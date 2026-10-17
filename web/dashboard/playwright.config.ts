@@ -16,7 +16,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: `${platformBin} api`,
+      command: `${JSON.stringify(platformBin)} api`, // quoted: repo paths may contain spaces
       url: `http://127.0.0.1:${String(apiPort)}/livez`,
       reuseExistingServer: false,
       timeout: 10_000,
