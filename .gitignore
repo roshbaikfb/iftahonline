@@ -1,0 +1,26 @@
+# build + tools
+/bin/
+/dist/
+/coverage.out
+/coverage.html
+*.test
+*.prof
+
+# env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# dashboard
+web/dashboard/node_modules/
+web/dashboard/dist/
+web/dashboard/test-results/
+web/dashboard/playwright-report/
+web/dashboard/blob-report/
+
+# editor / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
