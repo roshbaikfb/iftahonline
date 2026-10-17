@@ -1,0 +1,171 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - depguard
+    - dupl
+    - errcheck
+    - errorlint
+    - forbidigo
+    - gochecknoglobals
+    - gochecknoinits
+    - gosec
+    - govet
+    - ineffassign
+    - noctx
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unused
+
+  settings:
+    dupl:
+      # Tokens, not lines. A copied 40-line block is ~250+ tokens.
+      threshold: 100
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # readability over a few bytes; re-enable per hot struct if profiling says so
+
+    gosec:
+      excludes:
+        - G104 # duplicated by errcheck
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: defer
+        - name: unhandled-error
+          arguments: ["fmt.Fprint.*", "fmt.Print.*", "strings.Builder.Write.*", "bytes.Buffer.Write.*"]
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^fmt\.Print.*$
+          msg: use log/slog; stdout is reserved for JSON logs
+        - pattern: ^panic$
+          msg: never panic for control flow (CLAUDE.md rule 10); return an error
+        - pattern: ^os\.Getenv$
+          msg: config comes only from internal/platform/config, validated at startup
+
+    depguard:
+      rules:
+        domain:
+          list-mode: lax
+          files:
+            - "**/internal/modules/*/internal/domain/**"
+          allow:
+            - $gostd
+            - github.com/roshbaikfb/iftahonline/internal/platform
+          deny:
+            - pkg: net/http
+              desc: domain is transport-agnostic (CLAUDE.md rule 3)
+            - pkg: database/sql
+              desc: domain is storage-agnostic (CLAUDE.md rule 3)
+            - pkg: github.com/jackc/pgx
+              desc: domain is storage-agnostic (CLAUDE.md rule 3)
+            - pkg: github.com/redis/go-redis
+              desc: domain is storage-agnostic (CLAUDE.md rule 3)
+            - pkg: github.com/riverqueue/river
+              desc: domain emits events; jobs are inserted by app/store
+            - pkg: github.com/roshbaikfb/iftahonline/internal/platform/problem
+              desc: HTTP error mapping belongs to httpapi
+            - pkg: github.com/roshbaikfb/iftahonline/internal/platform/safehttp
+              desc: outbound I/O belongs to app/store
+            - pkg: github.com/roshbaikfb/iftahonline/internal/platform/postgres
+              desc: storage belongs to store/
+            - pkg: github.com/roshbaikfb/iftahonline/internal/platform/redisx
+              desc: storage belongs to store/
+        platform:
+          files:
+            - "**/internal/platform/**"
+          deny:
+            - pkg: github.com/roshbaikfb/iftahonline/internal/modules
+              desc: platform must not depend on business modules
+            - pkg: github.com/roshbaikfb/iftahonline/internal/server
+              desc: platform must not depend on process wiring
+        global:
+          files:
+            - $all
+          deny:
+            - pkg: log$
+              desc: use log/slog
+            - pkg: io/ioutil
+              desc: deprecated; use io and os
+            - pkg: math/rand$
+              desc: use crypto/rand, or math/rand/v2 for non-security randomness
+            - pkg: github.com/pkg/errors
+              desc: use fmt.Errorf with %w and errors.Is/As
+
+  exclusions:
+    generated: strict
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - gochecknoglobals
+          - errcheck
+      - path: _test\.go
+        linters: [forbidigo]
+        text: "panic"
+      - path: _test\.go
+        linters: [forbidigo]
+        text: "os.Getenv"
+      # Table-driven tests intentionally repeat shapes; revive's
+      # unhandled-error is too noisy in test helpers.
+      - path: _test\.go
+        linters: [revive]
+        text: "unhandled-error"
+      # The single place allowed to read the process environment.
+      - path: internal/platform/config/
+        linters: [forbidigo]
+        text: "os.Getenv"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/roshbaikfb/iftahonline
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
