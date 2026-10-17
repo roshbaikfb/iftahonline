@@ -1,0 +1,12 @@
+# Server stubs for the `system` tag, implemented in internal/server.
+# Each business module gets its own config filtered by its tag, generating
+# into internal/modules/<name>/internal/httpapi (see docs/modules/TEMPLATE.md).
+package: apigen
+output: internal/server/apigen/apigen.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true
+output-options:
+  include-tags: [system]

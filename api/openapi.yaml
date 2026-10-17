@@ -1,0 +1,112 @@
+openapi: 3.0.3
+info:
+  title: iftahonline platform API
+  version: 1.0.0
+  description: |
+    Contract for the merchant dashboard, the mobile app and integrations.
+    Change this file first, regenerate (`make gen`), then implement
+    (CLAUDE.md rule 11). Breaking changes inside /v1 fail CI (oasdiff).
+
+    Errors use RFC 9457 `application/problem+json`.
+servers:
+  - url: /
+tags:
+  - name: system
+    description: Process health and build metadata.
+paths:
+  /livez:
+    get:
+      tags: [system]
+      operationId: getLivez
+      summary: Liveness probe
+      description: 200 while the process is running. Never checks dependencies.
+      security: []
+      responses:
+        "200":
+          description: Alive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /readyz:
+    get:
+      tags: [system]
+      operationId: getReadyz
+      summary: Readiness probe
+      description: |
+        200 when every dependency answers; 503 when one fails or the process
+        is draining before shutdown.
+      security: []
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Not ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /v1/meta/version:
+    get:
+      tags: [system]
+      operationId: getVersion
+      summary: Build information
+      security: []
+      responses:
+        "200":
+          description: Build information.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+        default:
+          $ref: "#/components/responses/Problem"
+components:
+  responses:
+    Problem:
+      description: Error (RFC 9457).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable, draining]
+        checks:
+          type: object
+          description: Per-dependency result, e.g. {"postgres":"ok","redis":"timeout"}.
+          additionalProperties:
+            type: string
+    VersionInfo:
+      type: object
+      required: [version, commit, go_version, role]
+      properties:
+        version: { type: string, example: v0.1.0 }
+        commit: { type: string, example: 4b40e6d }
+        go_version: { type: string, example: go1.27.2 }
+        role: { type: string, enum: [api, storefront, worker] }
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, example: "urn:iftahonline:problem:not-found" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string, description: Stable machine-readable error code. }
+        request_id: { type: string }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/FieldError" }
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field: { type: string }
+        code: { type: string }
+        message: { type: string }
