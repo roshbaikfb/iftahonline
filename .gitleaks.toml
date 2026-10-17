@@ -1,0 +1,12 @@
+# gitleaks: default rules plus allowlisted build artefacts. `make secrets`
+# scans the full git history; nothing under these paths is ever committed.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "local tool caches and dependencies"
+paths = [
+  '''^\.cache/''',
+  '''^bin/''',
+  '''node_modules/''',
+]

@@ -13,7 +13,6 @@ sql:
       database: false
     rules:
       - sqlc/db-prepare
-      - no-select-star
       - no-unbounded-delete
     gen:
       go:
@@ -23,10 +22,9 @@ sql:
         emit_interface: true
         emit_empty_slices: true
 
+# sqlc expands SELECT * into explicit columns at generate time, so a
+# "no select star" rule could never fire; it is intentionally absent.
 rules:
-  - name: no-select-star
-    message: "list columns explicitly; SELECT * breaks when columns are added"
-    rule: query.sql.matches("(?i)select\\s+\\*")
   - name: no-unbounded-delete
     message: "DELETE and UPDATE need a WHERE clause"
     rule: query.sql.matches("(?is)^\\s*(delete\\s+from|update)\\s+[a-z_.]+(\\s+set\\s+[^;]*?)?\\s*;?\\s*$") && !query.sql.matches("(?i)\\swhere\\s")

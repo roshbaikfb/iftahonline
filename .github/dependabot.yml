@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      opentelemetry: { patterns: ["go.opentelemetry.io/*"] }
+      testcontainers: { patterns: ["github.com/testcontainers/*"] }
+      river: { patterns: ["github.com/riverqueue/*"] } # River upgrades need a new goose migration (ADR-0003)
+  - package-ecosystem: npm
+    directory: /web/dashboard
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /deploy/docker
+    schedule: { interval: weekly }

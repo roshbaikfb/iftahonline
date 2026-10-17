@@ -78,8 +78,8 @@ linters:
           msg: use log/slog; stdout is reserved for JSON logs
         - pattern: ^panic$
           msg: never panic for control flow (CLAUDE.md rule 10); return an error
-        - pattern: ^os\.Getenv$
-          msg: config comes only from internal/platform/config, validated at startup
+        - pattern: ^os\.(Getenv|LookupEnv|Environ)$
+          msg: config comes only from internal/platform/config (cmd/platform passes os.LookupEnv), validated at startup
 
     depguard:
       rules:
@@ -146,16 +146,17 @@ linters:
         text: "panic"
       - path: _test\.go
         linters: [forbidigo]
-        text: "os.Getenv"
+        text: "os\\.(Getenv|LookupEnv|Environ)"
+      # The one sanctioned read of the environment: main passes os.LookupEnv
+      # to config.Load.
+      - path: cmd/platform/main\.go
+        linters: [forbidigo]
+        text: "os\\.LookupEnv"
       # Table-driven tests intentionally repeat shapes; revive's
       # unhandled-error is too noisy in test helpers.
       - path: _test\.go
         linters: [revive]
         text: "unhandled-error"
-      # The single place allowed to read the process environment.
-      - path: internal/platform/config/
-        linters: [forbidigo]
-        text: "os.Getenv"
 
 formatters:
   enable:
