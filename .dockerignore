@@ -1,0 +1,15 @@
+.git
+bin
+dist
+coverage.*
+web/dashboard/node_modules
+web/dashboard/dist
+web/dashboard/test-results
+web/dashboard/playwright-report
+mobile
+loadtest
+docs
+*.md
+!go.mod
+.env
+.env.*

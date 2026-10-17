@@ -41,7 +41,7 @@ func TestContextEnrichment(t *testing.T) {
 	log.With("k", "v").InfoContext(ctx, "hello")
 	m := decode(t, &buf)
 	for k, want := range map[string]string{
-		"msg": "hello", "service": "iftahonline", "role": "api", "version": "test",
+		"msg": "hello", "service": "iftahonline", "role": "api", "build_version": "test",
 		"request_id": "req-1", "store_id": store.String(), "trace_id": sc.TraceID().String(), "span_id": sc.SpanID().String(),
 	} {
 		if got, _ := m[k].(string); got != want {

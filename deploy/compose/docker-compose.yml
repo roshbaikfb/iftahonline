@@ -1,0 +1,81 @@
+# Local development dependencies. Not for production.
+# Host ports are offset (15432, 16379, ...) to avoid clashing with services
+# developers often run locally; override with PG_PORT, REDIS_PORT, etc.
+#   make dev       start everything, migrate, run api + storefront
+#   make dev-down  stop (keeps volumes); add -v manually to wipe data
+name: iftahonline
+
+services:
+  postgres:
+    image: postgres:16-alpine # keep in sync with internal/platform/testinfra
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["${PG_PORT:-15432}:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d iftah"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["${REDIS_PORT:-16379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.55.0
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: local-dev-master-key-0123456789
+      MEILI_NO_ANALYTICS: "true"
+    ports: ["${MEILI_PORT:-17700}:7700"]
+    volumes: [meilidata:/meili_data]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7700/health || wget -qO- http://localhost:7700/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage. MinIO no longer publishes container
+  # images, so local dev uses SeaweedFS; application code stays S3-generic.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-master.volumeSizeLimitMB=64", "-volume.max=0",
+              "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    ports: ["${S3_PORT:-18333}:8333"]
+    volumes:
+      - s3data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9333/cluster/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.48
+    depends_on:
+      seaweedfs: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["echo 's3.bucket.create -name iftah-media' | weed shell -master=seaweedfs:9333"]
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "${SMTP_PORT:-11025}:1025"
+      - "${MAILPIT_UI_PORT:-18025}:8025"
+
+volumes:
+  pgdata:
+  meilidata:
+  s3data:

@@ -34,7 +34,7 @@ func New(o Options) *slog.Logger {
 	return slog.New(contextHandler{h}).With(
 		slog.String("service", o.Service),
 		slog.String("role", o.Role),
-		slog.String("version", o.Version),
+		slog.String("build_version", o.Version), // not "version": call sites use that key
 	)
 }
 

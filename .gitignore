@@ -24,3 +24,4 @@ web/dashboard/blob-report/
 .vscode/*
 !.vscode/extensions.json
 .DS_Store
+/.cache/
