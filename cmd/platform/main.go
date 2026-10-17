@@ -1,0 +1,226 @@
+// Command platform is the single binary for every role (ADR-0001):
+//
+//	platform api                    merchant/admin JSON API
+//	platform storefront             server-rendered shop pages
+//	platform worker                 River background jobs
+//	platform migrate up|down|status database migrations (as app_owner)
+//	platform version                print build information
+//
+// Configuration comes only from environment variables (see
+// internal/platform/config). Logs are JSON on stdout.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"os"
+	"os/signal"
+	"runtime"
+	"runtime/debug"
+	"syscall"
+
+	"github.com/riverqueue/river"
+
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
+	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+	"github.com/roshbaikfb/iftahonline/internal/server"
+	"github.com/roshbaikfb/iftahonline/internal/server/middleware"
+)
+
+// Set at link time: -ldflags "-X main.version=... -X main.commit=...".
+var (
+	version = "dev"  //nolint:gochecknoglobals // link-time build metadata.
+	commit  = "none" //nolint:gochecknoglobals // link-time build metadata.
+)
+
+const usage = `usage: platform <api|storefront|worker|migrate up|down|status|version>`
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.LookupEnv))
+}
+
+// run is main without process exit, so it can be tested.
+func run(args []string, stdout io.Writer, lookup config.LookupFunc) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(os.Stderr, usage)
+		return 2
+	}
+	if args[0] == "version" {
+		return printVersion(stdout)
+	}
+
+	role := config.Role(args[0])
+	boot := logging.New(logging.Options{Writer: stdout, Level: slog.LevelInfo, Service: "iftahonline", Role: string(role), Version: version})
+	cfg, err := config.Load(role, lookup)
+	if err != nil {
+		boot.Error("startup failed", "err", err)
+		return 1
+	}
+	log := logging.New(logging.Options{Writer: stdout, Level: cfg.LogLevel, Service: "iftahonline", Role: string(role), Version: version})
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop() // a second signal now kills the process immediately
+	}()
+
+	build := server.BuildInfo{Version: version, Commit: commit, Role: string(role)}
+	log.Info("starting", "config", cfg, "gomaxprocs", runtime.GOMAXPROCS(0), "gomemlimit", debug.SetMemoryLimit(-1))
+
+	switch role {
+	case config.RoleAPI:
+		err = runHTTP(ctx, cfg, log, build, middleware.ProfileAPI, nil)
+	case config.RoleStorefront:
+		err = runHTTP(ctx, cfg, log, build, middleware.ProfileStorefront, server.MountStorefront)
+	case config.RoleWorker:
+		err = runWorker(ctx, cfg, log, build)
+	case config.RoleMigrate:
+		err = runMigrate(ctx, cfg, log, args[1:], stdout)
+	}
+	if err != nil {
+		log.Error("exited with error", "err", err)
+		return 1
+	}
+	log.Info("exited cleanly")
+	return 0
+}
+
+func printVersion(w io.Writer) int {
+	err := json.NewEncoder(w).Encode(map[string]string{"version": version, "commit": commit, "go_version": runtime.Version()})
+	if err != nil {
+		return 1
+	}
+	return 0
+}
+
+// deps are the shared clients every long-running role needs.
+type deps struct {
+	tel *otel.Telemetry
+	ids *ulid.Generator
+}
+
+func newDeps(ctx context.Context, cfg config.Config, build server.BuildInfo) (deps, error) {
+	tel, err := otel.Setup(ctx, otel.Options{
+		Endpoint: cfg.OTel.Endpoint, ServiceName: "iftahonline-" + build.Role, Version: build.Version,
+		Environment: cfg.Env, SampleRatio: cfg.OTel.SampleRatio,
+	})
+	if err != nil {
+		return deps{}, fmt.Errorf("telemetry: %w", err)
+	}
+	return deps{tel: tel, ids: ulid.NewGenerator()}, nil
+}
+
+func (d deps) close(ctx context.Context, log *slog.Logger) {
+	if err := d.tel.Shutdown(context.WithoutCancel(ctx)); err != nil {
+		log.Warn("telemetry shutdown", "err", err)
+	}
+}
+
+func listen(ctx context.Context, addr string) (net.Listener, error) {
+	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen %s: %w", addr, err)
+	}
+	return ln, nil
+}
+
+func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo, profile middleware.Profile, mount func(server.Routes)) error {
+	d, err := newDeps(ctx, cfg, build)
+	if err != nil {
+		return err
+	}
+	defer d.close(ctx, log)
+
+	pool, err := postgres.NewPool(ctx, cfg.DB, "iftahonline-"+build.Role)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	rdb, err := redisx.New(cfg.Redis)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := rdb.Close(); cerr != nil {
+			log.Warn("redis close", "err", cerr)
+		}
+	}()
+
+	health := server.NewHealth(log, build,
+		server.Check{Name: "postgres", Fn: pool.Ping},
+		server.Check{Name: "redis", Fn: func(ctx context.Context) error { return rdb.Ping(ctx).Err() }},
+	)
+	handler := server.NewHandler(server.Deps{
+		Log: log, IDs: d.ids, Telemetry: d.tel, HTTP: cfg.HTTP, Health: health, Profile: profile, Mount: mount,
+	})
+	ln, err := listen(ctx, cfg.HTTP.Addr)
+	if err != nil {
+		return err
+	}
+	return server.Serve(ctx, server.NewServer(cfg.HTTP, handler, log), ln, health, cfg.HTTP, log)
+}
+
+func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo) error {
+	d, err := newDeps(ctx, cfg, build)
+	if err != nil {
+		return err
+	}
+	defer d.close(ctx, log)
+
+	pool, err := postgres.NewPool(ctx, cfg.DB, "iftahonline-worker")
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, river.NewWorkers())
+	if err != nil {
+		return err
+	}
+	// River's start context is detached: cancelling it would hard-stop
+	// running jobs. Shutdown is driven by Stop below instead.
+	if err = client.Start(context.WithoutCancel(ctx)); err != nil {
+		return fmt.Errorf("river start: %w", err)
+	}
+
+	health := server.NewHealth(log, build,
+		server.Check{Name: "postgres", Fn: pool.Ping},
+		server.RiverSchemaCheck(pool),
+	)
+	handler := server.NewHandler(server.Deps{
+		Log: log, IDs: d.ids, Telemetry: d.tel, HTTP: cfg.HTTP, Health: health, Profile: middleware.ProfileAPI,
+	})
+	ln, err := listen(ctx, cfg.HTTP.Addr)
+	if err != nil {
+		return errors.Join(err, client.StopAndCancel(context.WithoutCancel(ctx)))
+	}
+	serveErr := server.Serve(ctx, server.NewServer(cfg.HTTP, handler, log), ln, health, cfg.HTTP, log)
+
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
+	defer cancel()
+	log.Info("stopping river: finishing running jobs", "timeout", cfg.HTTP.ShutdownTimeout.String())
+	if stopErr := client.Stop(stopCtx); stopErr != nil {
+		log.Warn("river graceful stop timed out; cancelling jobs", "err", stopErr)
+		if cancelErr := client.StopAndCancel(context.WithoutCancel(ctx)); cancelErr != nil {
+			return errors.Join(serveErr, fmt.Errorf("river stop: %w", cancelErr))
+		}
+	}
+	return serveErr
+}
+
+func runMigrate(ctx context.Context, cfg config.Config, log *slog.Logger, args []string, stdout io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("%s", usage)
+	}
+	return postgres.Migrate(ctx, cfg.DB.URL, postgres.MigrateCommand(args[0]), log, stdout)
+}
