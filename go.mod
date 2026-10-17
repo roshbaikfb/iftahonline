@@ -10,6 +10,8 @@ tool (
 	golang.org/x/vuln/cmd/govulncheck
 )
 
+require github.com/oklog/ulid/v2 v2.1.2
+
 require (
 	cloud.google.com/go v0.123.0 // indirect
 	github.com/TwiN/go-color v1.4.1 // indirect
