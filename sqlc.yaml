@@ -1,0 +1,32 @@
+# sqlc: SQL-first, type-safe queries (CLAUDE.md stack). No ORM.
+# `make gen` runs `sqlc generate` offline; `make ci` runs `sqlc vet`
+# against a migrated database (SQLC_VET_DATABASE_URL) so every query is
+# prepared by real PostgreSQL.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/platform
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-select-star
+      - no-unbounded-delete
+    gen:
+      go:
+        package: dbgen
+        out: internal/server/dbgen
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_empty_slices: true
+
+rules:
+  - name: no-select-star
+    message: "list columns explicitly; SELECT * breaks when columns are added"
+    rule: query.sql.matches("(?i)select\\s+\\*")
+  - name: no-unbounded-delete
+    message: "DELETE and UPDATE need a WHERE clause"
+    rule: query.sql.matches("(?is)^\\s*(delete\\s+from|update)\\s+[a-z_.]+(\\s+set\\s+[^;]*?)?\\s*;?\\s*$") && !query.sql.matches("(?i)\\swhere\\s")
