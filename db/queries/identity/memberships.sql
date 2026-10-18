@@ -13,3 +13,29 @@ RETURNING *;
 SELECT store_id, role, created_at FROM store_memberships
 WHERE user_id = @user_id
 ORDER BY created_at, store_id;
+
+-- name: ListMembers :many
+-- One query for the whole team (no N+1): memberships joined to users.
+SELECT m.user_id, m.role, m.created_at, u.name, u.email
+FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = @store_id
+ORDER BY m.created_at, m.user_id;
+
+-- name: IsMemberByEmail :one
+SELECT EXISTS (
+  SELECT 1 FROM store_memberships m JOIN users u ON u.id = m.user_id
+  WHERE m.store_id = @store_id AND u.email = @email
+) AS member;
+
+-- name: GetMemberRole :one
+SELECT role FROM store_memberships WHERE store_id = @store_id AND user_id = @user_id;
+
+-- name: UpdateMemberRole :execrows
+-- The owner's role is never changed here (ownership transfer is separate).
+UPDATE store_memberships SET role = @role, updated_at = now()
+WHERE store_id = @store_id AND user_id = @user_id AND role <> 'owner';
+
+-- name: DeleteMember :execrows
+DELETE FROM store_memberships
+WHERE store_id = @store_id AND user_id = @user_id AND role <> 'owner';

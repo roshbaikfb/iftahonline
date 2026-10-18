@@ -148,6 +148,19 @@ type StoreDomain struct {
 	CreatedAt         pgtype.Timestamptz
 }
 
+type StoreInvitation struct {
+	ID         pgtype.UUID
+	StoreID    pgtype.UUID
+	Email      string
+	Role       string
+	TokenHash  []byte
+	InvitedBy  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	AcceptedAt pgtype.Timestamptz
+	RevokedAt  pgtype.Timestamptz
+}
+
 type StoreMembership struct {
 	StoreID   pgtype.UUID
 	UserID    pgtype.UUID
@@ -165,6 +178,27 @@ type User struct {
 	Status          string
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	Phone           pgtype.Text
+	PhoneVerifiedAt pgtype.Timestamptz
+	TotpSecret      []byte
+	TotpEnabledAt   pgtype.Timestamptz
+	TotpLastStep    int64
+}
+
+type UserDevice struct {
+	UserID      pgtype.UUID
+	DeviceHash  []byte
+	UserAgent   string
+	IpPrefix    string
+	FirstSeenAt pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
+}
+
+type UserRecoveryCode struct {
+	UserID    pgtype.UUID
+	CodeHash  []byte
+	CreatedAt pgtype.Timestamptz
+	UsedAt    pgtype.Timestamptz
 }
 
 type UserSession struct {
