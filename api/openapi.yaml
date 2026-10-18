@@ -17,6 +17,12 @@ security:
 tags:
   - name: system
     description: Process health and build metadata.
+  - name: identity
+    description: |
+      Accounts, sign-up, sessions and the store audit log (ADR-0005). The
+      dashboard authenticates with the `__Host-sid` cookie set by sign-up
+      and login; the mobile app sends `"client": "mobile"` and uses the
+      returned token as a bearer token.
   - name: tenancy
     description: |
       The store and its domains. Every path is scoped to one store; a
@@ -67,6 +73,133 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/VersionInfo" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/signup:
+    post:
+      tags: [identity]
+      operationId: signup
+      summary: Create an account and its first store
+      description: |
+        Creates the user, the store with its `<slug>.iftahonline.com`
+        subdomain, the owner membership and a session, atomically.
+        Rate-limited per IP. Store field errors are reported as
+        `store.<field>`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignupRequest" }
+      responses:
+        "201":
+          description: Signed up and signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/login:
+    post:
+      tags: [identity]
+      operationId: login
+      summary: Sign in with email and password
+      description: |
+        Wrong email, wrong password and disabled accounts get the same 401.
+        Repeated failures for one email are refused with 429 until the
+        budget refills; attempts are also limited per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/logout:
+    post:
+      tags: [identity]
+      operationId: logout
+      summary: End the current session
+      responses:
+        "204":
+          description: Signed out; the cookie is cleared.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me:
+    get:
+      tags: [identity]
+      operationId: getMe
+      summary: The signed-in user and their stores
+      responses:
+        "200":
+          description: The user and their memberships.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/sessions:
+    get:
+      tags: [identity]
+      operationId: listMySessions
+      summary: The signed-in user's active sessions
+      responses:
+        "200":
+          description: Sessions, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/sessions/{session_id}:
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    delete:
+      tags: [identity]
+      operationId: revokeMySession
+      summary: Sign out one device
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/audit-log:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [identity]
+      operationId: listAuditLog
+      summary: The store's audit log
+      description: "Permission: audit.read. Newest first; follow `next_cursor`."
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditPage" }
         default:
           $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}:
@@ -199,6 +332,12 @@ components:
       type: http
       scheme: bearer
       description: Mobile app session token (ADR-0005).
+  headers:
+    SessionCookie:
+      description: |
+        `__Host-sid=<token>; Path=/; Max-Age=…; HttpOnly; Secure; SameSite=Lax`
+        (web clients; cleared on logout).
+      schema: { type: string }
   parameters:
     StoreID:
       name: store_id
@@ -221,6 +360,113 @@ components:
       type: string
       pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
       example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+    SignupRequest:
+      type: object
+      required: [email, password, name, store]
+      properties:
+        email: { type: string, maxLength: 254, example: ahmed@example.com }
+        password: { type: string, minLength: 10, maxLength: 128, format: password }
+        name: { type: string, maxLength: 100, example: أحمد علي }
+        store: { $ref: "#/components/schemas/NewStore" }
+        client: { $ref: "#/components/schemas/ClientKind" }
+    NewStore:
+      type: object
+      required: [name, slug, currency, locale, timezone]
+      properties:
+        name: { type: string, maxLength: 120 }
+        slug: { type: string, maxLength: 63, example: ahmed-shop }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        locale: { type: string, enum: [ar, en] }
+        timezone: { type: string, example: Africa/Cairo }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, maxLength: 254 }
+        password: { type: string, maxLength: 512, format: password }
+        client: { $ref: "#/components/schemas/ClientKind" }
+    ClientKind:
+      type: string
+      enum: [web, mobile]
+      default: web
+      description: "`mobile` returns the session token in the body instead of a cookie."
+    AuthResponse:
+      type: object
+      required: [user, expires_at]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        store_id:
+          $ref: "#/components/schemas/ULID"
+        expires_at: { type: string, format: date-time }
+        token:
+          type: string
+          description: "Session token (mobile clients only). Send as `Authorization: Bearer <token>`."
+    User:
+      type: object
+      required: [id, email, name, email_verified, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        email: { type: string }
+        name: { type: string }
+        email_verified: { type: boolean }
+        created_at: { type: string, format: date-time }
+    Me:
+      type: object
+      required: [user, memberships]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        memberships:
+          type: array
+          items: { $ref: "#/components/schemas/Membership" }
+    Membership:
+      type: object
+      required: [store_id, role]
+      properties:
+        store_id: { $ref: "#/components/schemas/ULID" }
+        role: { $ref: "#/components/schemas/Role" }
+    Role:
+      type: string
+      enum: [owner, manager, support, shipping]
+    SessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SessionInfo" }
+    SessionInfo:
+      type: object
+      required: [id, user_agent, ip_prefix, created_at, last_seen_at, expires_at, current]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        user_agent: { type: string }
+        ip_prefix: { type: string, example: 203.0.113.0/24 }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        current: { type: boolean, description: This is the session making the request. }
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEntry" }
+        next_cursor: { type: string }
+    AuditEntry:
+      type: object
+      required: [id, occurred_at, action, target_type, target_id, ip_prefix, metadata]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        occurred_at: { type: string, format: date-time }
+        actor_user_id: { $ref: "#/components/schemas/ULID" }
+        action: { type: string, example: domain.added }
+        target_type: { type: string, example: domain }
+        target_id: { type: string }
+        ip_prefix: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
     Store:
       type: object
       required: [id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at]

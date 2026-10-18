@@ -62,6 +62,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an account and its first store
+         * @description Creates the user, the store with its `<slug>.iftahonline.com`
+         *     subdomain, the owner membership and a session, atomically.
+         *     Rate-limited per IP. Store field errors are reported as
+         *     `store.<field>`.
+         */
+        post: operations["signup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with email and password
+         * @description Wrong email, wrong password and disabled accounts get the same 401.
+         *     Repeated failures for one email are refused with 429 until the
+         *     budget refills; attempts are also limited per IP.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the current session */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user and their stores */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user's active sessions */
+        get: operations["listMySessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sign out one device */
+        delete: operations["revokeMySession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's audit log
+         * @description Permission: audit.read. Newest first; follow `next_cursor`.
+         */
+        get: operations["listAuditLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}": {
         parameters: {
             query?: never;
@@ -191,6 +328,101 @@ export interface components {
     schemas: {
         /** @example 01J9ZQ3W5Y8V4K2N6M7P0R1S2T */
         ULID: string;
+        SignupRequest: {
+            /** @example ahmed@example.com */
+            email: string;
+            /** Format: password */
+            password: string;
+            /** @example أحمد علي */
+            name: string;
+            store: components["schemas"]["NewStore"];
+            client?: components["schemas"]["ClientKind"];
+        };
+        NewStore: {
+            name: string;
+            /** @example ahmed-shop */
+            slug: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** @enum {string} */
+            locale: "ar" | "en";
+            /** @example Africa/Cairo */
+            timezone: string;
+        };
+        LoginRequest: {
+            email: string;
+            /** Format: password */
+            password: string;
+            client?: components["schemas"]["ClientKind"];
+        };
+        /**
+         * @description `mobile` returns the session token in the body instead of a cookie.
+         * @default web
+         * @enum {string}
+         */
+        ClientKind: "web" | "mobile";
+        AuthResponse: {
+            user: components["schemas"]["User"];
+            store_id?: components["schemas"]["ULID"];
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Session token (mobile clients only). Send as `Authorization: Bearer <token>`. */
+            token?: string;
+        };
+        User: {
+            id: components["schemas"]["ULID"];
+            email: string;
+            name: string;
+            email_verified: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Me: {
+            user: components["schemas"]["User"];
+            memberships: components["schemas"]["Membership"][];
+        };
+        Membership: {
+            store_id: components["schemas"]["ULID"];
+            role: components["schemas"]["Role"];
+        };
+        /** @enum {string} */
+        Role: "owner" | "manager" | "support" | "shipping";
+        SessionList: {
+            items: components["schemas"]["SessionInfo"][];
+        };
+        SessionInfo: {
+            id: components["schemas"]["ULID"];
+            user_agent: string;
+            /** @example 203.0.113.0/24 */
+            ip_prefix: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description This is the session making the request. */
+            current: boolean;
+        };
+        AuditPage: {
+            items: components["schemas"]["AuditEntry"][];
+            next_cursor?: string;
+        };
+        AuditEntry: {
+            id: components["schemas"]["ULID"];
+            /** Format: date-time */
+            occurred_at: string;
+            actor_user_id?: components["schemas"]["ULID"];
+            /** @example domain.added */
+            action: string;
+            /** @example domain */
+            target_type: string;
+            target_id: string;
+            ip_prefix: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+        };
         Store: {
             id: components["schemas"]["ULID"];
             /** @example my-shop */
@@ -306,7 +538,13 @@ export interface components {
         DomainID: components["schemas"]["ULID"];
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /**
+         * @description `__Host-sid=<token>; Path=/; Max-Age=…; HttpOnly; Secure; SameSite=Lax`
+         *     (web clients; cleared on logout).
+         */
+        SessionCookie: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -376,6 +614,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    signup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed up and signed in. */
+            201: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out; the cookie is cleared. */
+            204: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user and their memberships. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeMySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAuditLog: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
                 };
             };
             default: components["responses"]["Problem"];
