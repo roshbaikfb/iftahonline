@@ -9,3 +9,7 @@ supersedes it.
 | [0001](0001-go-modular-monolith-linux.md) | Go modular monolith, one binary, on Linux | Accepted |
 | [0002](0002-shared-db-store-id-rls.md) | Shared database, `store_id` on every tenant table, RLS as second wall | Accepted |
 | [0003](0003-river-jobs.md) | River (Postgres-backed) for background jobs and the outbox | Accepted |
+| [0004](0004-host-resolution-cache.md) | Host → store resolution with a two-level cache | Accepted |
+| [0005](0005-authentication.md) | Authentication: opaque sessions, argon2id, phone OTP, TOTP | Accepted |
+| [0006](0006-authorization.md) | Authorization: roles, one permission matrix, 404 for non-members | Accepted |
+| [0007](0007-cross-module-tx-tenant-jobs.md) | Cross-module transactions, tenant-scoped jobs, user-scoped RLS | Accepted |
