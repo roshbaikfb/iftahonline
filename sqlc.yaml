@@ -21,6 +21,34 @@ sql:
         sql_package: pgx/v5
         emit_interface: true
         emit_empty_slices: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/tenancy
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: tenancydb
+        out: internal/modules/tenancy/internal/store/tenancydb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: citext
+            go_type: string
 
 # sqlc expands SELECT * into explicit columns at generate time, so a
 # "no select star" rule could never fire; it is intentionally absent.
