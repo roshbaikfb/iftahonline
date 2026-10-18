@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
@@ -140,4 +141,10 @@ func RestoreTenant(ctx context.Context, encodedArgs []byte) (context.Context, er
 		return ctx, fmt.Errorf("jobs: store_id: %w", tenant.ErrNoTenant)
 	}
 	return tenant.WithStore(ctx, id), nil
+}
+
+// Inserter enqueues jobs inside the caller's transaction (ADR-0003).
+// *river.Client[pgx.Tx] implements it.
+type Inserter interface {
+	InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
 }
