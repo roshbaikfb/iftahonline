@@ -101,6 +101,9 @@ func (w *VerifyWorker) Work(ctx context.Context, job *river.Job[VerifyDomainArgs
 			case markErr != nil:
 				return markErr
 			}
+			if auditErr := w.Svc.auditDomain(ctx, tx, "domain.verified", v); auditErr != nil {
+				return auditErr
+			}
 			return w.Svc.invalidate(ctx, tx, v.Host)
 		})
 		if errors.Is(err, errTaken) {

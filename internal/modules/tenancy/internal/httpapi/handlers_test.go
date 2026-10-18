@@ -23,6 +23,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -119,7 +120,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	svc := app.NewService(pool, ins, ids, "iftahonline.com")
+	svc := app.NewService(pool, ins, ids, "iftahonline.com", audit.Nop{})
 
 	mk := func(prefix string) (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}

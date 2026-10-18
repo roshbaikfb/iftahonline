@@ -61,6 +61,18 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 	return string(ns.RiverJobState), nil
 }
 
+type AuditLog struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	OccurredAt  time.Time
+	ActorUserID pgtype.UUID
+	Action      string
+	TargetType  string
+	TargetID    string
+	IpPrefix    string
+	Metadata    []byte
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState
@@ -136,4 +148,35 @@ type StoreDomain struct {
 	VerifiedAt        *time.Time
 	LastCheckedAt     *time.Time
 	CreatedAt         time.Time
+}
+
+type StoreMembership struct {
+	StoreID   ulid.ID
+	UserID    ulid.ID
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type User struct {
+	ID              ulid.ID
+	Email           string
+	EmailVerifiedAt *time.Time
+	Name            string
+	PasswordHash    string
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type UserSession struct {
+	ID         ulid.ID
+	UserID     ulid.ID
+	TokenHash  []byte
+	UserAgent  string
+	IpPrefix   string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
 }

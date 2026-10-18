@@ -20,6 +20,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -67,7 +68,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	return fixture{app: appPool, owner: owner, rdb: rdb, svc: app.NewService(appPool, ins, ids, base), ids: ids}
+	return fixture{app: appPool, owner: owner, rdb: rdb, svc: app.NewService(appPool, ins, ids, base, audit.Nop{}), ids: ids}
 }
 
 // slug returns a unique valid slug (tests share one database).
