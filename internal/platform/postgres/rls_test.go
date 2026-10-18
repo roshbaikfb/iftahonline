@@ -12,5 +12,8 @@ import (
 // when modules add tables. Extra permissive policies that apply to
 // app_user must be listed here, each one reviewed.
 func TestTenantTablesUseRLS(t *testing.T) {
-	testkit.AssertTenantTablesUseRLS(t, pool(t, infra.OwnerURL, 2))
+	testkit.AssertTenantTablesUseRLS(t, pool(t, infra.OwnerURL, 2),
+		// A member reads their own memberships across stores (ADR-0007 §4).
+		"store_memberships.member_self_read",
+	)
 }
