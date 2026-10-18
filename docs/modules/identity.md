@@ -9,8 +9,8 @@ may do in a store. Design documents:
 - [ADR-0007](../adr/0007-cross-module-tx-tenant-jobs.md): cross-module transactions, tenant-scoped jobs and user-scoped RLS;
 - [ADR-0008](../adr/0008-session-lookup-in-postgres.md): session lookup.
 
-This document covers **P1 part 3a**. Phone OTP, TOTP 2FA, new-device
-alerts and invitations come in part 3b.
+It covers P1 parts 3a and 3b. Code and email delivery are described in
+[ADR-0009](../adr/0009-notifications-and-invitations.md).
 
 ## How other modules use it
 
@@ -118,6 +118,121 @@ If any step fails, nothing remains. Store field errors are reported as
 - **Privacy:** the database stores only the IP's /24 (IPv4) or /48 (IPv6)
   and a truncated User-Agent.
 
+## Second factor (TOTP)
+
+**Enrolment:**
+
+1. `POST /v1/me/mfa/totp` returns a seed: base32 plus an `otpauth://` URI,
+   which the dashboard shows as a QR code. The seed is sealed with
+   `secretbox` (AAD `totp:<user>`) and is not active yet.
+2. `POST /v1/me/mfa/totp/confirm` with a valid code enables 2FA and returns
+   **10 recovery codes**, shown once and stored as SHA-256.
+
+**Codes:**
+
+- Codes follow RFC 6238 (SHA-1, 6 digits, 30 s), with ±1 step for clock
+  drift.
+- Each step can be used once, enforced by an atomic `totp_last_step`
+  update. A replayed code fails, even within its 30 seconds.
+
+**Sign-in:**
+
+- With 2FA on, password login (and phone login) returns **202
+  `mfa_required`** with a `challenge_id` (5 min) and no session.
+- `POST /v1/auth/mfa` completes sign-in with a TOTP code or a recovery
+  code. Recovery codes are one-time.
+- Wrong second factors are limited per user. A challenge allows 5
+  attempts.
+
+**Disabling:** `POST /v1/me/mfa/totp/disable` needs the password **and** a
+current code, so a stolen session alone cannot remove 2FA.
+
+## Phone
+
+### Verifying a number
+
+1. `POST /v1/me/phone` sends a code.
+2. `POST /v1/me/phone/verify` confirms it.
+
+Only verified numbers are stored, and a number belongs to one account.
+
+### Signing in
+
+- `POST /v1/auth/otp/start` always answers 202 with a challenge. Unknown
+  numbers get a decoy and nothing is sent, so accounts cannot be
+  enumerated.
+- `POST /v1/auth/otp/verify` completes the sign-in. It returns the MFA
+  challenge instead of a session when 2FA is on.
+
+### Codes
+
+- 6 digits, uniformly random, valid 5 minutes, 5 attempts per challenge
+  (an atomic counter).
+- Only `HMAC(OTP_PEPPER, purpose, challenge, code)` is stored, so a code
+  never works for another purpose.
+
+### Limits
+
+These protect against SMS pumping:
+
+- per number: 1 per minute, 10 per day;
+- per IP: 10 per hour.
+
+Rate-limit keys use an HMAC of the number, so Redis key names hold no
+phone numbers.
+
+### Availability
+
+Phone OTP returns 503 in production until an SMS or WhatsApp provider is
+configured (ADR-0009). In development, codes appear in Mailpit as email to
+`<digits>@sms.invalid`.
+
+## New-device alerts
+
+A device is identified by:
+
+- the `__Host-did` cookie (browser), set on routes that can open a
+  session, or
+- the `X-Device-ID` header (app).
+
+`user_devices` keeps only its SHA-256. A user's first device does not
+alert. Any later unknown device enqueues `identity.device.alert` in the
+session's transaction. The alert email gives the time, User-Agent and
+network prefix, never the full IP, and links to the security settings.
+
+## Team: invitations and members
+
+| Operation | Permission |
+|---|---|
+| `GET /members` (one joined query, no N+1) | `members.read` |
+| `PATCH /members/{user}` role, `DELETE /members/{user}` | `members.manage`. The owner can be neither changed nor removed |
+| `GET/POST /invitations`, `DELETE /invitations/{id}` | `members.manage` |
+
+### Invitations
+
+- An invitation grants manager, support or shipping, never owner.
+- It is valid for 7 days.
+- There is one open invitation per email per store, and an existing
+  member cannot be invited.
+- The link is `DASHBOARD_URL/invite#<store ULID>.<secret>`. Only
+  SHA-256(token) is stored. The token waits sealed in Redis until the
+  email job sends it.
+
+### Accepting
+
+`POST /v1/invitations/accept` works in one of two ways:
+
+- **The invited email has an account:** the caller must be signed in as
+  it. Signed out, the answer is 401; as another account, 403.
+- **No account yet:** `name` and `password` create one, and the
+  membership and a session are created in the same transaction.
+
+### Removal
+
+Removal is immediate: the member's next request to the store gets 404.
+These actions are audited: `member.invited`, `invitation.revoked`,
+`member.joined`, `member.role_changed` and `member.removed`.
+
 ## Tables
 
 | Table | Scope | Notes |
@@ -126,6 +241,10 @@ If any step fails, nothing remains. Store field errors are reported as
 | `user_sessions` | Platform-wide | `token_hash` is unique; there is an index on `(user_id, created_at)` |
 | `store_memberships` | Tenant (RLS) | PK `(store_id, user_id)`, index on `user_id`, one owner per store. `member_self_read` lets a user read their own rows across stores |
 | `audit_log` | Tenant (RLS) | Partitioned by month and append-only (see below) |
+| `users` (3b) | Platform-wide | `phone` (unique, E.164, verified only), `totp_secret` (sealed), `totp_enabled_at`, `totp_last_step` |
+| `user_recovery_codes` | Platform-wide | SHA-256, one-time (`used_at`) |
+| `user_devices` | Platform-wide | SHA-256 of the device ID, last seen, UA, IP prefix |
+| `store_invitations` | Tenant (RLS) | `token_hash` unique, one open invitation per email per store |
 
 `member_self_read` is `FOR SELECT` and applies only to the user's own
 rows. It is the one extra permissive policy that the RLS catalog test

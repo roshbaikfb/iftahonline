@@ -14,3 +14,4 @@ supersedes it.
 | [0006](0006-authorization.md) | Authorization: roles, one permission matrix, 404 for non-members | Accepted |
 | [0007](0007-cross-module-tx-tenant-jobs.md) | Cross-module transactions, tenant-scoped jobs, user-scoped RLS | Accepted |
 | [0008](0008-session-lookup-in-postgres.md) | Session lookup in PostgreSQL, no Redis session cache (yet) | Accepted |
+| [0009](0009-notifications-and-invitations.md) | Delivering codes and emails without a provider; invitation tokens | Accepted |
