@@ -16,6 +16,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -34,6 +35,8 @@ type Deps struct {
 	// DNS resolves TXT records for domain verification; nil uses a
 	// pure-Go net.Resolver.
 	DNS app.TXTResolver
+	// Audit records store actions (identity's audit log); nil discards.
+	Audit audit.Recorder
 }
 
 // Module is the wired tenancy module.
@@ -52,6 +55,9 @@ func New(d Deps) (*Module, error) {
 	if d.DNS == nil {
 		d.DNS = &net.Resolver{PreferGo: true}
 	}
+	if d.Audit == nil {
+		d.Audit = audit.Nop{}
+	}
 	c := d.Config
 	cache := store.NewHostCache(d.Redis, c.SharedCacheTTL, c.NegativeTTL)
 	resolver, err := app.NewResolver(app.ResolverConfig{
@@ -63,7 +69,7 @@ func New(d Deps) (*Module, error) {
 		return nil, err
 	}
 	return &Module{
-		svc:      app.NewService(d.Pool, d.Jobs, d.IDs, c.BaseDomain),
+		svc:      app.NewService(d.Pool, d.Jobs, d.IDs, c.BaseDomain, d.Audit),
 		resolver: resolver,
 		cache:    cache,
 		deps:     d,

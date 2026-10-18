@@ -11,6 +11,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -29,12 +30,14 @@ type Service struct {
 	jobs       jobs.Inserter
 	ids        *ulid.Generator
 	baseDomain string
+	audit      audit.Recorder
 }
 
 // NewService builds the service. baseDomain is the platform domain under
-// which store subdomains live (e.g. iftahonline.com).
-func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, baseDomain string) *Service {
-	return &Service{db: db, jobs: ins, ids: ids, baseDomain: baseDomain}
+// which store subdomains live (e.g. iftahonline.com); rec records store
+// actions in the audit log, in the same transaction as the action.
+func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, baseDomain string, rec audit.Recorder) *Service {
+	return &Service{db: db, jobs: ins, ids: ids, baseDomain: baseDomain, audit: rec}
 }
 
 var errStoreNotFound = errs.NotFound("store_not_found", "store not found")
@@ -90,8 +93,11 @@ func (s *Service) UpdateSettings(ctx context.Context, in domain.StoreSettings) (
 	}
 	var st domain.Store
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		st, err = store.UpdateStore(ctx, tx, in)
-		return err
+		if st, err = store.UpdateStore(ctx, tx, in); err != nil {
+			return err
+		}
+		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "store.updated", TargetType: "store", TargetID: st.ID.String(),
+			Metadata: map[string]any{"name": st.Name, "locale": string(st.Locale), "timezone": st.Timezone}})
 	})
 	return st, notFound(err, errStoreNotFound)
 }
@@ -110,6 +116,10 @@ func (s *Service) SetStatus(ctx context.Context, status domain.StoreStatus) (dom
 		}
 		hosts, err := store.ListHosts(ctx, tx)
 		if err != nil {
+			return err
+		}
+		if err := s.audit.RecordTx(ctx, tx, audit.Entry{Action: "store.status_changed", TargetType: "store", TargetID: st.ID.String(),
+			Metadata: map[string]any{"status": string(status)}}); err != nil {
 			return err
 		}
 		return s.invalidate(ctx, tx, hosts...)
@@ -162,6 +172,9 @@ func (s *Service) AddCustomDomain(ctx context.Context, rawHost string) (domain.D
 		}); txErr != nil {
 			return txErr
 		}
+		if txErr = s.auditDomain(ctx, tx, "domain.added", d); txErr != nil {
+			return txErr
+		}
 		return s.enqueueVerify(ctx, tx, d.ID)
 	})
 	return d, err
@@ -179,6 +192,9 @@ func (s *Service) VerifyDomain(ctx context.Context, id ulid.ID) (domain.Domain, 
 			return errDomainAlreadyActive
 		}
 		if d, err = store.ResetPending(ctx, tx, id); err != nil {
+			return err
+		}
+		if err = s.auditDomain(ctx, tx, "domain.verification_requested", d); err != nil {
 			return err
 		}
 		return s.enqueueVerify(ctx, tx, id)
@@ -206,6 +222,9 @@ func (s *Service) RemoveDomain(ctx context.Context, id ulid.ID) error {
 		if !deleted {
 			return domain.ErrNotFound // changed concurrently
 		}
+		if err := s.auditDomain(ctx, tx, "domain.removed", d); err != nil {
+			return err
+		}
 		if d.Status == domain.DomainVerified {
 			return s.invalidate(ctx, tx, d.Host)
 		}
@@ -225,10 +244,17 @@ func (s *Service) SetPrimaryDomain(ctx context.Context, id ulid.ID) (domain.Doma
 		if cur.Status != domain.DomainVerified {
 			return errDomainNotVerified
 		}
-		d, err = store.SetPrimaryDomain(ctx, tx, id)
-		return err
+		if d, err = store.SetPrimaryDomain(ctx, tx, id); err != nil {
+			return err
+		}
+		return s.auditDomain(ctx, tx, "domain.primary_set", d)
 	})
 	return d, notFound(err, errDomainNotFound)
+}
+
+func (s *Service) auditDomain(ctx context.Context, tx pgx.Tx, action string, d domain.Domain) error {
+	return s.audit.RecordTx(ctx, tx, audit.Entry{Action: action, TargetType: "domain", TargetID: d.ID.String(),
+		Metadata: map[string]any{"host": d.Host}})
 }
 
 func (s *Service) enqueueVerify(ctx context.Context, tx pgx.Tx, id ulid.ID) error {
