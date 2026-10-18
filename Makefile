@@ -23,9 +23,9 @@ IMAGE   ?= iftahonline:$(VERSION)
 FUZZTIME ?= 10s
 COVER_MIN ?= 80
 # Coverage is enforced for business-module domain/app packages (CLAUDE.md)
-# and, in P0, for the platform packages that hold core rules.
+# and for the platform packages that hold core rules.
 COVER_MATCH := -match '/internal/modules/[^/]+/internal/(domain|app)$$' \
-	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging)$$'
+	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox)$$'
 
 API_ADDR        ?= 127.0.0.1:18080
 STOREFRONT_ADDR ?= 127.0.0.1:18081
