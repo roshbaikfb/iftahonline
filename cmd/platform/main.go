@@ -28,6 +28,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
@@ -157,11 +158,33 @@ func newTenancy(c clients) (*tenancy.Module, error) {
 	}
 	return tenancy.New(tenancy.Deps{
 		Pool: c.pool, Redis: c.rdb, Jobs: inserter, IDs: c.ids, Log: c.log, Config: c.cfg.Tenancy,
+		Audit: identity.NewAuditRecorder(c.ids),
 	})
 }
 
-// mountAPI: module routes join as their authentication lands (identity).
-func mountAPI(context.Context, clients) (func(server.Routes), error) { return nil, nil }
+func newIdentity(c clients, ten *tenancy.Module) (*identity.Module, error) {
+	return identity.New(identity.Deps{
+		Pool: c.pool, Redis: c.rdb, Tenancy: ten.Service(), IDs: c.ids, Log: c.log,
+		Config: c.cfg.Identity, ClientIP: middleware.ClientIP,
+	})
+}
+
+// mountAPI wires the merchant API: identity's routes, and every store
+// module's routes behind identity's membership middleware and policy.
+func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
+	ten, err := newTenancy(c)
+	if err != nil {
+		return nil, err
+	}
+	id, err := newIdentity(c, ten)
+	if err != nil {
+		return nil, err
+	}
+	return func(rt server.Routes) {
+		id.Mount(rt.Mux, rt.Problems)
+		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+	}, nil
+}
 
 func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error) {
 	ten, err := newTenancy(c)
@@ -235,14 +258,18 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}()
 
 	workers := river.NewWorkers()
-	ten, err := newTenancy(clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb})
+	c := clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb}
+	ten, err := newTenancy(c)
 	if err != nil {
 		return err
 	}
 	if err = ten.RegisterWorkers(workers); err != nil {
 		return err
 	}
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers)
+	if err = identity.RegisterWorkers(workers, pool); err != nil {
+		return err
+	}
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, identity.PeriodicJobs()...)
 	if err != nil {
 		return err
 	}

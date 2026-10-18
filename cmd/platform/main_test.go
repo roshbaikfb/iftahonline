@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -272,5 +273,65 @@ func TestRunExitCodes(t *testing.T) {
 				t.Fatalf("run(%v) = %d, output %q", tt.args, got, buf.String())
 			}
 		})
+	}
+}
+
+// TestAPISignupEndToEnd runs the real api binary: sign up, then use the
+// returned session on a store route and on /v1/me. The password is never
+// logged.
+func TestAPISignupEndToEnd(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	addr := freeAddr(t)
+	cmd := exec.CommandContext(ctx, binary, "api")
+	cmd.Env = append(roleEnv(addr), "ARGON2_MEMORY_KIB=8192", "ARGON2_TIME=1")
+	var out syncBuffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Wait()
+	})
+	base := "http://" + addr
+	if !waitStatus(ctx, base+"/readyz", http.StatusOK, 10*time.Second) {
+		t.Fatalf("api not ready\n%s", out.String())
+	}
+
+	slug := fmt.Sprintf("e2e-%d", time.Now().UnixNano()%1_000_000_000)
+	body := fmt.Sprintf(`{"email":"%s@example.com","password":"correct horse battery","name":"E2E","client":"mobile",
+		"store":{"name":"E2E","slug":%q,"currency":"EGP","locale":"ar","timezone":"Africa/Cairo"}}`, slug, slug)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/auth/signup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signup struct {
+		Token   string `json:"token"`
+		StoreID string `json:"store_id"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&signup)
+	_ = res.Body.Close()
+	if err != nil || res.StatusCode != http.StatusCreated || signup.Token == "" {
+		t.Fatalf("signup = %d %+v %v\n%s", res.StatusCode, signup, err, out.String())
+	}
+
+	for _, path := range []string{"/v1/stores/" + signup.StoreID, "/v1/stores/" + signup.StoreID + "/domains", "/v1/me"} {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
+		req.Header.Set("Authorization", "Bearer "+signup.Token)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s = %d\n%s", path, res.StatusCode, out.String())
+		}
+	}
+	if logs := out.String(); strings.Contains(logs, "correct horse battery") || strings.Contains(logs, signup.Token) {
+		t.Fatalf("secret logged\n%s", logs)
 	}
 }
