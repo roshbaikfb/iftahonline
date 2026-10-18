@@ -25,6 +25,9 @@ export default defineConfig({
         HTTP_ADDR: `127.0.0.1:${String(apiPort)}`,
         DATABASE_URL: 'postgres://none:none@127.0.0.1:1/none',
         REDIS_URL: 'redis://127.0.0.1:1/0',
+        // Public development-only values (see .env.example), not secrets.
+        SECRETBOX_KEYS: '1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=',
+        OTP_PEPPER: 'ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=',
         DRAIN_DELAY: '0s',
       },
     },

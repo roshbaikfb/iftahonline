@@ -5,6 +5,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 )
 
 // Role is the binary's subcommand.
@@ -52,6 +54,29 @@ type Config struct {
 	Worker   Worker
 	Tenancy  Tenancy
 	Identity Identity
+	Secrets  Secrets
+	Mail     Mail
+}
+
+// Secrets are keys from the secret manager (never from files or flags).
+// String/LogValue never print them.
+type Secrets struct {
+	// Keyring seals secrets at rest (TOTP seeds, pending codes):
+	// SECRETBOX_KEYS="v:base64key[,v:base64key]", first = current.
+	Keyring *secretbox.Keyring
+	// OTPPepper keys the HMAC of one-time codes (OTP_PEPPER, base64, >= 32 bytes).
+	OTPPepper []byte
+}
+
+// Mail configures outgoing email. Empty SMTPAddr logs a masked notice
+// instead of sending (no provider chosen yet, ADR-0005); in development,
+// point it at Mailpit (deploy/compose).
+type Mail struct {
+	SMTPAddr     string // host:port
+	SMTPUsername string
+	SMTPPassword string
+	From         string // e.g. "iftahonline <no-reply@iftahonline.com>"
+	DashboardURL string // base for links in emails, e.g. https://app.iftahonline.com
 }
 
 // HTTP configures the server for api, storefront and the worker's health port.
@@ -169,6 +194,31 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		}
 		c.Tenancy.AdminHost = r.hostname("ADMIN_HOST", "admin."+c.Tenancy.BaseDomain)
 	}
+	if role == RoleAPI || role == RoleWorker {
+		if kr, err := secretbox.ParseKeyring(r.secret("SECRETBOX_KEYS")); err != nil {
+			r.errorf("SECRETBOX_KEYS: %v", err)
+		} else {
+			c.Secrets.Keyring = kr
+		}
+		if pepper, err := base64.StdEncoding.DecodeString(r.secret("OTP_PEPPER")); err != nil || len(pepper) < 32 {
+			r.errorf("OTP_PEPPER: must be base64 of at least 32 random bytes")
+		} else {
+			c.Secrets.OTPPepper = pepper
+		}
+		c.Mail = Mail{
+			SMTPAddr:     r.addr("SMTP_ADDR", ""),
+			SMTPUsername: r.secretOptional("SMTP_USERNAME"),
+			SMTPPassword: r.secretOptional("SMTP_PASSWORD"),
+			From:         r.str("MAIL_FROM", "iftahonline <no-reply@"+c.Tenancy.BaseDomain+">"),
+			DashboardURL: r.url("DASHBOARD_URL", false, "http", "https"),
+		}
+		if c.Mail.DashboardURL == "" {
+			c.Mail.DashboardURL = "https://app." + c.Tenancy.BaseDomain
+		}
+		if c.Env == EnvProduction && c.Mail.SMTPAddr != "" && c.Mail.SMTPUsername == "" {
+			r.errorf("SMTP_USERNAME is required with SMTP_ADDR in production")
+		}
+	}
 	if role == RoleAPI {
 		c.Identity = Identity{
 			Argon2MemoryKiB: uint32(r.int64("ARGON2_MEMORY_KIB", 19*1024, 8*1024, 1024*1024)), //nolint:gosec // bounded above.
@@ -202,6 +252,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("redis", redactURL(c.Redis.URL)),
 		slog.Bool("otel", c.OTel.Endpoint != ""),
 		slog.String("base_domain", c.Tenancy.BaseDomain),
+		slog.Bool("smtp", c.Mail.SMTPAddr != ""),
 	)
 }
 
@@ -336,6 +387,28 @@ func (r *reader) url(key string, required bool, schemes ...string) string {
 	}
 	r.errorf("%s: scheme must be one of %s with a host", key, strings.Join(schemes, ", "))
 	return ""
+}
+
+// secret reads a required secret. Its value never appears in errors.
+func (r *reader) secret(key string) string {
+	v, ok := r.get(key)
+	if !ok || strings.TrimSpace(v) == "" {
+		r.errorf("%s is required", key)
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+func (r *reader) secretOptional(key string) string {
+	v, _ := r.get(key)
+	return strings.TrimSpace(v)
+}
+
+func (r *reader) str(key, def string) string {
+	if v, ok := r.get(key); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return def
 }
 
 // hostname reads a lower-case DNS name with at least two labels.

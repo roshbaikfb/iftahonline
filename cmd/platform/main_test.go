@@ -91,6 +91,9 @@ func roleEnv(addr string) []string {
 		"DATABASE_URL=" + infra.AppURL,
 		"MIGRATE_DATABASE_URL=" + infra.OwnerURL,
 		"REDIS_URL=" + infra.RedisURL,
+		// Public development-only values (see .env.example), not secrets.
+		"SECRETBOX_KEYS=1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
+		"OTP_PEPPER=ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
 		"DRAIN_DELAY=700ms",
 		"SHUTDOWN_TIMEOUT=5s",
 	}

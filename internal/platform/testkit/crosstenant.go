@@ -30,7 +30,9 @@ type CrossTenantCase struct {
 	// resource (B's store ID in the path, or A's store with B's resource ID).
 	Request *http.Request
 	// Leaks are values belonging to B (IDs, names, emails) that must not
-	// appear anywhere in the response.
+	// appear anywhere in the response. Values the attacker put in the
+	// request URL are skipped: echoing them back (problem "instance")
+	// reveals nothing they did not already send.
 	Leaks []string
 	// Unchanged, if set, verifies B's data afterwards (required for writes).
 	Unchanged func(t testing.TB)
@@ -75,8 +77,9 @@ func AssertCrossTenantDenied(t testing.TB, reg *Registry, h http.Handler, c Cros
 	for k, vs := range res.Header {
 		headers.WriteString(k + ": " + strings.Join(vs, ",") + "\n")
 	}
+	sent := c.Request.URL.String()
 	for _, leak := range c.Leaks {
-		if leak == "" {
+		if leak == "" || strings.Contains(sent, leak) {
 			continue
 		}
 		if strings.Contains(string(body), leak) || strings.Contains(headers.String(), leak) {
