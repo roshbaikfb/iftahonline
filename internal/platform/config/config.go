@@ -50,6 +50,7 @@ type Config struct {
 	Redis    Redis
 	OTel     OTel
 	Worker   Worker
+	Tenancy  Tenancy
 }
 
 // HTTP configures the server for api, storefront and the worker's health port.
@@ -86,6 +87,17 @@ type OTel struct {
 
 // Worker configures River.
 type Worker struct{ Concurrency int }
+
+// Tenancy configures store hosts and the host → store caches (ADR-0004).
+type Tenancy struct {
+	BaseDomain        string        // store subdomains live under it, e.g. iftahonline.com
+	AdminHost         string        // the only host that serves the super-admin API
+	HostCacheSize     int           // L1 entries for known hosts
+	HostCacheTTL      time.Duration // L1 lifetime
+	NegativeCacheSize int           // L1 entries for unknown hosts (separate, so floods cannot evict real stores)
+	NegativeTTL       time.Duration // lifetime of unknown-host entries in L1 and L2
+	SharedCacheTTL    time.Duration // L2 (Redis) lifetime for known hosts
+}
 
 // Load reads configuration for role.
 func Load(role Role, lookup LookupFunc) (Config, error) {
@@ -133,8 +145,18 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		r.errorf("DB_MIN_CONNS (%d) must not exceed DB_MAX_CONNS (%d)", c.DB.MinConns, c.DB.MaxConns)
 	}
 
-	if role == RoleAPI || role == RoleStorefront {
+	if role != RoleMigrate {
+		// The worker needs Redis too: it invalidates the shared host cache.
 		c.Redis = Redis{URL: r.url("REDIS_URL", true, "redis", "rediss")}
+		c.Tenancy = Tenancy{
+			BaseDomain:        r.hostname("PLATFORM_BASE_DOMAIN", "iftahonline.com"),
+			HostCacheSize:     int(r.int64("HOSTCACHE_SIZE", 20000, 1, 10_000_000)),
+			HostCacheTTL:      r.duration("HOSTCACHE_TTL", time.Minute),
+			NegativeCacheSize: int(r.int64("HOSTCACHE_NEGATIVE_SIZE", 4096, 1, 1_000_000)),
+			NegativeTTL:       r.duration("HOSTCACHE_NEGATIVE_TTL", 15*time.Second),
+			SharedCacheTTL:    r.duration("HOSTCACHE_SHARED_TTL", 10*time.Minute),
+		}
+		c.Tenancy.AdminHost = r.hostname("ADMIN_HOST", "admin."+c.Tenancy.BaseDomain)
 	}
 
 	c.OTel = OTel{
@@ -160,6 +182,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Int("db_max_conns", int(c.DB.MaxConns)),
 		slog.String("redis", redactURL(c.Redis.URL)),
 		slog.Bool("otel", c.OTel.Endpoint != ""),
+		slog.String("base_domain", c.Tenancy.BaseDomain),
 	)
 }
 
@@ -294,6 +317,27 @@ func (r *reader) url(key string, required bool, schemes ...string) string {
 	}
 	r.errorf("%s: scheme must be one of %s with a host", key, strings.Join(schemes, ", "))
 	return ""
+}
+
+// hostname reads a lower-case DNS name with at least two labels.
+func (r *reader) hostname(key, def string) string {
+	v, ok := r.get(key)
+	if !ok {
+		return def
+	}
+	v = strings.ToLower(strings.TrimSuffix(v, "."))
+	labels := strings.Split(v, ".")
+	valid := len(v) <= 253 && len(labels) >= 2
+	for _, l := range labels {
+		if l == "" || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' ||
+			strings.IndexFunc(l, func(c rune) bool { return (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' }) >= 0 {
+			valid = false
+		}
+	}
+	if !valid {
+		r.errorf("%s: %q is not a domain name", key, v)
+	}
+	return v
 }
 
 func (r *reader) prefixes(key string) []netip.Prefix {

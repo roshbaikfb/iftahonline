@@ -55,9 +55,43 @@ func TestDefaults(t *testing.T) {
 			t.Errorf("%s addr = %q, %v", role, rc.HTTP.Addr, rerr)
 		}
 	}
+	if c.Tenancy.BaseDomain != "iftahonline.com" || c.Tenancy.AdminHost != "admin.iftahonline.com" ||
+		c.Tenancy.HostCacheSize != 20000 || c.Tenancy.HostCacheTTL != time.Minute ||
+		c.Tenancy.NegativeCacheSize != 4096 || c.Tenancy.NegativeTTL != 15*time.Second ||
+		c.Tenancy.SharedCacheTTL != 10*time.Minute {
+		t.Fatalf("unexpected tenancy defaults: %+v", c.Tenancy)
+	}
 	m, err := config.Load(config.RoleMigrate, env(base()))
 	if err != nil || !strings.Contains(m.DB.URL, "app_owner") {
 		t.Fatalf("migrate must use MIGRATE_DATABASE_URL: %q, %v", m.DB.URL, err)
+	}
+}
+
+func TestTenancyConfig(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleStorefront, env(with(
+		"PLATFORM_BASE_DOMAIN", "Shops.Example.EG.", "HOSTCACHE_SIZE", "10", "HOSTCACHE_NEGATIVE_TTL", "1s",
+	)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Tenancy.BaseDomain != "shops.example.eg" || c.Tenancy.AdminHost != "admin.shops.example.eg" ||
+		c.Tenancy.HostCacheSize != 10 || c.Tenancy.NegativeTTL != time.Second {
+		t.Fatalf("tenancy = %+v", c.Tenancy)
+	}
+	for _, bad := range []string{"localhost", "-a.com", "a..com", "a_b.com", "a.com/x", strings.Repeat("a", 64) + ".com"} {
+		if _, err := config.Load(config.RoleAPI, env(with("PLATFORM_BASE_DOMAIN", bad))); err == nil {
+			t.Errorf("PLATFORM_BASE_DOMAIN=%q must be rejected", bad)
+		}
+	}
+	if _, err := config.Load(config.RoleAPI, env(with("ADMIN_HOST", "nope"))); err == nil {
+		t.Error("ADMIN_HOST must be a domain name")
+	}
+	if _, err := config.Load(config.RoleWorker, env(with("REDIS_URL", "<unset>"))); err == nil {
+		t.Error("the worker needs REDIS_URL")
+	}
+	if m, err := config.Load(config.RoleMigrate, env(with("REDIS_URL", "<unset>"))); err != nil || m.Tenancy.BaseDomain != "" {
+		t.Errorf("migrate needs no Redis or tenancy config: %+v, %v", m.Tenancy, err)
 	}
 }
 
