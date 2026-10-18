@@ -12,6 +12,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/server/dbgen"
 )
 
@@ -22,7 +23,9 @@ const RiverSchemaVersion = 8
 // NoopArgs is a job that does nothing. It keeps the worker's River wiring
 // real (River requires at least one worker) and lets smoke tests verify
 // the pipeline end to end.
-type NoopArgs struct{}
+type NoopArgs struct {
+	jobs.GlobalArgs
+}
 
 // Kind implements river.JobArgs.
 func (NoopArgs) Kind() string { return "platform.noop" }
@@ -34,7 +37,9 @@ type noopWorker struct {
 func (noopWorker) Work(context.Context, *river.Job[NoopArgs]) error { return nil }
 
 // NewRiverClient builds the worker's River client. Modules add their
-// workers to `workers` before the client is created.
+// workers to `workers` before the client is created. jobs.Middleware
+// rejects unscoped or cross-tenant inserts and restores each job's tenant
+// before it runs (ADR-0007).
 func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, workers *river.Workers) (*river.Client[pgx.Tx], error) {
 	if err := river.AddWorkerSafely(workers, &noopWorker{}); err != nil {
 		return nil, fmt.Errorf("river: add noop worker: %w", err)
@@ -43,6 +48,7 @@ func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, worke
 		Logger:     log,
 		Queues:     map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: c.Concurrency}},
 		Workers:    workers,
+		Middleware: jobs.Middleware(),
 		JobTimeout: time.Minute,
 	})
 	if err != nil {

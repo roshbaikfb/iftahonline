@@ -9,6 +9,7 @@ package testinfra
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -39,8 +40,14 @@ type Infra struct {
 }
 
 // Run starts PostgreSQL (migrated) and Redis, runs the tests, and tears
-// everything down. It returns the exit code for os.Exit.
+// everything down. It returns the exit code for os.Exit. Under -fuzz no
+// containers start: fuzz runs use -run='^$', so only the (pure) fuzz
+// target executes.
 func Run(m *testing.M, infra *Infra) int {
+	flag.Parse()
+	if f := flag.Lookup("test.fuzz"); f != nil && f.Value.String() != "" {
+		return m.Run()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
