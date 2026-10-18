@@ -131,8 +131,16 @@ Access checks:
 - A non-member, and a malformed store or domain ID, get 404.
 - Every operation has a cross-tenant test. `TestMain` fails the package if
   one is missing.
-- The routes are mounted in the `api` role once identity provides the
-  membership middleware (P1, PR 3).
+- In the `api` role the routes run behind identity's real membership
+  middleware and role × permission policy.
+
+## Audit
+
+Every change is written to identity's audit log in the same transaction
+as the change, through the `audit.Recorder` the module receives:
+`store.updated`, `store.status_changed`, `domain.added`,
+`domain.verification_requested`, `domain.verified`, `domain.removed` and
+`domain.primary_set`.
 
 ## Events and jobs
 
