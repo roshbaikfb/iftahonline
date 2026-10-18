@@ -57,6 +57,21 @@ func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, worke
 	return client, nil
 }
 
+// NewRiverInserter builds an insert-only River client for the api and
+// storefront roles: modules enqueue with InsertTx in their own
+// transactions, and the worker role runs the jobs. It carries the same
+// tenant middleware as the worker's client.
+func NewRiverInserter(pool *pgxpool.Pool, log *slog.Logger) (*river.Client[pgx.Tx], error) {
+	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Logger:     log,
+		Middleware: jobs.Middleware(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("river: new inserter: %w", err)
+	}
+	return client, nil
+}
+
 // RiverSchemaCheck fails readiness until River's tables are migrated to
 // the version this binary expects.
 func RiverSchemaCheck(pool *pgxpool.Pool) Check {
