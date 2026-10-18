@@ -25,7 +25,7 @@ COVER_MIN ?= 80
 # Coverage is enforced for business-module domain/app packages (CLAUDE.md)
 # and for the platform packages that hold core rules.
 COVER_MATCH := -match '/internal/modules/[^/]+/internal/(domain|app)$$' \
-	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox)$$'
+	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox|audit)$$'
 
 API_ADDR        ?= 127.0.0.1:18080
 STOREFRONT_ADDR ?= 127.0.0.1:18081
@@ -57,6 +57,7 @@ dash-deps: $(DASH)/node_modules/.installed
 gen: dash-deps ## Regenerate code: oapi-codegen, sqlc, templ, TS client
 	go tool oapi-codegen -config api/oapi-codegen.system.yaml api/openapi.yaml
 	go tool oapi-codegen -config api/oapi-codegen.tenancy.yaml api/openapi.yaml
+	go tool oapi-codegen -config api/oapi-codegen.identity.yaml api/openapi.yaml
 	$(SQLC) generate
 	go tool templ generate -path internal/server/views
 	cd $(DASH) && npm run --silent gen:api

@@ -51,6 +51,7 @@ type Config struct {
 	OTel     OTel
 	Worker   Worker
 	Tenancy  Tenancy
+	Identity Identity
 }
 
 // HTTP configures the server for api, storefront and the worker's health port.
@@ -87,6 +88,16 @@ type OTel struct {
 
 // Worker configures River.
 type Worker struct{ Concurrency int }
+
+// Identity configures password hashing (ADR-0005). Each concurrent hash
+// holds Argon2MemoryKiB, so HashConcurrency × Argon2MemoryKiB must fit
+// comfortably under GOMEMLIMIT.
+type Identity struct {
+	Argon2MemoryKiB uint32
+	Argon2Time      uint32
+	Argon2Threads   uint8
+	HashConcurrency int
+}
 
 // Tenancy configures store hosts and the host → store caches (ADR-0004).
 type Tenancy struct {
@@ -157,6 +168,14 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			SharedCacheTTL:    r.duration("HOSTCACHE_SHARED_TTL", 10*time.Minute),
 		}
 		c.Tenancy.AdminHost = r.hostname("ADMIN_HOST", "admin."+c.Tenancy.BaseDomain)
+	}
+	if role == RoleAPI {
+		c.Identity = Identity{
+			Argon2MemoryKiB: uint32(r.int64("ARGON2_MEMORY_KIB", 19*1024, 8*1024, 1024*1024)), //nolint:gosec // bounded above.
+			Argon2Time:      uint32(r.int64("ARGON2_TIME", 2, 1, 10)),                         //nolint:gosec // bounded above.
+			Argon2Threads:   uint8(r.int64("ARGON2_THREADS", 1, 1, 16)),                       //nolint:gosec // bounded above.
+			HashConcurrency: int(r.int64("PASSWORD_HASH_CONCURRENCY", 8, 1, 256)),
+		}
 	}
 
 	c.OTel = OTel{

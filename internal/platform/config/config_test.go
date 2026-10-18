@@ -61,6 +61,12 @@ func TestDefaults(t *testing.T) {
 		c.Tenancy.SharedCacheTTL != 10*time.Minute {
 		t.Fatalf("unexpected tenancy defaults: %+v", c.Tenancy)
 	}
+	if c.Identity.Argon2MemoryKiB != 19456 || c.Identity.Argon2Time != 2 || c.Identity.Argon2Threads != 1 || c.Identity.HashConcurrency != 8 {
+		t.Fatalf("unexpected identity defaults: %+v", c.Identity)
+	}
+	if _, err = config.Load(config.RoleAPI, env(with("ARGON2_MEMORY_KIB", "1024"))); err == nil {
+		t.Fatal("argon2 memory below 8 MiB must be rejected")
+	}
 	m, err := config.Load(config.RoleMigrate, env(base()))
 	if err != nil || !strings.Contains(m.DB.URL, "app_owner") {
 		t.Fatalf("migrate must use MIGRATE_DATABASE_URL: %q, %v", m.DB.URL, err)
