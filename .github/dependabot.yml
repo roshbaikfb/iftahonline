@@ -10,6 +10,20 @@ updates:
   - package-ecosystem: npm
     directory: /web/dashboard
     schedule: { interval: weekly }
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1 only.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # These majors require Node >= 22; local development still runs Node 20.19.
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: jsdom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/jest-dom"
+        update-types: ["version-update:semver-major"]
+      # Types must match the Node version we target (22 LTS in CI).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
