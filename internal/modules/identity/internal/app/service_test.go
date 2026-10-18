@@ -28,6 +28,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -39,12 +40,16 @@ var infra testinfra.Infra
 func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 
 type fixture struct {
-	svc   *app.Service
-	app   *pgxpool.Pool
-	owner *pgxpool.Pool
-	ids   *ulid.Generator
-	qc    *testkit.QueryCounter
-	ten   *tenancy.Module
+	svc     *app.Service
+	app     *pgxpool.Pool
+	owner   *pgxpool.Pool
+	ids     *ulid.Generator
+	qc      *testkit.QueryCounter
+	ten     *tenancy.Module
+	rdb     *redis.Client
+	keyring *secretbox.Keyring
+	ins     *river.Client[pgx.Tx]
+	log     *slog.Logger
 }
 
 // testLimits are tight so throttling is testable; each test uses fresh
@@ -54,6 +59,10 @@ func testLimits() app.Limits {
 		SignupPerIP:      ratelimit.Limit{Burst: 3, Period: time.Hour},
 		LoginPerIP:       ratelimit.Limit{Burst: 20, Period: time.Hour},
 		LoginFailPerUser: ratelimit.Limit{Burst: 3, Period: time.Hour},
+		OTPPerPhone:      ratelimit.Limit{Burst: 3, Period: time.Hour},
+		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
+		OTPPerIP:         ratelimit.Limit{Burst: 10, Period: time.Hour},
+		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: time.Hour},
 	}
 }
 
@@ -92,8 +101,15 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := app.NewService(pool, hasher, limiter, testLimits(), ten.Service(), ids, log)
-	return fixture{svc: svc, app: pool, owner: owner, ids: ids, qc: qc, ten: ten}
+	keyring, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := app.NewService(app.Deps{
+		DB: pool, Hasher: hasher, Limiter: limiter, Limits: testLimits(), Stores: ten.Service(), IDs: ids, Log: log,
+		Redis: rdb, Keyring: keyring, Pepper: []byte("dev-only-otp-pepper-not-a-secret"), Jobs: ins, OTPEnabled: true,
+	})
+	return fixture{svc: svc, app: pool, owner: owner, ids: ids, qc: qc, ten: ten, rdb: rdb, keyring: keyring, ins: ins, log: log}
 }
 
 func (f fixture) unique(prefix string) string {

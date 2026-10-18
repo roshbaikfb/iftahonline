@@ -163,9 +163,14 @@ func newTenancy(c clients) (*tenancy.Module, error) {
 }
 
 func newIdentity(c clients, ten *tenancy.Module) (*identity.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
 	return identity.New(identity.Deps{
 		Pool: c.pool, Redis: c.rdb, Tenancy: ten.Service(), IDs: c.ids, Log: c.log,
 		Config: c.cfg.Identity, ClientIP: middleware.ClientIP,
+		Secrets: c.cfg.Secrets, Jobs: inserter, Env: c.cfg.Env,
 	})
 }
 
@@ -266,7 +271,9 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err = ten.RegisterWorkers(workers); err != nil {
 		return err
 	}
-	if err = identity.RegisterWorkers(workers, pool); err != nil {
+	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
+		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
+	}); err != nil {
 		return err
 	}
 	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, identity.PeriodicJobs()...)

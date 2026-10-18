@@ -84,6 +84,9 @@ func (h *Handlers) Login(ctx context.Context, req LoginRequestObject) (LoginResp
 	if err != nil {
 		return nil, err
 	}
+	if res.MFA != nil {
+		return Login202JSONResponse(mfaRequired(res.MFA)), nil
+	}
 	body, cookie := authResponse(res, mobile(req.Body.Client))
 	return Login200JSONResponse{Body: body, Headers: Login200ResponseHeaders{SetCookie: cookie}}, nil
 }
@@ -175,7 +178,16 @@ func (h *Handlers) ListAuditLog(ctx context.Context, req ListAuditLogRequestObje
 }
 
 func toUser(u domain.User) User {
-	return User{Id: u.ID.String(), Email: u.Email, Name: u.Name, EmailVerified: u.EmailVerifiedAt != nil, CreatedAt: u.CreatedAt}
+	out := User{Id: u.ID.String(), Email: u.Email, Name: u.Name, EmailVerified: u.EmailVerifiedAt != nil,
+		MfaEnabled: u.MFAEnabled(), CreatedAt: u.CreatedAt}
+	if u.Phone != "" {
+		out.Phone = &u.Phone
+	}
+	return out
+}
+
+func mfaRequired(c *app.Challenge) MFARequired {
+	return MFARequired{MfaRequired: true, ChallengeId: c.ID, ExpiresAt: c.ExpiresAt}
 }
 
 // CookieName is the dashboard session cookie. The __Host- prefix makes

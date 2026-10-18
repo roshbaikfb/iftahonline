@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/password"
@@ -15,17 +17,23 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-// Limits are the throttles on public auth endpoints (ADR-0005 §6).
+// Limits are the throttles on public auth endpoints (ADR-0005 §4, §6).
 type Limits struct {
 	SignupPerIP      ratelimit.Limit // sign-up attempts per IP
 	LoginPerIP       ratelimit.Limit // login attempts per IP
 	LoginFailPerUser ratelimit.Limit // failed logins per email, then locked until refill
+	OTPPerPhone      ratelimit.Limit // codes sent to one number (resend spacing)
+	OTPPerPhoneDay   ratelimit.Limit // codes sent to one number per day (SMS pumping)
+	OTPPerIP         ratelimit.Limit // codes requested from one IP
+	MFAFailPerUser   ratelimit.Limit // wrong second factors per user
 }
 
 // DefaultLimits are conservative production defaults.
@@ -34,6 +42,10 @@ func DefaultLimits() Limits {
 		SignupPerIP:      ratelimit.Limit{Burst: 5, Period: time.Hour},
 		LoginPerIP:       ratelimit.Limit{Burst: 30, Period: 15 * time.Minute},
 		LoginFailPerUser: ratelimit.Limit{Burst: 5, Period: 15 * time.Minute},
+		OTPPerPhone:      ratelimit.Limit{Burst: 1, Period: time.Minute},
+		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
+		OTPPerIP:         ratelimit.Limit{Burst: 10, Period: time.Hour},
+		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: 15 * time.Minute},
 	}
 }
 
@@ -44,24 +56,47 @@ type DB interface {
 	store.Tx
 }
 
+// Deps are the service's dependencies.
+type Deps struct {
+	DB      DB
+	Hasher  *password.Hasher
+	Limiter *ratelimit.Limiter
+	Limits  Limits
+	Stores  tenancy.Service
+	IDs     *ulid.Generator
+	Log     *slog.Logger
+	Redis   *redis.Client      // pending challenges and code deliveries
+	Keyring *secretbox.Keyring // seals TOTP seeds and pending codes
+	Pepper  []byte             // OTP MAC key
+	Jobs    jobs.Inserter      // code delivery, invitation mail, device alerts
+	// OTPEnabled is false while no SMS/WhatsApp provider is configured in
+	// production: phone OTP then answers 503.
+	OTPEnabled bool
+}
+
 // Service implements the identity use cases.
 type Service struct {
-	db      DB
-	hasher  *password.Hasher
-	limiter *ratelimit.Limiter
-	limits  Limits
-	stores  tenancy.Service
-	ids     *ulid.Generator
-	audit   *Recorder
-	log     *slog.Logger
-	now     func() time.Time
+	db         DB
+	hasher     *password.Hasher
+	limiter    *ratelimit.Limiter
+	limits     Limits
+	stores     tenancy.Service
+	ids        *ulid.Generator
+	audit      *Recorder
+	log        *slog.Logger
+	rdb        *redis.Client
+	keyring    *secretbox.Keyring
+	pepper     []byte
+	jobs       jobs.Inserter
+	otpEnabled bool
+	now        func() time.Time
 }
 
 // NewService wires the service.
-func NewService(db DB, hasher *password.Hasher, limiter *ratelimit.Limiter, limits Limits,
-	stores tenancy.Service, ids *ulid.Generator, log *slog.Logger) *Service {
-	return &Service{db: db, hasher: hasher, limiter: limiter, limits: limits, stores: stores, ids: ids,
-		audit: NewRecorder(ids), log: log, now: time.Now}
+func NewService(d Deps) *Service {
+	return &Service{db: d.DB, hasher: d.Hasher, limiter: d.Limiter, limits: d.Limits, stores: d.Stores, ids: d.IDs,
+		audit: NewRecorder(d.IDs), log: d.Log, rdb: d.Redis, keyring: d.Keyring, pepper: d.Pepper, jobs: d.Jobs,
+		otpEnabled: d.OTPEnabled, now: time.Now}
 }
 
 var (
@@ -78,12 +113,14 @@ type SignupInput struct {
 	Store    tenancy.NewStore
 }
 
-// AuthResult is a fresh session for a user.
+// AuthResult is a fresh session for a user, or (MFA set) the challenge
+// the user must complete with a second factor first.
 type AuthResult struct {
 	User    domain.User
 	StoreID tenant.StoreID // set by sign-up
 	Session domain.Session
 	Token   domain.Token
+	MFA     *Challenge
 }
 
 // Signup creates the user, the store with its default subdomain, the owner
@@ -221,20 +258,10 @@ func (s *Service) Login(ctx context.Context, rawEmail, pw string) (AuthResult, e
 			}
 		}
 	}
-
-	token, err := domain.NewToken()
-	if err != nil {
-		return AuthResult{}, err
+	if u.MFAEnabled() {
+		return s.startMFA(ctx, u)
 	}
-	var sess domain.Session
-	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
-		sess, err = s.insertSession(ctx, tx, u.ID, token)
-		return err
-	})
-	if err != nil {
-		return AuthResult{}, err
-	}
-	return AuthResult{User: u, Session: sess, Token: token}, nil
+	return s.openSession(ctx, u)
 }
 
 func (s *Service) fail(ctx context.Context, key string) error {
@@ -244,14 +271,31 @@ func (s *Service) fail(ctx context.Context, key string) error {
 	return errInvalidCredentials
 }
 
+// insertSession opens a session in tx and records the device; a device
+// the user has not used before (when they have others) enqueues a
+// new-device alert in the same transaction.
 func (s *Service) insertSession(ctx context.Context, tx pgx.Tx, userID ulid.ID, token domain.Token) (domain.Session, error) {
 	m := metaFrom(ctx)
 	now := s.now()
-	return store.InsertSession(ctx, tx, store.NewSession{
-		ID: s.ids.New(), UserID: userID, Token: token,
-		UserAgent: domain.TruncateUserAgent(m.UserAgent), IPPrefix: domain.IPPrefix(m.IP),
+	ua, ipPrefix := domain.TruncateUserAgent(m.UserAgent), domain.IPPrefix(m.IP)
+	sess, err := store.InsertSession(ctx, tx, store.NewSession{
+		ID: s.ids.New(), UserID: userID, Token: token, UserAgent: ua, IPPrefix: ipPrefix,
 		ExpiresAt: domain.ExpiresAt(now, now),
 	})
+	if err != nil || m.DeviceID == "" {
+		return sess, err
+	}
+	isNew, hadOthers, err := store.TouchDevice(ctx, tx, userID, domain.DeviceHash(m.DeviceID), ua, ipPrefix)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	if isNew && hadOthers {
+		args := NewDeviceAlertArgs{UserID: userID, UserAgent: ua, IPPrefix: ipPrefix, At: now.UTC()}
+		if _, err := s.jobs.InsertTx(ctx, tx, args, nil); err != nil {
+			return domain.Session{}, fmt.Errorf("identity: enqueue device alert: %w", err)
+		}
+	}
+	return sess, nil
 }
 
 // throttle consumes one event; Redis failures fail closed (503).

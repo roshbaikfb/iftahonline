@@ -2,6 +2,10 @@ package httpapi_test
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base32"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,6 +34,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -113,10 +118,20 @@ func newFixture(t *testing.T) fixture {
 		SignupPerIP:      ratelimit.Limit{Burst: 50, Period: time.Hour},
 		LoginPerIP:       ratelimit.Limit{Burst: 50, Period: time.Hour},
 		LoginFailPerUser: ratelimit.Limit{Burst: 2, Period: time.Hour},
+		OTPPerPhone:      ratelimit.Limit{Burst: 5, Period: time.Minute},
+		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
+		OTPPerIP:         ratelimit.Limit{Burst: 50, Period: time.Hour},
+		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: time.Hour},
+	}
+	keyring, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=")
+	if err != nil {
+		t.Fatal(err)
 	}
 	id, err := identity.New(identity.Deps{
 		Pool: pool, Redis: rdb, Tenancy: ten.Service(), IDs: ids, Log: log, Limits: &limits,
-		Config: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 4},
+		Jobs: ins, Env: config.EnvTest,
+		Secrets: config.Secrets{Keyring: keyring, OTPPepper: []byte("dev-only-otp-pepper-not-a-secret")},
+		Config:  config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 4},
 		ClientIP: func(ctx context.Context) (netip.Addr, bool) {
 			ip, ok := ctx.Value(ipKey{}).(netip.Addr)
 			return ip, ok
@@ -247,14 +262,24 @@ func TestSignupAndLoginCookies(t *testing.T) {
 	// Mobile: token in the body, no cookie.
 	mob := f.signup(t, "mobile")
 	res, m = f.do(t, newReq(t, http.MethodPost, "/v1/auth/login", fmt.Sprintf(`{"email":%q,"password":"correct horse battery","client":"mobile"}`, mob.email)))
-	if res.StatusCode != http.StatusOK || m["token"] == nil || res.Header.Get("Set-Cookie") != "" {
-		t.Fatalf("mobile login = %d %v %q", res.StatusCode, m, res.Header.Get("Set-Cookie"))
+	// The session token is in the body only; the only cookie is the device
+	// identifier for new-device alerts, which is not a credential.
+	if res.StatusCode != http.StatusOK || m["token"] == nil || strings.Contains(strings.Join(res.Header.Values("Set-Cookie"), ";"), "__Host-sid") {
+		t.Fatalf("mobile login = %d %v %q", res.StatusCode, m, res.Header.Values("Set-Cookie"))
 	}
 
-	// Web login sets a cookie.
+	// Web login sets the session cookie and, for a new browser, the device
+	// cookie; both survive (the handler's Set-Cookie does not clobber it).
 	res, _ = f.do(t, newReq(t, http.MethodPost, "/v1/auth/login", fmt.Sprintf(`{"email":%q,"password":"correct horse battery"}`, email)))
-	if res.StatusCode != http.StatusOK || !strings.Contains(res.Header.Get("Set-Cookie"), "__Host-sid=") {
-		t.Fatalf("web login = %d", res.StatusCode)
+	all := strings.Join(res.Header.Values("Set-Cookie"), "\n")
+	if res.StatusCode != http.StatusOK || !strings.Contains(all, "__Host-sid=") || !strings.Contains(all, "__Host-did=") {
+		t.Fatalf("web login = %d %q", res.StatusCode, all)
+	}
+	// A browser that already has a device cookie keeps it.
+	res, _ = f.do(t, newReq(t, http.MethodPost, "/v1/auth/login", fmt.Sprintf(`{"email":%q,"password":"correct horse battery"}`, email),
+		func(r *http.Request) { r.AddCookie(&http.Cookie{Name: "__Host-did", Value: "known-device-0123456789"}) }))
+	if strings.Contains(strings.Join(res.Header.Values("Set-Cookie"), ";"), "__Host-did") {
+		t.Fatal("existing device cookie must not be replaced")
 	}
 }
 
@@ -485,4 +510,135 @@ func TestCrossTenant(t *testing.T) {
 	if res, _ := f.do(t, newReq(t, http.MethodGet, "/v1/stores/not-an-id", "", bearer(a.token))); res.StatusCode != http.StatusNotFound {
 		t.Fatalf("malformed store id = %d", res.StatusCode)
 	}
+}
+
+// TestTeamCrossTenant: A's owner cannot see or change B's team, by B's
+// store path or by B's IDs under A's own path.
+func TestTeamCrossTenant(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, b := f.signup(t, "mobile"), f.signup(t, "mobile")
+	bMember := f.signup(t, "mobile")
+	f.addMember(t, b.storeID, bMember.userID, "support")
+	res, m := f.do(t, newReq(t, http.MethodPost, "/v1/stores/"+b.storeID+"/invitations", `{"email":"secret-invitee@example.com","role":"manager"}`, bearer(b.token)))
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("B invites = %d %v", res.StatusCode, m)
+	}
+	bInvite := m["id"].(string)
+
+	teamUnchanged := func(tb testing.TB) {
+		tb.Helper()
+		_, ms := f.do(t, newReq(t, http.MethodGet, "/v1/stores/"+b.storeID+"/members", "", bearer(b.token)))
+		_, inv := f.do(t, newReq(t, http.MethodGet, "/v1/stores/"+b.storeID+"/invitations", "", bearer(b.token)))
+		items, _ := ms["items"].([]any)
+		invs, _ := inv["items"].([]any)
+		role := ""
+		for _, x := range items {
+			if e := x.(map[string]any); e["user_id"] == bMember.userID {
+				role, _ = e["role"].(string)
+			}
+		}
+		if len(items) != 2 || role != "support" || len(invs) != 1 {
+			tb.Errorf("B's team changed: members=%v invitations=%v", items, invs)
+		}
+	}
+	leaks := []string{bMember.email, "secret-invitee@example.com", bMember.userID, bInvite}
+	bStore, aStore := "/v1/stores/"+b.storeID, "/v1/stores/"+a.storeID
+	cases := []testkit.CrossTenantCase{
+		{OperationID: "listMembers", Request: newReq(t, http.MethodGet, bStore+"/members", "", bearer(a.token))},
+		{OperationID: "updateMemberRole", Request: newReq(t, http.MethodPatch, bStore+"/members/"+bMember.userID, `{"role":"manager"}`, bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "updateMemberRole", Request: newReq(t, http.MethodPatch, aStore+"/members/"+bMember.userID, `{"role":"manager"}`, bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "removeMember", Request: newReq(t, http.MethodDelete, bStore+"/members/"+bMember.userID, "", bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "removeMember", Request: newReq(t, http.MethodDelete, aStore+"/members/"+bMember.userID, "", bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "listInvitations", Request: newReq(t, http.MethodGet, bStore+"/invitations", "", bearer(a.token))},
+		{OperationID: "createInvitation", Request: newReq(t, http.MethodPost, bStore+"/invitations", `{"email":"evil@example.com","role":"manager"}`, bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "revokeInvitation", Request: newReq(t, http.MethodDelete, bStore+"/invitations/"+bInvite, "", bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "revokeInvitation", Request: newReq(t, http.MethodDelete, aStore+"/invitations/"+bInvite, "", bearer(a.token)), Unchanged: teamUnchanged},
+	}
+	for _, c := range cases {
+		t.Run(c.OperationID+" "+c.Request.URL.Path, func(t *testing.T) {
+			c.Leaks = leaks
+			testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, c)
+		})
+	}
+}
+
+func TestTeamPermissions(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	owner := f.signup(t, "mobile")
+	support := f.signup(t, "mobile")
+	f.addMember(t, owner.storeID, support.userID, "support")
+	store := "/v1/stores/" + owner.storeID
+	tests := []struct {
+		who    account
+		method string
+		path   string
+		body   string
+		status int
+	}{
+		{support, http.MethodGet, store + "/members", "", http.StatusOK},
+		{support, http.MethodGet, store + "/invitations", "", http.StatusForbidden},
+		{support, http.MethodPost, store + "/invitations", `{"email":"x@example.com","role":"manager"}`, http.StatusForbidden},
+		{support, http.MethodPatch, store + "/members/" + support.userID, `{"role":"manager"}`, http.StatusForbidden},
+		{support, http.MethodDelete, store + "/members/" + owner.userID, "", http.StatusForbidden},
+		{owner, http.MethodPost, store + "/invitations", `{"email":"y@example.com","role":"owner"}`, http.StatusUnprocessableEntity},
+		{owner, http.MethodPost, store + "/invitations", `{"email":"bad","role":"manager"}`, http.StatusUnprocessableEntity},
+		{owner, http.MethodPatch, store + "/members/" + owner.userID, `{"role":"manager"}`, http.StatusConflict},
+		{owner, http.MethodDelete, store + "/members/" + owner.userID, "", http.StatusConflict},
+		{owner, http.MethodDelete, store + "/members/not-an-id", "", http.StatusNotFound},
+		{owner, http.MethodPost, store + "/invitations", `{"email":"z@example.com","role":"shipping"}`, http.StatusCreated},
+		{owner, http.MethodPatch, store + "/members/" + support.userID, `{"role":"manager"}`, http.StatusNoContent},
+		{owner, http.MethodDelete, store + "/members/" + support.userID, "", http.StatusNoContent},
+		{support, http.MethodGet, store, "", http.StatusNotFound}, // removed: gone at once
+	}
+	for _, tt := range tests {
+		if res, m := f.do(t, newReq(t, tt.method, tt.path, tt.body, bearer(tt.who.token))); res.StatusCode != tt.status {
+			t.Errorf("%s %s = %d %v; want %d", tt.method, tt.path, res.StatusCode, m, tt.status)
+		}
+	}
+}
+
+func TestLoginWithMFAOverHTTP(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	acc := f.signup(t, "mobile")
+	_, setup := f.do(t, newReq(t, http.MethodPost, "/v1/me/mfa/totp", "", bearer(acc.token)))
+	secret, _ := setup["secret"].(string)
+	raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	if err != nil {
+		t.Fatalf("setup = %v", setup)
+	}
+	now := time.Now()
+	code := func(at time.Time) string { return hotp(raw, at.Unix()/30) }
+	res, m := f.do(t, newReq(t, http.MethodPost, "/v1/me/mfa/totp/confirm", fmt.Sprintf(`{"code":%q}`, code(now)), bearer(acc.token)))
+	if codes, _ := m["codes"].([]any); res.StatusCode != http.StatusOK || len(codes) != 10 {
+		t.Fatalf("confirm = %d %v", res.StatusCode, m)
+	}
+	_, me := f.do(t, newReq(t, http.MethodGet, "/v1/me", "", bearer(acc.token)))
+	if me["user"].(map[string]any)["mfa_enabled"] != true {
+		t.Fatalf("me = %v", me)
+	}
+
+	res, m = f.do(t, newReq(t, http.MethodPost, "/v1/auth/login", fmt.Sprintf(`{"email":%q,"password":"correct horse battery"}`, acc.email)))
+	if res.StatusCode != http.StatusAccepted || m["mfa_required"] != true || strings.Contains(strings.Join(res.Header.Values("Set-Cookie"), ";"), "__Host-sid") {
+		t.Fatalf("login with 2FA = %d %v", res.StatusCode, m)
+	}
+	ch := m["challenge_id"].(string)
+	res, m = f.do(t, newReq(t, http.MethodPost, "/v1/auth/mfa", fmt.Sprintf(`{"challenge_id":%q,"code":%q}`, ch, code(now.Add(30*time.Second)))))
+	if res.StatusCode != http.StatusOK || !strings.Contains(strings.Join(res.Header.Values("Set-Cookie"), ";"), "__Host-sid=") {
+		t.Fatalf("mfa = %d %v", res.StatusCode, m)
+	}
+}
+
+// hotp is RFC 4226 for 6 digits (kept here so the test does not trust the
+// implementation it checks).
+func hotp(key []byte, counter int64) string {
+	var msg [8]byte
+	binary.BigEndian.PutUint64(msg[:], uint64(counter))
+	mac := hmac.New(sha1.New, key)
+	mac.Write(msg[:])
+	sum := mac.Sum(nil)
+	off := sum[len(sum)-1] & 0x0f
+	return fmt.Sprintf("%06d", (binary.BigEndian.Uint32(sum[off:off+4])&0x7fffffff)%1_000_000)
 }
