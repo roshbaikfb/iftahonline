@@ -99,6 +99,34 @@ func IPPrefix(a netip.Addr) string {
 	return p.String()
 }
 
+// DeviceHash is what user_devices stores for a device identifier.
+func DeviceHash(deviceID string) []byte {
+	h := sha256.Sum256([]byte("device\x00" + deviceID))
+	return h[:]
+}
+
+// NewDeviceID returns a random identifier for the device cookie.
+func NewDeviceID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("identity: device id: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// ValidDeviceID bounds client-supplied identifiers.
+func ValidDeviceID(s string) bool {
+	if len(s) < 16 || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
 // TruncateUserAgent bounds what we keep of a User-Agent header.
 func TruncateUserAgent(ua string) string {
 	const maxLen = 200

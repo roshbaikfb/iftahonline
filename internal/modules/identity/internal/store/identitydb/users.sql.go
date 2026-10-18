@@ -11,8 +11,55 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const countDevices = `-- name: CountDevices :one
+SELECT count(*) FROM user_devices WHERE user_id = $1
+`
+
+func (q *Queries) CountDevices(ctx context.Context, userID ulid.ID) (int64, error) {
+	row := q.db.QueryRow(ctx, countDevices, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteRecoveryCodes = `-- name: DeleteRecoveryCodes :exec
+DELETE FROM user_recovery_codes WHERE user_id = $1
+`
+
+func (q *Queries) DeleteRecoveryCodes(ctx context.Context, userID ulid.ID) error {
+	_, err := q.db.Exec(ctx, deleteRecoveryCodes, userID)
+	return err
+}
+
+const disableTOTP = `-- name: DisableTOTP :exec
+UPDATE users SET totp_secret = NULL, totp_enabled_at = NULL, totp_last_step = 0, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) DisableTOTP(ctx context.Context, id ulid.ID) error {
+	_, err := q.db.Exec(ctx, disableTOTP, id)
+	return err
+}
+
+const enableTOTP = `-- name: EnableTOTP :execrows
+UPDATE users SET totp_enabled_at = now(), totp_last_step = $1, updated_at = now()
+WHERE id = $2 AND totp_secret IS NOT NULL AND totp_enabled_at IS NULL
+`
+
+type EnableTOTPParams struct {
+	Step int64
+	ID   ulid.ID
+}
+
+func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enableTOTP, arg.Step, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getUser = `-- name: GetUser :one
-SELECT id, email, email_verified_at, name, password_hash, status, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, email_verified_at, name, password_hash, status, created_at, updated_at, phone, phone_verified_at, totp_secret, totp_enabled_at, totp_last_step FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id ulid.ID) (User, error) {
@@ -27,12 +74,17 @@ func (q *Queries) GetUser(ctx context.Context, id ulid.ID) (User, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+		&i.TotpSecret,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, email_verified_at, name, password_hash, status, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, email_verified_at, name, password_hash, status, created_at, updated_at, phone, phone_verified_at, totp_secret, totp_enabled_at, totp_last_step FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -47,15 +99,50 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+		&i.TotpSecret,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
 	)
 	return i, err
+}
+
+const getUserByPhone = `-- name: GetUserByPhone :one
+SELECT id, email, email_verified_at, name, password_hash, status, created_at, updated_at, phone, phone_verified_at, totp_secret, totp_enabled_at, totp_last_step FROM users WHERE phone = $1
+`
+
+func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByPhone, phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.Name,
+		&i.PasswordHash,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+		&i.TotpSecret,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+	)
+	return i, err
+}
+
+type InsertRecoveryCodesParams struct {
+	UserID   ulid.ID
+	CodeHash []byte
 }
 
 const insertUser = `-- name: InsertUser :one
 
 INSERT INTO users (id, email, name, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, email_verified_at, name, password_hash, status, created_at, updated_at
+RETURNING id, email, email_verified_at, name, password_hash, status, created_at, updated_at, phone, phone_verified_at, totp_secret, totp_enabled_at, totp_last_step
 `
 
 type InsertUserParams struct {
@@ -84,8 +171,46 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+		&i.TotpSecret,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
 	)
 	return i, err
+}
+
+const setPendingTOTP = `-- name: SetPendingTOTP :execrows
+UPDATE users SET totp_secret = $1, updated_at = now()
+WHERE id = $2 AND totp_enabled_at IS NULL
+`
+
+type SetPendingTOTPParams struct {
+	TotpSecret []byte
+	ID         ulid.ID
+}
+
+// Starts (or restarts) enrolment; refused while 2FA is enabled.
+func (q *Queries) SetPendingTOTP(ctx context.Context, arg SetPendingTOTPParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setPendingTOTP, arg.TotpSecret, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setVerifiedPhone = `-- name: SetVerifiedPhone :exec
+UPDATE users SET phone = $1, phone_verified_at = now(), updated_at = now() WHERE id = $2
+`
+
+type SetVerifiedPhoneParams struct {
+	Phone *string
+	ID    ulid.ID
+}
+
+func (q *Queries) SetVerifiedPhone(ctx context.Context, arg SetVerifiedPhoneParams) error {
+	_, err := q.db.Exec(ctx, setVerifiedPhone, arg.Phone, arg.ID)
+	return err
 }
 
 const updatePasswordHash = `-- name: UpdatePasswordHash :exec
@@ -100,4 +225,68 @@ type UpdatePasswordHashParams struct {
 func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error {
 	_, err := q.db.Exec(ctx, updatePasswordHash, arg.PasswordHash, arg.ID)
 	return err
+}
+
+const upsertDevice = `-- name: UpsertDevice :one
+INSERT INTO user_devices (user_id, device_hash, user_agent, ip_prefix)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, device_hash) DO UPDATE
+  SET last_seen_at = now(), user_agent = excluded.user_agent, ip_prefix = excluded.ip_prefix
+RETURNING (xmax = 0)::boolean AS inserted
+`
+
+type UpsertDeviceParams struct {
+	UserID     ulid.ID
+	DeviceHash []byte
+	UserAgent  string
+	IpPrefix   string
+}
+
+// Records a sign-in device; inserted is true the first time it is seen.
+func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, upsertDevice,
+		arg.UserID,
+		arg.DeviceHash,
+		arg.UserAgent,
+		arg.IpPrefix,
+	)
+	var inserted bool
+	err := row.Scan(&inserted)
+	return inserted, err
+}
+
+const useRecoveryCode = `-- name: UseRecoveryCode :execrows
+UPDATE user_recovery_codes SET used_at = now()
+WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+`
+
+type UseRecoveryCodeParams struct {
+	UserID   ulid.ID
+	CodeHash []byte
+}
+
+func (q *Queries) UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, useRecoveryCode, arg.UserID, arg.CodeHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const useTOTPStep = `-- name: UseTOTPStep :execrows
+UPDATE users SET totp_last_step = $1 WHERE id = $2 AND totp_last_step < $1
+`
+
+type UseTOTPStepParams struct {
+	Step int64
+	ID   ulid.ID
+}
+
+// Atomic replay guard: a step is accepted once, and only moving forward.
+func (q *Queries) UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error) {
+	result, err := q.db.Exec(ctx, useTOTPStep, arg.Step, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

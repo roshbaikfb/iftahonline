@@ -12,6 +12,40 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const deleteMember = `-- name: DeleteMember :execrows
+DELETE FROM store_memberships
+WHERE store_id = $1 AND user_id = $2 AND role <> 'owner'
+`
+
+type DeleteMemberParams struct {
+	StoreID ulid.ID
+	UserID  ulid.ID
+}
+
+func (q *Queries) DeleteMember(ctx context.Context, arg DeleteMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMember, arg.StoreID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getMemberRole = `-- name: GetMemberRole :one
+SELECT role FROM store_memberships WHERE store_id = $1 AND user_id = $2
+`
+
+type GetMemberRoleParams struct {
+	StoreID ulid.ID
+	UserID  ulid.ID
+}
+
+func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (string, error) {
+	row := q.db.QueryRow(ctx, getMemberRole, arg.StoreID, arg.UserID)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
+
 const insertMembership = `-- name: InsertMembership :one
 INSERT INTO store_memberships (store_id, user_id, role)
 VALUES ($1, $2, $3)
@@ -35,6 +69,68 @@ func (q *Queries) InsertMembership(ctx context.Context, arg InsertMembershipPara
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const isMemberByEmail = `-- name: IsMemberByEmail :one
+SELECT EXISTS (
+  SELECT 1 FROM store_memberships m JOIN users u ON u.id = m.user_id
+  WHERE m.store_id = $1 AND u.email = $2
+) AS member
+`
+
+type IsMemberByEmailParams struct {
+	StoreID ulid.ID
+	Email   string
+}
+
+func (q *Queries) IsMemberByEmail(ctx context.Context, arg IsMemberByEmailParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isMemberByEmail, arg.StoreID, arg.Email)
+	var member bool
+	err := row.Scan(&member)
+	return member, err
+}
+
+const listMembers = `-- name: ListMembers :many
+SELECT m.user_id, m.role, m.created_at, u.name, u.email
+FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = $1
+ORDER BY m.created_at, m.user_id
+`
+
+type ListMembersRow struct {
+	UserID    ulid.ID
+	Role      string
+	CreatedAt time.Time
+	Name      string
+	Email     string
+}
+
+// One query for the whole team (no N+1): memberships joined to users.
+func (q *Queries) ListMembers(ctx context.Context, storeID ulid.ID) ([]ListMembersRow, error) {
+	rows, err := q.db.Query(ctx, listMembers, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMembersRow{}
+	for rows.Next() {
+		var i ListMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.Name,
+			&i.Email,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listMyMemberships = `-- name: ListMyMemberships :many
@@ -79,4 +175,24 @@ SELECT set_config('app.user_id', ($1::uuid)::text, true)
 func (q *Queries) SetUserScope(ctx context.Context, userID ulid.ID) error {
 	_, err := q.db.Exec(ctx, setUserScope, userID)
 	return err
+}
+
+const updateMemberRole = `-- name: UpdateMemberRole :execrows
+UPDATE store_memberships SET role = $1, updated_at = now()
+WHERE store_id = $2 AND user_id = $3 AND role <> 'owner'
+`
+
+type UpdateMemberRoleParams struct {
+	Role    string
+	StoreID ulid.ID
+	UserID  ulid.ID
+}
+
+// The owner's role is never changed here (ownership transfer is separate).
+func (q *Queries) UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateMemberRole, arg.Role, arg.StoreID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

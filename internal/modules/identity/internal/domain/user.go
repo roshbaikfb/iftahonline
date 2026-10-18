@@ -37,9 +37,16 @@ type User struct {
 	Name            string
 	PasswordHash    string
 	Status          UserStatus
+	Phone           string // verified E.164, or empty
+	TOTPSecret      []byte // sealed; set during enrolment and while enabled
+	TOTPEnabledAt   *time.Time
+	TOTPLastStep    int64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
+
+// MFAEnabled reports whether sign-in needs a second factor.
+func (u User) MFAEnabled() bool { return u.TOTPEnabledAt != nil }
 
 // Password length bounds, in characters. The upper bound keeps hashing
 // cost bounded.

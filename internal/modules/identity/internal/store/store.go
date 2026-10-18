@@ -81,10 +81,15 @@ func SetPasswordHash(ctx context.Context, db Tx, id ulid.ID, hash string) error 
 }
 
 func toUser(r identitydb.User) domain.User {
-	return domain.User{
+	u := domain.User{
 		ID: r.ID, Email: r.Email, EmailVerifiedAt: r.EmailVerifiedAt, Name: r.Name, PasswordHash: r.PasswordHash,
-		Status: domain.UserStatus(r.Status), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Status: domain.UserStatus(r.Status), TOTPSecret: r.TotpSecret, TOTPEnabledAt: r.TotpEnabledAt,
+		TOTPLastStep: r.TotpLastStep, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+	if r.Phone != nil {
+		u.Phone = *r.Phone
+	}
+	return u
 }
 
 // NewSession is a session row to insert.
