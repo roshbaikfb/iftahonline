@@ -62,10 +62,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the store
+         * @description Permission: store.read.
+         */
+        get: operations["getStore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update store settings
+         * @description Permission: store.update. Currency and plan are not editable here.
+         */
+        patch: operations["updateStore"];
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the store's domains
+         * @description Permission: domains.read.
+         */
+        get: operations["listDomains"];
+        put?: never;
+        /**
+         * Add a custom domain
+         * @description Permission: domains.manage. The domain starts as `pending`; publish
+         *     the returned TXT record, and it is verified automatically (checked
+         *     with backoff for about three days).
+         */
+        post: operations["addDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/domains/{domain_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a custom domain
+         * @description Permission: domains.manage. The platform subdomain and the primary domain cannot be removed.
+         */
+        delete: operations["deleteDomain"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/domains/{domain_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a pending or failed domain again now
+         * @description Permission: domains.manage.
+         */
+        post: operations["verifyDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/domains/{domain_id}/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a verified domain the canonical host
+         * @description Permission: domains.manage.
+         */
+        post: operations["setPrimaryDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @example 01J9ZQ3W5Y8V4K2N6M7P0R1S2T */
+        ULID: string;
+        Store: {
+            id: components["schemas"]["ULID"];
+            /** @example my-shop */
+            slug: string;
+            /** @example متجر أحمد */
+            name: string;
+            /** @enum {string} */
+            status: "active" | "suspended" | "closed";
+            /** @enum {string} */
+            plan: "free" | "basic" | "pro";
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** @enum {string} */
+            locale: "ar" | "en";
+            /** @example Africa/Cairo */
+            timezone: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        StoreSettings: {
+            name: string;
+            /** @enum {string} */
+            locale: "ar" | "en";
+            /** @enum {string} */
+            timezone: "Africa/Cairo" | "Asia/Riyadh" | "Asia/Dubai" | "Asia/Kuwait" | "Asia/Qatar" | "Asia/Bahrain" | "Asia/Muscat" | "UTC";
+        };
+        NewDomain: {
+            /** @example shop.example.com */
+            host: string;
+        };
+        Domain: {
+            id: components["schemas"]["ULID"];
+            /** @example shop.example.com */
+            host: string;
+            /** @enum {string} */
+            kind: "subdomain" | "custom";
+            /** @enum {string} */
+            status: "pending" | "verified" | "failed";
+            is_primary: boolean;
+            /** @enum {string} */
+            failure_reason?: "txt_record_not_found" | "dns_error" | "domain_taken" | "verification_timed_out";
+            verification?: components["schemas"]["DomainVerification"];
+            /** Format: date-time */
+            verified_at?: string;
+            /** Format: date-time */
+            last_checked_at?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description The TXT record to publish (custom domains that are not verified yet). */
+        DomainVerification: {
+            /** @enum {string} */
+            record_type: "TXT";
+            /** @example _iftah-verify.shop.example.com */
+            name: string;
+            /** @example iftah-verify=k3j5... */
+            value: string;
+        };
+        DomainList: {
+            items: components["schemas"]["Domain"][];
+        };
         Health: {
             /** @enum {string} */
             status: "ok" | "unavailable" | "draining";
@@ -113,7 +301,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        StoreID: components["schemas"]["ULID"];
+        DomainID: components["schemas"]["ULID"];
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -185,6 +376,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreSettings"];
+            };
+        };
+        responses: {
+            /** @description The updated store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Domains, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewDomain"];
+            };
+        };
+        responses: {
+            /** @description The pending domain. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Domain"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification restarted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Domain"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setPrimaryDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                domain_id: components["parameters"]["DomainID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new primary domain. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Domain"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -30,7 +30,7 @@ COVER_MATCH := -match '/internal/modules/[^/]+/internal/(domain|app)$$' \
 API_ADDR        ?= 127.0.0.1:18080
 STOREFRONT_ADDR ?= 127.0.0.1:18081
 
-GO_GENERATED := internal/server/apigen internal/server/dbgen internal/server/views/*_templ.go $(DASH)/src/api/schema.d.ts
+GO_GENERATED := internal/server/apigen internal/server/dbgen internal/modules/*/internal/httpapi/*.gen.go internal/modules/*/internal/store/*db internal/server/views/*_templ.go $(DASH)/src/api/schema.d.ts
 
 .PHONY: help
 help: ## Show this help
@@ -56,6 +56,7 @@ dash-deps: $(DASH)/node_modules/.installed
 .PHONY: gen
 gen: dash-deps ## Regenerate code: oapi-codegen, sqlc, templ, TS client
 	go tool oapi-codegen -config api/oapi-codegen.system.yaml api/openapi.yaml
+	go tool oapi-codegen -config api/oapi-codegen.tenancy.yaml api/openapi.yaml
 	$(SQLC) generate
 	go tool templ generate -path internal/server/views
 	cd $(DASH) && npm run --silent gen:api

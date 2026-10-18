@@ -10,9 +10,17 @@ info:
     Errors use RFC 9457 `application/problem+json`.
 servers:
   - url: /
+# Every operation needs a session unless it declares `security: []`.
+security:
+  - sessionCookie: []
+  - bearerToken: []
 tags:
   - name: system
     description: Process health and build metadata.
+  - name: tenancy
+    description: |
+      The store and its domains. Every path is scoped to one store; a
+      caller who is not a member of that store gets 404 (ADR-0006).
 paths:
   /livez:
     get:
@@ -61,7 +69,147 @@ paths:
               schema: { $ref: "#/components/schemas/VersionInfo" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [tenancy]
+      operationId: getStore
+      summary: Get the store
+      description: "Permission: store.read."
+      responses:
+        "200":
+          description: The store.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [tenancy]
+      operationId: updateStore
+      summary: Update store settings
+      description: "Permission: store.update. Currency and plan are not editable here."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreSettings" }
+      responses:
+        "200":
+          description: The updated store.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/domains:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [tenancy]
+      operationId: listDomains
+      summary: List the store's domains
+      description: "Permission: domains.read."
+      responses:
+        "200":
+          description: Domains, oldest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DomainList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [tenancy]
+      operationId: addDomain
+      summary: Add a custom domain
+      description: |
+        Permission: domains.manage. The domain starts as `pending`; publish
+        the returned TXT record, and it is verified automatically (checked
+        with backoff for about three days).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewDomain" }
+      responses:
+        "201":
+          description: The pending domain.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/domains/{domain_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/DomainID"
+    delete:
+      tags: [tenancy]
+      operationId: deleteDomain
+      summary: Remove a custom domain
+      description: "Permission: domains.manage. The platform subdomain and the primary domain cannot be removed."
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/domains/{domain_id}/verify:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/DomainID"
+    post:
+      tags: [tenancy]
+      operationId: verifyDomain
+      summary: Check a pending or failed domain again now
+      description: "Permission: domains.manage."
+      responses:
+        "202":
+          description: Verification restarted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/domains/{domain_id}/primary:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/DomainID"
+    post:
+      tags: [tenancy]
+      operationId: setPrimaryDomain
+      summary: Make a verified domain the canonical host
+      description: "Permission: domains.manage."
+      responses:
+        "200":
+          description: The new primary domain.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-sid
+      description: Dashboard session (ADR-0005).
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: Mobile app session token (ADR-0005).
+  parameters:
+    StoreID:
+      name: store_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    DomainID:
+      name: domain_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
   responses:
     Problem:
       description: Error (RFC 9457).
@@ -69,6 +217,70 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    ULID:
+      type: string
+      pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+      example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+    Store:
+      type: object
+      required: [id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        slug: { type: string, example: my-shop }
+        name: { type: string, example: متجر أحمد }
+        status: { type: string, enum: [active, suspended, closed] }
+        plan: { type: string, enum: [free, basic, pro] }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        locale: { type: string, enum: [ar, en] }
+        timezone: { type: string, example: Africa/Cairo }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    StoreSettings:
+      type: object
+      required: [name, locale, timezone]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        locale: { type: string, enum: [ar, en] }
+        timezone:
+          type: string
+          enum: [Africa/Cairo, Asia/Riyadh, Asia/Dubai, Asia/Kuwait, Asia/Qatar, Asia/Bahrain, Asia/Muscat, UTC]
+    NewDomain:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string, maxLength: 253, example: shop.example.com }
+    Domain:
+      type: object
+      required: [id, host, kind, status, is_primary, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        host: { type: string, example: shop.example.com }
+        kind: { type: string, enum: [subdomain, custom] }
+        status: { type: string, enum: [pending, verified, failed] }
+        is_primary: { type: boolean }
+        failure_reason:
+          type: string
+          enum: [txt_record_not_found, dns_error, domain_taken, verification_timed_out]
+        verification:
+          $ref: "#/components/schemas/DomainVerification"
+        verified_at: { type: string, format: date-time }
+        last_checked_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    DomainVerification:
+      type: object
+      description: The TXT record to publish (custom domains that are not verified yet).
+      required: [record_type, name, value]
+      properties:
+        record_type: { type: string, enum: [TXT] }
+        name: { type: string, example: _iftah-verify.shop.example.com }
+        value: { type: string, example: iftah-verify=k3j5... }
+    DomainList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Domain" }
     Health:
       type: object
       required: [status]

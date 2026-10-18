@@ -1,0 +1,9 @@
+# Server stubs for the `tenancy` tag (see docs/modules/TEMPLATE.md).
+package: httpapi
+output: internal/modules/tenancy/internal/httpapi/api.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+output-options:
+  include-tags: [tenancy]
