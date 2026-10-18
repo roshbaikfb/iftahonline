@@ -40,16 +40,17 @@ func (noopWorker) Work(context.Context, *river.Job[NoopArgs]) error { return nil
 // workers to `workers` before the client is created. jobs.Middleware
 // rejects unscoped or cross-tenant inserts and restores each job's tenant
 // before it runs (ADR-0007).
-func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, workers *river.Workers) (*river.Client[pgx.Tx], error) {
+func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, workers *river.Workers, periodic ...*river.PeriodicJob) (*river.Client[pgx.Tx], error) {
 	if err := river.AddWorkerSafely(workers, &noopWorker{}); err != nil {
 		return nil, fmt.Errorf("river: add noop worker: %w", err)
 	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Logger:     log,
-		Queues:     map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: c.Concurrency}},
-		Workers:    workers,
-		Middleware: jobs.Middleware(),
-		JobTimeout: time.Minute,
+		Logger:       log,
+		Queues:       map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: c.Concurrency}},
+		Workers:      workers,
+		Middleware:   jobs.Middleware(),
+		PeriodicJobs: periodic,
+		JobTimeout:   time.Minute,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("river: new client: %w", err)
