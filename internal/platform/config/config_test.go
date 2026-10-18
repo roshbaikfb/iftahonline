@@ -23,6 +23,8 @@ func base() map[string]string {
 		"DATABASE_URL":         "postgres://app_user:s3cret@localhost:5432/iftah?sslmode=disable",
 		"MIGRATE_DATABASE_URL": "postgres://app_owner:0wner@localhost:5432/iftah",
 		"REDIS_URL":            "redis://localhost:6379/0",
+		"SECRETBOX_KEYS":       "1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
+		"OTP_PEPPER":           "ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
 	}
 }
 
@@ -98,6 +100,49 @@ func TestTenancyConfig(t *testing.T) {
 	}
 	if m, err := config.Load(config.RoleMigrate, env(with("REDIS_URL", "<unset>"))); err != nil || m.Tenancy.BaseDomain != "" {
 		t.Errorf("migrate needs no Redis or tenancy config: %+v, %v", m.Tenancy, err)
+	}
+}
+
+func TestSecretsAndMail(t *testing.T) {
+	t.Parallel()
+	for _, role := range []config.Role{config.RoleAPI, config.RoleWorker} {
+		c, err := config.Load(role, env(base()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Secrets.Keyring == nil || len(c.Secrets.OTPPepper) != 32 || c.Mail.SMTPAddr != "" ||
+			c.Mail.DashboardURL != "https://app.iftahonline.com" || !strings.Contains(c.Mail.From, "no-reply@iftahonline.com") {
+			t.Fatalf("%s: secrets/mail = %+v %+v", role, c.Secrets, c.Mail)
+		}
+	}
+	tests := map[string][]string{
+		"missing keyring":        {"SECRETBOX_KEYS", "<unset>"},
+		"bad keyring":            {"SECRETBOX_KEYS", "1:short"},
+		"missing pepper":         {"OTP_PEPPER", "<unset>"},
+		"short pepper":           {"OTP_PEPPER", "c2hvcnQ="},
+		"bad smtp addr":          {"SMTP_ADDR", "no-port"},
+		"prod smtp needs a user": {"APP_ENV", "production", "SMTP_ADDR", "smtp.example.com:587"},
+	}
+	for name, kv := range tests {
+		_, err := config.Load(config.RoleAPI, env(with(kv...)))
+		if err == nil {
+			t.Errorf("%s: want error", name)
+			continue
+		}
+		if strings.Contains(err.Error(), "ZGV2") {
+			t.Errorf("%s: error leaks a secret: %v", name, err)
+		}
+	}
+	// The storefront needs neither.
+	if _, err := config.Load(config.RoleStorefront, env(with("SECRETBOX_KEYS", "<unset>", "OTP_PEPPER", "<unset>"))); err != nil {
+		t.Fatalf("storefront: %v", err)
+	}
+	// Secrets never reach the startup log line.
+	c, _ := config.Load(config.RoleAPI, env(with("SMTP_ADDR", "smtp.example.com:587", "SMTP_PASSWORD", "hunter2-smtp")))
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("x", "config", c)
+	if strings.Contains(buf.String(), "hunter2") || strings.Contains(buf.String(), "ZGV2") || !strings.Contains(buf.String(), `"smtp":true`) {
+		t.Fatalf("log line = %s", buf.String())
 	}
 }
 

@@ -92,6 +92,16 @@ func TestAssertCrossTenantDenied(t *testing.T) {
 			wantFails: []string{"status = 200", "content type", "leaks"},
 		},
 		{
+			name: "echoing the attacker's own path is not a leak",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/problem+json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"instance":"` + r.URL.Path + `"}`))
+			},
+			c: testkit.CrossTenantCase{OperationID: "getDomain", Request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/stores/B/domains/dom-b-1", nil),
+				Leaks: []string{"dom-b-1"}},
+		},
+		{
 			name: "403 reveals existence and fails",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/problem+json")
