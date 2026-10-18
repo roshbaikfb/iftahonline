@@ -24,8 +24,11 @@ import (
 	"runtime/debug"
 	"syscall"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
@@ -79,9 +82,9 @@ func run(args []string, stdout io.Writer, lookup config.LookupFunc) int {
 
 	switch role {
 	case config.RoleAPI:
-		err = runHTTP(ctx, cfg, log, build, middleware.ProfileAPI, nil)
+		err = runHTTP(ctx, cfg, log, build, middleware.ProfileAPI, mountAPI)
 	case config.RoleStorefront:
-		err = runHTTP(ctx, cfg, log, build, middleware.ProfileStorefront, server.MountStorefront)
+		err = runHTTP(ctx, cfg, log, build, middleware.ProfileStorefront, mountStorefront)
 	case config.RoleWorker:
 		err = runWorker(ctx, cfg, log, build)
 	case config.RoleMigrate:
@@ -134,7 +137,42 @@ func listen(ctx context.Context, addr string) (net.Listener, error) {
 	return ln, nil
 }
 
-func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo, profile middleware.Profile, mount func(server.Routes)) error {
+// clients are the shared connections a role's modules are built from.
+type clients struct {
+	cfg  config.Config
+	log  *slog.Logger
+	ids  *ulid.Generator
+	pool *pgxpool.Pool
+	rdb  *redis.Client
+}
+
+// mountFunc builds a role's modules and returns its routes. Background
+// work it starts must stop when ctx ends.
+type mountFunc func(ctx context.Context, c clients) (func(server.Routes), error)
+
+func newTenancy(c clients) (*tenancy.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	return tenancy.New(tenancy.Deps{
+		Pool: c.pool, Redis: c.rdb, Jobs: inserter, IDs: c.ids, Log: c.log, Config: c.cfg.Tenancy,
+	})
+}
+
+// mountAPI: module routes join as their authentication lands (identity).
+func mountAPI(context.Context, clients) (func(server.Routes), error) { return nil, nil }
+
+func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error) {
+	ten, err := newTenancy(c)
+	if err != nil {
+		return nil, err
+	}
+	go ten.ListenInvalidations(ctx)
+	return server.MountStorefront(ten.Resolver()), nil
+}
+
+func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo, profile middleware.Profile, mountFor mountFunc) error {
 	d, err := newDeps(ctx, cfg, build)
 	if err != nil {
 		return err
@@ -156,6 +194,10 @@ func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build ser
 		}
 	}()
 
+	mount, err := mountFor(ctx, clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb})
+	if err != nil {
+		return err
+	}
 	health := server.NewHealth(log, build,
 		server.Check{Name: "postgres", Fn: pool.Ping},
 		server.Check{Name: "redis", Fn: func(ctx context.Context) error { return rdb.Ping(ctx).Err() }},
@@ -182,8 +224,25 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	defer pool.Close()
+	rdb, err := redisx.New(cfg.Redis)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := rdb.Close(); cerr != nil {
+			log.Warn("redis close", "err", cerr)
+		}
+	}()
 
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, river.NewWorkers())
+	workers := river.NewWorkers()
+	ten, err := newTenancy(clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb})
+	if err != nil {
+		return err
+	}
+	if err = ten.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers)
 	if err != nil {
 		return err
 	}
@@ -195,6 +254,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 
 	health := server.NewHealth(log, build,
 		server.Check{Name: "postgres", Fn: pool.Ping},
+		server.Check{Name: "redis", Fn: func(ctx context.Context) error { return rdb.Ping(ctx).Err() }},
 		server.RiverSchemaCheck(pool),
 	)
 	handler := server.NewHandler(server.Deps{

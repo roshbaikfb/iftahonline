@@ -21,7 +21,33 @@ templ ErrorPage(status int, titleAR, titleEN, messageAR, messageEN string) {
 					<h2>{ titleEN }</h2>
 					<p>{ messageEN }</p>
 				</section>
-				<p><small>{ status }</small></p>
+				<footer><small>iftahonline · { status }</small></footer>
+			</main>
+		</body>
+	</html>
+}
+
+// ComingSoon is shown on an active store until the theme engine renders
+// its real pages.
+templ ComingSoon() {
+	<!DOCTYPE html>
+	<html lang="ar" dir="rtl">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="robots" content="noindex"/>
+			<title>قريبًا · Coming soon</title>
+		</head>
+		<body>
+			<main>
+				<h1>المتجر قيد التجهيز</h1>
+				<p>سيفتح هذا المتجر أبوابه قريبًا.</p>
+				<hr/>
+				<section lang="en" dir="ltr">
+					<h2>Coming soon</h2>
+					<p>This store is getting ready to open.</p>
+				</section>
+				<footer><small>iftahonline</small></footer>
 			</main>
 		</body>
 	</html>

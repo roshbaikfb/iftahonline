@@ -107,3 +107,31 @@ type RiverQueue struct {
 	PausedAt  pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
+
+type Store struct {
+	ID        pgtype.UUID
+	Slug      string
+	Name      string
+	Status    string
+	Plan      string
+	Currency  string
+	Locale    string
+	Timezone  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type StoreDomain struct {
+	ID                pgtype.UUID
+	StoreID           pgtype.UUID
+	Host              string
+	Kind              string
+	Status            string
+	IsPrimary         bool
+	VerificationToken string
+	FailureReason     string
+	CheckAttempts     int32
+	VerifiedAt        pgtype.Timestamptz
+	LastCheckedAt     pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+}

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
@@ -157,7 +158,7 @@ func TestUnknownRouteIsProblem(t *testing.T) {
 
 func TestStorefrontNotFoundPage(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, middleware.ProfileStorefront, server.MountStorefront)
+	f := newFixture(t, middleware.ProfileStorefront, server.MountStorefront(fakeResolver{err: tenancy.ErrUnknownHost}))
 	rec := f.do(t, http.MethodGet, "/products/abc")
 	body := rec.Body.String()
 	if rec.Code != http.StatusNotFound || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") ||
