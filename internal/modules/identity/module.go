@@ -13,10 +13,12 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/password"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -33,8 +35,17 @@ type Deps struct {
 	// ClientIP is the server's RealIP lookup (middleware.ClientIP).
 	ClientIP httpapi.ClientIPFunc
 	// Limits overrides DefaultLimits (tests).
-	Limits *app.Limits
+	Limits  *app.Limits
+	Secrets config.Secrets
+	Jobs    jobs.Inserter
+	// Env decides whether phone OTP is available (see OTPAvailable).
+	Env string
 }
+
+// OTPAvailable reports whether phone codes can be delivered: outside
+// production they go to Mailpit as email; in production they need an
+// SMS/WhatsApp provider, which is not chosen yet (ADR-0005).
+func OTPAvailable(env string) bool { return env != config.EnvProduction }
 
 // Module is the wired identity module.
 type Module struct {
@@ -45,7 +56,8 @@ type Module struct {
 
 // New wires the module.
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Redis == nil || d.Tenancy == nil || d.IDs == nil || d.Log == nil {
+	if d.Pool == nil || d.Redis == nil || d.Tenancy == nil || d.IDs == nil || d.Log == nil ||
+		d.Jobs == nil || d.Secrets.Keyring == nil || len(d.Secrets.OTPPepper) < 32 {
 		return nil, errors.New("identity: missing dependency")
 	}
 	hasher, err := password.New(password.Params{
@@ -66,7 +78,10 @@ func New(d Deps) (*Module, error) {
 	if err != nil {
 		return nil, fmt.Errorf("identity: %w", err)
 	}
-	svc := app.NewService(d.Pool, hasher, limiter, limits, d.Tenancy, d.IDs, d.Log)
+	svc := app.NewService(app.Deps{
+		DB: d.Pool, Hasher: hasher, Limiter: limiter, Limits: limits, Stores: d.Tenancy, IDs: d.IDs, Log: d.Log,
+		Redis: d.Redis, Keyring: d.Secrets.Keyring, Pepper: d.Secrets.OTPPepper, Jobs: d.Jobs, OTPEnabled: OTPAvailable(d.Env),
+	})
 	return &Module{svc: svc, policy: policy, scope: httpapi.Scope(svc, problem.NewResponder(d.Log), d.ClientIP)}, nil
 }
 
@@ -81,13 +96,36 @@ func (m *Module) Mount(mux *http.ServeMux, resp *problem.Responder) {
 	httpapi.Mount(mux, m.svc, m.policy, m.scope, resp)
 }
 
-// RegisterWorkers adds the module's job workers. It needs only the pool,
-// so the worker role does not build the whole module (no hasher).
-func RegisterWorkers(w *river.Workers, pool *pgxpool.Pool) error {
-	if err := river.AddWorkerSafely(w, &app.AuditPartitionsWorker{DB: pool}); err != nil {
-		return fmt.Errorf("identity: %w", err)
+// WorkerDeps are what the identity jobs need in the worker role (no
+// password hasher, no HTTP).
+type WorkerDeps struct {
+	Pool    *pgxpool.Pool
+	Redis   *redis.Client
+	Secrets config.Secrets
+	Mail    config.Mail
+	Env     string
+	Tenancy tenancy.Service
+	Log     *slog.Logger
+}
+
+// RegisterWorkers adds the module's job workers: audit partitions, phone
+// code delivery, invitation email and new-device alerts.
+func RegisterWorkers(w *river.Workers, d WorkerDeps) error {
+	if d.Pool == nil || d.Redis == nil || d.Secrets.Keyring == nil || d.Tenancy == nil || d.Log == nil {
+		return errors.New("identity: missing worker dependency")
 	}
-	return nil
+	var mailer notify.Mailer = notify.LogMailer{Log: d.Log}
+	if d.Mail.SMTPAddr != "" {
+		mailer = notify.SMTPMailer{Addr: d.Mail.SMTPAddr, Username: d.Mail.SMTPUsername, Password: d.Mail.SMTPPassword, From: d.Mail.From}
+	}
+	var otp notify.OTPSender = notify.DisabledOTPSender{}
+	if OTPAvailable(d.Env) {
+		otp = notify.MailOTPSender{Mailer: mailer}
+	}
+	return app.RegisterWorkers(w, app.WorkerDeps{
+		DB: d.Pool, Redis: d.Redis, Keyring: d.Secrets.Keyring, Mailer: mailer, OTP: otp,
+		Stores: d.Tenancy, DashboardURL: d.Mail.DashboardURL, Log: d.Log,
+	})
 }
 
 // PeriodicJobs are the module's scheduled jobs.

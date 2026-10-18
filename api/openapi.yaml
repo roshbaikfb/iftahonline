@@ -124,6 +124,106 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthResponse" }
+        "202":
+          description: Password accepted; complete sign-in with `POST /v1/auth/mfa`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFARequired" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/mfa:
+    post:
+      tags: [identity]
+      operationId: verifyMFA
+      summary: Complete sign-in with a TOTP or recovery code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MFAVerifyRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/otp/start:
+    post:
+      tags: [identity]
+      operationId: startOTPLogin
+      summary: Send a sign-in code to a verified phone
+      description: |
+        Always answers 202 with a challenge, whether or not the number has
+        an account. Limited per number (1/min, 10/day) and per IP. 503
+        while no SMS/WhatsApp provider is configured.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhoneRequest" }
+      responses:
+        "202":
+          description: A code was sent if the number has an account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CodeChallenge" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/otp/verify:
+    post:
+      tags: [identity]
+      operationId: verifyOTPLogin
+      summary: Sign in with the code from the phone
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeVerifyRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "202":
+          description: Code accepted; complete sign-in with `POST /v1/auth/mfa`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFARequired" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/invitations/accept:
+    post:
+      tags: [identity]
+      operationId: acceptInvitation
+      summary: Join a store from an invitation link
+      description: |
+        If the invited email has an account, the caller must be signed in
+        as it. Otherwise `name` and `password` create the account and a
+        session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptInvitationRequest" }
+      responses:
+        "200":
+          description: Joined.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptInvitationResponse" }
         default:
           $ref: "#/components/responses/Problem"
   /v1/auth/logout:
@@ -151,6 +251,86 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/me/phone:
+    post:
+      tags: [identity]
+      operationId: startPhoneVerification
+      summary: Send a code to a phone number to add to the account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhoneRequest" }
+      responses:
+        "202":
+          description: Code sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CodeChallenge" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/phone/verify:
+    post:
+      tags: [identity]
+      operationId: verifyPhone
+      summary: Confirm the phone number with the received code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeVerifyRequest" }
+      responses:
+        "204":
+          description: Phone verified; it can now be used for sign-in.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/mfa/totp:
+    post:
+      tags: [identity]
+      operationId: setupTOTP
+      summary: Start two-factor enrolment
+      responses:
+        "200":
+          description: Seed to add to an authenticator app (show as a QR code).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TOTPSetup" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/mfa/totp/confirm:
+    post:
+      tags: [identity]
+      operationId: confirmTOTP
+      summary: Enable two-factor authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TOTPCode" }
+      responses:
+        "200":
+          description: Enabled. The recovery codes are shown only now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecoveryCodes" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/mfa/totp/disable:
+    post:
+      tags: [identity]
+      operationId: disableTOTP
+      summary: Disable two-factor authentication
+      description: Needs the password and a current code (or a recovery code).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisableTOTPRequest" }
+      responses:
+        "204":
+          description: Disabled.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/me/sessions:
     get:
       tags: [identity]
@@ -174,6 +354,105 @@ paths:
       tags: [identity]
       operationId: revokeMySession
       summary: Sign out one device
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/members:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [identity]
+      operationId: listMembers
+      summary: The store's team
+      description: "Permission: members.read."
+      responses:
+        "200":
+          description: Members, oldest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/members/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - name: user_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    patch:
+      tags: [identity]
+      operationId: updateMemberRole
+      summary: Change a member's role
+      description: "Permission: members.manage. The owner's role cannot be changed."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberRoleUpdate" }
+      responses:
+        "204":
+          description: Changed.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [identity]
+      operationId: removeMember
+      summary: Remove a member from the store
+      description: "Permission: members.manage. The owner cannot be removed."
+      responses:
+        "204":
+          description: Removed; their next request to this store gets 404.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [identity]
+      operationId: listInvitations
+      summary: Open invitations
+      description: "Permission: members.manage."
+      responses:
+        "200":
+          description: Open invitations, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [identity]
+      operationId: createInvitation
+      summary: Invite someone to the team by email
+      description: "Permission: members.manage. The link is emailed and valid for 7 days."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewInvitation" }
+      responses:
+        "201":
+          description: Invitation created and queued for email.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/invitations/{invitation_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - name: invitation_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    delete:
+      tags: [identity]
+      operationId: revokeInvitation
+      summary: Cancel an open invitation
+      description: "Permission: members.manage."
       responses:
         "204":
           description: Revoked.
@@ -403,13 +682,137 @@ components:
           description: "Session token (mobile clients only). Send as `Authorization: Bearer <token>`."
     User:
       type: object
-      required: [id, email, name, email_verified, created_at]
+      required: [id, email, name, email_verified, mfa_enabled, created_at]
       properties:
         id: { $ref: "#/components/schemas/ULID" }
         email: { type: string }
         name: { type: string }
         email_verified: { type: boolean }
+        phone: { type: string, description: "Verified number, E.164.", example: "+201012345678" }
+        mfa_enabled: { type: boolean }
         created_at: { type: string, format: date-time }
+    MFARequired:
+      type: object
+      required: [mfa_required, challenge_id, expires_at]
+      properties:
+        mfa_required: { type: boolean, enum: [true] }
+        challenge_id: { $ref: "#/components/schemas/ULID" }
+        expires_at: { type: string, format: date-time }
+    MFAVerifyRequest:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { type: string, maxLength: 26 }
+        code: { type: string, maxLength: 32, description: 6-digit TOTP code or a recovery code. }
+        client: { $ref: "#/components/schemas/ClientKind" }
+    PhoneRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, maxLength: 32, example: "01012345678" }
+        region:
+          type: string
+          enum: [EG, SA, AE, KW, QA, BH, OM]
+          default: EG
+          description: Country for numbers without a + prefix.
+    CodeChallenge:
+      type: object
+      required: [challenge_id, expires_at]
+      properties:
+        challenge_id: { $ref: "#/components/schemas/ULID" }
+        expires_at: { type: string, format: date-time }
+    CodeVerifyRequest:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { type: string, maxLength: 26 }
+        code: { type: string, maxLength: 12 }
+        client: { $ref: "#/components/schemas/ClientKind" }
+    TOTPSetup:
+      type: object
+      required: [secret, otpauth_uri]
+      properties:
+        secret: { type: string, description: Base32 seed for manual entry. }
+        otpauth_uri: { type: string }
+    TOTPCode:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, maxLength: 12 }
+    RecoveryCodes:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          items: { type: string, example: k3j5-a9xq-2mzt-7c4v }
+    DisableTOTPRequest:
+      type: object
+      required: [password, code]
+      properties:
+        password: { type: string, maxLength: 512, format: password }
+        code: { type: string, maxLength: 32 }
+    Member:
+      type: object
+      required: [user_id, name, email, role, joined_at]
+      properties:
+        user_id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        joined_at: { type: string, format: date-time }
+    MemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Member" }
+    MemberRoleUpdate:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [manager, support, shipping] }
+    NewInvitation:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, maxLength: 254 }
+        role: { type: string, enum: [manager, support, shipping] }
+    Invitation:
+      type: object
+      required: [id, email, role, created_at, expires_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        invited_by: { $ref: "#/components/schemas/ULID" }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+    InvitationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Invitation" }
+    AcceptInvitationRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, maxLength: 128, description: The part after `#` in the invitation link. }
+        name: { type: string, maxLength: 100, description: For a new account. }
+        password: { type: string, maxLength: 128, format: password, description: For a new account. }
+        client: { $ref: "#/components/schemas/ClientKind" }
+    AcceptInvitationResponse:
+      type: object
+      required: [store_id, role, user]
+      properties:
+        store_id: { $ref: "#/components/schemas/ULID" }
+        role: { $ref: "#/components/schemas/Role" }
+        user: { $ref: "#/components/schemas/User" }
+        expires_at: { type: string, format: date-time, description: Session expiry (new accounts). }
+        token: { type: string, description: "Session token (new accounts, mobile clients)." }
     Me:
       type: object
       required: [user, memberships]

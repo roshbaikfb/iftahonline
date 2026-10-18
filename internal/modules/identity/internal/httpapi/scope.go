@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
@@ -45,6 +46,13 @@ func Scope(svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) fun
 			meta := app.RequestMeta{UserAgent: r.UserAgent()}
 			if clientIP != nil {
 				meta.IP, _ = clientIP(ctx)
+			}
+			if opensSession(r) {
+				var newID bool
+				meta.DeviceID, newID = deviceID(r)
+				if newID {
+					w = &deviceCookieWriter{ResponseWriter: w, cookie: deviceCookie(meta.DeviceID)}
+				}
 			}
 			ctx = app.WithRequestMeta(ctx, meta)
 
@@ -90,6 +98,63 @@ func Scope(svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) fun
 		})
 	}
 }
+
+// DeviceCookieName identifies a browser across sign-ins (new-device
+// alerts). It is not a credential.
+const DeviceCookieName = "__Host-did"
+
+// opensSession reports routes that can create a session.
+func opensSession(r *http.Request) bool {
+	return r.Method == http.MethodPost &&
+		(strings.HasPrefix(r.URL.Path, "/v1/auth/") || r.URL.Path == "/v1/invitations/accept")
+}
+
+// deviceID returns the app's X-Device-ID, the browser's device cookie, or
+// a new ID (newID true: set the cookie on the response).
+func deviceID(r *http.Request) (id string, newID bool) {
+	if h := r.Header.Get("X-Device-ID"); domain.ValidDeviceID(h) {
+		return h, false
+	}
+	if c, err := r.Cookie(DeviceCookieName); err == nil && domain.ValidDeviceID(c.Value) {
+		return c.Value, false
+	}
+	id, err := domain.NewDeviceID()
+	if err != nil {
+		return "", false
+	}
+	return id, true
+}
+
+func deviceCookie(id string) string {
+	return (&http.Cookie{Name: DeviceCookieName, Value: id, Path: "/", MaxAge: 2 * 365 * 24 * 3600,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}).String()
+}
+
+// deviceCookieWriter adds the device cookie when the response starts, so
+// it survives handlers that Set (not Add) their own Set-Cookie.
+type deviceCookieWriter struct {
+	http.ResponseWriter
+	cookie string
+	done   bool
+}
+
+func (d *deviceCookieWriter) WriteHeader(code int) {
+	if !d.done {
+		d.done = true
+		d.Header().Add("Set-Cookie", d.cookie)
+	}
+	d.ResponseWriter.WriteHeader(code)
+}
+
+func (d *deviceCookieWriter) Write(b []byte) (int, error) {
+	if !d.done {
+		d.WriteHeader(http.StatusOK)
+	}
+	return d.ResponseWriter.Write(b)
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (d *deviceCookieWriter) Unwrap() http.ResponseWriter { return d.ResponseWriter }
 
 // credentials prefers an explicit bearer token over the cookie.
 func credentials(r *http.Request) (token string, fromCookie bool) {

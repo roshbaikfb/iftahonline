@@ -35,6 +35,63 @@ func (e ClientKind) Valid() bool {
 	}
 }
 
+// Defines values for MFARequiredMfaRequired.
+const (
+	True MFARequiredMfaRequired = true
+)
+
+// Valid indicates whether the value is a known member of the MFARequiredMfaRequired enum.
+func (e MFARequiredMfaRequired) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemberRoleUpdateRole.
+const (
+	MemberRoleUpdateRoleManager  MemberRoleUpdateRole = "manager"
+	MemberRoleUpdateRoleShipping MemberRoleUpdateRole = "shipping"
+	MemberRoleUpdateRoleSupport  MemberRoleUpdateRole = "support"
+)
+
+// Valid indicates whether the value is a known member of the MemberRoleUpdateRole enum.
+func (e MemberRoleUpdateRole) Valid() bool {
+	switch e {
+	case MemberRoleUpdateRoleManager:
+		return true
+	case MemberRoleUpdateRoleShipping:
+		return true
+	case MemberRoleUpdateRoleSupport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewInvitationRole.
+const (
+	NewInvitationRoleManager  NewInvitationRole = "manager"
+	NewInvitationRoleShipping NewInvitationRole = "shipping"
+	NewInvitationRoleSupport  NewInvitationRole = "support"
+)
+
+// Valid indicates whether the value is a known member of the NewInvitationRole enum.
+func (e NewInvitationRole) Valid() bool {
+	switch e {
+	case NewInvitationRoleManager:
+		return true
+	case NewInvitationRoleShipping:
+		return true
+	case NewInvitationRoleSupport:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NewStoreCurrency.
 const (
 	AED NewStoreCurrency = "AED"
@@ -74,28 +131,90 @@ func (e NewStoreLocale) Valid() bool {
 	}
 }
 
+// Defines values for PhoneRequestRegion.
+const (
+	AE PhoneRequestRegion = "AE"
+	BH PhoneRequestRegion = "BH"
+	EG PhoneRequestRegion = "EG"
+	KW PhoneRequestRegion = "KW"
+	OM PhoneRequestRegion = "OM"
+	QA PhoneRequestRegion = "QA"
+	SA PhoneRequestRegion = "SA"
+)
+
+// Valid indicates whether the value is a known member of the PhoneRequestRegion enum.
+func (e PhoneRequestRegion) Valid() bool {
+	switch e {
+	case AE:
+		return true
+	case BH:
+		return true
+	case EG:
+		return true
+	case KW:
+		return true
+	case OM:
+		return true
+	case QA:
+		return true
+	case SA:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
-	Manager  Role = "manager"
-	Owner    Role = "owner"
-	Shipping Role = "shipping"
-	Support  Role = "support"
+	RoleManager  Role = "manager"
+	RoleOwner    Role = "owner"
+	RoleShipping Role = "shipping"
+	RoleSupport  Role = "support"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Manager:
+	case RoleManager:
 		return true
-	case Owner:
+	case RoleOwner:
 		return true
-	case Shipping:
+	case RoleShipping:
 		return true
-	case Support:
+	case RoleSupport:
 		return true
 	default:
 		return false
 	}
+}
+
+// AcceptInvitationRequest defines model for AcceptInvitationRequest.
+type AcceptInvitationRequest struct {
+	// Client `mobile` returns the session token in the body instead of a cookie.
+	Client *ClientKind `json:"client,omitempty"`
+
+	// Name For a new account.
+	Name *string `json:"name,omitempty"`
+
+	// Password For a new account.
+	Password *string `json:"password,omitempty"`
+
+	// Token The part after `#` in the invitation link.
+	Token string `json:"token"`
+}
+
+// AcceptInvitationResponse defines model for AcceptInvitationResponse.
+type AcceptInvitationResponse struct {
+	// ExpiresAt Session expiry (new accounts).
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Role      Role       `json:"role"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId ULID `json:"store_id"`
+
+	// Token Session token (new accounts, mobile clients).
+	Token *string `json:"token,omitempty"`
+	User  User    `json:"user"`
 }
 
 // AuditEntry defines model for AuditEntry.
@@ -138,11 +257,52 @@ type AuthResponse struct {
 // ClientKind `mobile` returns the session token in the body instead of a cookie.
 type ClientKind string
 
+// CodeChallenge defines model for CodeChallenge.
+type CodeChallenge struct {
+	// ChallengeId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ChallengeId ULID      `json:"challenge_id"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// CodeVerifyRequest defines model for CodeVerifyRequest.
+type CodeVerifyRequest struct {
+	ChallengeId string `json:"challenge_id"`
+
+	// Client `mobile` returns the session token in the body instead of a cookie.
+	Client *ClientKind `json:"client,omitempty"`
+	Code   string      `json:"code"`
+}
+
+// DisableTOTPRequest defines model for DisableTOTPRequest.
+type DisableTOTPRequest struct {
+	Code     string `json:"code"`
+	Password string `json:"password"`
+}
+
 // FieldError defines model for FieldError.
 type FieldError struct {
 	Code    string `json:"code"`
 	Field   string `json:"field"`
 	Message string `json:"message"`
+}
+
+// Invitation defines model for Invitation.
+type Invitation struct {
+	CreatedAt time.Time `json:"created_at"`
+	Email     string    `json:"email"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// InvitedBy Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	InvitedBy *ULID `json:"invited_by,omitempty"`
+	Role      Role  `json:"role"`
+}
+
+// InvitationList defines model for InvitationList.
+type InvitationList struct {
+	Items []Invitation `json:"items"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -153,11 +313,57 @@ type LoginRequest struct {
 	Password string      `json:"password"`
 }
 
+// MFARequired defines model for MFARequired.
+type MFARequired struct {
+	// ChallengeId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ChallengeId ULID                   `json:"challenge_id"`
+	ExpiresAt   time.Time              `json:"expires_at"`
+	MfaRequired MFARequiredMfaRequired `json:"mfa_required"`
+}
+
+// MFARequiredMfaRequired defines model for MFARequired.MfaRequired.
+type MFARequiredMfaRequired bool
+
+// MFAVerifyRequest defines model for MFAVerifyRequest.
+type MFAVerifyRequest struct {
+	ChallengeId string `json:"challenge_id"`
+
+	// Client `mobile` returns the session token in the body instead of a cookie.
+	Client *ClientKind `json:"client,omitempty"`
+
+	// Code 6-digit TOTP code or a recovery code.
+	Code string `json:"code"`
+}
+
 // Me defines model for Me.
 type Me struct {
 	Memberships []Membership `json:"memberships"`
 	User        User         `json:"user"`
 }
+
+// Member defines model for Member.
+type Member struct {
+	Email    string    `json:"email"`
+	JoinedAt time.Time `json:"joined_at"`
+	Name     string    `json:"name"`
+	Role     Role      `json:"role"`
+
+	// UserId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	UserId ULID `json:"user_id"`
+}
+
+// MemberList defines model for MemberList.
+type MemberList struct {
+	Items []Member `json:"items"`
+}
+
+// MemberRoleUpdate defines model for MemberRoleUpdate.
+type MemberRoleUpdate struct {
+	Role MemberRoleUpdateRole `json:"role"`
+}
+
+// MemberRoleUpdateRole defines model for MemberRoleUpdate.Role.
+type MemberRoleUpdateRole string
 
 // Membership defines model for Membership.
 type Membership struct {
@@ -166,6 +372,15 @@ type Membership struct {
 	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	StoreId ULID `json:"store_id"`
 }
+
+// NewInvitation defines model for NewInvitation.
+type NewInvitation struct {
+	Email string            `json:"email"`
+	Role  NewInvitationRole `json:"role"`
+}
+
+// NewInvitationRole defines model for NewInvitation.Role.
+type NewInvitationRole string
 
 // NewStore defines model for NewStore.
 type NewStore struct {
@@ -186,6 +401,18 @@ type NewStoreCurrency string
 // NewStoreLocale defines model for NewStore.Locale.
 type NewStoreLocale string
 
+// PhoneRequest defines model for PhoneRequest.
+type PhoneRequest struct {
+	// Phone Example: 01012345678
+	Phone string `json:"phone"`
+
+	// Region Country for numbers without a + prefix.
+	Region *PhoneRequestRegion `json:"region,omitempty"`
+}
+
+// PhoneRequestRegion Country for numbers without a + prefix.
+type PhoneRequestRegion string
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -199,6 +426,11 @@ type Problem struct {
 
 	// Type Example: urn:iftahonline:problem:not-found
 	Type string `json:"type"`
+}
+
+// RecoveryCodes defines model for RecoveryCodes.
+type RecoveryCodes struct {
+	Codes []string `json:"codes"`
 }
 
 // Role defines model for Role.
@@ -240,6 +472,19 @@ type SignupRequest struct {
 	Store    NewStore `json:"store"`
 }
 
+// TOTPCode defines model for TOTPCode.
+type TOTPCode struct {
+	Code string `json:"code"`
+}
+
+// TOTPSetup defines model for TOTPSetup.
+type TOTPSetup struct {
+	OtpauthUri string `json:"otpauth_uri"`
+
+	// Secret Base32 seed for manual entry.
+	Secret string `json:"secret"`
+}
+
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
@@ -250,8 +495,14 @@ type User struct {
 	EmailVerified bool      `json:"email_verified"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id   ULID   `json:"id"`
-	Name string `json:"name"`
+	Id         ULID   `json:"id"`
+	MfaEnabled bool   `json:"mfa_enabled"`
+	Name       string `json:"name"`
+
+	// Phone Verified number, E.164.
+	//
+	// Example: +201012345678
+	Phone *string `json:"phone,omitempty"`
 }
 
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
@@ -269,8 +520,38 @@ type ListAuditLogParams struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// VerifyMFAJSONRequestBody defines body for VerifyMFA for application/json ContentType.
+type VerifyMFAJSONRequestBody = MFAVerifyRequest
+
+// StartOTPLoginJSONRequestBody defines body for StartOTPLogin for application/json ContentType.
+type StartOTPLoginJSONRequestBody = PhoneRequest
+
+// VerifyOTPLoginJSONRequestBody defines body for VerifyOTPLogin for application/json ContentType.
+type VerifyOTPLoginJSONRequestBody = CodeVerifyRequest
+
 // SignupJSONRequestBody defines body for Signup for application/json ContentType.
 type SignupJSONRequestBody = SignupRequest
+
+// AcceptInvitationJSONRequestBody defines body for AcceptInvitation for application/json ContentType.
+type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
+
+// ConfirmTOTPJSONRequestBody defines body for ConfirmTOTP for application/json ContentType.
+type ConfirmTOTPJSONRequestBody = TOTPCode
+
+// DisableTOTPJSONRequestBody defines body for DisableTOTP for application/json ContentType.
+type DisableTOTPJSONRequestBody = DisableTOTPRequest
+
+// StartPhoneVerificationJSONRequestBody defines body for StartPhoneVerification for application/json ContentType.
+type StartPhoneVerificationJSONRequestBody = PhoneRequest
+
+// VerifyPhoneJSONRequestBody defines body for VerifyPhone for application/json ContentType.
+type VerifyPhoneJSONRequestBody = CodeVerifyRequest
+
+// CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
+type CreateInvitationJSONRequestBody = NewInvitation
+
+// UpdateMemberRoleJSONRequestBody defines body for UpdateMemberRole for application/json ContentType.
+type UpdateMemberRoleJSONRequestBody = MemberRoleUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -280,12 +561,39 @@ type ServerInterface interface {
 	// Logout End the current session
 	// (POST /v1/auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// VerifyMFA Complete sign-in with a TOTP or recovery code
+	// (POST /v1/auth/mfa)
+	VerifyMFA(w http.ResponseWriter, r *http.Request)
+	// StartOTPLogin Send a sign-in code to a verified phone
+	// (POST /v1/auth/otp/start)
+	StartOTPLogin(w http.ResponseWriter, r *http.Request)
+	// VerifyOTPLogin Sign in with the code from the phone
+	// (POST /v1/auth/otp/verify)
+	VerifyOTPLogin(w http.ResponseWriter, r *http.Request)
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(w http.ResponseWriter, r *http.Request)
+	// AcceptInvitation Join a store from an invitation link
+	// (POST /v1/invitations/accept)
+	AcceptInvitation(w http.ResponseWriter, r *http.Request)
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// SetupTOTP Start two-factor enrolment
+	// (POST /v1/me/mfa/totp)
+	SetupTOTP(w http.ResponseWriter, r *http.Request)
+	// ConfirmTOTP Enable two-factor authentication
+	// (POST /v1/me/mfa/totp/confirm)
+	ConfirmTOTP(w http.ResponseWriter, r *http.Request)
+	// DisableTOTP Disable two-factor authentication
+	// (POST /v1/me/mfa/totp/disable)
+	DisableTOTP(w http.ResponseWriter, r *http.Request)
+	// StartPhoneVerification Send a code to a phone number to add to the account
+	// (POST /v1/me/phone)
+	StartPhoneVerification(w http.ResponseWriter, r *http.Request)
+	// VerifyPhone Confirm the phone number with the received code
+	// (POST /v1/me/phone/verify)
+	VerifyPhone(w http.ResponseWriter, r *http.Request)
 	// ListMySessions The signed-in user's active sessions
 	// (GET /v1/me/sessions)
 	ListMySessions(w http.ResponseWriter, r *http.Request)
@@ -295,6 +603,24 @@ type ServerInterface interface {
 	// ListAuditLog The store's audit log
 	// (GET /v1/stores/{store_id}/audit-log)
 	ListAuditLog(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListAuditLogParams)
+	// ListInvitations Open invitations
+	// (GET /v1/stores/{store_id}/invitations)
+	ListInvitations(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CreateInvitation Invite someone to the team by email
+	// (POST /v1/stores/{store_id}/invitations)
+	CreateInvitation(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// RevokeInvitation Cancel an open invitation
+	// (DELETE /v1/stores/{store_id}/invitations/{invitation_id})
+	RevokeInvitation(w http.ResponseWriter, r *http.Request, storeId StoreID, invitationId ULID)
+	// ListMembers The store's team
+	// (GET /v1/stores/{store_id}/members)
+	ListMembers(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// RemoveMember Remove a member from the store
+	// (DELETE /v1/stores/{store_id}/members/{user_id})
+	RemoveMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID)
+	// UpdateMemberRole Change a member's role
+	// (PATCH /v1/stores/{store_id}/members/{user_id})
+	UpdateMemberRole(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -334,6 +660,48 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// VerifyMFA operation middleware
+func (siw *ServerInterfaceWrapper) VerifyMFA(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyMFA(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartOTPLogin operation middleware
+func (siw *ServerInterfaceWrapper) StartOTPLogin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartOTPLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyOTPLogin operation middleware
+func (siw *ServerInterfaceWrapper) VerifyOTPLogin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyOTPLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Signup operation middleware
 func (siw *ServerInterfaceWrapper) Signup(w http.ResponseWriter, r *http.Request) {
 
@@ -348,11 +716,95 @@ func (siw *ServerInterfaceWrapper) Signup(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// AcceptInvitation operation middleware
+func (siw *ServerInterfaceWrapper) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptInvitation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetupTOTP operation middleware
+func (siw *ServerInterfaceWrapper) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetupTOTP(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmTOTP operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmTOTP(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmTOTP(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableTOTP operation middleware
+func (siw *ServerInterfaceWrapper) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableTOTP(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartPhoneVerification operation middleware
+func (siw *ServerInterfaceWrapper) StartPhoneVerification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartPhoneVerification(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyPhone operation middleware
+func (siw *ServerInterfaceWrapper) VerifyPhone(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyPhone(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -448,6 +900,189 @@ func (siw *ServerInterfaceWrapper) ListAuditLog(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAuditLog(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvitations operation middleware
+func (siw *ServerInterfaceWrapper) ListInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvitations(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvitation operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvitation(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeInvitation operation middleware
+func (siw *ServerInterfaceWrapper) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "invitation_id" -------------
+	var invitationId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invitation_id", r.PathValue("invitation_id"), &invitationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invitation_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeInvitation(w, r, storeId, invitationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMembers(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveMember(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMemberRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMemberRole(w, r, storeId, userId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -579,10 +1214,25 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/signup", wrapper.Signup)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/login", wrapper.Login)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/mfa", wrapper.VerifyMFA)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/start", wrapper.StartOTPLogin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/verify", wrapper.VerifyOTPLogin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invitations/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone", wrapper.StartPhoneVerification)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone/verify", wrapper.VerifyPhone)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/mfa/totp", wrapper.SetupTOTP)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/mfa/totp/confirm", wrapper.ConfirmTOTP)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/mfa/totp/disable", wrapper.DisableTOTP)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/me/sessions/{session_id}", wrapper.RevokeMySession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/members", wrapper.ListMembers)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/members/{user_id}", wrapper.RemoveMember)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/stores/{store_id}/members/{user_id}", wrapper.UpdateMemberRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/invitations", wrapper.ListInvitations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/invitations/{invitation_id}", wrapper.RevokeInvitation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/audit-log", wrapper.ListAuditLog)
 
 	return m
@@ -618,6 +1268,20 @@ func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login202JSONResponse MFARequired
+
+func (response Login202JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -679,6 +1343,157 @@ func (response LogoutdefaultApplicationProblemPlusJSONResponse) VisitLogoutRespo
 	return err
 }
 
+type VerifyMFARequestObject struct {
+	Body *VerifyMFAJSONRequestBody
+}
+
+type VerifyMFAResponseObject interface {
+	VisitVerifyMFAResponse(w http.ResponseWriter) error
+}
+
+type VerifyMFA200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type VerifyMFA200JSONResponse struct {
+	Body    AuthResponse
+	Headers VerifyMFA200ResponseHeaders
+}
+
+func (response VerifyMFA200JSONResponse) VisitVerifyMFAResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyMFAdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response VerifyMFAdefaultApplicationProblemPlusJSONResponse) VisitVerifyMFAResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOTPLoginRequestObject struct {
+	Body *StartOTPLoginJSONRequestBody
+}
+
+type StartOTPLoginResponseObject interface {
+	VisitStartOTPLoginResponse(w http.ResponseWriter) error
+}
+
+type StartOTPLogin202JSONResponse CodeChallenge
+
+func (response StartOTPLogin202JSONResponse) VisitStartOTPLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOTPLogindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartOTPLogindefaultApplicationProblemPlusJSONResponse) VisitStartOTPLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOTPLoginRequestObject struct {
+	Body *VerifyOTPLoginJSONRequestBody
+}
+
+type VerifyOTPLoginResponseObject interface {
+	VisitVerifyOTPLoginResponse(w http.ResponseWriter) error
+}
+
+type VerifyOTPLogin200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type VerifyOTPLogin200JSONResponse struct {
+	Body    AuthResponse
+	Headers VerifyOTPLogin200ResponseHeaders
+}
+
+func (response VerifyOTPLogin200JSONResponse) VisitVerifyOTPLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOTPLogin202JSONResponse MFARequired
+
+func (response VerifyOTPLogin202JSONResponse) VisitVerifyOTPLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyOTPLogindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response VerifyOTPLogindefaultApplicationProblemPlusJSONResponse) VisitVerifyOTPLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SignupRequestObject struct {
 	Body *SignupJSONRequestBody
 }
@@ -728,6 +1543,55 @@ func (response SignupdefaultApplicationProblemPlusJSONResponse) VisitSignupRespo
 	return err
 }
 
+type AcceptInvitationRequestObject struct {
+	Body *AcceptInvitationJSONRequestBody
+}
+
+type AcceptInvitationResponseObject interface {
+	VisitAcceptInvitationResponse(w http.ResponseWriter) error
+}
+
+type AcceptInvitation200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type AcceptInvitation200JSONResponse struct {
+	Body    AcceptInvitationResponse
+	Headers AcceptInvitation200ResponseHeaders
+}
+
+func (response AcceptInvitation200JSONResponse) VisitAcceptInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptInvitationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AcceptInvitationdefaultApplicationProblemPlusJSONResponse) VisitAcceptInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -755,6 +1619,188 @@ type GetMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupTOTPRequestObject struct {
+}
+
+type SetupTOTPResponseObject interface {
+	VisitSetupTOTPResponse(w http.ResponseWriter) error
+}
+
+type SetupTOTP200JSONResponse TOTPSetup
+
+func (response SetupTOTP200JSONResponse) VisitSetupTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupTOTPdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetupTOTPdefaultApplicationProblemPlusJSONResponse) VisitSetupTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmTOTPRequestObject struct {
+	Body *ConfirmTOTPJSONRequestBody
+}
+
+type ConfirmTOTPResponseObject interface {
+	VisitConfirmTOTPResponse(w http.ResponseWriter) error
+}
+
+type ConfirmTOTP200JSONResponse RecoveryCodes
+
+func (response ConfirmTOTP200JSONResponse) VisitConfirmTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmTOTPdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConfirmTOTPdefaultApplicationProblemPlusJSONResponse) VisitConfirmTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableTOTPRequestObject struct {
+	Body *DisableTOTPJSONRequestBody
+}
+
+type DisableTOTPResponseObject interface {
+	VisitDisableTOTPResponse(w http.ResponseWriter) error
+}
+
+type DisableTOTP204Response struct {
+}
+
+func (response DisableTOTP204Response) VisitDisableTOTPResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisableTOTPdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisableTOTPdefaultApplicationProblemPlusJSONResponse) VisitDisableTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartPhoneVerificationRequestObject struct {
+	Body *StartPhoneVerificationJSONRequestBody
+}
+
+type StartPhoneVerificationResponseObject interface {
+	VisitStartPhoneVerificationResponse(w http.ResponseWriter) error
+}
+
+type StartPhoneVerification202JSONResponse CodeChallenge
+
+func (response StartPhoneVerification202JSONResponse) VisitStartPhoneVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartPhoneVerificationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartPhoneVerificationdefaultApplicationProblemPlusJSONResponse) VisitStartPhoneVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyPhoneRequestObject struct {
+	Body *VerifyPhoneJSONRequestBody
+}
+
+type VerifyPhoneResponseObject interface {
+	VisitVerifyPhoneResponse(w http.ResponseWriter) error
+}
+
+type VerifyPhone204Response struct {
+}
+
+func (response VerifyPhone204Response) VisitVerifyPhoneResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type VerifyPhonedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response VerifyPhonedefaultApplicationProblemPlusJSONResponse) VisitVerifyPhoneResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -877,6 +1923,227 @@ func (response ListAuditLogdefaultApplicationProblemPlusJSONResponse) VisitListA
 	return err
 }
 
+type ListInvitationsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListInvitationsResponseObject interface {
+	VisitListInvitationsResponse(w http.ResponseWriter) error
+}
+
+type ListInvitations200JSONResponse InvitationList
+
+func (response ListInvitations200JSONResponse) VisitListInvitationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInvitationsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListInvitationsdefaultApplicationProblemPlusJSONResponse) VisitListInvitationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvitationRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *CreateInvitationJSONRequestBody
+}
+
+type CreateInvitationResponseObject interface {
+	VisitCreateInvitationResponse(w http.ResponseWriter) error
+}
+
+type CreateInvitation201JSONResponse Invitation
+
+func (response CreateInvitation201JSONResponse) VisitCreateInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvitationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateInvitationdefaultApplicationProblemPlusJSONResponse) VisitCreateInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitationRequestObject struct {
+	StoreId      StoreID `json:"store_id"`
+	InvitationId ULID    `json:"invitation_id"`
+}
+
+type RevokeInvitationResponseObject interface {
+	VisitRevokeInvitationResponse(w http.ResponseWriter) error
+}
+
+type RevokeInvitation204Response struct {
+}
+
+func (response RevokeInvitation204Response) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeInvitationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeInvitationdefaultApplicationProblemPlusJSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMembersRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListMembersResponseObject interface {
+	VisitListMembersResponse(w http.ResponseWriter) error
+}
+
+type ListMembers200JSONResponse MemberList
+
+func (response ListMembers200JSONResponse) VisitListMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMembersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMembersdefaultApplicationProblemPlusJSONResponse) VisitListMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveMemberRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	UserId  ULID    `json:"user_id"`
+}
+
+type RemoveMemberResponseObject interface {
+	VisitRemoveMemberResponse(w http.ResponseWriter) error
+}
+
+type RemoveMember204Response struct {
+}
+
+func (response RemoveMember204Response) VisitRemoveMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveMemberdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveMemberdefaultApplicationProblemPlusJSONResponse) VisitRemoveMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMemberRoleRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	UserId  ULID    `json:"user_id"`
+	Body    *UpdateMemberRoleJSONRequestBody
+}
+
+type UpdateMemberRoleResponseObject interface {
+	VisitUpdateMemberRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateMemberRole204Response struct {
+}
+
+func (response UpdateMemberRole204Response) VisitUpdateMemberRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateMemberRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMemberRoledefaultApplicationProblemPlusJSONResponse) VisitUpdateMemberRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Login Sign in with email and password
@@ -885,12 +2152,39 @@ type StrictServerInterface interface {
 	// Logout End the current session
 	// (POST /v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// VerifyMFA Complete sign-in with a TOTP or recovery code
+	// (POST /v1/auth/mfa)
+	VerifyMFA(ctx context.Context, request VerifyMFARequestObject) (VerifyMFAResponseObject, error)
+	// StartOTPLogin Send a sign-in code to a verified phone
+	// (POST /v1/auth/otp/start)
+	StartOTPLogin(ctx context.Context, request StartOTPLoginRequestObject) (StartOTPLoginResponseObject, error)
+	// VerifyOTPLogin Sign in with the code from the phone
+	// (POST /v1/auth/otp/verify)
+	VerifyOTPLogin(ctx context.Context, request VerifyOTPLoginRequestObject) (VerifyOTPLoginResponseObject, error)
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
+	// AcceptInvitation Join a store from an invitation link
+	// (POST /v1/invitations/accept)
+	AcceptInvitation(ctx context.Context, request AcceptInvitationRequestObject) (AcceptInvitationResponseObject, error)
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// SetupTOTP Start two-factor enrolment
+	// (POST /v1/me/mfa/totp)
+	SetupTOTP(ctx context.Context, request SetupTOTPRequestObject) (SetupTOTPResponseObject, error)
+	// ConfirmTOTP Enable two-factor authentication
+	// (POST /v1/me/mfa/totp/confirm)
+	ConfirmTOTP(ctx context.Context, request ConfirmTOTPRequestObject) (ConfirmTOTPResponseObject, error)
+	// DisableTOTP Disable two-factor authentication
+	// (POST /v1/me/mfa/totp/disable)
+	DisableTOTP(ctx context.Context, request DisableTOTPRequestObject) (DisableTOTPResponseObject, error)
+	// StartPhoneVerification Send a code to a phone number to add to the account
+	// (POST /v1/me/phone)
+	StartPhoneVerification(ctx context.Context, request StartPhoneVerificationRequestObject) (StartPhoneVerificationResponseObject, error)
+	// VerifyPhone Confirm the phone number with the received code
+	// (POST /v1/me/phone/verify)
+	VerifyPhone(ctx context.Context, request VerifyPhoneRequestObject) (VerifyPhoneResponseObject, error)
 	// ListMySessions The signed-in user's active sessions
 	// (GET /v1/me/sessions)
 	ListMySessions(ctx context.Context, request ListMySessionsRequestObject) (ListMySessionsResponseObject, error)
@@ -900,6 +2194,24 @@ type StrictServerInterface interface {
 	// ListAuditLog The store's audit log
 	// (GET /v1/stores/{store_id}/audit-log)
 	ListAuditLog(ctx context.Context, request ListAuditLogRequestObject) (ListAuditLogResponseObject, error)
+	// ListInvitations Open invitations
+	// (GET /v1/stores/{store_id}/invitations)
+	ListInvitations(ctx context.Context, request ListInvitationsRequestObject) (ListInvitationsResponseObject, error)
+	// CreateInvitation Invite someone to the team by email
+	// (POST /v1/stores/{store_id}/invitations)
+	CreateInvitation(ctx context.Context, request CreateInvitationRequestObject) (CreateInvitationResponseObject, error)
+	// RevokeInvitation Cancel an open invitation
+	// (DELETE /v1/stores/{store_id}/invitations/{invitation_id})
+	RevokeInvitation(ctx context.Context, request RevokeInvitationRequestObject) (RevokeInvitationResponseObject, error)
+	// ListMembers The store's team
+	// (GET /v1/stores/{store_id}/members)
+	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
+	// RemoveMember Remove a member from the store
+	// (DELETE /v1/stores/{store_id}/members/{user_id})
+	RemoveMember(ctx context.Context, request RemoveMemberRequestObject) (RemoveMemberResponseObject, error)
+	// UpdateMemberRole Change a member's role
+	// (PATCH /v1/stores/{store_id}/members/{user_id})
+	UpdateMemberRole(ctx context.Context, request UpdateMemberRoleRequestObject) (UpdateMemberRoleResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -996,6 +2308,99 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VerifyMFA operation middleware
+func (sh *strictHandler) VerifyMFA(w http.ResponseWriter, r *http.Request) {
+	var request VerifyMFARequestObject
+
+	var body VerifyMFAJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyMFA(ctx, request.(VerifyMFARequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyMFA")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyMFAResponseObject); ok {
+		if err := validResponse.VisitVerifyMFAResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartOTPLogin operation middleware
+func (sh *strictHandler) StartOTPLogin(w http.ResponseWriter, r *http.Request) {
+	var request StartOTPLoginRequestObject
+
+	var body StartOTPLoginJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartOTPLogin(ctx, request.(StartOTPLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartOTPLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartOTPLoginResponseObject); ok {
+		if err := validResponse.VisitStartOTPLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyOTPLogin operation middleware
+func (sh *strictHandler) VerifyOTPLogin(w http.ResponseWriter, r *http.Request) {
+	var request VerifyOTPLoginRequestObject
+
+	var body VerifyOTPLoginJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyOTPLogin(ctx, request.(VerifyOTPLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyOTPLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyOTPLoginResponseObject); ok {
+		if err := validResponse.VisitVerifyOTPLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Signup operation middleware
 func (sh *strictHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	var request SignupRequestObject
@@ -1027,6 +2432,37 @@ func (sh *strictHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AcceptInvitation operation middleware
+func (sh *strictHandler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
+	var request AcceptInvitationRequestObject
+
+	var body AcceptInvitationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AcceptInvitation(ctx, request.(AcceptInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AcceptInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AcceptInvitationResponseObject); ok {
+		if err := validResponse.VisitAcceptInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMe operation middleware
 func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	var request GetMeRequestObject
@@ -1044,6 +2480,154 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetupTOTP operation middleware
+func (sh *strictHandler) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+	var request SetupTOTPRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetupTOTP(ctx, request.(SetupTOTPRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetupTOTP")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetupTOTPResponseObject); ok {
+		if err := validResponse.VisitSetupTOTPResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfirmTOTP operation middleware
+func (sh *strictHandler) ConfirmTOTP(w http.ResponseWriter, r *http.Request) {
+	var request ConfirmTOTPRequestObject
+
+	var body ConfirmTOTPJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmTOTP(ctx, request.(ConfirmTOTPRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmTOTP")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmTOTPResponseObject); ok {
+		if err := validResponse.VisitConfirmTOTPResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisableTOTP operation middleware
+func (sh *strictHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+	var request DisableTOTPRequestObject
+
+	var body DisableTOTPJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableTOTP(ctx, request.(DisableTOTPRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableTOTP")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableTOTPResponseObject); ok {
+		if err := validResponse.VisitDisableTOTPResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartPhoneVerification operation middleware
+func (sh *strictHandler) StartPhoneVerification(w http.ResponseWriter, r *http.Request) {
+	var request StartPhoneVerificationRequestObject
+
+	var body StartPhoneVerificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartPhoneVerification(ctx, request.(StartPhoneVerificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartPhoneVerification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartPhoneVerificationResponseObject); ok {
+		if err := validResponse.VisitStartPhoneVerificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyPhone operation middleware
+func (sh *strictHandler) VerifyPhone(w http.ResponseWriter, r *http.Request) {
+	var request VerifyPhoneRequestObject
+
+	var body VerifyPhoneJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyPhone(ctx, request.(VerifyPhoneRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyPhone")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyPhoneResponseObject); ok {
+		if err := validResponse.VisitVerifyPhoneResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1121,6 +2705,179 @@ func (sh *strictHandler) ListAuditLog(w http.ResponseWriter, r *http.Request, st
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListAuditLogResponseObject); ok {
 		if err := validResponse.VisitListAuditLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListInvitations operation middleware
+func (sh *strictHandler) ListInvitations(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListInvitationsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListInvitations(ctx, request.(ListInvitationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListInvitations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListInvitationsResponseObject); ok {
+		if err := validResponse.VisitListInvitationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateInvitation operation middleware
+func (sh *strictHandler) CreateInvitation(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateInvitationRequestObject
+
+	request.StoreId = storeId
+
+	var body CreateInvitationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvitation(ctx, request.(CreateInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInvitationResponseObject); ok {
+		if err := validResponse.VisitCreateInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeInvitation operation middleware
+func (sh *strictHandler) RevokeInvitation(w http.ResponseWriter, r *http.Request, storeId StoreID, invitationId ULID) {
+	var request RevokeInvitationRequestObject
+
+	request.StoreId = storeId
+	request.InvitationId = invitationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeInvitation(ctx, request.(RevokeInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeInvitationResponseObject); ok {
+		if err := validResponse.VisitRevokeInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMembers operation middleware
+func (sh *strictHandler) ListMembers(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListMembersRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMembers(ctx, request.(ListMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMembersResponseObject); ok {
+		if err := validResponse.VisitListMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveMember operation middleware
+func (sh *strictHandler) RemoveMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID) {
+	var request RemoveMemberRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveMember(ctx, request.(RemoveMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveMemberResponseObject); ok {
+		if err := validResponse.VisitRemoveMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMemberRole operation middleware
+func (sh *strictHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID) {
+	var request UpdateMemberRoleRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body UpdateMemberRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMemberRole(ctx, request.(UpdateMemberRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMemberRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMemberRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateMemberRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -107,6 +107,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete sign-in with a TOTP or recovery code */
+        post: operations["verifyMFA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/otp/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a sign-in code to a verified phone
+         * @description Always answers 202 with a challenge, whether or not the number has
+         *     an account. Limited per number (1/min, 10/day) and per IP. 503
+         *     while no SMS/WhatsApp provider is configured.
+         */
+        post: operations["startOTPLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with the code from the phone */
+        post: operations["verifyOTPLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join a store from an invitation link
+         * @description If the invited email has an account, the caller must be signed in
+         *     as it. Otherwise `name` and `password` create the account and a
+         *     session.
+         */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -135,6 +213,94 @@ export interface paths {
         get: operations["getMe"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a code to a phone number to add to the account */
+        post: operations["startPhoneVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/phone/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the phone number with the received code */
+        post: operations["verifyPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/mfa/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start two-factor enrolment */
+        post: operations["setupTOTP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/mfa/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable two-factor authentication */
+        post: operations["confirmTOTP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/mfa/totp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable two-factor authentication
+         * @description Needs the password and a current code (or a recovery code).
+         */
+        post: operations["disableTOTP"];
         delete?: never;
         options?: never;
         head?: never;
@@ -172,6 +338,104 @@ export interface paths {
         post?: never;
         /** Sign out one device */
         delete: operations["revokeMySession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's team
+         * @description Permission: members.read.
+         */
+        get: operations["listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a member from the store
+         * @description Permission: members.manage. The owner cannot be removed.
+         */
+        delete: operations["removeMember"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a member's role
+         * @description Permission: members.manage. The owner's role cannot be changed.
+         */
+        patch: operations["updateMemberRole"];
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Open invitations
+         * @description Permission: members.manage.
+         */
+        get: operations["listInvitations"];
+        put?: never;
+        /**
+         * Invite someone to the team by email
+         * @description Permission: members.manage. The link is emailed and valid for 7 days.
+         */
+        post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invitation_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open invitation
+         * @description Permission: members.manage.
+         */
+        delete: operations["revokeInvitation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -374,8 +638,120 @@ export interface components {
             email: string;
             name: string;
             email_verified: boolean;
+            /**
+             * @description Verified number, E.164.
+             * @example +201012345678
+             */
+            phone?: string;
+            mfa_enabled: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        MFARequired: {
+            /** @enum {boolean} */
+            mfa_required: true;
+            challenge_id: components["schemas"]["ULID"];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        MFAVerifyRequest: {
+            challenge_id: string;
+            /** @description 6-digit TOTP code or a recovery code. */
+            code: string;
+            client?: components["schemas"]["ClientKind"];
+        };
+        PhoneRequest: {
+            /** @example 01012345678 */
+            phone: string;
+            /**
+             * @description Country for numbers without a + prefix.
+             * @default EG
+             * @enum {string}
+             */
+            region: "EG" | "SA" | "AE" | "KW" | "QA" | "BH" | "OM";
+        };
+        CodeChallenge: {
+            challenge_id: components["schemas"]["ULID"];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        CodeVerifyRequest: {
+            challenge_id: string;
+            code: string;
+            client?: components["schemas"]["ClientKind"];
+        };
+        TOTPSetup: {
+            /** @description Base32 seed for manual entry. */
+            secret: string;
+            otpauth_uri: string;
+        };
+        TOTPCode: {
+            code: string;
+        };
+        RecoveryCodes: {
+            codes: string[];
+        };
+        DisableTOTPRequest: {
+            /** Format: password */
+            password: string;
+            code: string;
+        };
+        Member: {
+            user_id: components["schemas"]["ULID"];
+            name: string;
+            email: string;
+            role: components["schemas"]["Role"];
+            /** Format: date-time */
+            joined_at: string;
+        };
+        MemberList: {
+            items: components["schemas"]["Member"][];
+        };
+        MemberRoleUpdate: {
+            /** @enum {string} */
+            role: "manager" | "support" | "shipping";
+        };
+        NewInvitation: {
+            email: string;
+            /** @enum {string} */
+            role: "manager" | "support" | "shipping";
+        };
+        Invitation: {
+            id: components["schemas"]["ULID"];
+            email: string;
+            role: components["schemas"]["Role"];
+            invited_by?: components["schemas"]["ULID"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        InvitationList: {
+            items: components["schemas"]["Invitation"][];
+        };
+        AcceptInvitationRequest: {
+            /** @description The part after `#` in the invitation link. */
+            token: string;
+            /** @description For a new account. */
+            name?: string;
+            /**
+             * Format: password
+             * @description For a new account.
+             */
+            password?: string;
+            client?: components["schemas"]["ClientKind"];
+        };
+        AcceptInvitationResponse: {
+            store_id: components["schemas"]["ULID"];
+            role: components["schemas"]["Role"];
+            user: components["schemas"]["User"];
+            /**
+             * Format: date-time
+             * @description Session expiry (new accounts).
+             */
+            expires_at?: string;
+            /** @description Session token (new accounts, mobile clients). */
+            token?: string;
         };
         Me: {
             user: components["schemas"]["User"];
@@ -668,6 +1044,127 @@ export interface operations {
                     "application/json": components["schemas"]["AuthResponse"];
                 };
             };
+            /** @description Password accepted; complete sign-in with `POST /v1/auth/mfa`. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MFARequired"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyMFA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MFAVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startOTPLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneRequest"];
+            };
+        };
+        responses: {
+            /** @description A code was sent if the number has an account. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChallenge"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyOTPLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Code accepted; complete sign-in with `POST /v1/auth/mfa`. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MFARequired"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Joined. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponse"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };
@@ -712,6 +1209,123 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    startPhoneVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Code sent. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChallenge"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Phone verified; it can now be used for sign-in. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setupTOTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Seed to add to an authenticator app (show as a QR code). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TOTPSetup"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    confirmTOTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TOTPCode"];
+            };
+        };
+        responses: {
+            /** @description Enabled. The recovery codes are shown only now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disableTOTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableTOTPRequest"];
+            };
+        };
+        responses: {
+            /** @description Disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listMySessions: {
         parameters: {
             query?: never;
@@ -739,6 +1353,149 @@ export interface operations {
             header?: never;
             path: {
                 session_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed; their next request to this store gets 404. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open invitations, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewInvitation"];
+            };
+        };
+        responses: {
+            /** @description Invitation created and queued for email. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invitation"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invitation_id: components["schemas"]["ULID"];
             };
             cookie?: never;
         };

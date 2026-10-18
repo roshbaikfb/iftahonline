@@ -13,6 +13,7 @@ import (
 type RequestMeta struct {
 	UserAgent string
 	IP        netip.Addr
+	DeviceID  string // __Host-did cookie or X-Device-ID header; "" if unknown
 }
 
 type metaKey struct{}
