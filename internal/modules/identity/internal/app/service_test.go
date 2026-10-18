@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -586,4 +587,52 @@ func TestAuditPartitionsWorker(t *testing.T) {
 	if app.AuditPartitionsPeriodic() == nil {
 		t.Fatal("periodic job")
 	}
+}
+
+// TestPartitionCreationDoesNotDeadlockWriters reproduces the CI deadlock:
+// creating partitions while sign-ups insert into stores and audit_log.
+// Partition creation must never take a lock that conflicts with inserts.
+func TestPartitionCreationDoesNotDeadlockWriters(t *testing.T) {
+	f := newFixture(t)
+	w := &app.AuditPartitionsWorker{DB: f.app}
+	stop := make(chan struct{})
+	errc := make(chan error, 64)
+	var wg sync.WaitGroup
+	for range 6 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_, err := f.svc.Signup(f.device(t), app.SignupInput{
+					Email: f.unique("dl") + "@example.com", Password: goodPassword, Name: "D",
+					Store: tenancy.NewStore{Slug: f.unique("dl-"), Name: "D", Currency: "EGP", Locale: "ar", Timezone: "UTC"},
+				})
+				if err != nil && !errs.Is(err, errs.KindRateLimited) {
+					errc <- err
+					return
+				}
+			}
+		})
+	}
+	// Each run adds partitions further ahead: real DDL while writers run.
+	for months := 3; months <= 24; months++ {
+		if _, err := f.owner.Exec(t.Context(), "SELECT app.ensure_audit_log_partitions($1)", months); err != nil {
+			close(stop)
+			wg.Wait()
+			t.Fatalf("ensure %d months: %v", months, err)
+		}
+	}
+	if err := w.Work(t.Context(), &river.Job[app.AuditPartitionsArgs]{}); err != nil {
+		t.Fatal(err)
+	}
+	close(stop)
+	wg.Wait()
+	close(errc)
+	for err := range errc {
+		t.Errorf("sign-up during partition creation: %v", err)
+	}
+	testkit.AssertTenantTablesUseRLS(t, f.owner, "store_memberships.member_self_read")
 }

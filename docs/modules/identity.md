@@ -268,6 +268,10 @@ allows.
   partition directly skips the parent's policies.
 - The `identity.audit.partitions` job runs it daily and when the worker
   starts, keeping 3 months ahead.
+- Each partition is built as a standalone table and then attached with
+  `ATTACH PARTITION`, which never blocks inserts (migration 00013).
+  `CREATE TABLE … PARTITION OF` deadlocked with concurrent sign-ups;
+  `TestPartitionCreationDoesNotDeadlockWriters` guards against it.
 
 ### What an entry holds
 
