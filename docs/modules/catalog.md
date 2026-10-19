@@ -6,7 +6,8 @@ store's **category tree**. Design and stock semantics:
 [ADR-0011](../adr/0011-catalog-and-stock-reservations.md). Isolation:
 [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 
-Images, search indexing and importers follow in later P2 pull requests.
+Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search
+indexing and importers follow in later P2 pull requests.
 
 ## Public API (`internal/modules/catalog/api.go`)
 
@@ -27,6 +28,9 @@ Every method acts on the store in `ctx`.
 | Job | When | Effect |
 |---|---|---|
 | `catalog.expire_reservation` | Scheduled at the reservation's `expires_at`, inserted in the reservation's transaction | Ends the ref's active lines as `expired` and gives back counted units; snoozes if it runs early |
+| `catalog.process_image` (queue `media`) | `completeImageUpload` | Sniffs, bounds, orients and re-encodes the original into a master; `ready` or `failed` with a reason |
+| `catalog.expire_image_upload` | One hour after `createImageUpload` | Deletes the image if it is still `pending`, and any partial upload |
+| `catalog.delete_objects` | After processing, image deletion and product deletion | Removes objects; refuses keys outside the store's prefix |
 
 Product events for search indexing arrive with the search pull request.
 
@@ -43,6 +47,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | `stock_reservations` | One row per (ref, variant): `qty`, `counted`, `status`, `expires_at` |
 | `categories` | Tree via `parent_id` (≤ 3 levels, ≤ 500 per store); `slug` unique per store; a parent with children cannot be deleted |
 | `product_categories` | Product ↔ category links (≤ 20 per product) |
+| `product_images` | `pending` → `processing` → `ready` / `failed`; `upload_key`, master `object_key`, size, `alt`, `position` (≤ 20 per product) |
 
 ## HTTP API (tag `catalog`)
 
@@ -52,6 +57,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | `createProduct`, `updateProduct`, `deleteProduct` | `catalog.manage` |
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
+| `createImageUpload`, `completeImageUpload`, `updateImage`, `deleteImage` | `catalog.manage` |
 
 - `updateProduct` replaces the product. Variants sent with `id` keep their
   identity and stock; variants without one are created with `on_hand`;
@@ -62,11 +68,15 @@ parent (`db/migrations/00015_catalog.sql`).
   ASCII.
 - A malformed or foreign ID in the path is 404; in the body it is a
   validation error.
+- Images: `createImageUpload` returns a presigned POST (`upload.url` +
+  `upload.fields`, file last as `file`); after the upload, call
+  `completeImageUpload`. `ready` images carry signed imgproxy `urls` for
+  four sizes in AVIF and WebP.
 
 ## Performance
 
-- `listProducts` runs two queries whatever the page size: products with
-  their category IDs, then variants with stock for the page (asserted by
+- `listProducts` runs three queries whatever the page size: products with
+  their category IDs, variants with stock, and images for the page (asserted by
   `TestListProductsConstantQueries`). A category filter has its own
   query, driven by the category's links. Plans: ADR-0011 §7.
 - A reservation is one UPDATE per line on the variant's inventory row.
@@ -74,6 +84,9 @@ parent (`db/migrations/00015_catalog.sql`).
 ## Tests
 
 - `domain`: table-driven rules; `FuzzSlugify`.
+- `media`: type sniffing, bombs, orientation, metadata stripping;
+  `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
+  SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).
 - `app` (real PostgreSQL): lifecycle, uniqueness, constant query count,
   50 concurrent reservations on stock 10, multi-line deadlock freedom,
   idempotency, expiry, cross-tenant isolation.
