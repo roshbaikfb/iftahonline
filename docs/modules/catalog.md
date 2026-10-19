@@ -6,8 +6,9 @@ store's **category tree**. Design and stock semantics:
 [ADR-0011](../adr/0011-catalog-and-stock-reservations.md). Isolation:
 [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 
-Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search
-indexing and importers follow in later P2 pull requests.
+Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search:
+[ADR-0013](../adr/0013-tenant-safe-search.md). Importers follow in a later
+P2 pull request.
 
 ## Public API (`internal/modules/catalog/api.go`)
 
@@ -31,6 +32,8 @@ Every method acts on the store in `ctx`.
 | `catalog.process_image` (queue `media`) | `completeImageUpload` | Sniffs, bounds, orients and re-encodes the original into a master; `ready` or `failed` with a reason |
 | `catalog.expire_image_upload` | One hour after `createImageUpload` | Deletes the image if it is still `pending`, and any partial upload |
 | `catalog.delete_objects` | After processing, image deletion and product deletion | Removes objects; refuses keys outside the store's prefix |
+| `catalog.index_product` | Product create/replace/delete; image ready/updated/deleted | Upserts the product's search document from its current state, or deletes it |
+| `catalog.search_settings` (global, periodic) | Worker start, then every 6 hours | Creates the index and applies its settings |
 
 Product events for search indexing arrive with the search pull request.
 
@@ -53,7 +56,7 @@ parent (`db/migrations/00015_catalog.sql`).
 
 | Operation | Permission |
 |---|---|
-| `listProducts`, `getProduct`, `listCategories` | `catalog.read` |
+| `listProducts`, `getProduct`, `listCategories`, `searchProducts` | `catalog.read` |
 | `createProduct`, `updateProduct`, `deleteProduct` | `catalog.manage` |
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
@@ -73,6 +76,12 @@ parent (`db/migrations/00015_catalog.sql`).
   `completeImageUpload`. `ready` images carry signed imgproxy `urls` for
   four sizes in AVIF and WebP.
 
+## Search
+
+`searchProducts` goes to Meilisearch only (no database query). The search
+client adds the store filter from the context; the text is normalized
+like the documents (`domain.NormalizeSearch`).
+
 ## Performance
 
 - `listProducts` runs three queries whatever the page size: products with
@@ -84,6 +93,9 @@ parent (`db/migrations/00015_catalog.sql`).
 ## Tests
 
 - `domain`: table-driven rules; `FuzzSlugify`.
+- `search` (real Meilisearch): store A never sees store B's products,
+  whatever the query; foreign upserts fail; foreign deletes are no-ops;
+  Arabic forms match. `domain`: `FuzzNormalizeSearch`.
 - `media`: type sniffing, bombs, orientation, metadata stripping;
   `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
   SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).

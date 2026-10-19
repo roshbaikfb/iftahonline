@@ -79,6 +79,11 @@ The `api` and `worker` roles also need object storage and imgproxy
   32` each) as the api, read access to the bucket, and
   `IMGPROXY_ALLOWED_SOURCES=s3://<bucket>/`. Set `IMGPROXY_URL` to its
   public address.
+- **Meilisearch** (`MEILI_URL`, `MEILI_API_KEY`, `MEILI_INDEX`): never
+  the master key. The api's key needs `search` and `documents.*` on the
+  index; the worker's also needs `indexes.create`, `settings.update` and
+  `tasks.get`, because the worker applies the index settings
+  ([ADR-0013](../docs/adr/0013-tenant-safe-search.md)).
 - **`MEDIA_IMAGE_WORKERS`** (worker): concurrent image jobs. Each holds
   up to about 220 MB at the default 25 MP limit; size `GOMEMLIMIT`
   accordingly.

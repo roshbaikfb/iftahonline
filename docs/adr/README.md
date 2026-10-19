@@ -18,3 +18,4 @@ supersedes it.
 | [0010](0010-super-admin-console.md) | Super-admin console boundaries | Accepted |
 | [0011](0011-catalog-and-stock-reservations.md) | Catalog data model and race-safe stock reservations | Accepted |
 | [0012](0012-image-pipeline.md) | Product image pipeline: presigned uploads, re-encoded masters, signed imgproxy delivery | Accepted |
+| [0013](0013-tenant-safe-search.md) | Tenant-safe product search with Arabic normalization | Accepted |
