@@ -32,6 +32,8 @@ func base() map[string]string {
 		"IMGPROXY_URL":         "http://localhost:18088",
 		"IMGPROXY_KEY":         "6465762d6f6e6c792d696d6770726f78792d6b65792d6e6f742d736563726574",
 		"IMGPROXY_SALT":        "6465762d6f6e6c792d696d6770726f78792d73616c742d7075626c6963",
+		"MEILI_URL":            "http://localhost:17700",
+		"MEILI_API_KEY":        "local-dev-master-key-0123456789",
 	}
 }
 
@@ -297,6 +299,26 @@ func TestMedia(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), "local-dev-secret") || strings.Contains(err.Error(), "6465762d") {
 			t.Errorf("%s: error leaks a secret: %v", name, err)
+		}
+	}
+}
+
+func TestSearch(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || c.Search.URL != "http://localhost:17700" || c.Search.Index != "products" || c.Search.APIKey == "" {
+		t.Fatalf("search = %+v %v", c.Search, err)
+	}
+	for name, kv := range map[string][]string{
+		"missing url": {"MEILI_URL", "<unset>"},
+		"bad url":     {"MEILI_URL", "meili:7700"},
+		"missing key": {"MEILI_API_KEY", "<unset>"},
+	} {
+		_, err := config.Load(config.RoleAPI, env(with(kv...)))
+		if err == nil {
+			t.Errorf("%s: want error", name)
+		} else if strings.Contains(err.Error(), "local-dev-master-key") {
+			t.Errorf("%s: error leaks the key", name)
 		}
 	}
 }
