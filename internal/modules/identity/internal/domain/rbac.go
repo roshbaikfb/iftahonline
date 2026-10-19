@@ -11,7 +11,8 @@ import (
 //   - owner: everything.
 //   - manager: runs the store day to day, but cannot change who has access.
 //   - support: answers customers; reads, does not configure.
-//   - shipping: fulfils orders; sees the store, nothing else yet.
+//   - shipping: fulfils orders; sees the catalog and keeps stock counts
+//     right (they handle the goods), but does not edit products.
 func Matrix() map[authz.Role][]authz.Permission {
 	return map[authz.Role][]authz.Permission{
 		authz.RoleOwner: authz.Permissions(),
@@ -19,12 +20,14 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermStoreRead, authz.PermStoreUpdate,
 			authz.PermDomainsRead, authz.PermDomainsManage,
 			authz.PermMembersRead, authz.PermAuditRead,
+			authz.PermCatalogRead, authz.PermCatalogManage, authz.PermInventoryManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
+			authz.PermCatalogRead,
 		},
 		authz.RoleShipping: {
-			authz.PermStoreRead,
+			authz.PermStoreRead, authz.PermCatalogRead, authz.PermInventoryManage,
 		},
 	}
 }

@@ -55,6 +55,10 @@ const (
 	PermMembersRead   Permission = "members.read"
 	PermMembersManage Permission = "members.manage"
 	PermAuditRead     Permission = "audit.read"
+
+	PermCatalogRead     Permission = "catalog.read"
+	PermCatalogManage   Permission = "catalog.manage"
+	PermInventoryManage Permission = "inventory.manage"
 )
 
 // Permissions lists every permission.
@@ -64,6 +68,7 @@ func Permissions() []Permission {
 		PermDomainsRead, PermDomainsManage,
 		PermMembersRead, PermMembersManage,
 		PermAuditRead,
+		PermCatalogRead, PermCatalogManage, PermInventoryManage,
 	}
 }
 
