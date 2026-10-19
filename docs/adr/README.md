@@ -16,3 +16,4 @@ supersedes it.
 | [0008](0008-session-lookup-in-postgres.md) | Session lookup in PostgreSQL, no Redis session cache (yet) | Accepted |
 | [0009](0009-notifications-and-invitations.md) | Delivering codes and emails without a provider; invitation tokens | Accepted |
 | [0010](0010-super-admin-console.md) | Super-admin console boundaries | Accepted |
+| [0011](0011-catalog-and-stock-reservations.md) | Catalog data model and race-safe stock reservations | Accepted |
