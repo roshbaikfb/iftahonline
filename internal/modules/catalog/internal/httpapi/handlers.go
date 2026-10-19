@@ -480,3 +480,48 @@ func (h *Handlers) toImage(img domain.Image) ProductImage {
 	out.Urls = &ImageURLs{Thumb: f("thumb"), Small: f("small"), Medium: f("medium"), Large: f("large")}
 	return out
 }
+
+// SearchProducts implements StrictServerInterface.
+func (h *Handlers) SearchProducts(ctx context.Context, req SearchProductsRequestObject) (SearchProductsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	p := req.Params
+	q := app.SearchQuery{Text: deref(p.Q)}
+	if p.Status != nil {
+		q.Status = string(*p.Status)
+	}
+	if p.Limit != nil {
+		q.Limit = *p.Limit
+	}
+	if p.Offset != nil {
+		q.Offset = *p.Offset
+	}
+	if p.CategoryId != nil {
+		id, err := bodyID("category_id", *p.CategoryId)
+		if err != nil {
+			return nil, err
+		}
+		q.CategoryID = &id
+	}
+	res, err := h.svc.SearchProducts(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	out := SearchProducts200JSONResponse{Items: make([]ProductSearchHit, len(res.Hits)), EstimatedTotal: res.EstimatedTotal}
+	for i, d := range res.Hits {
+		hit := ProductSearchHit{
+			Id: d.ID, Title: d.Title, Slug: d.Slug, Status: ProductSearchHitStatus(d.Status), CategoryIds: d.CategoryIDs,
+			PriceMinor: d.PriceMinor, Currency: ProductSearchHitCurrency(d.Currency),
+		}
+		if hit.CategoryIds == nil {
+			hit.CategoryIds = []ULID{}
+		}
+		if d.ImageKey != "" {
+			u := h.urls.URLs(d.ImageKey)["thumb"]
+			hit.Thumb = &ImageFormats{Avif: u["avif"], Webp: u["webp"]}
+		}
+		out.Items[i] = hit
+	}
+	return out, nil
+}

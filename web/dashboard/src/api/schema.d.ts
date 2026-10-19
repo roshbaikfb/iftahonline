@@ -614,6 +614,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/products/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Search the store's products
+         * @description Permission: catalog.read. Full-text search over title, options,
+         *     SKUs and description, typo tolerant, with Arabic normalization
+         *     (أ/إ/آ = ا, ى = ي, ة = ه, diacritics ignored). Only this store's
+         *     products are ever returned (ADR-0013). The index is updated within
+         *     seconds of a change. Without `q`, newest first.
+         */
+        get: operations["searchProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/products/{product_id}": {
         parameters: {
             query?: never;
@@ -1353,6 +1379,27 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        ProductSearchPage: {
+            items: components["schemas"]["ProductSearchHit"][];
+            /** Format: int64 */
+            estimated_total: number;
+        };
+        ProductSearchHit: {
+            id: components["schemas"]["ULID"];
+            title: string;
+            slug: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "archived";
+            category_ids: components["schemas"]["ULID"][];
+            /**
+             * Format: int64
+             * @description The lowest variant price.
+             */
+            price_minor: number;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            thumb?: components["schemas"]["ImageFormats"];
         };
         ProductImage: {
             id: components["schemas"]["ULID"];
@@ -2361,6 +2408,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchProducts: {
+        parameters: {
+            query?: {
+                q?: string;
+                status?: "draft" | "active" | "archived";
+                category_id?: components["schemas"]["ULID"];
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hits, best match first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductSearchPage"];
                 };
             };
             default: components["responses"]["Problem"];

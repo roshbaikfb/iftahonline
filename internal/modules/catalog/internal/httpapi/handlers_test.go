@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/search"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -109,6 +110,23 @@ type fixture struct {
 	imageB   domain.Image
 }
 
+// storeIndex answers every search with one hit of the store in ctx, so
+// tests see the tenant the handler passed down.
+type storeIndex struct{}
+
+func (storeIndex) Upsert(context.Context, []search.Doc) error { return nil }
+func (storeIndex) Delete(context.Context, []ulid.ID) error    { return nil }
+func (storeIndex) Search(ctx context.Context, q search.Query) (search.Result, error) {
+	id, err := tenant.FromContext(ctx)
+	if err != nil {
+		return search.Result{}, err
+	}
+	return search.Result{EstimatedTotal: 1, Hits: []search.Doc{{
+		ID: id.String(), StoreID: id.String(), Title: "hit for " + q.Text, Slug: "hit", Status: "active",
+		PriceMinor: 100, Currency: "EGP", ImageKey: "stores/x/images/y.jpg",
+	}}}, nil
+}
+
 // presignOnly is a bucket that only presigns (handlers never read files).
 type presignOnly struct{}
 
@@ -133,8 +151,9 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	svc := app.NewService(pool, ins, ids, audit.Nop{}, currency(money.EGP),
-		app.Media{Objects: presignOnly{}, Limits: media.Limits{MaxBytes: 1 << 20, MaxPixels: 1 << 20}})
+	svc := app.NewService(app.Deps{DB: pool, Jobs: ins, IDs: ids, Audit: audit.Nop{}, Currency: currency(money.EGP),
+		Media:  app.Media{Objects: presignOnly{}, Limits: media.Limits{MaxBytes: 1 << 20, MaxPixels: 1 << 20}},
+		Search: storeIndex{}})
 	mk := func() (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}
 		sctx := tenant.WithStore(ctx, id)
@@ -291,6 +310,15 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("deleteImage = %d", c)
 	}
 
+	code, sr := f.do(t, req(t, http.MethodGet, storePath(a, "/products/search?q=%D8%A3%D8%AD%D8%B0%D9%8A%D8%A9&status=active&limit=5"), tokSupportA, ""))
+	if code != http.StatusOK || sr["estimated_total"] != float64(1) {
+		t.Fatalf("searchProducts = %d %v", code, sr)
+	}
+	hit := sr["items"].([]any)[0].(map[string]any)
+	if hit["id"] != a.String() || hit["title"] != "hit for احذيه" || hit["thumb"].(map[string]any)["webp"] == "" || hit["category_ids"] == nil {
+		t.Fatalf("hit = %v (the store and normalized text must come from the handler)", hit)
+	}
+
 	mustCreate := func(title string) {
 		if c, b := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"`+title+`","variants":[{"price_minor":1}]}`)); c != http.StatusCreated {
 			t.Fatalf("create %s = %d %v", title, code, b)
@@ -355,6 +383,9 @@ func TestValidation(t *testing.T) {
 		{"unknown parent", req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"x","parent_id":"`+id+`"}`), 422, "validation_failed", "parent_id"},
 		{"bad category id", req(t, http.MethodPut, storePath(a, "/categories/nope"), tokOwnerA, `{"name":"x"}`), 404, "category_not_found", ""},
 		{"missing category delete", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokOwnerA, ""), 404, "category_not_found", ""},
+		{"long search", req(t, http.MethodGet, storePath(a, "/products/search?q="+strings.Repeat("a", 201)), tokOwnerA, ""), 422, "validation_failed", "q"},
+		{"search offset", req(t, http.MethodGet, storePath(a, "/products/search?offset=5000"), tokOwnerA, ""), 422, "validation_failed", "offset"},
+		{"search category", req(t, http.MethodGet, storePath(a, "/products/search?category_id=nope"), tokOwnerA, ""), 422, "validation_failed", "category_id"},
 		{"svg upload", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/svg+xml"}`), 422, "validation_failed", "content_type"},
 		{"upload to missing product", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/png"}`), 404, "product_not_found", ""},
 		{"long alt", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokOwnerA, `{"alt":"`+strings.Repeat("a", 201)+`"}`), 422, "validation_failed", "alt"},
@@ -429,6 +460,8 @@ func TestAuthorization(t *testing.T) {
 		{"no session", req(t, http.MethodGet, storePath(a, "/products"), "", ""), http.StatusUnauthorized},
 		{"unknown token", req(t, http.MethodGet, storePath(a, "/categories"), "forged", ""), http.StatusUnauthorized},
 		{"support lists products", req(t, http.MethodGet, storePath(a, "/products"), tokSupportA, ""), http.StatusOK},
+		{"shipping searches products", req(t, http.MethodGet, storePath(a, "/products/search?q=x"), tokShippingA, ""), http.StatusOK},
+		{"search needs a session", req(t, http.MethodGet, storePath(a, "/products/search?q=x"), "", ""), http.StatusUnauthorized},
 		{"support lists categories", req(t, http.MethodGet, storePath(a, "/categories"), tokSupportA, ""), http.StatusOK},
 		{"support reads product", req(t, http.MethodGet, storePath(a, "/products/"+id), tokSupportA, ""), http.StatusNotFound},
 		{"support cannot create product", req(t, http.MethodPost, storePath(a, "/products"), tokSupportA, product), http.StatusForbidden},
@@ -482,6 +515,7 @@ func TestCrossTenant(t *testing.T) {
 	cases := []testkit.CrossTenantCase{
 		// B's store in the path.
 		{OperationID: "listProducts", Request: req(t, http.MethodGet, storePath(b, "/products"), tokOwnerA, "")},
+		{OperationID: "searchProducts", Request: req(t, http.MethodGet, storePath(b, "/products/search?q=B"), tokOwnerA, ""), Leaks: []string{b.String()}},
 		{OperationID: "createProduct", Request: req(t, http.MethodPost, storePath(b, "/products"), tokOwnerA, product), Unchanged: unchanged},
 		{OperationID: "getProduct", Request: req(t, http.MethodGet, storePath(b, "/products/"+pid), tokOwnerA, "")},
 		{OperationID: "listCategories", Request: req(t, http.MethodGet, storePath(b, "/categories"), tokOwnerA, "")},
@@ -509,6 +543,12 @@ func TestCrossTenant(t *testing.T) {
 		testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, c)
 	}
 
+	// Search under A's own path is scoped to A by the handler's context.
+	code, sr := f.do(t, req(t, http.MethodGet, storePath(a, "/products/search?q=secret"), tokOwnerA, ""))
+	if code != http.StatusOK || sr["items"].([]any)[0].(map[string]any)["id"] != a.String() {
+		t.Fatalf("search ran outside store A: %d %v", code, sr)
+	}
+
 	// Lists under A's own path never show B's rows.
 	for _, path := range []string{"/products", "/products?category_id=" + cid, "/categories"} {
 		rec := httptest.NewRecorder()
@@ -520,7 +560,7 @@ func TestCrossTenant(t *testing.T) {
 		}
 	}
 	// A cannot attach B's category to its own product.
-	code, _ := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+cid+`"],"variants":[{"price_minor":1}]}`))
+	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+cid+`"],"variants":[{"price_minor":1}]}`))
 	if code != 422 {
 		t.Fatalf("foreign category accepted: %d", code)
 	}

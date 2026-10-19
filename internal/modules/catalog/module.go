@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -12,6 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/search"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -31,6 +33,8 @@ type Deps struct {
 	Audit audit.Recorder
 	// Media is object storage and image delivery (ADR-0012).
 	Media config.Media
+	// Search is the products index (ADR-0013).
+	Search config.Search
 }
 
 // Module is the wired catalog module.
@@ -38,6 +42,7 @@ type Module struct {
 	svc    *app.Service
 	media  app.Media
 	signer *media.Signer
+	index  *search.Client
 	deps   Deps
 }
 
@@ -58,10 +63,19 @@ func New(d Deps) (*Module, error) {
 		return nil, err
 	}
 	m := app.Media{Objects: objects, Limits: media.Limits{MaxBytes: mc.MaxUploadBytes, MaxPixels: mc.MaxImagePixels}}
+	index := search.New(d.Search.URL, d.Search.APIKey, d.Search.Index, 10*time.Second)
 	return &Module{
-		svc: app.NewService(d.Pool, d.Jobs, d.IDs, d.Audit, d.Currency, m), media: m,
-		signer: media.NewSigner(mc.ImgproxyURL, mc.S3Bucket, mc.ImgproxyKey, mc.ImgproxySalt), deps: d,
+		svc: app.NewService(app.Deps{
+			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index,
+		}),
+		media: m, index: index, deps: d,
+		signer: media.NewSigner(mc.ImgproxyURL, mc.S3Bucket, mc.ImgproxyKey, mc.ImgproxySalt),
 	}, nil
+}
+
+// PeriodicJobs are the module's scheduled jobs.
+func (m *Module) PeriodicJobs() []*river.PeriodicJob {
+	return []*river.PeriodicJob{app.SearchSettingsPeriodic()}
 }
 
 // Queues are the River queues the module's jobs need besides the default.
@@ -80,6 +94,8 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 		wrap(river.AddWorkerSafely(w, &app.ProcessWorker{ImageWorkers: iw})),
 		wrap(river.AddWorkerSafely(w, &app.ExpireUploadWorker{ImageWorkers: iw})),
 		wrap(river.AddWorkerSafely(w, &app.DeleteObjectsWorker{ImageWorkers: iw})),
+		wrap(river.AddWorkerSafely(w, &app.IndexWorker{DB: m.deps.Pool, Index: m.index})),
+		wrap(river.AddWorkerSafely(w, &app.SearchSettingsWorker{Index: m.index})),
 	)
 }
 
