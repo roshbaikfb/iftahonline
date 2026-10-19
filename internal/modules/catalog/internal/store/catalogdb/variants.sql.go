@@ -157,16 +157,22 @@ func (q *Queries) ListProductVariantIDs(ctx context.Context, arg ListProductVari
 
 const listVariantsByProducts = `-- name: ListVariantsByProducts :many
 SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-       i.tracked, i.on_hand, i.reserved
-FROM variants v
-JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
-WHERE v.store_id = $1 AND v.product_id = ANY($2::uuid[]) AND v.deleted_at IS NULL
-ORDER BY v.product_id, v.position, v.id
+       v.tracked, v.on_hand, v.reserved
+FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(product_id, ord)
+CROSS JOIN LATERAL (
+  SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
+         i.tracked, i.on_hand, i.reserved
+  FROM variants v
+  JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
+  WHERE v.store_id = $2 AND v.product_id = ids.product_id AND v.deleted_at IS NULL
+  ORDER BY v.position, v.id
+  LIMIT 100) v
+ORDER BY ids.ord, v.position, v.id
 `
 
 type ListVariantsByProductsParams struct {
-	StoreID    ulid.ID
 	ProductIds []ulid.ID
+	StoreID    ulid.ID
 }
 
 type ListVariantsByProductsRow struct {
@@ -183,8 +189,10 @@ type ListVariantsByProductsRow struct {
 	Reserved       int32
 }
 
+// One index lookup per product: the LIMIT (= domain.MaxVariants) keeps
+// the planner from flattening this into a store-wide scan.
 func (q *Queries) ListVariantsByProducts(ctx context.Context, arg ListVariantsByProductsParams) ([]ListVariantsByProductsRow, error) {
-	rows, err := q.db.Query(ctx, listVariantsByProducts, arg.StoreID, arg.ProductIds)
+	rows, err := q.db.Query(ctx, listVariantsByProducts, arg.ProductIds, arg.StoreID)
 	if err != nil {
 		return nil, err
 	}

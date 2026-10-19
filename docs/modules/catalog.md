@@ -65,9 +65,10 @@ parent (`db/migrations/00015_catalog.sql`).
 
 ## Performance
 
-- `listProducts` runs a constant number of queries: products, variants
-  with stock, and category links for the page (asserted by
-  `TestListProductsConstantQueries`).
+- `listProducts` runs two queries whatever the page size: products with
+  their category IDs, then variants with stock for the page (asserted by
+  `TestListProductsConstantQueries`). A category filter has its own
+  query, driven by the category's links. Plans: ADR-0011 §7.
 - A reservation is one UPDATE per line on the variant's inventory row.
 
 ## Tests
