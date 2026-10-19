@@ -94,6 +94,26 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type Category struct {
+	ID        pgtype.UUID
+	StoreID   pgtype.UUID
+	ParentID  pgtype.UUID
+	Slug      string
+	Name      string
+	Position  int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type InventoryLevel struct {
+	VariantID pgtype.UUID
+	StoreID   pgtype.UUID
+	Tracked   bool
+	OnHand    int32
+	Reserved  int32
+	UpdatedAt pgtype.Timestamptz
+}
+
 type PlatformAdmin struct {
 	ID           pgtype.UUID
 	Email        string
@@ -105,6 +125,25 @@ type PlatformAdmin struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	LastLoginAt  pgtype.Timestamptz
+}
+
+type Product struct {
+	ID          pgtype.UUID
+	StoreID     pgtype.UUID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DeletedAt   pgtype.Timestamptz
+}
+
+type ProductCategory struct {
+	StoreID    pgtype.UUID
+	ProductID  pgtype.UUID
+	CategoryID pgtype.UUID
 }
 
 type RiverJob struct {
@@ -154,6 +193,19 @@ type RiverQueue struct {
 	Metadata  []byte
 	PausedAt  pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type StockReservation struct {
+	ID         pgtype.UUID
+	StoreID    pgtype.UUID
+	Ref        string
+	VariantID  pgtype.UUID
+	Qty        int32
+	Counted    bool
+	Status     string
+	ExpiresAt  pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+	ReleasedAt pgtype.Timestamptz
 }
 
 type Store struct {
@@ -247,4 +299,19 @@ type UserSession struct {
 	LastSeenAt pgtype.Timestamptz
 	ExpiresAt  pgtype.Timestamptz
 	RevokedAt  pgtype.Timestamptz
+}
+
+type Variant struct {
+	ID             pgtype.UUID
+	StoreID        pgtype.UUID
+	ProductID      pgtype.UUID
+	Sku            pgtype.Text
+	OptionValues   []string
+	PriceMinor     int64
+	CompareAtMinor pgtype.Int8
+	Currency       string
+	Position       int32
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	DeletedAt      pgtype.Timestamptz
 }

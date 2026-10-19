@@ -96,6 +96,26 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type Category struct {
+	ID        ulid.ID
+	StoreID   ulid.ID
+	ParentID  *ulid.ID
+	Slug      string
+	Name      string
+	Position  int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type InventoryLevel struct {
+	VariantID ulid.ID
+	StoreID   ulid.ID
+	Tracked   bool
+	OnHand    int32
+	Reserved  int32
+	UpdatedAt time.Time
+}
+
 type PlatformAdmin struct {
 	ID           ulid.ID
 	Email        string
@@ -107,6 +127,25 @@ type PlatformAdmin struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	LastLoginAt  *time.Time
+}
+
+type Product struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
+type ProductCategory struct {
+	StoreID    ulid.ID
+	ProductID  ulid.ID
+	CategoryID ulid.ID
 }
 
 type RiverJob struct {
@@ -156,6 +195,19 @@ type RiverQueue struct {
 	Metadata  []byte
 	PausedAt  *time.Time
 	UpdatedAt time.Time
+}
+
+type StockReservation struct {
+	ID         ulid.ID
+	StoreID    ulid.ID
+	Ref        string
+	VariantID  ulid.ID
+	Qty        int32
+	Counted    bool
+	Status     string
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	ReleasedAt *time.Time
 }
 
 type Store struct {
@@ -249,4 +301,19 @@ type UserSession struct {
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
+}
+
+type Variant struct {
+	ID             ulid.ID
+	StoreID        ulid.ID
+	ProductID      ulid.ID
+	Sku            *string
+	OptionValues   []string
+	PriceMinor     int64
+	CompareAtMinor *int64
+	Currency       string
+	Position       int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeletedAt      *time.Time
 }
