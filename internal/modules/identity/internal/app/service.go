@@ -16,6 +16,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	mailaddr "github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/password"
@@ -181,7 +182,7 @@ func (s *Service) Signup(ctx context.Context, in SignupInput) (AuthResult, error
 
 func validateSignup(in SignupInput) (email, name string, err error) {
 	var fields []errs.FieldError
-	email, ok := domain.NormalizeEmail(in.Email)
+	email, ok := mailaddr.Normalize(in.Email)
 	if !ok {
 		fields = append(fields, errs.FieldError{Field: "email", Code: "invalid", Message: "enter a valid email address"})
 	}
@@ -223,7 +224,7 @@ func (s *Service) Login(ctx context.Context, rawEmail, pw string) (AuthResult, e
 	if err := s.throttle(ctx, "login:ip:"+ipKey(ctx), s.limits.LoginPerIP); err != nil {
 		return AuthResult{}, err
 	}
-	email, ok := domain.NormalizeEmail(rawEmail)
+	email, ok := mailaddr.Normalize(rawEmail)
 	if !ok || len(pw) > 4*domain.MaxPasswordLen {
 		return AuthResult{}, errInvalidCredentials
 	}
