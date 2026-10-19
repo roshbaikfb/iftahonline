@@ -23,6 +23,13 @@ tags:
       dashboard authenticates with the `__Host-sid` cookie set by sign-up
       and login; the mobile app sends `"client": "mobile"` and uses the
       returned token as a bearer token.
+  - name: admin
+    description: |
+      The super-admin console (ADR-0005 §8). Served only on the admin
+      host (ADMIN_HOST, e.g. admin.iftahonline.com); every other host
+      gets 404. Admins are separate from merchant users, sign in with
+      password and TOTP together, and every action is recorded in the
+      append-only admin audit log.
   - name: tenancy
     description: |
       The store and its domains. Every path is scoped to one store; a
@@ -600,8 +607,175 @@ paths:
               schema: { $ref: "#/components/schemas/Domain" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/auth/login:
+    post:
+      tags: [admin]
+      operationId: adminLogin
+      summary: Admin sign-in (password and TOTP code together)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminLoginRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/AdminSessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuth" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/auth/logout:
+    post:
+      tags: [admin]
+      operationId: adminLogout
+      summary: End the admin session
+      security:
+        - adminSessionCookie: []
+      responses:
+        "204":
+          description: Signed out.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/AdminSessionCookie" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/me:
+    get:
+      tags: [admin]
+      operationId: adminMe
+      summary: The signed-in admin
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The admin.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProfile" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores:
+    get:
+      tags: [admin]
+      operationId: adminListStores
+      summary: Search every store
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: query
+          in: query
+          description: Slug prefix or name substring.
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, suspended, closed] }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Stores, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStorePage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStore
+      summary: One store with its domains
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The store.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminSuspendStore
+      summary: Suspend an active store (storefront answers 503)
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: Suspended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminReactivateStore
+      summary: Reactivate a suspended store
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: Active again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/audit-log:
+    get:
+      tags: [admin]
+      operationId: adminAuditLog
+      summary: Every admin action, newest first
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuditPage" }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
+    adminSessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-asid
+      description: Super-admin console session (admin host only).
     sessionCookie:
       type: apiKey
       in: cookie
@@ -616,6 +790,9 @@ components:
       description: |
         `__Host-sid=<token>; Path=/; Max-Age=…; HttpOnly; Secure; SameSite=Lax`
         (web clients; cleared on logout).
+      schema: { type: string }
+    AdminSessionCookie:
+      description: "`__Host-asid=<token>; Path=/; HttpOnly; Secure; SameSite=Strict` (cleared on logout)."
       schema: { type: string }
   parameters:
     StoreID:
@@ -870,6 +1047,76 @@ components:
         metadata:
           type: object
           additionalProperties: true
+    AdminLoginRequest:
+      type: object
+      required: [email, password, code]
+      properties:
+        email: { type: string, maxLength: 254 }
+        password: { type: string, maxLength: 512, format: password }
+        code: { type: string, maxLength: 12, description: Current 6-digit TOTP code. }
+    AdminProfile:
+      type: object
+      required: [id, email, name]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        email: { type: string }
+        name: { type: string }
+        last_login_at: { type: string, format: date-time }
+    AdminAuth:
+      type: object
+      required: [admin, expires_at]
+      properties:
+        admin: { $ref: "#/components/schemas/AdminProfile" }
+        expires_at: { type: string, format: date-time }
+    AdminReason:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminStoreSummary:
+      type: object
+      required: [store, primary_host]
+      properties:
+        store: { $ref: "#/components/schemas/Store" }
+        primary_host: { type: string }
+    AdminStorePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminStoreSummary" }
+        next_cursor: { type: string }
+    AdminStoreDetail:
+      type: object
+      required: [store, domains]
+      properties:
+        store: { $ref: "#/components/schemas/Store" }
+        domains:
+          type: array
+          items: { $ref: "#/components/schemas/Domain" }
+    AdminAuditEntry:
+      type: object
+      required: [id, occurred_at, action, target_type, target_id, ip_prefix, metadata]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        occurred_at: { type: string, format: date-time }
+        admin_id: { $ref: "#/components/schemas/ULID" }
+        action: { type: string, example: store.suspended }
+        target_type: { type: string }
+        target_id: { type: string }
+        ip_prefix: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+    AdminAuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAuditEntry" }
+        next_cursor: { type: string }
     Store:
       type: object
       required: [id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at]

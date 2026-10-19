@@ -272,7 +272,7 @@ func TestRunExitCodes(t *testing.T) {
 					return "", false
 				}
 			}
-			if got := run(tt.args, &buf, lookup); got != tt.want || !strings.Contains(buf.String(), tt.out) {
+			if got := run(tt.args, strings.NewReader(""), &buf, lookup); got != tt.want || !strings.Contains(buf.String(), tt.out) {
 				t.Fatalf("run(%v) = %d, output %q", tt.args, got, buf.String())
 			}
 		})
@@ -336,5 +336,85 @@ func TestAPISignupEndToEnd(t *testing.T) {
 	}
 	if logs := out.String(); strings.Contains(logs, "correct horse battery") || strings.Contains(logs, signup.Token) {
 		t.Fatalf("secret logged\n%s", logs)
+	}
+}
+
+// TestAdminCLI creates a platform admin through `platform admin create`:
+// the password comes from stdin, the TOTP enrolment is printed once, and
+// neither appears in the JSON logs.
+func TestAdminCLI(t *testing.T) {
+	t.Parallel()
+	lookup := func(k string) (string, bool) {
+		v, ok := map[string]string{
+			"APP_ENV":            "test",
+			"ADMIN_DATABASE_URL": infra.AdminURL,
+			"SECRETBOX_KEYS":     "1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
+			"ARGON2_MEMORY_KIB":  "8192",
+			"ARGON2_TIME":        "1",
+		}[k]
+		return v, ok
+	}
+	email := fmt.Sprintf("cli-%d@iftahonline.com", time.Now().UnixNano())
+	var out bytes.Buffer
+	code := run([]string{"admin", "create", "--email", email, "--name", "Ops CLI"}, strings.NewReader("a long admin passphrase\n"), &out, lookup)
+	if code != 0 || !strings.Contains(out.String(), "admin created: "+email) || !strings.Contains(out.String(), "otpauth://totp/") {
+		t.Fatalf("create = %d\n%s", code, out.String())
+	}
+	secret := strings.TrimSpace(strings.SplitN(strings.SplitN(out.String(), "secret: ", 2)[1], "\n", 2)[0])
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "{") && (strings.Contains(line, secret) || strings.Contains(line, "passphrase")) {
+			t.Fatalf("secret in a log line: %s", line)
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		args  []string
+		stdin string
+	}{
+		"duplicate":     {[]string{"admin", "create", "--email", email, "--name", "Again"}, "a long admin passphrase\n"},
+		"weak password": {[]string{"admin", "create", "--email", "x" + email, "--name", "Weak"}, "short\n"},
+		"no flags":      {[]string{"admin", "create"}, ""},
+		"no subcommand": {[]string{"admin"}, ""},
+	} {
+		var buf bytes.Buffer
+		if got := run(tc.args, strings.NewReader(tc.stdin), &buf, lookup); got != 1 {
+			t.Errorf("%s: exit %d\n%s", name, got, buf.String())
+		}
+	}
+}
+
+// TestAPIServesConsoleOnlyOnAdminHost: with ADMIN_DATABASE_URL the real
+// api binary serves /admin/v1 on the admin host (401 without a session)
+// and 404 everywhere else.
+func TestAPIServesConsoleOnlyOnAdminHost(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	addr := freeAddr(t)
+	cmd := exec.CommandContext(ctx, binary, "api")
+	cmd.Env = append(roleEnv(addr), "ADMIN_DATABASE_URL="+infra.AdminURL, "ARGON2_MEMORY_KIB=8192", "ARGON2_TIME=1")
+	var out syncBuffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Wait()
+	})
+	if !waitStatus(ctx, "http://"+addr+"/readyz", http.StatusOK, 10*time.Second) {
+		t.Fatalf("api not ready\n%s", out.String())
+	}
+	for host, want := range map[string]int{"admin.iftahonline.com": http.StatusUnauthorized, "api.iftahonline.com": http.StatusNotFound} {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/admin/v1/me", nil)
+		req.Host = host
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != want {
+			t.Errorf("Host %s: %d, want %d", host, res.StatusCode, want)
+		}
 	}
 }
