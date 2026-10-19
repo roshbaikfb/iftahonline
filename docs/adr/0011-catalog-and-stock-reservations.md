@@ -64,10 +64,21 @@ degrade into N+1 queries as pages grow.
    minutes), inserted in the reservation's transaction (outbox). The job
    is tenant-scoped; no cross-tenant sweeper is needed. A job that runs
    early (clock skew) snoozes until the expiry.
-7. **Lists run in a constant number of queries:** products page,
-   variants with stock for the page (`product_id = ANY($ids)`), and
-   category links for the page. Tests assert the count (6 statements
-   with BEGIN, set tenant and COMMIT) for 1 and 25 products.
+7. **Lists run in a constant number of queries, with plans that hold
+   for large stores:**
+   - The products page carries its category IDs inline (a correlated
+     `ARRAY(...)` over the link table's primary key).
+   - Variants with stock for the whole page come from one query: a
+     `LATERAL` lookup per product with `LIMIT 100` (the variant cap).
+   - A category filter uses its own query, driven by the category's
+     links, so a small category in a large store stays cheap.
+   - Why: prepared statements may switch to generic plans, which assume
+     an average store. A plain `product_id = ANY($ids)` filter then
+     scanned all 20,000 links of a large store (EXPLAIN on 120k products
+     / 360k variants); the shapes above leave the planner only
+     per-product index lookups (0.25 ms and 0.6 ms).
+   - Tests assert the count (5 statements with BEGIN, set tenant and
+     COMMIT) for 1 and 25 products.
 8. **API surface for other modules** (`catalog/api.go`):
    `GetSellableVariant`, `ReserveStock`, `ReleaseStock`. Committing a
    reservation to an order (decrementing `on_hand`) arrives with orders

@@ -263,7 +263,7 @@ type ProductFilter struct {
 }
 
 // ListProducts returns a page of products, newest first, with their
-// variants and categories, in exactly three queries whatever the page size.
+// variants and categories, in exactly two queries whatever the page size.
 func ListProducts(ctx context.Context, tx Tx, f ProductFilter) ([]domain.Product, error) {
 	store, err := current(ctx)
 	if err != nil {
@@ -274,9 +274,21 @@ func ListProducts(ctx context.Context, tx Tx, f ProductFilter) ([]domain.Product
 		s := string(*f.Status)
 		status = &s
 	}
-	rows, err := catalogdb.New(tx).ListProducts(ctx, catalogdb.ListProductsParams{
-		StoreID: store, Status: status, After: f.After, CategoryID: f.CategoryID, Lim: int32(f.Limit), //nolint:gosec // bounded by domain.MaxProductsPageLimit
-	})
+	lim := int32(f.Limit) //nolint:gosec // bounded by domain.MaxProductsPageLimit
+	q := catalogdb.New(tx)
+	var rows []catalogdb.ListProductsRow
+	if f.CategoryID != nil {
+		var inCat []catalogdb.ListProductsInCategoryRow
+		inCat, err = q.ListProductsInCategory(ctx, catalogdb.ListProductsInCategoryParams{
+			StoreID: store, CategoryID: *f.CategoryID, Status: status, After: f.After, Lim: lim,
+		})
+		rows = make([]catalogdb.ListProductsRow, len(inCat))
+		for i, r := range inCat {
+			rows[i] = catalogdb.ListProductsRow(r)
+		}
+	} else {
+		rows, err = q.ListProducts(ctx, catalogdb.ListProductsParams{StoreID: store, Status: status, After: f.After, Lim: lim})
+	}
 	if err != nil {
 		return nil, productErr(err, "list products")
 	}
@@ -293,16 +305,16 @@ func GetProduct(ctx context.Context, tx Tx, id ulid.ID) (domain.Product, error) 
 	if err != nil {
 		return domain.Product{}, productErr(err, "get product")
 	}
-	ps, err := loadProducts(ctx, tx, store, []catalogdb.Product{row})
+	ps, err := loadProducts(ctx, tx, store, []catalogdb.ListProductsRow{catalogdb.ListProductsRow(row)})
 	if err != nil {
 		return domain.Product{}, err
 	}
 	return ps[0], nil
 }
 
-// loadProducts attaches variants and categories to rows with one query
-// each (no N+1).
-func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.Product) ([]domain.Product, error) {
+// loadProducts attaches variants to rows (which carry their category IDs)
+// with one query for the whole page (no N+1).
+func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.ListProductsRow) ([]domain.Product, error) {
 	if len(rows) == 0 {
 		return []domain.Product{}, nil
 	}
@@ -316,8 +328,7 @@ func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.Pr
 		}
 		out[i], index[r.ID], ids[i] = p, i, r.ID
 	}
-	q := catalogdb.New(tx)
-	vs, err := q.ListVariantsByProducts(ctx, catalogdb.ListVariantsByProductsParams{StoreID: store, ProductIds: ids})
+	vs, err := catalogdb.New(tx).ListVariantsByProducts(ctx, catalogdb.ListVariantsByProductsParams{StoreID: store, ProductIds: ids})
 	if err != nil {
 		return nil, productErr(err, "list variants")
 	}
@@ -329,18 +340,10 @@ func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.Pr
 		p := &out[index[v.ProductID]]
 		p.Variants = append(p.Variants, dv)
 	}
-	cats, err := q.ListProductCategories(ctx, catalogdb.ListProductCategoriesParams{StoreID: store, ProductIds: ids})
-	if err != nil {
-		return nil, productErr(err, "list product categories")
-	}
-	for _, c := range cats {
-		p := &out[index[c.ProductID]]
-		p.CategoryIDs = append(p.CategoryIDs, c.CategoryID)
-	}
 	return out, nil
 }
 
-func toProduct(r catalogdb.Product) (domain.Product, error) {
+func toProduct(r catalogdb.ListProductsRow) (domain.Product, error) {
 	var opts []domain.Option
 	if err := json.Unmarshal(r.Options, &opts); err != nil {
 		return domain.Product{}, fmt.Errorf("catalog store: decode options of %s: %w", r.ID, err)
@@ -350,7 +353,7 @@ func toProduct(r catalogdb.Product) (domain.Product, error) {
 	}
 	return domain.Product{
 		ID: r.ID, Slug: r.Slug, Title: r.Title, Description: r.Description, Status: domain.ProductStatus(r.Status),
-		Options: opts, Variants: []domain.Variant{}, CategoryIDs: []ulid.ID{}, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Options: opts, Variants: []domain.Variant{}, CategoryIDs: r.CategoryIds, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }
 

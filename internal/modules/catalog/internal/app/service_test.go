@@ -290,9 +290,9 @@ func TestListProductsConstantQueries(t *testing.T) {
 	if len(page.Items) != 25 || page.NextCursor == "" {
 		t.Fatalf("got %d items, cursor %q", len(page.Items), page.NextCursor)
 	}
-	// BEGIN, set tenant, products, variants, categories, COMMIT.
-	if one != 6 || many != one {
-		t.Fatalf("queries: 1 product = %d, 25 products = %d; want 6 for both", one, many)
+	// BEGIN, set tenant, products (with category IDs), variants, COMMIT.
+	if one != 5 || many != one {
+		t.Fatalf("queries: 1 product = %d, 25 products = %d; want 5 for both", one, many)
 	}
 	for _, p := range page.Items {
 		if len(p.Variants) != 2 || len(p.CategoryIDs) != 1 {

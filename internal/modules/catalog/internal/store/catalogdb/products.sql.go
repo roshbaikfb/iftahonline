@@ -7,6 +7,7 @@ package catalogdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -26,8 +27,12 @@ func (q *Queries) DeleteProductCategories(ctx context.Context, arg DeleteProduct
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at FROM products
-WHERE store_id = $1 AND id = $2 AND deleted_at IS NULL
+
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM products p
+WHERE p.store_id = $1 AND p.id = $2 AND p.deleted_at IS NULL
 `
 
 type GetProductParams struct {
@@ -35,9 +40,26 @@ type GetProductParams struct {
 	ID      ulid.ID
 }
 
-func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product, error) {
+type GetProductRow struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	CategoryIds []ulid.ID
+}
+
+// Product reads carry their category IDs inline: one PK lookup per
+// product (a separate "links for these products" query degrades into a
+// store-wide scan under generic plans for large stores; ADR-0011).
+func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (GetProductRow, error) {
 	row := q.db.QueryRow(ctx, getProduct, arg.StoreID, arg.ID)
-	var i Product
+	var i GetProductRow
 	err := row.Scan(
 		&i.ID,
 		&i.StoreID,
@@ -49,6 +71,7 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CategoryIds,
 	)
 	return i, err
 }
@@ -111,78 +134,54 @@ func (q *Queries) InsertProductCategories(ctx context.Context, arg InsertProduct
 	return err
 }
 
-const listProductCategories = `-- name: ListProductCategories :many
-SELECT product_id, category_id FROM product_categories
-WHERE store_id = $1 AND product_id = ANY($2::uuid[])
-ORDER BY product_id, category_id
-`
-
-type ListProductCategoriesParams struct {
-	StoreID    ulid.ID
-	ProductIds []ulid.ID
-}
-
-type ListProductCategoriesRow struct {
-	ProductID  ulid.ID
-	CategoryID ulid.ID
-}
-
-func (q *Queries) ListProductCategories(ctx context.Context, arg ListProductCategoriesParams) ([]ListProductCategoriesRow, error) {
-	rows, err := q.db.Query(ctx, listProductCategories, arg.StoreID, arg.ProductIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProductCategoriesRow{}
-	for rows.Next() {
-		var i ListProductCategoriesRow
-		if err := rows.Scan(&i.ProductID, &i.CategoryID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listProducts = `-- name: ListProducts :many
-SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at FROM products p
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM products p
 WHERE p.store_id = $1 AND p.deleted_at IS NULL
   AND ($2::text IS NULL OR p.status = $2::text)
   AND ($3::uuid IS NULL OR p.id < $3::uuid)
-  AND ($4::uuid IS NULL OR EXISTS (
-    SELECT 1 FROM product_categories pc
-    WHERE pc.store_id = p.store_id AND pc.category_id = $4::uuid AND pc.product_id = p.id))
 ORDER BY p.id DESC
-LIMIT $5
+LIMIT $4
 `
 
 type ListProductsParams struct {
-	StoreID    ulid.ID
-	Status     *string
-	After      *ulid.ID
-	CategoryID *ulid.ID
-	Lim        int32
+	StoreID ulid.ID
+	Status  *string
+	After   *ulid.ID
+	Lim     int32
+}
+
+type ListProductsRow struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	CategoryIds []ulid.ID
 }
 
 // Newest first; `after` is the last ID of the previous page.
-func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error) {
+func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]ListProductsRow, error) {
 	rows, err := q.db.Query(ctx, listProducts,
 		arg.StoreID,
 		arg.Status,
 		arg.After,
-		arg.CategoryID,
 		arg.Lim,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Product{}
+	items := []ListProductsRow{}
 	for rows.Next() {
-		var i Product
+		var i ListProductsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.StoreID,
@@ -194,6 +193,82 @@ func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]P
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CategoryIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProductsInCategory = `-- name: ListProductsInCategory :many
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+    SELECT c.category_id FROM product_categories c
+    WHERE c.store_id = p.store_id AND c.product_id = p.id ORDER BY c.category_id)::uuid[] AS category_ids
+FROM product_categories pc
+JOIN products p ON p.store_id = pc.store_id AND p.id = pc.product_id
+WHERE pc.store_id = $1 AND pc.category_id = $2 AND p.deleted_at IS NULL
+  AND ($3::text IS NULL OR p.status = $3::text)
+  AND ($4::uuid IS NULL OR pc.product_id < $4::uuid)
+ORDER BY pc.product_id DESC
+LIMIT $5
+`
+
+type ListProductsInCategoryParams struct {
+	StoreID    ulid.ID
+	CategoryID ulid.ID
+	Status     *string
+	After      *ulid.ID
+	Lim        int32
+}
+
+type ListProductsInCategoryRow struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	CategoryIds []ulid.ID
+}
+
+// ListProducts for one category, driven by the category's links so a
+// small category in a large store does not scan the store's products.
+func (q *Queries) ListProductsInCategory(ctx context.Context, arg ListProductsInCategoryParams) ([]ListProductsInCategoryRow, error) {
+	rows, err := q.db.Query(ctx, listProductsInCategory,
+		arg.StoreID,
+		arg.CategoryID,
+		arg.Status,
+		arg.After,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProductsInCategoryRow{}
+	for rows.Next() {
+		var i ListProductsInCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Options,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.CategoryIds,
 		); err != nil {
 			return nil, err
 		}

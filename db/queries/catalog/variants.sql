@@ -37,12 +37,20 @@ SELECT id FROM variants
 WHERE store_id = @store_id AND product_id = @product_id AND deleted_at IS NULL;
 
 -- name: ListVariantsByProducts :many
+-- One index lookup per product: the LIMIT (= domain.MaxVariants) keeps
+-- the planner from flattening this into a store-wide scan.
 SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-       i.tracked, i.on_hand, i.reserved
-FROM variants v
-JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
-WHERE v.store_id = @store_id AND v.product_id = ANY(@product_ids::uuid[]) AND v.deleted_at IS NULL
-ORDER BY v.product_id, v.position, v.id;
+       v.tracked, v.on_hand, v.reserved
+FROM unnest(@product_ids::uuid[]) WITH ORDINALITY AS ids(product_id, ord)
+CROSS JOIN LATERAL (
+  SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
+         i.tracked, i.on_hand, i.reserved
+  FROM variants v
+  JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
+  WHERE v.store_id = @store_id AND v.product_id = ids.product_id AND v.deleted_at IS NULL
+  ORDER BY v.position, v.id
+  LIMIT 100) v
+ORDER BY ids.ord, v.position, v.id;
 
 -- name: GetSellableVariant :one
 SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
