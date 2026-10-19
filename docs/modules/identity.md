@@ -58,6 +58,9 @@ every cell.
 | members.read | ✓ | ✓ | ✓ | |
 | members.manage | ✓ | | | |
 | audit.read | ✓ | ✓ | | |
+| catalog.read | ✓ | ✓ | ✓ | ✓ |
+| catalog.manage | ✓ | ✓ | | |
+| inventory.manage | ✓ | ✓ | | ✓ |
 
 A store has exactly one owner, enforced by a partial unique index.
 
