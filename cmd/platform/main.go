@@ -4,6 +4,9 @@
 //	platform storefront             server-rendered shop pages
 //	platform worker                 River background jobs
 //	platform migrate up|down|status database migrations (as app_owner)
+//	platform admin create --email E --name N
+//	                                add a platform admin (password on stdin;
+//	                                prints the TOTP enrolment once)
 //	platform version                print build information
 //
 // Configuration comes only from environment variables (see
@@ -11,9 +14,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,12 +27,14 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -46,14 +53,14 @@ var (
 	commit  = "none" //nolint:gochecknoglobals // link-time build metadata.
 )
 
-const usage = `usage: platform <api|storefront|worker|migrate up|down|status|version>`
+const usage = `usage: platform <api|storefront|worker|migrate up|down|status|admin create --email E --name N|version>`
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.LookupEnv))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.LookupEnv))
 }
 
 // run is main without process exit, so it can be tested.
-func run(args []string, stdout io.Writer, lookup config.LookupFunc) int {
+func run(args []string, stdin io.Reader, stdout io.Writer, lookup config.LookupFunc) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(os.Stderr, usage)
 		return 2
@@ -90,6 +97,8 @@ func run(args []string, stdout io.Writer, lookup config.LookupFunc) int {
 		err = runWorker(ctx, cfg, log, build)
 	case config.RoleMigrate:
 		err = runMigrate(ctx, cfg, log, args[1:], stdout)
+	case config.RoleAdmin:
+		err = runAdmin(ctx, cfg, log, args[1:], stdin, stdout)
 	}
 	if err != nil {
 		log.Error("exited with error", "err", err)
@@ -140,11 +149,12 @@ func listen(ctx context.Context, addr string) (net.Listener, error) {
 
 // clients are the shared connections a role's modules are built from.
 type clients struct {
-	cfg  config.Config
-	log  *slog.Logger
-	ids  *ulid.Generator
-	pool *pgxpool.Pool
-	rdb  *redis.Client
+	cfg       config.Config
+	log       *slog.Logger
+	ids       *ulid.Generator
+	pool      *pgxpool.Pool
+	rdb       *redis.Client
+	adminPool *pgxpool.Pool // api role with ADMIN_DATABASE_URL only
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -158,7 +168,7 @@ func newTenancy(c clients) (*tenancy.Module, error) {
 	}
 	return tenancy.New(tenancy.Deps{
 		Pool: c.pool, Redis: c.rdb, Jobs: inserter, IDs: c.ids, Log: c.log, Config: c.cfg.Tenancy,
-		Audit: identity.NewAuditRecorder(c.ids),
+		Audit: identity.NewAuditRecorder(c.ids), AdminPool: c.adminPool,
 	})
 }
 
@@ -185,10 +195,65 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	var console *admin.Module
+	if c.adminPool != nil {
+		if console, err = admin.New(admin.Deps{
+			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
+			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
+		}); err != nil {
+			return nil, err
+		}
+	} else {
+		c.log.Info("super-admin console disabled (no ADMIN_DATABASE_URL)")
+	}
+	var mountErr error
 	return func(rt server.Routes) {
 		id.Mount(rt.Mux, rt.Problems)
 		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		if console != nil {
+			mountErr = console.Mount(rt.Mux, rt.Problems)
+			if mountErr != nil {
+				c.log.Error("admin console not mounted", "err", mountErr)
+			}
+		}
 	}, nil
+}
+
+// runAdmin implements `platform admin create --email E --name N`. The
+// password is read from stdin (one line), so it never appears in shell
+// history or the process list. The TOTP seed is printed once, to stdout
+// only; it is never logged.
+func runAdmin(ctx context.Context, cfg config.Config, log *slog.Logger, args []string, stdin io.Reader, stdout io.Writer) error {
+	fs := flag.NewFlagSet("admin create", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	email := fs.String("email", "", "admin email")
+	name := fs.String("name", "", "admin display name")
+	if len(args) == 0 || args[0] != "create" {
+		return fmt.Errorf("%s", usage)
+	}
+	if err := fs.Parse(args[1:]); err != nil || *email == "" || *name == "" {
+		return fmt.Errorf("%s", usage)
+	}
+	pw, err := bufio.NewReader(io.LimitReader(stdin, 1024)).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("admin: read password: %w", err)
+	}
+	pool, err := postgres.NewPool(ctx, cfg.DB, "iftahonline-admin-cli")
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	mod, err := admin.New(admin.Deps{AdminPool: pool, IDs: ulid.NewGenerator(), Log: log, Secrets: cfg.Secrets, Hashing: cfg.Identity})
+	if err != nil {
+		return err
+	}
+	created, err := mod.CreateAdmin(ctx, *email, *name, strings.TrimRight(pw, "\r\n"))
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "admin created: %s (%s)\n\nAdd this account to an authenticator app now; it is shown only once.\nsecret: %s\nuri:    %s\n",
+		created.Admin.Email, created.Admin.ID, created.Secret, created.URI)
+	return err
 }
 
 func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error) {
@@ -222,7 +287,16 @@ func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build ser
 		}
 	}()
 
-	mount, err := mountFor(ctx, clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb})
+	c := clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb}
+	if cfg.AdminDB.URL != "" {
+		adminPool, poolErr := postgres.NewPool(ctx, cfg.AdminDB, "iftahonline-admin")
+		if poolErr != nil {
+			return poolErr
+		}
+		defer adminPool.Close()
+		c.adminPool = adminPool
+	}
+	mount, err := mountFor(ctx, c)
 	if err != nil {
 		return err
 	}

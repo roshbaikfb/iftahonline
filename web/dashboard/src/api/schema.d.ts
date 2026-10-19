@@ -586,6 +586,148 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin sign-in (password and TOTP code together) */
+        post: operations["adminLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the admin session */
+        post: operations["adminLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in admin */
+        get: operations["adminMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search every store */
+        get: operations["adminListStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /** One store with its domains */
+        get: operations["adminGetStore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend an active store (storefront answers 503) */
+        post: operations["adminSuspendStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a suspended store */
+        post: operations["adminReactivateStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every admin action, newest first */
+        get: operations["adminAuditLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -799,6 +941,59 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AdminLoginRequest: {
+            email: string;
+            /** Format: password */
+            password: string;
+            /** @description Current 6-digit TOTP code. */
+            code: string;
+        };
+        AdminProfile: {
+            id: components["schemas"]["ULID"];
+            email: string;
+            name: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        AdminAuth: {
+            admin: components["schemas"]["AdminProfile"];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        AdminReason: {
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminStoreSummary: {
+            store: components["schemas"]["Store"];
+            primary_host: string;
+        };
+        AdminStorePage: {
+            items: components["schemas"]["AdminStoreSummary"][];
+            next_cursor?: string;
+        };
+        AdminStoreDetail: {
+            store: components["schemas"]["Store"];
+            domains: components["schemas"]["Domain"][];
+        };
+        AdminAuditEntry: {
+            id: components["schemas"]["ULID"];
+            /** Format: date-time */
+            occurred_at: string;
+            admin_id?: components["schemas"]["ULID"];
+            /** @example store.suspended */
+            action: string;
+            target_type: string;
+            target_id: string;
+            ip_prefix: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+        };
+        AdminAuditPage: {
+            items: components["schemas"]["AdminAuditEntry"][];
+            next_cursor?: string;
+        };
         Store: {
             id: components["schemas"]["ULID"];
             /** @example my-shop */
@@ -920,6 +1115,8 @@ export interface components {
          *     (web clients; cleared on logout).
          */
         SessionCookie: string;
+        /** @description `__Host-asid=<token>; Path=/; HttpOnly; Secure; SameSite=Strict` (cleared on logout). */
+        AdminSessionCookie: string;
     };
     pathItems: never;
 }
@@ -1702,6 +1899,201 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Domain"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["AdminSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuth"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out. */
+            204: {
+                headers: {
+                    "Set-Cookie": components["headers"]["AdminSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The admin. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminProfile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListStores: {
+        parameters: {
+            query?: {
+                /** @description Slug prefix or name substring. */
+                query?: string;
+                status?: "active" | "suspended" | "closed";
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stores, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStorePage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSuspendStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Suspended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminReactivateStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Active again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminAuditLog: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditPage"];
                 };
             };
             default: components["responses"]["Problem"];
