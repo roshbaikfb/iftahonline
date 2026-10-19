@@ -146,6 +146,30 @@ func TestSecretsAndMail(t *testing.T) {
 	}
 }
 
+func TestAdminConfig(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleAPI, env(base()))
+	if err != nil || c.AdminDB.URL != "" {
+		t.Fatalf("console must be off by default: %q, %v", c.AdminDB.URL, err)
+	}
+	c, err = config.Load(config.RoleAPI, env(with("ADMIN_DATABASE_URL", "postgres://app_admin:pw@db:5432/iftah")))
+	if err != nil || !strings.Contains(c.AdminDB.URL, "app_admin") || c.AdminDB.MaxConns != 4 {
+		t.Fatalf("admin db = %+v, %v", c.AdminDB, err)
+	}
+	// The admin CLI uses the admin role as its database, needs the
+	// keyring and hashing parameters, but no Redis or OTP pepper.
+	a, err := config.Load(config.RoleAdmin, env(map[string]string{
+		"ADMIN_DATABASE_URL": "postgres://app_admin:pw@db:5432/iftah",
+		"SECRETBOX_KEYS":     base()["SECRETBOX_KEYS"],
+	}))
+	if err != nil || !strings.Contains(a.DB.URL, "app_admin") || a.Secrets.Keyring == nil || a.Identity.Argon2MemoryKiB == 0 {
+		t.Fatalf("admin cli = %+v, %v", a, err)
+	}
+	if _, err := config.Load(config.RoleAdmin, env(map[string]string{"SECRETBOX_KEYS": base()["SECRETBOX_KEYS"]})); err == nil {
+		t.Fatal("admin cli needs ADMIN_DATABASE_URL")
+	}
+}
+
 func TestOverrides(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleAPI, env(with(

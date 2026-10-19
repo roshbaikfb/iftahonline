@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -54,6 +55,26 @@ type Service interface {
 	VerifyDomain(ctx context.Context, id ulid.ID) (Domain, error)
 	RemoveDomain(ctx context.Context, id ulid.ID) error
 	SetPrimaryDomain(ctx context.Context, id ulid.ID) (Domain, error)
+}
+
+// DirectoryEntry is a store as the super-admin console lists it.
+type DirectoryEntry struct {
+	Store       Store
+	PrimaryHost string
+}
+
+// DirectoryPage is one page of the store directory.
+type DirectoryPage struct {
+	Items      []DirectoryEntry
+	NextCursor string
+}
+
+// Directory is the super-admin console's read-only, cross-tenant view of
+// stores (ADR-0007 §5). It exists only when the module is given the
+// app_admin pool.
+type Directory interface {
+	Search(ctx context.Context, query, status, cursor string, limit int) (DirectoryPage, error)
+	Store(ctx context.Context, id tenant.StoreID) (Store, []Domain, error)
 }
 
 // HostResolver maps a raw Host header to its store. A cache hit does no

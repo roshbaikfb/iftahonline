@@ -29,6 +29,7 @@ const (
 	RoleStorefront Role = "storefront"
 	RoleWorker     Role = "worker"
 	RoleMigrate    Role = "migrate"
+	RoleAdmin      Role = "admin" // CLI: manage platform admins (ADMIN_DATABASE_URL)
 )
 
 // Environments.
@@ -56,6 +57,9 @@ type Config struct {
 	Identity Identity
 	Secrets  Secrets
 	Mail     Mail
+	// AdminDB is the super-admin console's pool (app_admin). Empty URL:
+	// the console is disabled.
+	AdminDB DB
 }
 
 // Secrets are keys from the secret manager (never from files or flags).
@@ -141,7 +145,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 	c := Config{Role: role}
 
 	switch role {
-	case RoleAPI, RoleStorefront, RoleWorker, RoleMigrate:
+	case RoleAPI, RoleStorefront, RoleWorker, RoleMigrate, RoleAdmin:
 	default:
 		return Config{}, fmt.Errorf("config: unknown role %q", role)
 	}
@@ -167,8 +171,11 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 	}
 
 	dbKey := "DATABASE_URL"
-	if role == RoleMigrate {
+	switch role {
+	case RoleMigrate:
 		dbKey = "MIGRATE_DATABASE_URL" // owner role; services use the NOBYPASSRLS app_user
+	case RoleAdmin:
+		dbKey = "ADMIN_DATABASE_URL" // the console's app_admin role
 	}
 	c.DB = DB{
 		URL:              r.url(dbKey, true, "postgres", "postgresql"),
@@ -181,7 +188,15 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		r.errorf("DB_MIN_CONNS (%d) must not exceed DB_MAX_CONNS (%d)", c.DB.MinConns, c.DB.MaxConns)
 	}
 
-	if role != RoleMigrate {
+	if role == RoleAPI {
+		// Optional: without it the super-admin console is not served.
+		c.AdminDB = DB{
+			URL: r.url("ADMIN_DATABASE_URL", false, "postgres", "postgresql"), MaxConns: 4, MinConns: 0,
+			MaxConnLifetime: c.DB.MaxConnLifetime, StatementTimeout: c.DB.StatementTimeout,
+		}
+	}
+
+	if role != RoleMigrate && role != RoleAdmin {
 		// The worker needs Redis too: it invalidates the shared host cache.
 		c.Redis = Redis{URL: r.url("REDIS_URL", true, "redis", "rediss")}
 		c.Tenancy = Tenancy{
@@ -194,12 +209,14 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		}
 		c.Tenancy.AdminHost = r.hostname("ADMIN_HOST", "admin."+c.Tenancy.BaseDomain)
 	}
-	if role == RoleAPI || role == RoleWorker {
+	if role == RoleAPI || role == RoleWorker || role == RoleAdmin {
 		if kr, err := secretbox.ParseKeyring(r.secret("SECRETBOX_KEYS")); err != nil {
 			r.errorf("SECRETBOX_KEYS: %v", err)
 		} else {
 			c.Secrets.Keyring = kr
 		}
+	}
+	if role == RoleAPI || role == RoleWorker {
 		if pepper, err := base64.StdEncoding.DecodeString(r.secret("OTP_PEPPER")); err != nil || len(pepper) < 32 {
 			r.errorf("OTP_PEPPER: must be base64 of at least 32 random bytes")
 		} else {
@@ -219,7 +236,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			r.errorf("SMTP_USERNAME is required with SMTP_ADDR in production")
 		}
 	}
-	if role == RoleAPI {
+	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
 			Argon2MemoryKiB: uint32(r.int64("ARGON2_MEMORY_KIB", 19*1024, 8*1024, 1024*1024)), //nolint:gosec // bounded above.
 			Argon2Time:      uint32(r.int64("ARGON2_TIME", 2, 1, 10)),                         //nolint:gosec // bounded above.
@@ -253,6 +270,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("otel", c.OTel.Endpoint != ""),
 		slog.String("base_domain", c.Tenancy.BaseDomain),
 		slog.Bool("smtp", c.Mail.SMTPAddr != ""),
+		slog.Bool("admin_console", c.AdminDB.URL != ""),
 	)
 }
 
