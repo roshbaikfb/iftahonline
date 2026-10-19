@@ -148,6 +148,24 @@ type ProductCategory struct {
 	CategoryID ulid.ID
 }
 
+type ProductImage struct {
+	ID            ulid.ID
+	StoreID       ulid.ID
+	ProductID     ulid.ID
+	Status        string
+	UploadKey     string
+	ObjectKey     *string
+	Format        *string
+	Width         *int32
+	Height        *int32
+	Bytes         *int64
+	Alt           string
+	Position      int32
+	FailureReason string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState

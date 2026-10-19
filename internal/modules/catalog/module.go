@@ -11,8 +11,10 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -27,12 +29,16 @@ type Deps struct {
 	Currency CurrencySource
 	// Audit records merchant actions (identity's audit log); nil discards.
 	Audit audit.Recorder
+	// Media is object storage and image delivery (ADR-0012).
+	Media config.Media
 }
 
 // Module is the wired catalog module.
 type Module struct {
-	svc  *app.Service
-	deps Deps
+	svc    *app.Service
+	media  app.Media
+	signer *media.Signer
+	deps   Deps
 }
 
 // New wires the module.
@@ -43,7 +49,24 @@ func New(d Deps) (*Module, error) {
 	if d.Audit == nil {
 		d.Audit = audit.Nop{}
 	}
-	return &Module{svc: app.NewService(d.Pool, d.Jobs, d.IDs, d.Audit, d.Currency), deps: d}, nil
+	mc := d.Media
+	objects, err := media.NewS3(media.S3Config{
+		Endpoint: mc.S3Endpoint, PublicEndpoint: mc.S3PublicEndpoint, Region: mc.S3Region, Bucket: mc.S3Bucket,
+		AccessKey: mc.S3AccessKey, SecretKey: mc.S3SecretKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	m := app.Media{Objects: objects, Limits: media.Limits{MaxBytes: mc.MaxUploadBytes, MaxPixels: mc.MaxImagePixels}}
+	return &Module{
+		svc: app.NewService(d.Pool, d.Jobs, d.IDs, d.Audit, d.Currency, m), media: m,
+		signer: media.NewSigner(mc.ImgproxyURL, mc.S3Bucket, mc.ImgproxyKey, mc.ImgproxySalt), deps: d,
+	}, nil
+}
+
+// Queues are the River queues the module's jobs need besides the default.
+func (m *Module) Queues() map[string]river.QueueConfig {
+	return map[string]river.QueueConfig{app.QueueMedia: {MaxWorkers: max(m.deps.Media.ImageWorkers, 1)}}
 }
 
 // Catalog returns the use cases other modules call.
@@ -51,7 +74,17 @@ func (m *Module) Catalog() Catalog { return m.svc }
 
 // RegisterWorkers adds the module's job workers.
 func (m *Module) RegisterWorkers(w *river.Workers) error {
-	if err := river.AddWorkerSafely(w, &app.ExpireWorker{DB: m.deps.Pool}); err != nil {
+	iw := &app.ImageWorkers{DB: m.deps.Pool, Jobs: m.deps.Jobs, Media: m.media}
+	return errors.Join(
+		wrap(river.AddWorkerSafely(w, &app.ExpireWorker{DB: m.deps.Pool})),
+		wrap(river.AddWorkerSafely(w, &app.ProcessWorker{ImageWorkers: iw})),
+		wrap(river.AddWorkerSafely(w, &app.ExpireUploadWorker{ImageWorkers: iw})),
+		wrap(river.AddWorkerSafely(w, &app.DeleteObjectsWorker{ImageWorkers: iw})),
+	)
+}
+
+func wrap(err error) error {
+	if err != nil {
 		return fmt.Errorf("catalog: %w", err)
 	}
 	return nil
@@ -59,5 +92,5 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 
 // Mount registers the HTTP API. scope is identity's membership middleware.
 func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
-	httpapi.Mount(mux, m.svc, auth, scope, resp)
+	httpapi.Mount(mux, m.svc, m.signer, auth, scope, resp)
 }

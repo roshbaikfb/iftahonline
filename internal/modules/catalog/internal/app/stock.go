@@ -169,14 +169,8 @@ type ExpireReservationArgs struct {
 func (ExpireReservationArgs) Kind() string { return "catalog.expire_reservation" }
 
 func (s *Service) scheduleExpiry(ctx context.Context, tx pgx.Tx, ref string, at time.Time) error {
-	t, err := jobs.ForTenant(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err = s.jobs.InsertTx(ctx, tx, ExpireReservationArgs{TenantArgs: t, Ref: ref}, &river.InsertOpts{ScheduledAt: at}); err != nil {
-		return fmt.Errorf("catalog: schedule reservation expiry: %w", err)
-	}
-	return nil
+	return s.enqueue(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return ExpireReservationArgs{TenantArgs: t, Ref: ref} },
+		&river.InsertOpts{ScheduledAt: at})
 }
 
 // ExpireWorker runs ExpireReservationArgs.
