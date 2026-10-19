@@ -37,6 +37,49 @@ systemctl enable --now iftahonline-api iftahonline-storefront iftahonline-worker
   The worker first finishes running jobs and cancels them after the
   timeout. `TimeoutStopSec` must stay above `DRAIN_DELAY + SHUTDOWN_TIMEOUT`.
 
+## Database roles
+
+Infrastructure creates the roles; migrations never do. In development,
+`deploy/compose/initdb/01-roles.sql` does it. In production, create the
+same three roles with secrets from the secret manager before the first
+migration (`migrate up` refuses to run without them):
+
+| Role | Used by | Attributes |
+|---|---|---|
+| `app_owner` | `migrate` | Owns the schema |
+| `app_user` | `api`, `storefront`, `worker` | `NOSUPERUSER NOBYPASSRLS` |
+| `app_admin` | The super-admin console (`ADMIN_DATABASE_URL`) and `platform admin create` | `NOSUPERUSER NOBYPASSRLS` |
+
+```sql
+CREATE ROLE app_admin LOGIN PASSWORD '…' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+```
+
+## Secrets
+
+The `api` and `worker` roles need two secrets:
+
+- **`SECRETBOX_KEYS`**: `1:<base64 of 32 random bytes>`. To rotate, list
+  the new key first.
+- **`OTP_PEPPER`**: base64 of 32 or more random bytes.
+
+Generate each with `openssl rand -base64 32`, and keep both in the secret
+manager.
+
+## Super-admin console
+
+1. Set `ADMIN_DATABASE_URL` (the `app_admin` role) for the api role, and
+   restart it.
+2. Point `ADMIN_HOST` (default `admin.<PLATFORM_BASE_DOMAIN>`) at the api
+   behind the edge.
+3. Restrict that hostname at the edge to the operators' IP ranges.
+4. Create the first admin. The password goes on stdin, and the TOTP
+   enrolment is printed once:
+
+   ```sh
+   read -rs PW && printf '%s\n' "$PW" | ADMIN_DATABASE_URL=… SECRETBOX_KEYS=… \
+     iftahonline admin create --email ops@iftahonline.com --name "Ops"
+   ```
+
 ## Probes
 
 | Path | Meaning |
