@@ -10,12 +10,12 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store/tenancydb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -41,7 +41,7 @@ func InsertStore(ctx context.Context, tx Tx, in domain.NewStore) (domain.Store, 
 		ID: id, Slug: in.Slug, Name: in.Name, Currency: in.Currency, Locale: in.Locale, Timezone: in.Timezone,
 	})
 	if err != nil {
-		if isUnique(err, "stores_slug_key") {
+		if postgres.IsUniqueViolation(err, "stores_slug_key") {
 			return domain.Store{}, errs.Validation(errs.FieldError{Field: "slug", Code: "taken", Message: "this slug is already taken"})
 		}
 		return domain.Store{}, fmt.Errorf("tenancy store: insert store: %w", err)
@@ -126,9 +126,9 @@ func InsertDomain(ctx context.Context, tx Tx, d NewDomain) (domain.Domain, error
 	row, err := tenancydb.New(tx).InsertDomain(ctx, p)
 	if err != nil {
 		switch {
-		case isUnique(err, "store_domains_store_host_key"):
+		case postgres.IsUniqueViolation(err, "store_domains_store_host_key"):
 			return domain.Domain{}, errs.Conflict("domain_exists", "this domain is already added to the store")
-		case isUnique(err, "store_domains_verified_host_key"):
+		case postgres.IsUniqueViolation(err, "store_domains_verified_host_key"):
 			return domain.Domain{}, errs.Conflict("domain_taken", "this domain is already in use")
 		}
 		return domain.Domain{}, fmt.Errorf("tenancy store: insert domain: %w", err)
@@ -225,7 +225,7 @@ func MarkVerified(ctx context.Context, tx Tx, domainID ulid.ID) (domain.Domain, 
 		return domain.Domain{}, err
 	}
 	row, err := tenancydb.New(tx).MarkDomainVerified(ctx, tenancydb.MarkDomainVerifiedParams{StoreID: id, ID: domainID})
-	if isUnique(err, "store_domains_verified_host_key") {
+	if postgres.IsUniqueViolation(err, "store_domains_verified_host_key") {
 		return domain.Domain{}, ErrDomainTaken
 	}
 	return domainResult(row, err, "mark verified")
@@ -294,9 +294,4 @@ func ResolveHost(ctx context.Context, db Tx, host string) (res domain.Resolution
 		return domain.Resolution{}, false, fmt.Errorf("tenancy store: resolve host: %w", err)
 	}
 	return domain.Resolution{StoreID: tenant.StoreID{ID: row.StoreID}, Status: domain.StoreStatus(row.StoreStatus)}, true, nil
-}
-
-func isUnique(err error, constraint string) bool {
-	pgErr, ok := errors.AsType[*pgconn.PgError](err)
-	return ok && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
 }
