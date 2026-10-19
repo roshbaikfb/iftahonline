@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/password"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/password"
 )
 
 // fast keeps tests quick; production uses DefaultParams.

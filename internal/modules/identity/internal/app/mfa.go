@@ -10,8 +10,10 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/totp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -47,7 +49,7 @@ func (s *Service) SetupTOTP(ctx context.Context) (TOTPSetup, error) {
 	if u.MFAEnabled() {
 		return TOTPSetup{}, errMFAEnabled
 	}
-	secret, err := domain.NewTOTPSecret()
+	secret, err := totp.NewSecret()
 	if err != nil {
 		return TOTPSetup{}, err
 	}
@@ -62,7 +64,7 @@ func (s *Service) SetupTOTP(ctx context.Context) (TOTPSetup, error) {
 	if !pending {
 		return TOTPSetup{}, errMFAEnabled
 	}
-	return TOTPSetup{Secret: b32Encode(secret), URI: domain.TOTPURI(secret, TOTPIssuer, u.Email)}, nil
+	return TOTPSetup{Secret: b32Encode(secret), URI: totp.URI(secret, TOTPIssuer, u.Email)}, nil
 }
 
 // ConfirmTOTP enables 2FA once the user enters a valid code, and returns
@@ -86,7 +88,7 @@ func (s *Service) ConfirmTOTP(ctx context.Context, code string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	step, ok := domain.VerifyTOTP(secret, code, s.now(), 0)
+	step, ok := totp.Verify(secret, code, s.now(), 0)
 	if !ok {
 		return nil, errBadSecondCode
 	}
@@ -169,7 +171,7 @@ func (s *Service) secondFactorOK(ctx context.Context, u domain.User, code string
 	if err != nil {
 		return false, err
 	}
-	step, ok := domain.VerifyTOTP(secret, code, s.now(), u.TOTPLastStep)
+	step, ok := totp.Verify(secret, code, s.now(), u.TOTPLastStep)
 	if !ok {
 		return false, nil
 	}
@@ -211,7 +213,7 @@ func (s *Service) VerifyMFA(ctx context.Context, challengeID, code string) (Auth
 
 // openSession creates a session for u in its own transaction.
 func (s *Service) openSession(ctx context.Context, u domain.User) (AuthResult, error) {
-	token, err := domain.NewToken()
+	token, err := authtoken.New()
 	if err != nil {
 		return AuthResult{}, err
 	}
