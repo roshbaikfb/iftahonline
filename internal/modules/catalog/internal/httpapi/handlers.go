@@ -1,0 +1,369 @@
+// Package httpapi serves the catalog tag of api/openapi.yaml. Handlers
+// authorize first, take the store only from the context (set by the
+// membership middleware, never from the path), and return errs errors
+// that the problem package renders.
+package httpapi
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+// Handlers implements StrictServerInterface.
+type Handlers struct {
+	svc  *app.Service
+	auth authz.Authorizer
+}
+
+var _ StrictServerInterface = (*Handlers)(nil)
+
+// Mount registers the catalog routes on mux. scope is the membership
+// middleware: it authenticates, returns 404 to non-members, and sets the
+// tenant and principal (ADR-0006).
+func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+	badRequest := func(w http.ResponseWriter, r *http.Request, err error) {
+		resp.Write(w, r, errs.BadRequest("invalid request", err))
+	}
+	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, auth: auth}, nil, StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  badRequest,
+		ResponseErrorHandlerFunc: resp.Write,
+	})
+	HandlerWithOptions(strict, StdHTTPServerOptions{
+		BaseRouter:       mux,
+		Middlewares:      []MiddlewareFunc{MiddlewareFunc(scope)},
+		ErrorHandlerFunc: badRequest,
+	})
+}
+
+var (
+	errProductNotFound  = errs.NotFound("product_not_found", "product not found")
+	errCategoryNotFound = errs.NotFound("category_not_found", "category not found")
+	errBodyRequired     = errs.BadRequest("request body is required", nil)
+)
+
+// pathID parses a path ID. A malformed ID is simply not found.
+func pathID(s string, notFound error) (ulid.ID, error) {
+	id, err := ulid.Parse(s)
+	if err != nil {
+		return ulid.ID{}, notFound
+	}
+	return id, nil
+}
+
+// bodyID parses an ID from a request body; a malformed one is a
+// validation error on field.
+func bodyID(field, s string) (ulid.ID, error) {
+	id, err := ulid.Parse(s)
+	if err != nil {
+		return ulid.ID{}, errs.Validation(errs.FieldError{Field: field, Code: "invalid", Message: "not a valid ID"})
+	}
+	return id, nil
+}
+
+// ListProducts implements StrictServerInterface.
+func (h *Handlers) ListProducts(ctx context.Context, req ListProductsRequestObject) (ListProductsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	q := app.ProductQuery{Cursor: deref(req.Params.Cursor)}
+	if req.Params.Status != nil {
+		q.Status = string(*req.Params.Status)
+	}
+	if req.Params.Limit != nil {
+		q.Limit = *req.Params.Limit
+	}
+	if req.Params.CategoryId != nil {
+		id, err := bodyID("category_id", *req.Params.CategoryId)
+		if err != nil {
+			return nil, err
+		}
+		q.CategoryID = &id
+	}
+	page, err := h.svc.ListProducts(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	out := ListProducts200JSONResponse{Items: make([]Product, len(page.Items))}
+	for i, p := range page.Items {
+		out.Items[i] = toProduct(p)
+	}
+	if page.NextCursor != "" {
+		out.NextCursor = &page.NextCursor
+	}
+	return out, nil
+}
+
+// CreateProduct implements StrictServerInterface.
+func (h *Handlers) CreateProduct(ctx context.Context, req CreateProductRequestObject) (CreateProductResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	in, err := productInput(*req.Body)
+	if err != nil {
+		return nil, err
+	}
+	p, err := h.svc.CreateProduct(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return CreateProduct201JSONResponse(toProduct(p)), nil
+}
+
+// GetProduct implements StrictServerInterface.
+func (h *Handlers) GetProduct(ctx context.Context, req GetProductRequestObject) (GetProductResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.ProductId, errProductNotFound)
+	if err != nil {
+		return nil, err
+	}
+	p, err := h.svc.GetProduct(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return GetProduct200JSONResponse(toProduct(p)), nil
+}
+
+// UpdateProduct implements StrictServerInterface.
+func (h *Handlers) UpdateProduct(ctx context.Context, req UpdateProductRequestObject) (UpdateProductResponseObject, error) {
+	p, err := replace(ctx, h.auth, authz.PermCatalogManage, req.ProductId, errProductNotFound, req.Body, productInput, h.svc.UpdateProduct)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateProduct200JSONResponse(toProduct(p)), nil
+}
+
+// replace runs the steps every PUT of one resource shares: authorize,
+// parse the path ID, decode the body, call the use case.
+func replace[B, In, Out any](ctx context.Context, auth authz.Authorizer, perm authz.Permission, rawID string, notFound error,
+	body *B, decode func(B) (In, error), call func(context.Context, ulid.ID, In) (Out, error)) (Out, error) {
+	var zero Out
+	if err := auth.Authorize(ctx, perm); err != nil {
+		return zero, err
+	}
+	id, err := pathID(rawID, notFound)
+	if err != nil {
+		return zero, err
+	}
+	if body == nil {
+		return zero, errBodyRequired
+	}
+	in, err := decode(*body)
+	if err != nil {
+		return zero, err
+	}
+	return call(ctx, id, in)
+}
+
+// DeleteProduct implements StrictServerInterface.
+func (h *Handlers) DeleteProduct(ctx context.Context, req DeleteProductRequestObject) (DeleteProductResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.ProductId, errProductNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteProduct(ctx, id); err != nil {
+		return nil, err
+	}
+	return DeleteProduct204Response{}, nil
+}
+
+// SetInventory implements StrictServerInterface.
+func (h *Handlers) SetInventory(ctx context.Context, req SetInventoryRequestObject) (SetInventoryResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermInventoryManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.VariantId, app.ErrVariantNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	tracked := req.Body.Tracked == nil || *req.Body.Tracked
+	st, err := h.svc.SetStock(ctx, id, domain.StockInput{Tracked: tracked, OnHand: req.Body.OnHand})
+	if err != nil {
+		return nil, err
+	}
+	return SetInventory200JSONResponse(toStock(st)), nil
+}
+
+// ListCategories implements StrictServerInterface.
+func (h *Handlers) ListCategories(ctx context.Context, _ ListCategoriesRequestObject) (ListCategoriesResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	cs, err := h.svc.ListCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := ListCategories200JSONResponse{Items: make([]Category, len(cs))}
+	for i, c := range cs {
+		out.Items[i] = toCategory(c)
+	}
+	return out, nil
+}
+
+// CreateCategory implements StrictServerInterface.
+func (h *Handlers) CreateCategory(ctx context.Context, req CreateCategoryRequestObject) (CreateCategoryResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	in, err := categoryInput(*req.Body)
+	if err != nil {
+		return nil, err
+	}
+	c, err := h.svc.CreateCategory(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return CreateCategory201JSONResponse(toCategory(c)), nil
+}
+
+// UpdateCategory implements StrictServerInterface.
+func (h *Handlers) UpdateCategory(ctx context.Context, req UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error) {
+	c, err := replace(ctx, h.auth, authz.PermCatalogManage, req.CategoryId, errCategoryNotFound, req.Body, categoryInput, h.svc.UpdateCategory)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateCategory200JSONResponse(toCategory(c)), nil
+}
+
+// DeleteCategory implements StrictServerInterface.
+func (h *Handlers) DeleteCategory(ctx context.Context, req DeleteCategoryRequestObject) (DeleteCategoryResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.CategoryId, errCategoryNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteCategory(ctx, id); err != nil {
+		return nil, err
+	}
+	return DeleteCategory204Response{}, nil
+}
+
+func productInput(b ProductInput) (domain.ProductInput, error) {
+	in := domain.ProductInput{
+		Title: b.Title, Slug: deref(b.Slug), Description: deref(b.Description),
+		Variants: make([]domain.VariantInput, len(b.Variants)),
+	}
+	if b.Status != nil {
+		in.Status = string(*b.Status)
+	}
+	if b.Options != nil {
+		in.Options = make([]domain.Option, len(*b.Options))
+		for i, o := range *b.Options {
+			in.Options[i] = domain.Option{Name: o.Name, Values: o.Values}
+		}
+	}
+	if b.CategoryIds != nil {
+		in.CategoryIDs = make([]ulid.ID, len(*b.CategoryIds))
+		for i, s := range *b.CategoryIds {
+			id, err := bodyID(fmt.Sprintf("category_ids[%d]", i), s)
+			if err != nil {
+				return domain.ProductInput{}, err
+			}
+			in.CategoryIDs[i] = id
+		}
+	}
+	for i, v := range b.Variants {
+		dv := domain.VariantInput{SKU: deref(v.Sku), PriceMinor: v.PriceMinor, CompareAtMinor: v.CompareAtMinor, Tracked: v.Tracked}
+		if v.OptionValues != nil {
+			dv.OptionValues = *v.OptionValues
+		}
+		if v.OnHand != nil {
+			dv.OnHand = *v.OnHand
+		}
+		if v.Id != nil {
+			id, err := bodyID(fmt.Sprintf("variants[%d].id", i), *v.Id)
+			if err != nil {
+				return domain.ProductInput{}, err
+			}
+			dv.ID = &id
+		}
+		in.Variants[i] = dv
+	}
+	return in, nil
+}
+
+func categoryInput(b CategoryInput) (domain.CategoryInput, error) {
+	in := domain.CategoryInput{Name: b.Name, Slug: deref(b.Slug)}
+	if b.Position != nil {
+		in.Position = *b.Position
+	}
+	if b.ParentId != nil {
+		id, err := bodyID("parent_id", *b.ParentId)
+		if err != nil {
+			return domain.CategoryInput{}, err
+		}
+		in.ParentID = &id
+	}
+	return in, nil
+}
+
+func toProduct(p domain.Product) Product {
+	out := Product{
+		Id: p.ID.String(), Slug: p.Slug, Title: p.Title, Description: p.Description, Status: ProductStatus(p.Status),
+		Options: make([]ProductOption, len(p.Options)), Variants: make([]Variant, len(p.Variants)),
+		CategoryIds: make([]ULID, len(p.CategoryIDs)), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+	}
+	for i, o := range p.Options {
+		out.Options[i] = ProductOption{Name: o.Name, Values: o.Values}
+	}
+	for i, v := range p.Variants {
+		out.Variants[i] = Variant{
+			Id: v.ID.String(), OptionValues: v.OptionValues, PriceMinor: v.Price.Amount(),
+			Currency: VariantCurrency(v.Price.Currency()), Position: v.Position, Stock: toStock(v.Stock),
+		}
+		if v.SKU != "" {
+			out.Variants[i].Sku = &v.SKU
+		}
+		if v.CompareAt != nil {
+			c := v.CompareAt.Amount()
+			out.Variants[i].CompareAtMinor = &c
+		}
+	}
+	for i, id := range p.CategoryIDs {
+		out.CategoryIds[i] = id.String()
+	}
+	return out
+}
+
+func toStock(s domain.Stock) Stock {
+	return Stock{Tracked: s.Tracked, OnHand: s.OnHand, Reserved: s.Reserved, Available: s.Available()}
+}
+
+func toCategory(c domain.Category) Category {
+	out := Category{Id: c.ID.String(), Slug: c.Slug, Name: c.Name, Position: c.Position, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.ParentID != nil {
+		p := c.ParentID.String()
+		out.ParentId = &p
+	}
+	return out
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

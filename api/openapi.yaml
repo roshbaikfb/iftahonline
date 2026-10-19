@@ -34,6 +34,12 @@ tags:
     description: |
       The store and its domains. Every path is scoped to one store; a
       caller who is not a member of that store gets 404 (ADR-0006).
+  - name: catalog
+    description: |
+      Products, variants, stock and categories (ADR-0011). Every path is
+      scoped to one store; a caller who is not a member of that store, or
+      who names another store's product, variant or category, gets 404.
+      Prices are integer minor units in the store's currency.
 paths:
   /livez:
     get:
@@ -607,6 +613,199 @@ paths:
               schema: { $ref: "#/components/schemas/Domain" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: listProducts
+      summary: List products
+      description: |
+        Permission: catalog.read. Newest first, with variants, stock and
+        category IDs; follow `next_cursor`. Deleted products are never listed.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, active, archived] }
+        - name: category_id
+          in: query
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [catalog]
+      operationId: createProduct
+      summary: Create a product
+      description: |
+        Permission: catalog.manage. Without `slug`, one is derived from the
+        title (Arabic letters are kept). Variants must not carry `id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: The product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/{product_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ProductID"
+    get:
+      tags: [catalog]
+      operationId: getProduct
+      summary: Get a product
+      description: "Permission: catalog.read."
+      responses:
+        "200":
+          description: The product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [catalog]
+      operationId: updateProduct
+      summary: Replace a product
+      description: |
+        Permission: catalog.manage. Replaces fields, options, variants and
+        categories. Variants with `id` keep their identity and stock;
+        variants without one are created (with `on_hand`); variants left
+        out are deleted. Stock of existing variants changes only through
+        the inventory endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "200":
+          description: The product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [catalog]
+      operationId: deleteProduct
+      summary: Delete a product
+      description: "Permission: catalog.manage. Soft delete: the slug and SKUs become free."
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/variants/{variant_id}/inventory:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/VariantID"
+    put:
+      tags: [catalog]
+      operationId: setInventory
+      summary: Set a variant's stock
+      description: |
+        Permission: inventory.manage. `on_hand` cannot go below the units
+        currently reserved by checkouts (409 stock_below_reserved).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryInput" }
+      responses:
+        "200":
+          description: The new stock level.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stock" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/categories:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: listCategories
+      summary: List the category tree
+      description: "Permission: catalog.read. Every category (at most 500), roots first."
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [catalog]
+      operationId: createCategory
+      summary: Create a category
+      description: "Permission: catalog.manage. At most 3 levels deep."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "201":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/categories/{category_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/CategoryID"
+    put:
+      tags: [catalog]
+      operationId: updateCategory
+      summary: Replace or move a category
+      description: "Permission: catalog.manage."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [catalog]
+      operationId: deleteCategory
+      summary: Delete a category
+      description: |
+        Permission: catalog.manage. A category with subcategories cannot be
+        deleted (409 category_has_children); its products simply leave it.
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/auth/login:
     post:
       tags: [admin]
@@ -802,6 +1001,21 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     DomainID:
       name: domain_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    ProductID:
+      name: product_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    VariantID:
+      name: variant_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    CategoryID:
+      name: category_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -1177,6 +1391,137 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Domain" }
+    ProductOption:
+      type: object
+      required: [name, values]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50, example: المقاس }
+        values:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 50 }
+          example: [S, M, L]
+    ProductInput:
+      type: object
+      required: [title, variants]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200, example: تيشيرت قطن }
+        slug: { type: string, maxLength: 120, description: Derived from the title when empty. }
+        description: { type: string, maxLength: 20000 }
+        status: { type: string, enum: [draft, active, archived], default: draft }
+        options:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/ProductOption" }
+        variants:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Exactly one when there are no options.
+          items: { $ref: "#/components/schemas/VariantInput" }
+        category_ids:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ULID" }
+    VariantInput:
+      type: object
+      required: [price_minor]
+      properties:
+        id:
+          $ref: "#/components/schemas/ULID"
+        sku: { type: string, maxLength: 64 }
+        option_values:
+          type: array
+          maxItems: 3
+          description: One value per option, in option order.
+          items: { type: string, maxLength: 50 }
+        price_minor: { type: integer, format: int64, minimum: 0, example: 15000 }
+        compare_at_minor: { type: integer, format: int64, minimum: 1, description: Must exceed price_minor. }
+        tracked: { type: boolean, default: true, description: New variants only. }
+        on_hand: { type: integer, minimum: 0, maximum: 1000000, default: 0, description: New variants only. }
+    Product:
+      type: object
+      required: [id, slug, title, description, status, options, variants, category_ids, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        slug: { type: string, example: تيشيرت-قطن }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/ProductOption" }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/Variant" }
+        category_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ULID" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Variant:
+      type: object
+      required: [id, option_values, price_minor, currency, position, stock]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        sku: { type: string }
+        option_values:
+          type: array
+          items: { type: string }
+        price_minor: { type: integer, format: int64 }
+        compare_at_minor: { type: integer, format: int64 }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        position: { type: integer }
+        stock: { $ref: "#/components/schemas/Stock" }
+    Stock:
+      type: object
+      required: [tracked, on_hand, reserved, available]
+      properties:
+        tracked: { type: boolean, description: Untracked stock never runs out. }
+        on_hand: { type: integer }
+        reserved: { type: integer, description: Held by checkouts that have not completed. }
+        available: { type: integer, description: on_hand - reserved (meaningless when untracked). }
+    InventoryInput:
+      type: object
+      required: [on_hand]
+      properties:
+        tracked: { type: boolean, default: true }
+        on_hand: { type: integer, minimum: 0, maximum: 1000000 }
+    ProductPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+        next_cursor: { type: string }
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120, example: ملابس رجالي }
+        slug: { type: string, maxLength: 120, description: Derived from the name when empty. }
+        parent_id: { $ref: "#/components/schemas/ULID" }
+        position: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+    Category:
+      type: object
+      required: [id, slug, name, position, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        parent_id: { $ref: "#/components/schemas/ULID" }
+        slug: { type: string }
+        name: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
     Health:
       type: object
       required: [status]
