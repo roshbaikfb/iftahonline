@@ -508,3 +508,44 @@ func TestCrossTenantIsolation(t *testing.T) {
 		t.Fatalf("write as B from A: %v", err)
 	}
 }
+
+func TestStoreDirectory(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	adminPool, err := pgxpool.New(t.Context(), infra.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(adminPool.Close)
+	dir := app.NewStoreDirectory(adminPool)
+	tag := f.slug("sd")
+	_, a := f.createStore(t, tag+"-a")
+	_, b := f.createStore(t, tag+"-b")
+
+	page, err := dir.Search(t.Context(), tag, "", "", 1)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Store.ID != b.ID || page.NextCursor == "" {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+	next, err := dir.Search(t.Context(), tag, "active", page.NextCursor, 0)
+	if err != nil || len(next.Items) != 1 || next.Items[0].Store.ID != a.ID || next.NextCursor != "" {
+		t.Fatalf("next = %+v, %v", next, err)
+	}
+	for name, call := range map[string]func() error{
+		"limit":   func() error { _, e := dir.Search(t.Context(), "", "", "", 101); return e },
+		"query":   func() error { _, e := dir.Search(t.Context(), strings.Repeat("q", 101), "", "", 10); return e },
+		"status":  func() error { _, e := dir.Search(t.Context(), "", "gone", "", 10); return e },
+		"cursor":  func() error { _, e := dir.Search(t.Context(), "", "", "bm8", 10); return e },
+		"cursor2": func() error { _, e := dir.Search(t.Context(), "", "", "eDp5", 10); return e },
+	} {
+		if e := call(); kindOf(e) != errs.KindValidation {
+			t.Errorf("%s: %v", name, e)
+		}
+	}
+	st, ds, err := dir.Store(t.Context(), a.ID)
+	if err != nil || st.ID != a.ID || len(ds) != 1 {
+		t.Fatalf("store = %+v %+v %v", st, ds, err)
+	}
+	if _, _, err := dir.Store(t.Context(), tenant.StoreID{ID: f.ids.New()}); kindOf(err) != errs.KindNotFound {
+		t.Fatalf("missing store: %v", err)
+	}
+}

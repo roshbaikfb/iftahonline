@@ -21,6 +21,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -37,6 +38,9 @@ type Deps struct {
 	DNS app.TXTResolver
 	// Audit records store actions (identity's audit log); nil discards.
 	Audit audit.Recorder
+	// AdminPool is the app_admin pool for the super-admin directory;
+	// nil means no directory (every role but the api).
+	AdminPool *pgxpool.Pool
 }
 
 // Module is the wired tenancy module.
@@ -78,6 +82,34 @@ func New(d Deps) (*Module, error) {
 
 // Service returns the store use cases.
 func (m *Module) Service() Service { return m.svc }
+
+// Directory returns the cross-tenant store directory, or nil when the
+// module has no admin pool.
+func (m *Module) Directory() Directory {
+	if m.deps.AdminPool == nil {
+		return nil
+	}
+	return directoryAdapter{app.NewStoreDirectory(m.deps.AdminPool)}
+}
+
+// directoryAdapter maps the app's page type onto the api's.
+type directoryAdapter struct{ d *app.StoreDirectory }
+
+func (a directoryAdapter) Search(ctx context.Context, query, status, cursor string, limit int) (DirectoryPage, error) {
+	p, err := a.d.Search(ctx, query, status, cursor, limit)
+	if err != nil {
+		return DirectoryPage{}, err
+	}
+	out := DirectoryPage{NextCursor: p.NextCursor, Items: make([]DirectoryEntry, len(p.Items))}
+	for i, e := range p.Items {
+		out.Items[i] = DirectoryEntry{Store: e.Store, PrimaryHost: e.PrimaryHost}
+	}
+	return out, nil
+}
+
+func (a directoryAdapter) Store(ctx context.Context, id tenant.StoreID) (Store, []Domain, error) {
+	return a.d.Store(ctx, id)
+}
 
 // Resolver returns the host resolver.
 func (m *Module) Resolver() HostResolver { return m.resolver }

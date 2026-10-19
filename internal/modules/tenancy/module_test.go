@@ -3,6 +3,7 @@ package tenancy_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -206,5 +207,107 @@ func TestHostResolutionEndToEnd(t *testing.T) {
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
+	}
+}
+
+// TestAdminDirectory: the console's app_admin pool sees every store,
+// read-only; the same queries as app_user see nothing (RLS).
+func TestAdminDirectory(t *testing.T) {
+	ctx := t.Context()
+	admin, err := pgxpool.New(ctx, infra.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	a := newInstance(t)
+	pool, err := pgxpool.New(ctx, infra.AppURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	opts, _ := redis.ParseURL(infra.RedisURL)
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { _ = rdb.Close() })
+	ins, _ := river.NewClient(riverpgxv5.New(pool), &river.Config{Middleware: jobs.Middleware()})
+	mod, err := tenancy.New(tenancy.Deps{Pool: pool, Redis: rdb, Jobs: ins, IDs: ulid.NewGenerator(),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Config: cfg(), AdminPool: admin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.mod.Directory() != nil {
+		t.Fatal("no admin pool, no directory")
+	}
+	dir := mod.Directory()
+
+	tag := strings.ToLower(ulid.NewGenerator().New().String()[18:])
+	var ids []tenant.StoreID
+	for i, name := range []string{"Alpha " + tag, "Beta " + tag, "Gamma " + tag} {
+		sctx := tenant.WithStore(ctx, tenant.StoreID{ID: ulid.NewGenerator().New()})
+		txErr := postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
+			_, createErr := mod.Service().CreateStoreTx(sctx, tx, tenancy.NewStore{
+				Slug: fmt.Sprintf("dir%d-%s", i, tag), Name: name, Currency: "EGP", Locale: "ar", Timezone: "UTC"})
+			return createErr
+		})
+		if txErr != nil {
+			t.Fatal(txErr)
+		}
+		id, _ := tenant.FromContext(sctx)
+		ids = append(ids, id)
+	}
+	if _, err = mod.Service().SetStatus(tenant.WithStore(ctx, ids[1]), tenancy.StatusSuspended); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := dir.Search(ctx, tag, "", "", 2)
+	if err != nil || len(page.Items) != 2 || page.NextCursor == "" || page.Items[0].Store.ID != ids[2] ||
+		page.Items[0].PrimaryHost != fmt.Sprintf("dir2-%s.iftahonline.com", tag) {
+		t.Fatalf("page 1 = %+v, %v", page, err)
+	}
+	page2, err := dir.Search(ctx, tag, "", page.NextCursor, 2)
+	if err != nil || len(page2.Items) != 1 || page2.Items[0].Store.ID != ids[0] || page2.NextCursor != "" {
+		t.Fatalf("page 2 = %+v, %v", page2, err)
+	}
+	if p, _ := dir.Search(ctx, tag, "suspended", "", 10); len(p.Items) != 1 || p.Items[0].Store.ID != ids[1] {
+		t.Fatalf("status filter = %+v", p)
+	}
+	if p, _ := dir.Search(ctx, "dir1-"+tag, "", "", 10); len(p.Items) != 1 {
+		t.Fatalf("slug prefix = %+v", p)
+	}
+	// LIKE wildcards in the query are literal.
+	if p, _ := dir.Search(ctx, "%"+tag, "", "", 10); len(p.Items) != 0 {
+		t.Fatalf("wildcard must be literal, got %d", len(p.Items))
+	}
+	for _, bad := range []struct{ status, cursor string }{{"deleted", ""}, {"", "!!"}} {
+		if _, err = dir.Search(ctx, "", bad.status, bad.cursor, 10); err == nil {
+			t.Fatalf("bad input %+v accepted", bad)
+		}
+	}
+	st, ds, err := dir.Store(ctx, ids[1])
+	if err != nil || st.Status != tenancy.StatusSuspended || len(ds) != 1 || !ds[0].IsPrimary {
+		t.Fatalf("store = %+v %+v %v", st, ds, err)
+	}
+	if _, _, err := dir.Store(ctx, tenant.StoreID{ID: ulid.NewGenerator().New()}); err == nil {
+		t.Fatal("unknown store must be not found")
+	}
+
+	// app_admin is read-only on the directory and blind elsewhere.
+	for _, q := range []string{
+		"UPDATE stores SET name = 'x'", // privileges are checked before any row
+		"SELECT count(*) FROM audit_log",
+		"SELECT count(*) FROM users",
+		"SELECT count(*) FROM store_memberships",
+		"SELECT count(*) FROM user_sessions",
+	} {
+		if _, err := admin.Exec(ctx, q); err == nil || !strings.Contains(err.Error(), "permission denied") {
+			t.Errorf("app_admin: %s: %v", q, err)
+		}
+	}
+	// And app_user sees none of it without a tenant.
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM stores").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("app_user sees %d stores, %v", n, err)
+	}
+	if _, err := pool.Exec(ctx, "SELECT count(*) FROM platform_admins"); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("app_user reads platform_admins: %v", err)
 	}
 }

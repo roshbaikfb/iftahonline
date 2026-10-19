@@ -47,6 +47,12 @@ sql:
             go_type:
               type: time.Time
               pointer: true
+          - db_type: uuid
+            nullable: true
+            go_type:
+              import: github.com/roshbaikfb/iftahonline/internal/platform/ulid
+              type: ID
+              pointer: true
           - db_type: citext
             go_type: string
   - engine: postgresql

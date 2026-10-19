@@ -5,6 +5,10 @@ CREATE ROLE app_owner LOGIN PASSWORD 'app_owner'
   NOSUPERUSER NOCREATEDB NOCREATEROLE;
 CREATE ROLE app_user LOGIN PASSWORD 'app_user'
   NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+-- Super-admin console (ADR-0007 §5): reads the store directory across
+-- tenants through explicit policies; never used by merchant traffic.
+CREATE ROLE app_admin LOGIN PASSWORD 'app_admin'
+  NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 
 CREATE DATABASE iftah OWNER app_owner;
 \connect iftah

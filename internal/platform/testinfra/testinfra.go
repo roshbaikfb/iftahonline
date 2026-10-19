@@ -36,6 +36,7 @@ const (
 type Infra struct {
 	OwnerURL string // app_owner: migrations and test fixtures
 	AppURL   string // app_user: what services use (NOBYPASSRLS)
+	AdminURL string // app_admin: the super-admin console's role
 	RedisURL string
 }
 
@@ -98,7 +99,7 @@ func start(ctx context.Context, infra *Infra) (func(), error) {
 	dsn := func(user string) string {
 		return fmt.Sprintf("postgres://%s:%s@%s:%s/iftah?sslmode=disable", user, user, host, port.Port())
 	}
-	infra.OwnerURL, infra.AppURL = dsn("app_owner"), dsn("app_user")
+	infra.OwnerURL, infra.AppURL, infra.AdminURL = dsn("app_owner"), dsn("app_user"), dsn("app_admin")
 
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	if err = postgres.Migrate(ctx, infra.OwnerURL, postgres.MigrateUp, quiet, io.Discard); err != nil {
