@@ -146,6 +146,24 @@ type ProductCategory struct {
 	CategoryID pgtype.UUID
 }
 
+type ProductImage struct {
+	ID            pgtype.UUID
+	StoreID       pgtype.UUID
+	ProductID     pgtype.UUID
+	Status        string
+	UploadKey     string
+	ObjectKey     pgtype.Text
+	Format        pgtype.Text
+	Width         pgtype.Int4
+	Height        pgtype.Int4
+	Bytes         pgtype.Int8
+	Alt           string
+	Position      int32
+	FailureReason string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState

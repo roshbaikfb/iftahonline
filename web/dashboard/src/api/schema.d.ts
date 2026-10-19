@@ -649,6 +649,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/products/{product_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an image upload
+         * @description Permission: catalog.manage. Creates a `pending` image and returns a
+         *     presigned upload: POST `upload.fields` plus the file (last, as
+         *     `file`) as multipart/form-data to `upload.url`, then call
+         *     `completeImageUpload`. The storage service enforces the declared
+         *     type and `upload.max_bytes`; the server then checks the real
+         *     content, strips metadata and re-encodes it (ADR-0012). At most 20
+         *     images per product; uploads not completed within an hour are
+         *     discarded.
+         */
+        post: operations["createImageUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/products/{product_id}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+                image_id: components["parameters"]["ImageID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an image
+         * @description Permission: catalog.manage. Its files are removed in the background.
+         */
+        delete: operations["deleteImage"];
+        options?: never;
+        head?: never;
+        /**
+         * Set an image's alt text and position
+         * @description Permission: catalog.manage.
+         */
+        patch: operations["updateImage"];
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+                image_id: components["parameters"]["ImageID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process an uploaded image
+         * @description Permission: catalog.manage. Call after the upload succeeded. The
+         *     image becomes `processing`, then `ready` (with `urls`) or `failed`
+         *     (with `failure_reason`). Repeating the call is harmless.
+         */
+        post: operations["completeImageUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/variants/{variant_id}/inventory": {
         parameters: {
             query?: never;
@@ -1263,10 +1347,64 @@ export interface components {
             options: components["schemas"]["ProductOption"][];
             variants: components["schemas"]["Variant"][];
             category_ids: components["schemas"]["ULID"][];
+            /** @description In position order; only `ready` images have `urls`. */
+            images: components["schemas"]["ProductImage"][];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        ProductImage: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            status: "pending" | "processing" | "ready" | "failed";
+            alt: string;
+            position: number;
+            width?: number;
+            height?: number;
+            /** @enum {string} */
+            failure_reason?: "file_too_large" | "unsupported_type" | "too_many_pixels" | "corrupt_image" | "upload_missing";
+            urls?: components["schemas"]["ImageURLs"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px). */
+        ImageURLs: {
+            thumb: components["schemas"]["ImageFormats"];
+            small: components["schemas"]["ImageFormats"];
+            medium: components["schemas"]["ImageFormats"];
+            large: components["schemas"]["ImageFormats"];
+        };
+        ImageFormats: {
+            /** Format: uri */
+            avif: string;
+            /** Format: uri */
+            webp: string;
+        };
+        ImageInput: {
+            alt?: string;
+            position?: number;
+        };
+        ImageUploadRequest: {
+            /** @enum {string} */
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+            alt?: string;
+            position?: number;
+        };
+        ImageUpload: {
+            image: components["schemas"]["ProductImage"];
+            upload: components["schemas"]["PresignedUpload"];
+        };
+        PresignedUpload: {
+            /** Format: uri */
+            url: string;
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: int64 */
+            max_bytes: number;
         };
         Variant: {
             id: components["schemas"]["ULID"];
@@ -1375,6 +1513,7 @@ export interface components {
         ProductID: components["schemas"]["ULID"];
         VariantID: components["schemas"]["ULID"];
         CategoryID: components["schemas"]["ULID"];
+        ImageID: components["schemas"]["ULID"];
     };
     requestBodies: never;
     headers: {
@@ -2297,6 +2436,111 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createImageUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description The pending image and its upload. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageUpload"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+                image_id: components["parameters"]["ImageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+                image_id: components["parameters"]["ImageID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageInput"];
+            };
+        };
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductImage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeImageUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+                image_id: components["parameters"]["ImageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Processing started (or already done). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductImage"];
+                };
             };
             default: components["responses"]["Problem"];
         };

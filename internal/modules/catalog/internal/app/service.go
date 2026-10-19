@@ -34,12 +34,13 @@ type Service struct {
 	ids      *ulid.Generator
 	audit    audit.Recorder
 	currency CurrencySource
+	media    Media
 	now      func() time.Time
 }
 
 // NewService builds the service.
-func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, rec audit.Recorder, cur CurrencySource) *Service {
-	return &Service{db: db, jobs: ins, ids: ids, audit: rec, currency: cur, now: time.Now}
+func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, rec audit.Recorder, cur CurrencySource, m Media) *Service {
+	return &Service{db: db, jobs: ins, ids: ids, audit: rec, currency: cur, media: m, now: time.Now}
 }
 
 // SetClock replaces the clock (tests).
@@ -198,10 +199,18 @@ func (s *Service) GetProduct(ctx context.Context, id ulid.ID) (domain.Product, e
 }
 
 // DeleteProduct soft-deletes a product and its variants. Its slug and SKUs
-// become free; existing reservations are unaffected.
+// become free; existing reservations are unaffected. Its images are
+// deleted, and a job removes their objects.
 func (s *Service) DeleteProduct(ctx context.Context, id ulid.ID) error {
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		if err := store.SoftDeleteProduct(ctx, tx, id); err != nil {
+			return err
+		}
+		keys, err := store.DeleteProductImages(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err = s.deleteObjects(ctx, tx, keys); err != nil {
 			return err
 		}
 		return s.auditProduct(ctx, tx, "product.deleted", id, "")
@@ -282,8 +291,12 @@ func (s *Service) SetStock(ctx context.Context, variantID ulid.ID, in domain.Sto
 	return st, notFound(err, ErrVariantNotFound)
 }
 
+func auditEntry(action, target string, id ulid.ID) audit.Entry {
+	return audit.Entry{Action: action, TargetType: target, TargetID: id.String()}
+}
+
 func (s *Service) auditProduct(ctx context.Context, tx pgx.Tx, action string, id ulid.ID, title string) error {
-	e := audit.Entry{Action: action, TargetType: "product", TargetID: id.String()}
+	e := auditEntry(action, "product", id)
 	if title != "" {
 		e.Metadata = map[string]any{"title": title}
 	}

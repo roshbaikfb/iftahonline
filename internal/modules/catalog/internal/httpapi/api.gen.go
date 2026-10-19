@@ -17,6 +17,30 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ImageUploadRequestContentType.
+const (
+	Imagegif  ImageUploadRequestContentType = "image/gif"
+	Imagejpeg ImageUploadRequestContentType = "image/jpeg"
+	Imagepng  ImageUploadRequestContentType = "image/png"
+	Imagewebp ImageUploadRequestContentType = "image/webp"
+)
+
+// Valid indicates whether the value is a known member of the ImageUploadRequestContentType enum.
+func (e ImageUploadRequestContentType) Valid() bool {
+	switch e {
+	case Imagegif:
+		return true
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	case Imagewebp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProductStatus.
 const (
 	ProductStatusActive   ProductStatus = "active"
@@ -32,6 +56,57 @@ func (e ProductStatus) Valid() bool {
 	case ProductStatusArchived:
 		return true
 	case ProductStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProductImageFailureReason.
+const (
+	CorruptImage    ProductImageFailureReason = "corrupt_image"
+	FileTooLarge    ProductImageFailureReason = "file_too_large"
+	TooManyPixels   ProductImageFailureReason = "too_many_pixels"
+	UnsupportedType ProductImageFailureReason = "unsupported_type"
+	UploadMissing   ProductImageFailureReason = "upload_missing"
+)
+
+// Valid indicates whether the value is a known member of the ProductImageFailureReason enum.
+func (e ProductImageFailureReason) Valid() bool {
+	switch e {
+	case CorruptImage:
+		return true
+	case FileTooLarge:
+		return true
+	case TooManyPixels:
+		return true
+	case UnsupportedType:
+		return true
+	case UploadMissing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProductImageStatus.
+const (
+	Failed     ProductImageStatus = "failed"
+	Pending    ProductImageStatus = "pending"
+	Processing ProductImageStatus = "processing"
+	Ready      ProductImageStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ProductImageStatus enum.
+func (e ProductImageStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case Pending:
+		return true
+	case Processing:
+		return true
+	case Ready:
 		return true
 	default:
 		return false
@@ -141,10 +216,54 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
+// ImageFormats defines model for ImageFormats.
+type ImageFormats struct {
+	Avif string `json:"avif"`
+	Webp string `json:"webp"`
+}
+
+// ImageInput defines model for ImageInput.
+type ImageInput struct {
+	Alt      *string `json:"alt,omitempty"`
+	Position *int    `json:"position,omitempty"`
+}
+
+// ImageURLs Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px).
+type ImageURLs struct {
+	Large  ImageFormats `json:"large"`
+	Medium ImageFormats `json:"medium"`
+	Small  ImageFormats `json:"small"`
+	Thumb  ImageFormats `json:"thumb"`
+}
+
+// ImageUpload defines model for ImageUpload.
+type ImageUpload struct {
+	Image  ProductImage    `json:"image"`
+	Upload PresignedUpload `json:"upload"`
+}
+
+// ImageUploadRequest defines model for ImageUploadRequest.
+type ImageUploadRequest struct {
+	Alt         *string                       `json:"alt,omitempty"`
+	ContentType ImageUploadRequestContentType `json:"content_type"`
+	Position    *int                          `json:"position,omitempty"`
+}
+
+// ImageUploadRequestContentType defines model for ImageUploadRequest.ContentType.
+type ImageUploadRequestContentType string
+
 // InventoryInput defines model for InventoryInput.
 type InventoryInput struct {
 	OnHand  int   `json:"on_hand"`
 	Tracked *bool `json:"tracked,omitempty"`
+}
+
+// PresignedUpload defines model for PresignedUpload.
+type PresignedUpload struct {
+	ExpiresAt time.Time         `json:"expires_at"`
+	Fields    map[string]string `json:"fields"`
+	MaxBytes  int64             `json:"max_bytes"`
+	Url       string            `json:"url"`
 }
 
 // Problem defines model for Problem.
@@ -169,7 +288,10 @@ type Product struct {
 	Description string    `json:"description"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id      ULID            `json:"id"`
+	Id ULID `json:"id"`
+
+	// Images In position order; only `ready` images have `urls`.
+	Images  []ProductImage  `json:"images"`
 	Options []ProductOption `json:"options"`
 
 	// Slug Example: تيشيرت-قطن
@@ -182,6 +304,29 @@ type Product struct {
 
 // ProductStatus defines model for Product.Status.
 type ProductStatus string
+
+// ProductImage defines model for ProductImage.
+type ProductImage struct {
+	Alt           string                     `json:"alt"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	FailureReason *ProductImageFailureReason `json:"failure_reason,omitempty"`
+	Height        *int                       `json:"height,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id       ULID               `json:"id"`
+	Position int                `json:"position"`
+	Status   ProductImageStatus `json:"status"`
+
+	// Urls Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px).
+	Urls  *ImageURLs `json:"urls,omitempty"`
+	Width *int       `json:"width,omitempty"`
+}
+
+// ProductImageFailureReason defines model for ProductImage.FailureReason.
+type ProductImageFailureReason string
+
+// ProductImageStatus defines model for ProductImage.Status.
+type ProductImageStatus string
 
 // ProductInput defines model for ProductInput.
 type ProductInput struct {
@@ -279,6 +424,9 @@ type CategoryID = ULID
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 
+// ImageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type ImageID = ULID
+
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID
 
@@ -310,6 +458,12 @@ type CreateProductJSONRequestBody = ProductInput
 
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductInput
+
+// CreateImageUploadJSONRequestBody defines body for CreateImageUpload for application/json ContentType.
+type CreateImageUploadJSONRequestBody = ImageUploadRequest
+
+// UpdateImageJSONRequestBody defines body for UpdateImage for application/json ContentType.
+type UpdateImageJSONRequestBody = ImageInput
 
 // SetInventoryJSONRequestBody defines body for SetInventory for application/json ContentType.
 type SetInventoryJSONRequestBody = InventoryInput
@@ -343,6 +497,18 @@ type ServerInterface interface {
 	// UpdateProduct Replace a product
 	// (PUT /v1/stores/{store_id}/products/{product_id})
 	UpdateProduct(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID)
+	// CreateImageUpload Start an image upload
+	// (POST /v1/stores/{store_id}/products/{product_id}/images)
+	CreateImageUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID)
+	// DeleteImage Delete an image
+	// (DELETE /v1/stores/{store_id}/products/{product_id}/images/{image_id})
+	DeleteImage(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID)
+	// UpdateImage Set an image's alt text and position
+	// (PATCH /v1/stores/{store_id}/products/{product_id}/images/{image_id})
+	UpdateImage(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID)
+	// CompleteImageUpload Process an uploaded image
+	// (POST /v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete)
+	CompleteImageUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID)
 	// SetInventory Set a variant's stock
 	// (PUT /v1/stores/{store_id}/variants/{variant_id}/inventory)
 	SetInventory(w http.ResponseWriter, r *http.Request, storeId StoreID, variantId VariantID)
@@ -691,6 +857,173 @@ func (siw *ServerInterfaceWrapper) UpdateProduct(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CreateImageUpload operation middleware
+func (siw *ServerInterfaceWrapper) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "product_id" -------------
+	var productId ProductID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "product_id", r.PathValue("product_id"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "product_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateImageUpload(w, r, storeId, productId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteImage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "product_id" -------------
+	var productId ProductID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "product_id", r.PathValue("product_id"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "product_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "image_id" -------------
+	var imageId ImageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "image_id", r.PathValue("image_id"), &imageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "image_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteImage(w, r, storeId, productId, imageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImage operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "product_id" -------------
+	var productId ProductID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "product_id", r.PathValue("product_id"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "product_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "image_id" -------------
+	var imageId ImageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "image_id", r.PathValue("image_id"), &imageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "image_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImage(w, r, storeId, productId, imageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteImageUpload operation middleware
+func (siw *ServerInterfaceWrapper) CompleteImageUpload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "product_id" -------------
+	var productId ProductID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "product_id", r.PathValue("product_id"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "product_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "image_id" -------------
+	var imageId ImageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "image_id", r.PathValue("image_id"), &imageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "image_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteImageUpload(w, r, storeId, productId, imageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetInventory operation middleware
 func (siw *ServerInterfaceWrapper) SetInventory(w http.ResponseWriter, r *http.Request) {
 
@@ -851,6 +1184,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.DeleteProduct)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.GetProduct)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.UpdateProduct)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images", wrapper.CreateImageUpload)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}", wrapper.DeleteImage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}", wrapper.UpdateImage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete", wrapper.CompleteImageUpload)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/variants/{variant_id}/inventory", wrapper.SetInventory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.ListCategories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.CreateCategory)
@@ -1211,6 +1548,165 @@ func (response UpdateProductdefaultApplicationProblemPlusJSONResponse) VisitUpda
 	return err
 }
 
+type CreateImageUploadRequestObject struct {
+	StoreId   StoreID   `json:"store_id"`
+	ProductId ProductID `json:"product_id"`
+	Body      *CreateImageUploadJSONRequestBody
+}
+
+type CreateImageUploadResponseObject interface {
+	VisitCreateImageUploadResponse(w http.ResponseWriter) error
+}
+
+type CreateImageUpload201JSONResponse ImageUpload
+
+func (response CreateImageUpload201JSONResponse) VisitCreateImageUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImageUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateImageUploaddefaultApplicationProblemPlusJSONResponse) VisitCreateImageUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteImageRequestObject struct {
+	StoreId   StoreID   `json:"store_id"`
+	ProductId ProductID `json:"product_id"`
+	ImageId   ImageID   `json:"image_id"`
+}
+
+type DeleteImageResponseObject interface {
+	VisitDeleteImageResponse(w http.ResponseWriter) error
+}
+
+type DeleteImage204Response struct {
+}
+
+func (response DeleteImage204Response) VisitDeleteImageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteImagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteImagedefaultApplicationProblemPlusJSONResponse) VisitDeleteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateImageRequestObject struct {
+	StoreId   StoreID   `json:"store_id"`
+	ProductId ProductID `json:"product_id"`
+	ImageId   ImageID   `json:"image_id"`
+	Body      *UpdateImageJSONRequestBody
+}
+
+type UpdateImageResponseObject interface {
+	VisitUpdateImageResponse(w http.ResponseWriter) error
+}
+
+type UpdateImage200JSONResponse ProductImage
+
+func (response UpdateImage200JSONResponse) VisitUpdateImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateImagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateImagedefaultApplicationProblemPlusJSONResponse) VisitUpdateImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteImageUploadRequestObject struct {
+	StoreId   StoreID   `json:"store_id"`
+	ProductId ProductID `json:"product_id"`
+	ImageId   ImageID   `json:"image_id"`
+}
+
+type CompleteImageUploadResponseObject interface {
+	VisitCompleteImageUploadResponse(w http.ResponseWriter) error
+}
+
+type CompleteImageUpload202JSONResponse ProductImage
+
+func (response CompleteImageUpload202JSONResponse) VisitCompleteImageUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteImageUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CompleteImageUploaddefaultApplicationProblemPlusJSONResponse) VisitCompleteImageUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetInventoryRequestObject struct {
 	StoreId   StoreID   `json:"store_id"`
 	VariantId VariantID `json:"variant_id"`
@@ -1281,6 +1777,18 @@ type StrictServerInterface interface {
 	// UpdateProduct Replace a product
 	// (PUT /v1/stores/{store_id}/products/{product_id})
 	UpdateProduct(ctx context.Context, request UpdateProductRequestObject) (UpdateProductResponseObject, error)
+	// CreateImageUpload Start an image upload
+	// (POST /v1/stores/{store_id}/products/{product_id}/images)
+	CreateImageUpload(ctx context.Context, request CreateImageUploadRequestObject) (CreateImageUploadResponseObject, error)
+	// DeleteImage Delete an image
+	// (DELETE /v1/stores/{store_id}/products/{product_id}/images/{image_id})
+	DeleteImage(ctx context.Context, request DeleteImageRequestObject) (DeleteImageResponseObject, error)
+	// UpdateImage Set an image's alt text and position
+	// (PATCH /v1/stores/{store_id}/products/{product_id}/images/{image_id})
+	UpdateImage(ctx context.Context, request UpdateImageRequestObject) (UpdateImageResponseObject, error)
+	// CompleteImageUpload Process an uploaded image
+	// (POST /v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete)
+	CompleteImageUpload(ctx context.Context, request CompleteImageUploadRequestObject) (CompleteImageUploadResponseObject, error)
 	// SetInventory Set a variant's stock
 	// (PUT /v1/stores/{store_id}/variants/{variant_id}/inventory)
 	SetInventory(ctx context.Context, request SetInventoryRequestObject) (SetInventoryResponseObject, error)
@@ -1586,6 +2094,131 @@ func (sh *strictHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProductResponseObject); ok {
 		if err := validResponse.VisitUpdateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateImageUpload operation middleware
+func (sh *strictHandler) CreateImageUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID) {
+	var request CreateImageUploadRequestObject
+
+	request.StoreId = storeId
+	request.ProductId = productId
+
+	var body CreateImageUploadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateImageUpload(ctx, request.(CreateImageUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateImageUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateImageUploadResponseObject); ok {
+		if err := validResponse.VisitCreateImageUploadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteImage operation middleware
+func (sh *strictHandler) DeleteImage(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID) {
+	var request DeleteImageRequestObject
+
+	request.StoreId = storeId
+	request.ProductId = productId
+	request.ImageId = imageId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteImage(ctx, request.(DeleteImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteImageResponseObject); ok {
+		if err := validResponse.VisitDeleteImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateImage operation middleware
+func (sh *strictHandler) UpdateImage(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID) {
+	var request UpdateImageRequestObject
+
+	request.StoreId = storeId
+	request.ProductId = productId
+	request.ImageId = imageId
+
+	var body UpdateImageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateImage(ctx, request.(UpdateImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateImageResponseObject); ok {
+		if err := validResponse.VisitUpdateImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteImageUpload operation middleware
+func (sh *strictHandler) CompleteImageUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID) {
+	var request CompleteImageUploadRequestObject
+
+	request.StoreId = storeId
+	request.ProductId = productId
+	request.ImageId = imageId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteImageUpload(ctx, request.(CompleteImageUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteImageUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteImageUploadResponseObject); ok {
+		if err := validResponse.VisitCompleteImageUploadResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

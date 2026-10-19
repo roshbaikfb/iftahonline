@@ -37,16 +37,25 @@ type noopWorker struct {
 func (noopWorker) Work(context.Context, *river.Job[NoopArgs]) error { return nil }
 
 // NewRiverClient builds the worker's River client. Modules add their
-// workers to `workers` before the client is created. jobs.Middleware
+// workers to `workers` before the client is created, and may need queues
+// of their own (e.g. a small "media" queue that bounds memory) besides
+// the default one. jobs.Middleware
 // rejects unscoped or cross-tenant inserts and restores each job's tenant
 // before it runs (ADR-0007).
-func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, workers *river.Workers, periodic ...*river.PeriodicJob) (*river.Client[pgx.Tx], error) {
+func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, workers *river.Workers, queues map[string]river.QueueConfig, periodic ...*river.PeriodicJob) (*river.Client[pgx.Tx], error) {
 	if err := river.AddWorkerSafely(workers, &noopWorker{}); err != nil {
 		return nil, fmt.Errorf("river: add noop worker: %w", err)
 	}
+	all := map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: c.Concurrency}}
+	for name, q := range queues {
+		if name == river.QueueDefault {
+			return nil, fmt.Errorf("river: queue %q is reserved", name)
+		}
+		all[name] = q
+	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger:       log,
-		Queues:       map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: c.Concurrency}},
+		Queues:       all,
 		Workers:      workers,
 		Middleware:   jobs.Middleware(),
 		PeriodicJobs: periodic,

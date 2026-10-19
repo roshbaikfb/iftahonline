@@ -101,6 +101,7 @@ type Product struct {
 	Options     []Option
 	Variants    []Variant
 	CategoryIDs []ulid.ID
+	Images      []Image
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

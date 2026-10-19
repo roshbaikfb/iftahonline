@@ -17,9 +17,15 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+// URLSigner builds delivery URLs of an image master (media.Signer).
+type URLSigner interface {
+	URLs(objectKey string) map[string]map[string]string
+}
+
 // Handlers implements StrictServerInterface.
 type Handlers struct {
 	svc  *app.Service
+	urls URLSigner
 	auth authz.Authorizer
 }
 
@@ -28,11 +34,11 @@ var _ StrictServerInterface = (*Handlers)(nil)
 // Mount registers the catalog routes on mux. scope is the membership
 // middleware: it authenticates, returns 404 to non-members, and sets the
 // tenant and principal (ADR-0006).
-func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+func Mount(mux *http.ServeMux, svc *app.Service, urls URLSigner, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
 	badRequest := func(w http.ResponseWriter, r *http.Request, err error) {
 		resp.Write(w, r, errs.BadRequest("invalid request", err))
 	}
-	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, auth: auth}, nil, StrictHTTPServerOptions{
+	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, urls: urls, auth: auth}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: resp.Write,
 	})
@@ -46,6 +52,7 @@ func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope fu
 var (
 	errProductNotFound  = errs.NotFound("product_not_found", "product not found")
 	errCategoryNotFound = errs.NotFound("category_not_found", "category not found")
+	errImageNotFound    = errs.NotFound("image_not_found", "image not found")
 	errBodyRequired     = errs.BadRequest("request body is required", nil)
 )
 
@@ -93,7 +100,7 @@ func (h *Handlers) ListProducts(ctx context.Context, req ListProductsRequestObje
 	}
 	out := ListProducts200JSONResponse{Items: make([]Product, len(page.Items))}
 	for i, p := range page.Items {
-		out.Items[i] = toProduct(p)
+		out.Items[i] = h.toProduct(p)
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
@@ -117,7 +124,7 @@ func (h *Handlers) CreateProduct(ctx context.Context, req CreateProductRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return CreateProduct201JSONResponse(toProduct(p)), nil
+	return CreateProduct201JSONResponse(h.toProduct(p)), nil
 }
 
 // GetProduct implements StrictServerInterface.
@@ -133,7 +140,7 @@ func (h *Handlers) GetProduct(ctx context.Context, req GetProductRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return GetProduct200JSONResponse(toProduct(p)), nil
+	return GetProduct200JSONResponse(h.toProduct(p)), nil
 }
 
 // UpdateProduct implements StrictServerInterface.
@@ -142,7 +149,7 @@ func (h *Handlers) UpdateProduct(ctx context.Context, req UpdateProductRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return UpdateProduct200JSONResponse(toProduct(p)), nil
+	return UpdateProduct200JSONResponse(h.toProduct(p)), nil
 }
 
 // replace runs the steps every PUT of one resource shares: authorize,
@@ -320,11 +327,15 @@ func categoryInput(b CategoryInput) (domain.CategoryInput, error) {
 	return in, nil
 }
 
-func toProduct(p domain.Product) Product {
+func (h *Handlers) toProduct(p domain.Product) Product {
 	out := Product{
 		Id: p.ID.String(), Slug: p.Slug, Title: p.Title, Description: p.Description, Status: ProductStatus(p.Status),
 		Options: make([]ProductOption, len(p.Options)), Variants: make([]Variant, len(p.Variants)),
-		CategoryIds: make([]ULID, len(p.CategoryIDs)), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		CategoryIds: make([]ULID, len(p.CategoryIDs)), Images: make([]ProductImage, len(p.Images)),
+		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+	}
+	for i, img := range p.Images {
+		out.Images[i] = h.toImage(img)
 	}
 	for i, o := range p.Options {
 		out.Options[i] = ProductOption{Name: o.Name, Values: o.Values}
@@ -366,4 +377,106 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// CreateImageUpload implements StrictServerInterface.
+func (h *Handlers) CreateImageUpload(ctx context.Context, req CreateImageUploadRequestObject) (CreateImageUploadResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	pid, err := pathID(req.ProductId, errProductNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	in := domain.ImageInput{Alt: deref(req.Body.Alt)}
+	if req.Body.Position != nil {
+		in.Position = *req.Body.Position
+	}
+	img, up, err := h.svc.CreateImageUpload(ctx, pid, string(req.Body.ContentType), in)
+	if err != nil {
+		return nil, err
+	}
+	return CreateImageUpload201JSONResponse{Image: h.toImage(img), Upload: PresignedUpload{
+		Url: up.URL, Fields: up.Fields, ExpiresAt: up.ExpiresAt, MaxBytes: up.MaxBytes,
+	}}, nil
+}
+
+// imageIDs authorizes and parses the product and image path IDs.
+func (h *Handlers) imageIDs(ctx context.Context, product, image string) (ulid.ID, ulid.ID, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return ulid.ID{}, ulid.ID{}, err
+	}
+	pid, err := pathID(product, errImageNotFound)
+	if err != nil {
+		return ulid.ID{}, ulid.ID{}, err
+	}
+	iid, err := pathID(image, errImageNotFound)
+	return pid, iid, err
+}
+
+// CompleteImageUpload implements StrictServerInterface.
+func (h *Handlers) CompleteImageUpload(ctx context.Context, req CompleteImageUploadRequestObject) (CompleteImageUploadResponseObject, error) {
+	pid, iid, err := h.imageIDs(ctx, req.ProductId, req.ImageId)
+	if err != nil {
+		return nil, err
+	}
+	img, err := h.svc.CompleteImageUpload(ctx, pid, iid)
+	if err != nil {
+		return nil, err
+	}
+	return CompleteImageUpload202JSONResponse(h.toImage(img)), nil
+}
+
+// UpdateImage implements StrictServerInterface.
+func (h *Handlers) UpdateImage(ctx context.Context, req UpdateImageRequestObject) (UpdateImageResponseObject, error) {
+	pid, iid, err := h.imageIDs(ctx, req.ProductId, req.ImageId)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	in := domain.ImageInput{Alt: deref(req.Body.Alt)}
+	if req.Body.Position != nil {
+		in.Position = *req.Body.Position
+	}
+	img, err := h.svc.UpdateImage(ctx, pid, iid, in)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateImage200JSONResponse(h.toImage(img)), nil
+}
+
+// DeleteImage implements StrictServerInterface.
+func (h *Handlers) DeleteImage(ctx context.Context, req DeleteImageRequestObject) (DeleteImageResponseObject, error) {
+	pid, iid, err := h.imageIDs(ctx, req.ProductId, req.ImageId)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteImage(ctx, pid, iid); err != nil {
+		return nil, err
+	}
+	return DeleteImage204Response{}, nil
+}
+
+func (h *Handlers) toImage(img domain.Image) ProductImage {
+	out := ProductImage{Id: img.ID.String(), Status: ProductImageStatus(img.Status), Alt: img.Alt, Position: img.Position, CreatedAt: img.CreatedAt}
+	if img.FailureReason != "" {
+		r := ProductImageFailureReason(img.FailureReason)
+		out.FailureReason = &r
+	}
+	if img.Status != domain.ImageReady {
+		return out
+	}
+	w, ht := img.Width, img.Height
+	out.Width, out.Height = &w, &ht
+	u := h.urls.URLs(img.ObjectKey)
+	f := func(preset string) ImageFormats {
+		return ImageFormats{Avif: u[preset]["avif"], Webp: u[preset]["webp"]}
+	}
+	out.Urls = &ImageURLs{Thumb: f("thumb"), Small: f("small"), Medium: f("medium"), Large: f("large")}
+	return out
 }

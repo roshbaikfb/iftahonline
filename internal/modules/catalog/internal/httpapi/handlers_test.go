@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -104,7 +106,19 @@ type fixture struct {
 	ctxB     context.Context
 	productB domain.Product
 	catB     domain.Category
+	imageB   domain.Image
 }
+
+// presignOnly is a bucket that only presigns (handlers never read files).
+type presignOnly struct{}
+
+func (presignOnly) PresignUpload(_ context.Context, key, ct string, maxBytes int64, ttl time.Duration) (media.Upload, error) {
+	return media.Upload{URL: "https://s3.test/bucket", Fields: map[string]string{"key": key, "Content-Type": ct},
+		ExpiresAt: time.Now().Add(ttl), MaxBytes: maxBytes}, nil
+}
+func (presignOnly) Get(context.Context, string, int64) ([]byte, error) { return nil, media.ErrNoObject }
+func (presignOnly) Put(context.Context, string, string, []byte) error  { return nil }
+func (presignOnly) Delete(context.Context, string) error               { return nil }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
@@ -119,7 +133,8 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	svc := app.NewService(pool, ins, ids, audit.Nop{}, currency(money.EGP))
+	svc := app.NewService(pool, ins, ids, audit.Nop{}, currency(money.EGP),
+		app.Media{Objects: presignOnly{}, Limits: media.Limits{MaxBytes: 1 << 20, MaxPixels: 1 << 20}})
 	mk := func() (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}
 		sctx := tenant.WithStore(ctx, id)
@@ -153,8 +168,13 @@ func newFixture(t *testing.T) fixture {
 		tokOwnerB:    {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{b: authz.RoleOwner}},
 	}
 	mux := http.NewServeMux()
-	httpapi.Mount(mux, svc, testPolicy(t), testkit.FakeStoreScope(resp, members), resp)
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB}
+	signer := media.NewSigner("https://img.test", "bucket", []byte("0123456789abcdef"), []byte("salt-0123456789a"))
+	httpapi.Mount(mux, svc, signer, testPolicy(t), testkit.FakeStoreScope(resp, members), resp)
+	imageB, _, err := svc.CreateImageUpload(ctxB, productB.ID, "image/jpeg", domain.ImageInput{Alt: "B secret alt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB, imageB: imageB}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -248,6 +268,29 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("setInventory = %d %v", c, st)
 	}
 
+	code, iu := f.do(t, req(t, http.MethodPost, storePath(a, "/products/"+pid+"/images"), tokOwnerA, `{"content_type":"image/webp","alt":"أمامية"}`))
+	if code != http.StatusCreated {
+		t.Fatalf("createImageUpload = %d %v", code, iu)
+	}
+	image, upload := iu["image"].(map[string]any), iu["upload"].(map[string]any)
+	if image["status"] != "pending" || image["urls"] != nil || upload["max_bytes"] != float64(1<<20) ||
+		upload["fields"].(map[string]any)["Content-Type"] != "image/webp" {
+		t.Fatalf("upload = %v", iu)
+	}
+	iid := image["id"].(string)
+	if c, body := f.do(t, req(t, http.MethodPost, storePath(a, "/products/"+pid+"/images/"+iid+"/complete"), tokOwnerA, "")); c != http.StatusAccepted || body["status"] != "processing" {
+		t.Fatalf("completeImageUpload = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodPatch, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, `{"alt":"front","position":2}`)); c != http.StatusOK || body["alt"] != "front" || body["position"] != float64(2) {
+		t.Fatalf("updateImage = %d %v", c, body)
+	}
+	if c, got := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+pid), tokOwnerA, "")); c != http.StatusOK || len(got["images"].([]any)) != 1 {
+		t.Fatalf("product images = %d %v", c, got["images"])
+	}
+	if c, _ := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("deleteImage = %d", c)
+	}
+
 	mustCreate := func(title string) {
 		if c, b := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"`+title+`","variants":[{"price_minor":1}]}`)); c != http.StatusCreated {
 			t.Fatalf("create %s = %d %v", title, code, b)
@@ -312,6 +355,11 @@ func TestValidation(t *testing.T) {
 		{"unknown parent", req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"x","parent_id":"`+id+`"}`), 422, "validation_failed", "parent_id"},
 		{"bad category id", req(t, http.MethodPut, storePath(a, "/categories/nope"), tokOwnerA, `{"name":"x"}`), 404, "category_not_found", ""},
 		{"missing category delete", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokOwnerA, ""), 404, "category_not_found", ""},
+		{"svg upload", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/svg+xml"}`), 422, "validation_failed", "content_type"},
+		{"upload to missing product", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/png"}`), 404, "product_not_found", ""},
+		{"long alt", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokOwnerA, `{"alt":"`+strings.Repeat("a", 201)+`"}`), 422, "validation_failed", "alt"},
+		{"missing image", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokOwnerA, ""), 404, "image_not_found", ""},
+		{"bad image id", req(t, http.MethodDelete, storePath(a, "/products/"+id+"/images/nope"), tokOwnerA, ""), 404, "image_not_found", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -392,6 +440,10 @@ func TestAuthorization(t *testing.T) {
 		{"support cannot delete category", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokSupportA, ""), http.StatusForbidden},
 		{"shipping sets stock", req(t, http.MethodPut, storePath(a, "/variants/"+id+"/inventory"), tokShippingA, `{"on_hand":1}`), http.StatusNotFound},
 		{"shipping cannot create product", req(t, http.MethodPost, storePath(a, "/products"), tokShippingA, product), http.StatusForbidden},
+		{"support cannot upload images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokSupportA, `{"content_type":"image/png"}`), http.StatusForbidden},
+		{"support cannot complete images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokSupportA, ""), http.StatusForbidden},
+		{"shipping cannot edit images", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, `{"alt":"x"}`), http.StatusForbidden},
+		{"shipping cannot delete images", req(t, http.MethodDelete, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, ""), http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -410,14 +462,15 @@ func TestCrossTenant(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	a, b := f.storeA, f.storeB
-	pid, vid, cid := f.productB.ID.String(), f.productB.Variants[0].ID.String(), f.catB.ID.String()
-	leaks := []string{"B secret product", "B secret category", "B-SKU-1", pid, vid, cid}
+	pid, vid, cid, iid := f.productB.ID.String(), f.productB.Variants[0].ID.String(), f.catB.ID.String(), f.imageB.ID.String()
+	leaks := []string{"B secret product", "B secret category", "B-SKU-1", "B secret alt", pid, vid, cid, iid}
 	product := `{"title":"pwned","variants":[{"price_minor":1}]}`
 
 	unchanged := func(tb testing.TB) {
 		tb.Helper()
 		p, err := f.svc.GetProduct(f.ctxB, f.productB.ID)
-		if err != nil || p.Title != "B secret product" || len(p.Variants) != 1 || p.Variants[0].Stock.OnHand != 7 || len(p.CategoryIDs) != 1 {
+		if err != nil || p.Title != "B secret product" || len(p.Variants) != 1 || p.Variants[0].Stock.OnHand != 7 || len(p.CategoryIDs) != 1 ||
+			len(p.Images) != 1 || p.Images[0].Alt != "B secret alt" || p.Images[0].Status != domain.ImagePending {
 			tb.Errorf("store B's product changed: %+v %v", p, err)
 		}
 		cats, err := f.svc.ListCategories(f.ctxB)
@@ -445,6 +498,12 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "updateCategory", Request: req(t, http.MethodPut, storePath(b, "/categories/"+cid), tokOwnerA, `{"name":"pwned"}`), Unchanged: unchanged},
 		{OperationID: "deleteCategory", Request: req(t, http.MethodDelete, storePath(a, "/categories/"+cid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "deleteCategory", Request: req(t, http.MethodDelete, storePath(b, "/categories/"+cid), tokOwnerA, ""), Unchanged: unchanged},
+		{OperationID: "createImageUpload", Request: req(t, http.MethodPost, storePath(a, "/products/"+pid+"/images"), tokOwnerA, `{"content_type":"image/png"}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "createImageUpload", Request: req(t, http.MethodPost, storePath(b, "/products/"+pid+"/images"), tokOwnerA, `{"content_type":"image/png"}`), Unchanged: unchanged},
+		{OperationID: "completeImageUpload", Request: req(t, http.MethodPost, storePath(a, "/products/"+pid+"/images/"+iid+"/complete"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "updateImage", Request: req(t, http.MethodPatch, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, `{"alt":"pwned"}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "updateImage", Request: req(t, http.MethodPatch, storePath(b, "/products/"+pid+"/images/"+iid), tokOwnerA, `{"alt":"pwned"}`), Unchanged: unchanged},
+		{OperationID: "deleteImage", Request: req(t, http.MethodDelete, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 	}
 	for _, c := range cases {
 		testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, c)

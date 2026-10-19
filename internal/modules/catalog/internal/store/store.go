@@ -263,7 +263,8 @@ type ProductFilter struct {
 }
 
 // ListProducts returns a page of products, newest first, with their
-// variants and categories, in exactly two queries whatever the page size.
+// variants, categories and images, in exactly three queries whatever the
+// page size.
 func ListProducts(ctx context.Context, tx Tx, f ProductFilter) ([]domain.Product, error) {
 	store, err := current(ctx)
 	if err != nil {
@@ -312,8 +313,8 @@ func GetProduct(ctx context.Context, tx Tx, id ulid.ID) (domain.Product, error) 
 	return ps[0], nil
 }
 
-// loadProducts attaches variants to rows (which carry their category IDs)
-// with one query for the whole page (no N+1).
+// loadProducts attaches variants and images to rows (which carry their
+// category IDs) with one query each for the whole page (no N+1).
 func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.ListProductsRow) ([]domain.Product, error) {
 	if len(rows) == 0 {
 		return []domain.Product{}, nil
@@ -340,6 +341,9 @@ func loadProducts(ctx context.Context, tx Tx, store ulid.ID, rows []catalogdb.Li
 		p := &out[index[v.ProductID]]
 		p.Variants = append(p.Variants, dv)
 	}
+	if err = loadImages(ctx, tx, store, ids, out, index); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -353,7 +357,7 @@ func toProduct(r catalogdb.ListProductsRow) (domain.Product, error) {
 	}
 	return domain.Product{
 		ID: r.ID, Slug: r.Slug, Title: r.Title, Description: r.Description, Status: domain.ProductStatus(r.Status),
-		Options: opts, Variants: []domain.Variant{}, CategoryIDs: r.CategoryIds, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Options: opts, Variants: []domain.Variant{}, Images: []domain.Image{}, CategoryIDs: r.CategoryIds, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }
 

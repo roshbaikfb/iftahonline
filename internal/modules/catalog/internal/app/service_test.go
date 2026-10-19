@@ -64,13 +64,15 @@ func (r *recorder) has(action string) bool {
 }
 
 type fixture struct {
-	svc   *app.Service
-	pool  *pgxpool.Pool
-	qc    *testkit.QueryCounter
-	audit *recorder
-	ctxA  context.Context
-	ctxB  context.Context
-	ids   *ulid.Generator
+	objects *memStore
+	ins     *river.Client[pgx.Tx]
+	svc     *app.Service
+	pool    *pgxpool.Pool
+	qc      *testkit.QueryCounter
+	audit   *recorder
+	ctxA    context.Context
+	ctxB    context.Context
+	ids     *ulid.Generator
 }
 
 // newFixture creates two stores (A in EGP, B in SAR) and a service whose
@@ -84,8 +86,9 @@ func newFixture(t *testing.T) fixture {
 	}
 	ids := ulid.NewGenerator()
 	rec := &recorder{}
-	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids,
-		svc: app.NewService(pool, ins, ids, rec, fixedCurrency(money.EGP))}
+	objects := newMemStore()
+	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids, objects: objects, ins: ins,
+		svc: app.NewService(pool, ins, ids, rec, fixedCurrency(money.EGP), app.Media{Objects: objects, Limits: testLimits})}
 	f.ctxA = createStore(t, pool, ids, "EGP")
 	f.ctxB = createStore(t, pool, ids, "SAR")
 	return f
@@ -290,9 +293,9 @@ func TestListProductsConstantQueries(t *testing.T) {
 	if len(page.Items) != 25 || page.NextCursor == "" {
 		t.Fatalf("got %d items, cursor %q", len(page.Items), page.NextCursor)
 	}
-	// BEGIN, set tenant, products (with category IDs), variants, COMMIT.
-	if one != 5 || many != one {
-		t.Fatalf("queries: 1 product = %d, 25 products = %d; want 5 for both", one, many)
+	// BEGIN, set tenant, products (with category IDs), variants, images, COMMIT.
+	if one != 6 || many != one {
+		t.Fatalf("queries: 1 product = %d, 25 products = %d; want 6 for both", one, many)
 	}
 	for _, p := range page.Items {
 		if len(p.Variants) != 2 || len(p.CategoryIDs) != 1 {

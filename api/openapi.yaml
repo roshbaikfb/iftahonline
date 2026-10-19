@@ -714,6 +714,90 @@ paths:
           description: Deleted.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/{product_id}/images:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ProductID"
+    post:
+      tags: [catalog]
+      operationId: createImageUpload
+      summary: Start an image upload
+      description: |
+        Permission: catalog.manage. Creates a `pending` image and returns a
+        presigned upload: POST `upload.fields` plus the file (last, as
+        `file`) as multipart/form-data to `upload.url`, then call
+        `completeImageUpload`. The storage service enforces the declared
+        type and `upload.max_bytes`; the server then checks the real
+        content, strips metadata and re-encodes it (ADR-0012). At most 20
+        images per product; uploads not completed within an hour are
+        discarded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageUploadRequest" }
+      responses:
+        "201":
+          description: The pending image and its upload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageUpload" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/{product_id}/images/{image_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ProductID"
+      - $ref: "#/components/parameters/ImageID"
+    patch:
+      tags: [catalog]
+      operationId: updateImage
+      summary: Set an image's alt text and position
+      description: "Permission: catalog.manage."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageInput" }
+      responses:
+        "200":
+          description: The image.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductImage" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [catalog]
+      operationId: deleteImage
+      summary: Delete an image
+      description: "Permission: catalog.manage. Its files are removed in the background."
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ProductID"
+      - $ref: "#/components/parameters/ImageID"
+    post:
+      tags: [catalog]
+      operationId: completeImageUpload
+      summary: Process an uploaded image
+      description: |
+        Permission: catalog.manage. Call after the upload succeeded. The
+        image becomes `processing`, then `ready` (with `urls`) or `failed`
+        (with `failure_reason`). Repeating the call is harmless.
+      responses:
+        "202":
+          description: Processing started (or already done).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductImage" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/variants/{variant_id}/inventory:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -1016,6 +1100,11 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     CategoryID:
       name: category_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    ImageID:
+      name: image_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -1442,7 +1531,7 @@ components:
         on_hand: { type: integer, minimum: 0, maximum: 1000000, default: 0, description: New variants only. }
     Product:
       type: object
-      required: [id, slug, title, description, status, options, variants, category_ids, created_at, updated_at]
+      required: [id, slug, title, description, status, options, variants, category_ids, images, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/ULID" }
         slug: { type: string, example: تيشيرت-قطن }
@@ -1458,8 +1547,70 @@ components:
         category_ids:
           type: array
           items: { $ref: "#/components/schemas/ULID" }
+        images:
+          type: array
+          description: In position order; only `ready` images have `urls`.
+          items: { $ref: "#/components/schemas/ProductImage" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    ProductImage:
+      type: object
+      required: [id, status, alt, position, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        status: { type: string, enum: [pending, processing, ready, failed] }
+        alt: { type: string }
+        position: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        failure_reason:
+          type: string
+          enum: [file_too_large, unsupported_type, too_many_pixels, corrupt_image, upload_missing]
+        urls: { $ref: "#/components/schemas/ImageURLs" }
+        created_at: { type: string, format: date-time }
+    ImageURLs:
+      type: object
+      description: Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px).
+      required: [thumb, small, medium, large]
+      properties:
+        thumb: { $ref: "#/components/schemas/ImageFormats" }
+        small: { $ref: "#/components/schemas/ImageFormats" }
+        medium: { $ref: "#/components/schemas/ImageFormats" }
+        large: { $ref: "#/components/schemas/ImageFormats" }
+    ImageFormats:
+      type: object
+      required: [avif, webp]
+      properties:
+        avif: { type: string, format: uri }
+        webp: { type: string, format: uri }
+    ImageInput:
+      type: object
+      properties:
+        alt: { type: string, maxLength: 200 }
+        position: { type: integer, minimum: 0, maximum: 100 }
+    ImageUploadRequest:
+      type: object
+      required: [content_type]
+      properties:
+        content_type: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
+        alt: { type: string, maxLength: 200 }
+        position: { type: integer, minimum: 0, maximum: 100 }
+    ImageUpload:
+      type: object
+      required: [image, upload]
+      properties:
+        image: { $ref: "#/components/schemas/ProductImage" }
+        upload: { $ref: "#/components/schemas/PresignedUpload" }
+    PresignedUpload:
+      type: object
+      required: [url, fields, expires_at, max_bytes]
+      properties:
+        url: { type: string, format: uri }
+        fields:
+          type: object
+          additionalProperties: { type: string }
+        expires_at: { type: string, format: date-time }
+        max_bytes: { type: integer, format: int64 }
     Variant:
       type: object
       required: [id, option_values, price_minor, currency, position, stock]
