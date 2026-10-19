@@ -150,6 +150,9 @@ func (s *Service) UpdateImage(ctx context.Context, productID, imageID ulid.ID, i
 		if img, txErr = store.UpdateImage(ctx, tx, productID, imageID, in); txErr != nil {
 			return txErr
 		}
+		if txErr = s.reindex(ctx, tx, productID); txErr != nil {
+			return txErr
+		}
 		return s.auditImage(ctx, tx, "image.updated", img)
 	})
 	return img, notFound(err, errImageNotFound)
@@ -163,6 +166,9 @@ func (s *Service) DeleteImage(ctx context.Context, productID, imageID ulid.ID) e
 			return err
 		}
 		if err = s.deleteObjects(ctx, tx, keys); err != nil {
+			return err
+		}
+		if err = s.reindex(ctx, tx, productID); err != nil {
 			return err
 		}
 		return s.auditImage(ctx, tx, "image.deleted", domain.Image{ID: imageID})
@@ -285,10 +291,15 @@ func (w *ProcessWorker) Work(ctx context.Context, job *river.Job[ProcessImageArg
 	return postgres.InTenantTx(ctx, w.DB, func(tx pgx.Tx) error {
 		_, markErr := store.MarkReady(ctx, tx, img.ID, store.Ready{ObjectKey: key, Format: m.Format, Width: m.Width, Height: m.Height, Bytes: int64(len(m.Data))})
 		garbage := []string{img.UploadKey}
-		if errors.Is(markErr, domain.ErrNotFound) {
+		switch {
+		case errors.Is(markErr, domain.ErrNotFound):
 			garbage = append(garbage, key) // deleted while we worked
-		} else if markErr != nil {
+		case markErr != nil:
 			return markErr
+		default:
+			if err := reindexTx(ctx, w.Jobs, tx, img.ProductID); err != nil {
+				return err
+			}
 		}
 		return enqueueTx(ctx, w.Jobs, tx, func(t jobs.TenantArgs) river.JobArgs { return DeleteObjectsArgs{TenantArgs: t, Keys: garbage} }, nil)
 	})

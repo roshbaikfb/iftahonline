@@ -664,6 +664,43 @@ paths:
               schema: { $ref: "#/components/schemas/Product" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/search:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: searchProducts
+      summary: Search the store's products
+      description: |
+        Permission: catalog.read. Full-text search over title, options,
+        SKUs and description, typo tolerant, with Arabic normalization
+        (أ/إ/آ = ا, ى = ي, ة = ه, diacritics ignored). Only this store's
+        products are ever returned (ADR-0013). The index is updated within
+        seconds of a change. Without `q`, newest first.
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, active, archived] }
+        - name: category_id
+          in: query
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 1000, default: 0 }
+      responses:
+        "200":
+          description: Hits, best match first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductSearchPage" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/products/{product_id}:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -1553,6 +1590,28 @@ components:
           items: { $ref: "#/components/schemas/ProductImage" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    ProductSearchPage:
+      type: object
+      required: [items, estimated_total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProductSearchHit" }
+        estimated_total: { type: integer, format: int64 }
+    ProductSearchHit:
+      type: object
+      required: [id, title, slug, status, category_ids, price_minor, currency]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        title: { type: string }
+        slug: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        category_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ULID" }
+        price_minor: { type: integer, format: int64, description: The lowest variant price. }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        thumb: { $ref: "#/components/schemas/ImageFormats" }
     ProductImage:
       type: object
       required: [id, status, alt, position, created_at]

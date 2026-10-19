@@ -134,21 +134,63 @@ func (e ProductInputStatus) Valid() bool {
 	}
 }
 
+// Defines values for ProductSearchHitCurrency.
+const (
+	ProductSearchHitCurrencyAED ProductSearchHitCurrency = "AED"
+	ProductSearchHitCurrencyEGP ProductSearchHitCurrency = "EGP"
+	ProductSearchHitCurrencySAR ProductSearchHitCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the ProductSearchHitCurrency enum.
+func (e ProductSearchHitCurrency) Valid() bool {
+	switch e {
+	case ProductSearchHitCurrencyAED:
+		return true
+	case ProductSearchHitCurrencyEGP:
+		return true
+	case ProductSearchHitCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProductSearchHitStatus.
+const (
+	ProductSearchHitStatusActive   ProductSearchHitStatus = "active"
+	ProductSearchHitStatusArchived ProductSearchHitStatus = "archived"
+	ProductSearchHitStatusDraft    ProductSearchHitStatus = "draft"
+)
+
+// Valid indicates whether the value is a known member of the ProductSearchHitStatus enum.
+func (e ProductSearchHitStatus) Valid() bool {
+	switch e {
+	case ProductSearchHitStatusActive:
+		return true
+	case ProductSearchHitStatusArchived:
+		return true
+	case ProductSearchHitStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VariantCurrency.
 const (
-	AED VariantCurrency = "AED"
-	EGP VariantCurrency = "EGP"
-	SAR VariantCurrency = "SAR"
+	VariantCurrencyAED VariantCurrency = "AED"
+	VariantCurrencyEGP VariantCurrency = "EGP"
+	VariantCurrencySAR VariantCurrency = "SAR"
 )
 
 // Valid indicates whether the value is a known member of the VariantCurrency enum.
 func (e VariantCurrency) Valid() bool {
 	switch e {
-	case AED:
+	case VariantCurrencyAED:
 		return true
-	case EGP:
+	case VariantCurrencyEGP:
 		return true
-	case SAR:
+	case VariantCurrencySAR:
 		return true
 	default:
 		return false
@@ -170,6 +212,27 @@ func (e ListProductsParamsStatus) Valid() bool {
 	case ListProductsParamsStatusArchived:
 		return true
 	case ListProductsParamsStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchProductsParamsStatus.
+const (
+	SearchProductsParamsStatusActive   SearchProductsParamsStatus = "active"
+	SearchProductsParamsStatusArchived SearchProductsParamsStatus = "archived"
+	SearchProductsParamsStatusDraft    SearchProductsParamsStatus = "draft"
+)
+
+// Valid indicates whether the value is a known member of the SearchProductsParamsStatus enum.
+func (e SearchProductsParamsStatus) Valid() bool {
+	switch e {
+	case SearchProductsParamsStatusActive:
+		return true
+	case SearchProductsParamsStatusArchived:
+		return true
+	case SearchProductsParamsStatusDraft:
 		return true
 	default:
 		return false
@@ -363,6 +426,34 @@ type ProductPage struct {
 	NextCursor *string   `json:"next_cursor,omitempty"`
 }
 
+// ProductSearchHit defines model for ProductSearchHit.
+type ProductSearchHit struct {
+	CategoryIds []ULID                   `json:"category_ids"`
+	Currency    ProductSearchHitCurrency `json:"currency"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// PriceMinor The lowest variant price.
+	PriceMinor int64                  `json:"price_minor"`
+	Slug       string                 `json:"slug"`
+	Status     ProductSearchHitStatus `json:"status"`
+	Thumb      *ImageFormats          `json:"thumb,omitempty"`
+	Title      string                 `json:"title"`
+}
+
+// ProductSearchHitCurrency defines model for ProductSearchHit.Currency.
+type ProductSearchHitCurrency string
+
+// ProductSearchHitStatus defines model for ProductSearchHit.Status.
+type ProductSearchHitStatus string
+
+// ProductSearchPage defines model for ProductSearchPage.
+type ProductSearchPage struct {
+	EstimatedTotal int64              `json:"estimated_total"`
+	Items          []ProductSearchHit `json:"items"`
+}
+
 // Stock defines model for Stock.
 type Stock struct {
 	// Available on_hand - reserved (meaningless when untracked).
@@ -447,6 +538,18 @@ type ListProductsParams struct {
 // ListProductsParamsStatus defines parameters for ListProducts.
 type ListProductsParamsStatus string
 
+// SearchProductsParams defines parameters for SearchProducts.
+type SearchProductsParams struct {
+	Q          *string                     `form:"q,omitempty" json:"q,omitempty"`
+	Status     *SearchProductsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	CategoryId *ULID                       `form:"category_id,omitempty" json:"category_id,omitempty"`
+	Limit      *int                        `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset     *int                        `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// SearchProductsParamsStatus defines parameters for SearchProducts.
+type SearchProductsParamsStatus string
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CategoryInput
 
@@ -488,6 +591,9 @@ type ServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// SearchProducts Search the store's products
+	// (GET /v1/stores/{store_id}/products/search)
+	SearchProducts(w http.ResponseWriter, r *http.Request, storeId StoreID, params SearchProductsParams)
 	// DeleteProduct Delete a product
 	// (DELETE /v1/stores/{store_id}/products/{product_id})
 	DeleteProduct(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID)
@@ -743,6 +849,100 @@ func (siw *ServerInterfaceWrapper) CreateProduct(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProduct(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchProducts operation middleware
+func (siw *ServerInterfaceWrapper) SearchProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchProductsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category_id", r.URL.Query(), &params.CategoryId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchProducts(w, r, storeId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1181,6 +1381,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.ListProducts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.CreateProduct)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/search", wrapper.SearchProducts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.DeleteProduct)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.GetProduct)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.UpdateProduct)
@@ -1422,6 +1623,46 @@ type CreateProductdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateProductdefaultApplicationProblemPlusJSONResponse) VisitCreateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchProductsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  SearchProductsParams
+}
+
+type SearchProductsResponseObject interface {
+	VisitSearchProductsResponse(w http.ResponseWriter) error
+}
+
+type SearchProducts200JSONResponse ProductSearchPage
+
+func (response SearchProducts200JSONResponse) VisitSearchProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchProductsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchProductsdefaultApplicationProblemPlusJSONResponse) VisitSearchProductsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1768,6 +2009,9 @@ type StrictServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
+	// SearchProducts Search the store's products
+	// (GET /v1/stores/{store_id}/products/search)
+	SearchProducts(ctx context.Context, request SearchProductsRequestObject) (SearchProductsResponseObject, error)
 	// DeleteProduct Delete a product
 	// (DELETE /v1/stores/{store_id}/products/{product_id})
 	DeleteProduct(ctx context.Context, request DeleteProductRequestObject) (DeleteProductResponseObject, error)
@@ -2006,6 +2250,33 @@ func (sh *strictHandler) CreateProduct(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateProductResponseObject); ok {
 		if err := validResponse.VisitCreateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchProducts operation middleware
+func (sh *strictHandler) SearchProducts(w http.ResponseWriter, r *http.Request, storeId StoreID, params SearchProductsParams) {
+	var request SearchProductsRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchProducts(ctx, request.(SearchProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchProductsResponseObject); ok {
+		if err := validResponse.VisitSearchProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

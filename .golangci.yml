@@ -117,6 +117,13 @@ linters:
               desc: platform must not depend on business modules
             - pkg: github.com/roshbaikfb/iftahonline/internal/server
               desc: platform must not depend on process wiring
+        search:
+          files:
+            - $all
+            - "!**/internal/modules/catalog/internal/search/**"
+          deny:
+            - pkg: github.com/meilisearch/meilisearch-go
+              desc: only catalog/internal/search talks to Meilisearch; it adds the mandatory store filter (ADR-0013)
         global:
           files:
             - $all

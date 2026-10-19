@@ -35,12 +35,24 @@ type Service struct {
 	audit    audit.Recorder
 	currency CurrencySource
 	media    Media
+	search   SearchIndex
 	now      func() time.Time
 }
 
+// Deps are the service's dependencies.
+type Deps struct {
+	DB       postgres.Beginner
+	Jobs     jobs.Inserter
+	IDs      *ulid.Generator
+	Audit    audit.Recorder
+	Currency CurrencySource
+	Media    Media
+	Search   SearchIndex
+}
+
 // NewService builds the service.
-func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, rec audit.Recorder, cur CurrencySource, m Media) *Service {
-	return &Service{db: db, jobs: ins, ids: ids, audit: rec, currency: cur, media: m, now: time.Now}
+func NewService(d Deps) *Service {
+	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, now: time.Now}
 }
 
 // SetClock replaces the clock (tests).
@@ -97,6 +109,9 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur money
 		return domain.Product{}, err
 	}
 	if err := s.auditProduct(ctx, tx, "product.created", id, in.Title); err != nil {
+		return domain.Product{}, err
+	}
+	if err := s.reindex(ctx, tx, id); err != nil {
 		return domain.Product{}, err
 	}
 	return store.GetProduct(ctx, tx, id)
@@ -184,6 +199,9 @@ func (s *Service) replaceTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur mone
 	if err = s.auditProduct(ctx, tx, "product.updated", id, in.Title); err != nil {
 		return domain.Product{}, err
 	}
+	if err = s.reindex(ctx, tx, id); err != nil {
+		return domain.Product{}, err
+	}
 	return store.GetProduct(ctx, tx, id)
 }
 
@@ -211,6 +229,9 @@ func (s *Service) DeleteProduct(ctx context.Context, id ulid.ID) error {
 			return err
 		}
 		if err = s.deleteObjects(ctx, tx, keys); err != nil {
+			return err
+		}
+		if err = s.reindex(ctx, tx, id); err != nil {
 			return err
 		}
 		return s.auditProduct(ctx, tx, "product.deleted", id, "")

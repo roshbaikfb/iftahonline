@@ -193,7 +193,7 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	}
 	stores := ten.Service()
 	return catalog.New(catalog.Deps{
-		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media,
+		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media, Search: c.cfg.Search,
 		Currency: catalog.CurrencyFunc(func(ctx context.Context) (money.Currency, error) {
 			st, err := stores.GetStore(ctx)
 			return st.Currency, err
@@ -379,7 +379,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}); err != nil {
 		return err
 	}
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), identity.PeriodicJobs()...)
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), append(identity.PeriodicJobs(), cat.PeriodicJobs()...)...)
 	if err != nil {
 		return err
 	}
