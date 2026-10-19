@@ -25,7 +25,7 @@ COVER_MIN ?= 80
 # Coverage is enforced for business-module domain/app packages (CLAUDE.md)
 # and for the platform packages that hold core rules.
 COVER_MATCH := -match '/internal/modules/[^/]+/internal/(domain|app)$$' \
-	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox|audit|totp|authtoken|password|email)$$'
+	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox|audit|totp|authtoken|password|email|clientinfo)$$'
 
 API_ADDR        ?= 127.0.0.1:18080
 STOREFRONT_ADDR ?= 127.0.0.1:18081

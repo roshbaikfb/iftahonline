@@ -16,6 +16,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
 	mailaddr "github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -279,7 +280,7 @@ func (s *Service) fail(ctx context.Context, key string) error {
 func (s *Service) insertSession(ctx context.Context, tx pgx.Tx, userID ulid.ID, token authtoken.Token) (domain.Session, error) {
 	m := metaFrom(ctx)
 	now := s.now()
-	ua, ipPrefix := domain.TruncateUserAgent(m.UserAgent), domain.IPPrefix(m.IP)
+	ua, ipPrefix := clientinfo.TruncateUserAgent(m.UserAgent), clientinfo.IPPrefix(m.IP)
 	sess, err := store.InsertSession(ctx, tx, store.NewSession{
 		ID: s.ids.New(), UserID: userID, Token: token, UserAgent: ua, IPPrefix: ipPrefix,
 		ExpiresAt: domain.ExpiresAt(now, now),

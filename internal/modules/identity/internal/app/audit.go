@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
-	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -52,7 +52,7 @@ func (s *Recorder) RecordTx(ctx context.Context, tx pgx.Tx, e audit.Entry) error
 	}
 	return store.InsertAudit(ctx, tx, store.AuditEntry{
 		ID: s.ids.New(), ActorUserID: actor, Action: e.Action, TargetType: e.TargetType, TargetID: e.TargetID,
-		IPPrefix: domain.IPPrefix(metaFrom(ctx).IP), Metadata: meta,
+		IPPrefix: clientinfo.IPPrefix(metaFrom(ctx).IP), Metadata: meta,
 	})
 }
 

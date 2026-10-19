@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"net/netip"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -40,25 +39,6 @@ func ExpiresAt(created, now time.Time) time.Time {
 	return idle
 }
 
-// IPPrefix reduces an address to its /24 (IPv4) or /48 (IPv6) network:
-// enough to recognise "same network" in a session list or audit entry,
-// without storing a personal identifier.
-func IPPrefix(a netip.Addr) string {
-	if !a.IsValid() {
-		return ""
-	}
-	a = a.Unmap()
-	bits := 48
-	if a.Is4() {
-		bits = 24
-	}
-	p, err := a.Prefix(bits)
-	if err != nil {
-		return ""
-	}
-	return p.String()
-}
-
 // DeviceHash is what user_devices stores for a device identifier.
 func DeviceHash(deviceID string) []byte {
 	h := sha256.Sum256([]byte("device\x00" + deviceID))
@@ -85,19 +65,4 @@ func ValidDeviceID(s string) bool {
 		}
 	}
 	return true
-}
-
-// TruncateUserAgent bounds what we keep of a User-Agent header.
-func TruncateUserAgent(ua string) string {
-	const maxLen = 200
-	if len(ua) <= maxLen {
-		return ua
-	}
-	// Cut on a rune boundary.
-	for i := maxLen; i > 0; i-- {
-		if ua[i]&0xC0 != 0x80 {
-			return ua[:i]
-		}
-	}
-	return ""
 }
