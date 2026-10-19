@@ -6,6 +6,7 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -60,6 +61,28 @@ type Config struct {
 	// AdminDB is the super-admin console's pool (app_admin). Empty URL:
 	// the console is disabled.
 	AdminDB DB
+	Media   Media
+}
+
+// Media configures object storage and image delivery (api and worker).
+type Media struct {
+	S3Endpoint string // e.g. https://s3.eu-central-1.amazonaws.com or http://localhost:18333
+	// S3PublicEndpoint is where browsers send uploads (presigned POSTs);
+	// it defaults to S3Endpoint.
+	S3PublicEndpoint string
+	S3Region         string
+	S3Bucket         string
+	S3AccessKey      string
+	S3SecretKey      string
+	// ImgproxyURL is the public base of the imgproxy deployment, e.g.
+	// https://img.iftahonline.com. Delivery URLs are signed with
+	// ImgproxyKey and ImgproxySalt (hex, from the secret manager).
+	ImgproxyURL    string
+	ImgproxyKey    []byte
+	ImgproxySalt   []byte
+	MaxUploadBytes int64 // largest accepted original
+	MaxImagePixels int64 // width × height bound, checked before decoding
+	ImageWorkers   int   // concurrent image jobs per worker (each holds a decoded image)
 }
 
 // Secrets are keys from the secret manager (never from files or flags).
@@ -245,6 +268,10 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		}
 	}
 
+	if role == RoleAPI || role == RoleWorker {
+		c.Media = r.media()
+	}
+
 	c.OTel = OTel{
 		Endpoint:    r.url("OTEL_EXPORTER_OTLP_ENDPOINT", false, "http", "https"),
 		SampleRatio: r.ratio("OTEL_TRACES_SAMPLER_ARG", 0.1),
@@ -271,7 +298,48 @@ func (c Config) LogValue() slog.Value {
 		slog.String("base_domain", c.Tenancy.BaseDomain),
 		slog.Bool("smtp", c.Mail.SMTPAddr != ""),
 		slog.Bool("admin_console", c.AdminDB.URL != ""),
+		slog.String("s3_endpoint", redactURL(c.Media.S3Endpoint)),
+		slog.String("s3_bucket", c.Media.S3Bucket),
+		slog.String("imgproxy", redactURL(c.Media.ImgproxyURL)),
 	)
+}
+
+func (r *reader) media() Media {
+	m := Media{
+		S3Endpoint:     r.url("S3_ENDPOINT", true, "http", "https"),
+		S3Region:       r.str("S3_REGION", "us-east-1"),
+		S3Bucket:       r.str("S3_BUCKET", ""),
+		S3AccessKey:    r.secret("S3_ACCESS_KEY"),
+		S3SecretKey:    r.secret("S3_SECRET_KEY"),
+		ImgproxyURL:    r.url("IMGPROXY_URL", true, "http", "https"),
+		ImgproxyKey:    r.hexSecret("IMGPROXY_KEY"),
+		ImgproxySalt:   r.hexSecret("IMGPROXY_SALT"),
+		MaxUploadBytes: r.int64("MEDIA_MAX_UPLOAD_BYTES", 15<<20, 1<<20, 100<<20),
+		MaxImagePixels: r.int64("MEDIA_MAX_IMAGE_PIXELS", 25_000_000, 1_000_000, 100_000_000),
+		ImageWorkers:   int(r.int64("MEDIA_IMAGE_WORKERS", 2, 1, 64)),
+	}
+	m.S3PublicEndpoint = r.url("S3_PUBLIC_ENDPOINT", false, "http", "https")
+	if m.S3PublicEndpoint == "" {
+		m.S3PublicEndpoint = m.S3Endpoint
+	}
+	if m.S3Bucket == "" {
+		r.errorf("S3_BUCKET is required")
+	}
+	return m
+}
+
+// hexSecret reads a required hex-encoded secret of at least 16 bytes.
+func (r *reader) hexSecret(key string) []byte {
+	v := r.secret(key)
+	if v == "" {
+		return nil
+	}
+	b, err := hex.DecodeString(v)
+	if err != nil || len(b) < 16 {
+		r.errorf("%s: must be hex of at least 16 random bytes", key)
+		return nil
+	}
+	return b
 }
 
 func redactURL(s string) string {

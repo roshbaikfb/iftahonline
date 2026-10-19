@@ -25,6 +25,13 @@ func base() map[string]string {
 		"REDIS_URL":            "redis://localhost:6379/0",
 		"SECRETBOX_KEYS":       "1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
 		"OTP_PEPPER":           "ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
+		"S3_ENDPOINT":          "http://localhost:18333",
+		"S3_BUCKET":            "iftah-media",
+		"S3_ACCESS_KEY":        "local-dev-access",
+		"S3_SECRET_KEY":        "local-dev-secret-not-for-prod",
+		"IMGPROXY_URL":         "http://localhost:18088",
+		"IMGPROXY_KEY":         "6465762d6f6e6c792d696d6770726f78792d6b65792d6e6f742d736563726574",
+		"IMGPROXY_SALT":        "6465762d6f6e6c792d696d6770726f78792d73616c742d7075626c6963",
 	}
 }
 
@@ -249,5 +256,47 @@ func TestLogValueRedacts(t *testing.T) {
 	slog.New(slog.NewJSONHandler(&buf, nil)).Info("config", "cfg", c)
 	if strings.Contains(buf.String(), "s3cret") || !strings.Contains(buf.String(), "app_user:xxxxx@") {
 		t.Fatalf("not redacted: %s", buf.String())
+	}
+}
+
+func TestMedia(t *testing.T) {
+	t.Parallel()
+	for _, role := range []config.Role{config.RoleAPI, config.RoleWorker} {
+		c, err := config.Load(role, env(base()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := c.Media
+		if m.S3PublicEndpoint != m.S3Endpoint || m.S3Region != "us-east-1" || m.S3Bucket != "iftah-media" ||
+			len(m.ImgproxyKey) != 32 || len(m.ImgproxySalt) < 16 || m.MaxUploadBytes != 15<<20 || m.ImageWorkers != 2 {
+			t.Fatalf("%s: media = %+v", role, m)
+		}
+	}
+	c, err := config.Load(config.RoleAPI, env(with("S3_PUBLIC_ENDPOINT", "https://up.example.com")))
+	if err != nil || c.Media.S3PublicEndpoint != "https://up.example.com" {
+		t.Fatalf("public endpoint: %v %+v", err, c.Media)
+	}
+	if c, err := config.Load(config.RoleStorefront, env(with("S3_ENDPOINT", "<unset>"))); err != nil || c.Media.S3Endpoint != "" {
+		t.Fatalf("storefront needs no media config: %v", err)
+	}
+	tests := map[string][]string{
+		"missing endpoint": {"S3_ENDPOINT", "<unset>"},
+		"bad endpoint":     {"S3_ENDPOINT", "ftp://x"},
+		"missing bucket":   {"S3_BUCKET", "<unset>"},
+		"missing secret":   {"S3_SECRET_KEY", "<unset>"},
+		"missing imgproxy": {"IMGPROXY_URL", "<unset>"},
+		"key not hex":      {"IMGPROXY_KEY", "not-hex"},
+		"short salt":       {"IMGPROXY_SALT", "abcd"},
+		"huge uploads":     {"MEDIA_MAX_UPLOAD_BYTES", "999999999999"},
+	}
+	for name, kv := range tests {
+		_, err := config.Load(config.RoleWorker, env(with(kv...)))
+		if err == nil {
+			t.Errorf("%s: want error", name)
+			continue
+		}
+		if strings.Contains(err.Error(), "local-dev-secret") || strings.Contains(err.Error(), "6465762d") {
+			t.Errorf("%s: error leaks a secret: %v", name, err)
+		}
 	}
 }

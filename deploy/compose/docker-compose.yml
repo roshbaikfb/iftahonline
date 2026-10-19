@@ -69,6 +69,32 @@ services:
     command: ["echo 's3.bucket.create -name iftah-media' | weed shell -master=seaweedfs:9333"]
     restart: "no"
 
+  # Image delivery (ADR-0012): signed URLs only; reads masters from the
+  # bucket and converts to WebP/AVIF. Key and salt match .env.example
+  # (development-only values).
+  imgproxy:
+    image: darthsim/imgproxy:v3.28.0
+    depends_on:
+      seaweedfs: { condition: service_healthy }
+    environment:
+      IMGPROXY_KEY: 6465762d6f6e6c792d696d6770726f78792d6b65792d6e6f742d736563726574
+      IMGPROXY_SALT: 6465762d6f6e6c792d696d6770726f78792d73616c742d7075626c6963
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: http://seaweedfs:8333
+      IMGPROXY_S3_ENDPOINT_USING_PATH_STYLE: "true"
+      IMGPROXY_S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local-dev-access
+      AWS_SECRET_ACCESS_KEY: local-dev-secret-not-for-prod
+      IMGPROXY_ALLOWED_SOURCES: s3://iftah-media/
+      IMGPROXY_STRIP_METADATA: "true"
+      IMGPROXY_MAX_SRC_RESOLUTION: "25"
+    ports: ["${IMGPROXY_PORT:-18088}:8080"]
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
   mailpit:
     image: axllent/mailpit:v1.31.6
     ports:

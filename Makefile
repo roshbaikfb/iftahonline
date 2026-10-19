@@ -167,7 +167,7 @@ image-scan: ## Trivy scan of $(IMAGE): fail on HIGH/CRITICAL
 
 .PHONY: dev
 dev: build ## Start dependencies, migrate, run api + storefront (Ctrl-C stops)
-	$(COMPOSE) up -d --wait postgres redis meilisearch seaweedfs mailpit
+	$(COMPOSE) up -d --wait postgres redis meilisearch seaweedfs imgproxy mailpit
 	$(COMPOSE) up seaweedfs-init
 	set -a; source .env.example; [ -f .env ] && source .env; set +a; \
 	$(BIN)/platform migrate up; \

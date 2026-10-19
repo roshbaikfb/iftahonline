@@ -65,6 +65,24 @@ The `api` and `worker` roles need two secrets:
 Generate each with `openssl rand -base64 32`, and keep both in the secret
 manager.
 
+## Media (S3 and imgproxy)
+
+The `api` and `worker` roles also need object storage and imgproxy
+([ADR-0012](../docs/adr/0012-image-pipeline.md)):
+
+- **`S3_ENDPOINT`**, **`S3_REGION`**, **`S3_BUCKET`**, **`S3_ACCESS_KEY`**,
+  **`S3_SECRET_KEY`**: any S3-compatible store. Browsers upload straight
+  to it, so set `S3_PUBLIC_ENDPOINT` when they reach it at another
+  address, and allow CORS `POST` from the dashboard origin on the bucket.
+- **imgproxy**: run it next to the storefront, behind the CDN. Give it
+  the same `IMGPROXY_KEY` and `IMGPROXY_SALT` (hex, `openssl rand -hex
+  32` each) as the api, read access to the bucket, and
+  `IMGPROXY_ALLOWED_SOURCES=s3://<bucket>/`. Set `IMGPROXY_URL` to its
+  public address.
+- **`MEDIA_IMAGE_WORKERS`** (worker): concurrent image jobs. Each holds
+  up to about 220 MB at the default 25 MP limit; size `GOMEMLIMIT`
+  accordingly.
+
 ## Super-admin console
 
 1. Set `ADMIN_DATABASE_URL` (the `app_admin` role) for the api role, and
