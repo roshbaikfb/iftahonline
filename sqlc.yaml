@@ -126,6 +126,47 @@ sql:
           - db_type: citext
             go_type: string
 
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/catalog
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: catalogdb
+        out: internal/modules/catalog/internal/store/catalogdb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: uuid
+            nullable: true
+            go_type:
+              import: github.com/roshbaikfb/iftahonline/internal/platform/ulid
+              type: ID
+              pointer: true
+          - db_type: citext
+            go_type: string
+          - db_type: citext
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+
 # sqlc expands SELECT * into explicit columns at generate time, so a
 # "no select star" rule could never fire; it is intentionally absent.
 rules:
