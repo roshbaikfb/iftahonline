@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	mailaddr "github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -83,7 +84,7 @@ func (s *Service) Invite(ctx context.Context, rawEmail, rawRole string) (store.I
 	if !ok {
 		return store.Invitation{}, errNoSession
 	}
-	email, ok := domain.NormalizeEmail(rawEmail)
+	email, ok := mailaddr.Normalize(rawEmail)
 	if !ok {
 		return store.Invitation{}, errs.Validation(errs.FieldError{Field: "email", Code: "invalid", Message: "enter a valid email address"})
 	}
