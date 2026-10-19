@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store/identitydb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -47,7 +47,7 @@ func noRows(err error) error {
 func InsertUser(ctx context.Context, tx Tx, id ulid.ID, email, name, hash string) (domain.User, error) {
 	row, err := identitydb.New(tx).InsertUser(ctx, identitydb.InsertUserParams{ID: id, Email: email, Name: name, PasswordHash: hash})
 	if err != nil {
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {
+		if postgres.IsUniqueViolation(err, "users_email_key") {
 			return domain.User{}, ErrEmailTaken
 		}
 		return domain.User{}, fmt.Errorf("identity store: insert user: %w", err)

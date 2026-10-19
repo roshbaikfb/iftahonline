@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store/identitydb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -21,11 +20,6 @@ var (
 	ErrInvitationExists = errors.New("identity store: open invitation exists")
 	ErrAlreadyMember    = errors.New("identity store: already a member")
 )
-
-func uniqueViolation(err error, constraint string) bool {
-	pgErr, ok := errors.AsType[*pgconn.PgError](err)
-	return ok && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
-}
 
 // UserByPhone finds the account with this verified phone.
 func UserByPhone(ctx context.Context, db Tx, e164 string) (domain.User, error) {
@@ -39,7 +33,7 @@ func UserByPhone(ctx context.Context, db Tx, e164 string) (domain.User, error) {
 // SetVerifiedPhone stores a phone the user proved they control.
 func SetVerifiedPhone(ctx context.Context, db Tx, userID ulid.ID, e164 string) error {
 	err := identitydb.New(db).SetVerifiedPhone(ctx, identitydb.SetVerifiedPhoneParams{ID: userID, Phone: &e164})
-	if uniqueViolation(err, "users_phone_key") {
+	if postgres.IsUniqueViolation(err, "users_phone_key") {
 		return ErrPhoneTaken
 	}
 	if err != nil {
@@ -178,7 +172,7 @@ func InsertInvitation(ctx context.Context, tx Tx, in NewInvitation) (Invitation,
 		ID: in.ID, StoreID: store, Email: in.Email, Role: string(in.Role), TokenHash: in.TokenHash,
 		InvitedBy: in.InvitedBy, ExpiresAt: in.ExpiresAt,
 	})
-	if uniqueViolation(err, "store_invitations_one_open") {
+	if postgres.IsUniqueViolation(err, "store_invitations_one_open") {
 		return Invitation{}, ErrInvitationExists
 	}
 	if err != nil {
@@ -298,7 +292,7 @@ func MemberRole(ctx context.Context, tx Tx, userID ulid.ID) (authz.Role, error) 
 // AddMember inserts a membership, reporting ErrAlreadyMember on conflict.
 func AddMember(ctx context.Context, tx Tx, userID ulid.ID, role authz.Role) error {
 	err := InsertMembership(ctx, tx, userID, role)
-	if err != nil && uniqueViolation(errors.Unwrap(err), "store_memberships_pkey") {
+	if err != nil && postgres.IsUniqueViolation(errors.Unwrap(err), "store_memberships_pkey") {
 		return ErrAlreadyMember
 	}
 	return err

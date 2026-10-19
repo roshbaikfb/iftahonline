@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/store/admindb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -38,7 +38,7 @@ func toAdmin(r admindb.PlatformAdmin) domain.Admin {
 func InsertAdmin(ctx context.Context, db DB, id ulid.ID, email, name, hash string, sealedTOTP []byte) (domain.Admin, error) {
 	row, err := admindb.New(db).InsertAdmin(ctx, admindb.InsertAdminParams{ID: id, Email: email, Name: name, PasswordHash: hash, TotpSecret: sealedTOTP})
 	if err != nil {
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" {
+		if postgres.IsUniqueViolation(err, "") {
 			return domain.Admin{}, ErrEmailTaken
 		}
 		return domain.Admin{}, fmt.Errorf("admin store: insert: %w", err)
