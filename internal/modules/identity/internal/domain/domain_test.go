@@ -168,44 +168,6 @@ func TestValidatePassword(t *testing.T) {
 	}
 }
 
-func TestToken(t *testing.T) {
-	t.Parallel()
-	a, err := domain.NewToken()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := domain.NewToken()
-	if a == b || len(a) != 43 {
-		t.Fatalf("tokens %q %q", a, b)
-	}
-	if p, ok := domain.ParseToken(string(a)); !ok || p != a {
-		t.Fatal("round trip")
-	}
-	for _, bad := range []string{"", "short", string(a) + "x", strings.Repeat("!", 43), strings.Repeat("A", 42) + "="} {
-		if _, ok := domain.ParseToken(bad); ok {
-			t.Fatalf("%q must not parse", bad)
-		}
-	}
-	if len(a.Hash()) != 32 || string(a.Hash()) == string(b.Hash()) {
-		t.Fatal("hash")
-	}
-	if a.String() == string(a) || strings.Contains(a.String(), string(a)) {
-		t.Fatal("String must not reveal the token")
-	}
-}
-
-func FuzzParseToken(f *testing.F) {
-	tok, _ := domain.NewToken()
-	f.Add(string(tok))
-	f.Add("")
-	f.Add(strings.Repeat("A", 43))
-	f.Fuzz(func(t *testing.T, s string) {
-		if p, ok := domain.ParseToken(s); ok && (string(p) != s || len(p.Hash()) != 32) {
-			t.Fatalf("bad parse of %q", s)
-		}
-	})
-}
-
 func TestExpiresAt(t *testing.T) {
 	t.Parallel()
 	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -244,5 +206,27 @@ func TestTruncateUserAgent(t *testing.T) {
 	got := domain.TruncateUserAgent(long)
 	if len(got) > 200 || !utf8.ValidString(got) || len(got) < 198 {
 		t.Fatalf("len=%d valid=%v", len(got), utf8.ValidString(got))
+	}
+}
+
+func TestDeviceIDs(t *testing.T) {
+	t.Parallel()
+	a, err := domain.NewDeviceID()
+	if err != nil || !domain.ValidDeviceID(a) {
+		t.Fatalf("new id %q, %v", a, err)
+	}
+	b, _ := domain.NewDeviceID()
+	if a == b || string(domain.DeviceHash(a)) == string(domain.DeviceHash(b)) || len(domain.DeviceHash(a)) != 32 {
+		t.Fatal("ids and hashes must differ")
+	}
+	for _, bad := range []string{"", "short", strings.Repeat("a", 65), "has spaces in it ok", "üüüüüüüüüüüüüüüü", "semi;colon-0123456"} {
+		if domain.ValidDeviceID(bad) {
+			t.Fatalf("%q must be invalid", bad)
+		}
+	}
+	for _, ok := range []string{"A1b2-C3d4_E5f6G7h8", "550e8400-e29b-41d4-a716-446655440000"} {
+		if !domain.ValidDeviceID(ok) {
+			t.Fatalf("%q must be valid", ok)
+		}
 	}
 }

@@ -13,12 +13,12 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
-	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/totp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -220,7 +220,7 @@ func totpNow(t *testing.T, secret string, at time.Time) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return domain.HOTP(raw, domain.TOTPStep(at), 6)
+	return totp.HOTP(raw, totp.Step(at), 6)
 }
 
 func TestTOTPLifecycle(t *testing.T) {
@@ -264,7 +264,7 @@ func TestTOTPLifecycle(t *testing.T) {
 	if _, err = f.svc.VerifyMFA(t.Context(), res.MFA.ID, totpNow(t, setup.Secret, now)); !errs.Is(err, errs.KindUnauthenticated) {
 		t.Fatalf("replayed code: %v", err)
 	}
-	next := totpNow(t, setup.Secret, now.Add(domain.TOTPPeriod))
+	next := totpNow(t, setup.Secret, now.Add(totp.Period))
 	done, err := f.svc.VerifyMFA(f.device(t), res.MFA.ID, next)
 	if err != nil || done.Token == "" {
 		t.Fatalf("mfa = %+v, %v", done, err)

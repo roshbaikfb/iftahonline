@@ -11,13 +11,14 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/password"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/password"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -119,7 +120,7 @@ type AuthResult struct {
 	User    domain.User
 	StoreID tenant.StoreID // set by sign-up
 	Session domain.Session
-	Token   domain.Token
+	Token   authtoken.Token
 	MFA     *Challenge
 }
 
@@ -138,7 +139,7 @@ func (s *Service) Signup(ctx context.Context, in SignupInput) (AuthResult, error
 	if err != nil {
 		return AuthResult{}, err
 	}
-	token, err := domain.NewToken()
+	token, err := authtoken.New()
 	if err != nil {
 		return AuthResult{}, err
 	}
@@ -274,7 +275,7 @@ func (s *Service) fail(ctx context.Context, key string) error {
 // insertSession opens a session in tx and records the device; a device
 // the user has not used before (when they have others) enqueues a
 // new-device alert in the same transaction.
-func (s *Service) insertSession(ctx context.Context, tx pgx.Tx, userID ulid.ID, token domain.Token) (domain.Session, error) {
+func (s *Service) insertSession(ctx context.Context, tx pgx.Tx, userID ulid.ID, token authtoken.Token) (domain.Session, error) {
 	m := metaFrom(ctx)
 	now := s.now()
 	ua, ipPrefix := domain.TruncateUserAgent(m.UserAgent), domain.IPPrefix(m.IP)
@@ -330,7 +331,7 @@ func ipKey(ctx context.Context) string {
 
 // Authenticate resolves a token on routes outside a store.
 func (s *Service) Authenticate(ctx context.Context, raw string) (Identity, error) {
-	token, ok := domain.ParseToken(raw)
+	token, ok := authtoken.Parse(raw)
 	if !ok {
 		return Identity{}, errNoSession
 	}
@@ -349,7 +350,7 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (Identity, error
 // store in ctx with one query. No session: 401. Not a member: 404, the
 // same as a store that does not exist (ADR-0006).
 func (s *Service) AuthenticateInStore(ctx context.Context, raw string) (authz.Principal, error) {
-	token, ok := domain.ParseToken(raw)
+	token, ok := authtoken.Parse(raw)
 	if !ok {
 		return authz.Principal{}, errNoSession
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store/identitydb"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -96,7 +97,7 @@ func toUser(r identitydb.User) domain.User {
 type NewSession struct {
 	ID        ulid.ID
 	UserID    ulid.ID
-	Token     domain.Token
+	Token     authtoken.Token
 	UserAgent string
 	IPPrefix  string
 	ExpiresAt time.Time
@@ -124,7 +125,7 @@ type ActiveSession struct {
 }
 
 // SessionByToken loads a live session.
-func SessionByToken(ctx context.Context, db Tx, t domain.Token) (ActiveSession, error) {
+func SessionByToken(ctx context.Context, db Tx, t authtoken.Token) (ActiveSession, error) {
 	r, err := identitydb.New(db).GetActiveSession(ctx, t.Hash())
 	if err != nil {
 		return ActiveSession{}, noRows(err)
@@ -135,7 +136,7 @@ func SessionByToken(ctx context.Context, db Tx, t domain.Token) (ActiveSession, 
 
 // SessionByTokenInStore loads a live session and the user's role in the
 // current store, in one query.
-func SessionByTokenInStore(ctx context.Context, tx Tx, t domain.Token) (ActiveSession, error) {
+func SessionByTokenInStore(ctx context.Context, tx Tx, t authtoken.Token) (ActiveSession, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return ActiveSession{}, err

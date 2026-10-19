@@ -15,6 +15,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -272,7 +273,7 @@ func (s *Service) joinTx(ctx context.Context, tx pgx.Tx, inv store.Invitation, u
 	}
 	res := AcceptResult{StoreID: storeID, Role: inv.Role, User: user}
 	if newAccount {
-		token, err := domain.NewToken()
+		token, err := authtoken.New()
 		if err != nil {
 			return AcceptResult{}, err
 		}
