@@ -35,10 +35,12 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
@@ -184,6 +186,21 @@ func newIdentity(c clients, ten *tenancy.Module) (*identity.Module, error) {
 	})
 }
 
+func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	stores := ten.Service()
+	return catalog.New(catalog.Deps{
+		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids),
+		Currency: catalog.CurrencyFunc(func(ctx context.Context) (money.Currency, error) {
+			st, err := stores.GetStore(ctx)
+			return st.Currency, err
+		}),
+	})
+}
+
 // mountAPI wires the merchant API: identity's routes, and every store
 // module's routes behind identity's membership middleware and policy.
 func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
@@ -192,6 +209,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		return nil, err
 	}
 	id, err := newIdentity(c, ten)
+	if err != nil {
+		return nil, err
+	}
+	cat, err := newCatalog(c, ten)
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +231,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	return func(rt server.Routes) {
 		id.Mount(rt.Mux, rt.Problems)
 		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		cat.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
 			if mountErr != nil {
@@ -343,6 +365,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	if err = ten.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	cat, err := newCatalog(c, ten)
+	if err != nil {
+		return err
+	}
+	if err = cat.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{

@@ -1,0 +1,469 @@
+package httpapi_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
+	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+var (
+	infra       testinfra.Infra
+	crossTenant testkit.Registry
+)
+
+// TestMain fails the package if any catalog operation under
+// /v1/stores/{store_id} lacks a cross-tenant test (ADR-0006).
+func TestMain(m *testing.M) {
+	code := testinfra.Run(m, &infra)
+	if code == 0 && !testing.Short() && runAll() {
+		_, file, _, _ := runtime.Caller(0)
+		spec, err := openapi3.NewLoader().LoadFromFile(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", "api", "openapi.yaml"))
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "load spec:", err)
+			os.Exit(1)
+		}
+		if missing := crossTenant.Missing(testkit.StoreScopedOperations(spec, "catalog")); len(missing) > 0 {
+			_, _ = fmt.Fprintln(os.Stderr, "operations without a cross-tenant test:", missing)
+			os.Exit(1)
+		}
+	}
+	os.Exit(code)
+}
+
+func runAll() bool {
+	for _, a := range os.Args[1:] {
+		if strings.HasPrefix(a, "-test.run=") || strings.HasPrefix(a, "-test.fuzz=") {
+			return false
+		}
+	}
+	return true
+}
+
+// testPolicy mirrors identity's matrix for the catalog permissions; it
+// exercises the handlers' permission checks, not the matrix itself.
+func testPolicy(t *testing.T) authz.Policy {
+	t.Helper()
+	p, err := authz.NewPolicy(map[authz.Role][]authz.Permission{
+		authz.RoleOwner:    authz.Permissions(),
+		authz.RoleSupport:  {authz.PermCatalogRead},
+		authz.RoleShipping: {authz.PermCatalogRead, authz.PermInventoryManage},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+type currency money.Currency
+
+func (c currency) StoreCurrency(context.Context) (money.Currency, error) {
+	return money.Currency(c), nil
+}
+
+const (
+	tokOwnerA    = "owner-a"
+	tokSupportA  = "support-a"
+	tokShippingA = "shipping-a"
+	tokOwnerB    = "owner-b"
+)
+
+type fixture struct {
+	h        http.Handler
+	svc      *app.Service
+	storeA   tenant.StoreID
+	storeB   tenant.StoreID
+	ctxB     context.Context
+	productB domain.Product
+	catB     domain.Category
+}
+
+func newFixture(t *testing.T) fixture {
+	t.Helper()
+	ctx := t.Context()
+	pool, err := pgxpool.New(ctx, infra.AppURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	ins, err := river.NewClient(riverpgxv5.New(pool), &river.Config{Middleware: jobs.Middleware()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := ulid.NewGenerator()
+	svc := app.NewService(pool, ins, ids, audit.Nop{}, currency(money.EGP))
+	mk := func() (context.Context, tenant.StoreID) {
+		id := tenant.StoreID{ID: ids.New()}
+		sctx := tenant.WithStore(ctx, id)
+		txErr := postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
+			_, execErr := tx.Exec(sctx, `INSERT INTO stores (id, slug, name, currency, locale, timezone) VALUES ($1, $2, 'Test', 'EGP', 'ar', 'Africa/Cairo')`,
+				id.ID, "http-"+strings.ToLower(id.String()[14:]))
+			return execErr
+		})
+		if txErr != nil {
+			t.Fatal(txErr)
+		}
+		return sctx, id
+	}
+	_, a := mk()
+	ctxB, b := mk()
+	catB, err := svc.CreateCategory(ctxB, domain.CategoryInput{Name: "B secret category"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	productB, err := svc.CreateProduct(ctxB, domain.ProductInput{Title: "B secret product", Status: "active", CategoryIDs: []ulid.ID{catB.ID},
+		Variants: []domain.VariantInput{{SKU: "B-SKU-1", PriceMinor: 999, OnHand: 7}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := problem.NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	members := map[string]testkit.FakeMember{
+		tokOwnerA:    {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{a: authz.RoleOwner}},
+		tokSupportA:  {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{a: authz.RoleSupport}},
+		tokShippingA: {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{a: authz.RoleShipping}},
+		tokOwnerB:    {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{b: authz.RoleOwner}},
+	}
+	mux := http.NewServeMux()
+	httpapi.Mount(mux, svc, testPolicy(t), testkit.FakeStoreScope(resp, members), resp)
+	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB}
+}
+
+func req(t *testing.T, method, path, token, body string) *http.Request {
+	t.Helper()
+	var r io.Reader
+	if body != "" {
+		r = strings.NewReader(body)
+	}
+	rq := httptest.NewRequestWithContext(t.Context(), method, path, r)
+	if token != "" {
+		rq.Header.Set("Authorization", "Bearer "+token)
+	}
+	if body != "" {
+		rq.Header.Set("Content-Type", "application/json")
+	}
+	return rq
+}
+
+func (f fixture) do(t *testing.T, rq *http.Request) (int, map[string]any) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, rq)
+	var m map[string]any
+	if rec.Body.Len() > 0 {
+		if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+			t.Fatalf("body %q: %v", rec.Body.String(), err)
+		}
+	}
+	return rec.Code, m
+}
+
+func storePath(s tenant.StoreID, rest string) string { return "/v1/stores/" + s.String() + rest }
+
+const teeBody = `{"title":"تيشيرت قطن","status":"active",
+  "options":[{"name":"المقاس","values":["S","M"]}],
+  "variants":[{"sku":"TEE-S","option_values":["S"],"price_minor":15000,"compare_at_minor":20000,"on_hand":4},
+              {"sku":"TEE-M","option_values":["M"],"price_minor":16000,"tracked":false}]}`
+
+func TestHappyPath(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+
+	code, cat := f.do(t, req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"ملابس"}`))
+	if code != http.StatusCreated || cat["slug"] != "ملابس" {
+		t.Fatalf("createCategory = %d %v", code, cat)
+	}
+	catID := cat["id"].(string)
+	code, child := f.do(t, req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"Men","parent_id":"`+catID+`","position":2}`))
+	if code != http.StatusCreated || child["parent_id"] != catID || child["position"] != float64(2) {
+		t.Fatalf("createCategory child = %d %v", code, child)
+	}
+	childID := child["id"].(string)
+	if c, body := f.do(t, req(t, http.MethodPut, storePath(a, "/categories/"+childID), tokOwnerA, `{"name":"Men","slug":"men-wear"}`)); c != http.StatusOK || body["slug"] != "men-wear" || body["parent_id"] != nil {
+		t.Fatalf("updateCategory = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodGet, storePath(a, "/categories"), tokOwnerA, "")); c != http.StatusOK || len(body["items"].([]any)) != 2 {
+		t.Fatalf("listCategories = %d %v", c, body)
+	}
+
+	body := strings.Replace(teeBody, `"status":"active",`, `"status":"active","category_ids":["`+catID+`"],`, 1)
+	code, p := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, body))
+	if code != http.StatusCreated || p["slug"] != "تيشيرت-قطن" || len(p["category_ids"].([]any)) != 1 {
+		t.Fatalf("createProduct = %d %v", code, p)
+	}
+	vs := p["variants"].([]any)
+	v0, v1 := vs[0].(map[string]any), vs[1].(map[string]any)
+	if v0["currency"] != "EGP" || v0["price_minor"] != float64(15000) || v0["compare_at_minor"] != float64(20000) || v0["sku"] != "TEE-S" {
+		t.Fatalf("variant = %v", v0)
+	}
+	if st := v0["stock"].(map[string]any); st["on_hand"] != float64(4) || st["available"] != float64(4) || st["tracked"] != true {
+		t.Fatalf("stock = %v", st)
+	}
+	if st := v1["stock"].(map[string]any); st["tracked"] != false {
+		t.Fatalf("untracked stock = %v", st)
+	}
+	pid, vid := p["id"].(string), v0["id"].(string)
+
+	if c, got := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+pid), tokOwnerA, "")); c != http.StatusOK || got["title"] != "تيشيرت قطن" {
+		t.Fatalf("getProduct = %d %v", c, got)
+	}
+	upd := `{"title":"تيشيرت","slug":"tee","variants":[{"id":"` + vid + `","sku":"TEE-S","price_minor":14000}]}`
+	code, got := f.do(t, req(t, http.MethodPut, storePath(a, "/products/"+pid), tokOwnerA, upd))
+	if code != http.StatusOK || got["slug"] != "tee" || got["status"] != "draft" || len(got["variants"].([]any)) != 1 || len(got["options"].([]any)) != 0 {
+		t.Fatalf("updateProduct = %d %v", code, got)
+	}
+	if v := got["variants"].([]any)[0].(map[string]any); v["id"] != vid || v["stock"].(map[string]any)["on_hand"] != float64(4) {
+		t.Fatalf("kept variant = %v", v)
+	}
+	if c, st := f.do(t, req(t, http.MethodPut, storePath(a, "/variants/"+vid+"/inventory"), tokOwnerA, `{"on_hand":9}`)); c != http.StatusOK || st["on_hand"] != float64(9) || st["tracked"] != true {
+		t.Fatalf("setInventory = %d %v", c, st)
+	}
+
+	mustCreate := func(title string) {
+		if c, b := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"`+title+`","variants":[{"price_minor":1}]}`)); c != http.StatusCreated {
+			t.Fatalf("create %s = %d %v", title, code, b)
+		}
+	}
+	mustCreate("two")
+	mustCreate("three")
+	code, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products?limit=2&status=draft"), tokOwnerA, ""))
+	if code != http.StatusOK || len(page["items"].([]any)) != 2 || page["next_cursor"] == nil {
+		t.Fatalf("listProducts = %d %v", code, page)
+	}
+	code, page = f.do(t, req(t, http.MethodGet, storePath(a, "/products?limit=2&status=draft&cursor="+page["next_cursor"].(string)), tokOwnerA, ""))
+	if code != http.StatusOK || len(page["items"].([]any)) != 1 || page["next_cursor"] != nil {
+		t.Fatalf("listProducts page 2 = %d %v", code, page)
+	}
+	if code, page = f.do(t, req(t, http.MethodGet, storePath(a, "/products?category_id="+catID), tokOwnerA, "")); code != http.StatusOK || len(page["items"].([]any)) != 0 {
+		t.Fatalf("listProducts by category = %d %v", code, page)
+	}
+
+	if c, _ := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/"+pid), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("deleteProduct = %d", c)
+	}
+	if c, _ := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+pid), tokOwnerA, "")); c != http.StatusNotFound {
+		t.Fatalf("deleted product = %d", c)
+	}
+	if c, _ := f.do(t, req(t, http.MethodDelete, storePath(a, "/categories/"+childID), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("deleteCategory = %d", c)
+	}
+}
+
+func TestValidation(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	id := ulid.NewGenerator().New().String()
+	tests := []struct {
+		name   string
+		rq     *http.Request
+		status int
+		code   string
+		field  string
+	}{
+		{"empty title", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"","variants":[{"price_minor":1}]}`), 422, "validation_failed", "title"},
+		{"no variants", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","variants":[]}`), 422, "validation_failed", "variants"},
+		{"negative price", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","variants":[{"price_minor":-5}]}`), 422, "validation_failed", "variants[0].price_minor"},
+		{"unknown option value", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","options":[{"name":"Size","values":["S"]}],"variants":[{"option_values":["XL"],"price_minor":1}]}`), 422, "validation_failed", "variants[0].option_values[0]"},
+		{"bad status", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","status":"live","variants":[{"price_minor":1}]}`), 422, "validation_failed", "status"},
+		{"malformed category id", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["nope"],"variants":[{"price_minor":1}]}`), 422, "validation_failed", "category_ids[0]"},
+		{"unknown category", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+id+`"],"variants":[{"price_minor":1}]}`), 422, "validation_failed", "category_ids"},
+		{"malformed variant id", req(t, http.MethodPut, storePath(a, "/products/"+id), tokOwnerA, `{"title":"x","variants":[{"id":"bad","price_minor":1}]}`), 422, "validation_failed", "variants[0].id"},
+		{"malformed json", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":`), 400, "", ""},
+		{"bad list status", req(t, http.MethodGet, storePath(a, "/products?status=gone"), tokOwnerA, ""), 422, "validation_failed", "status"},
+		{"bad cursor", req(t, http.MethodGet, storePath(a, "/products?cursor=nope"), tokOwnerA, ""), 422, "validation_failed", "cursor"},
+		{"bad category filter", req(t, http.MethodGet, storePath(a, "/products?category_id=nope"), tokOwnerA, ""), 422, "validation_failed", "category_id"},
+		{"bad product id", req(t, http.MethodGet, storePath(a, "/products/nope"), tokOwnerA, ""), 404, "product_not_found", ""},
+		{"missing product", req(t, http.MethodPut, storePath(a, "/products/"+id), tokOwnerA, `{"title":"x","variants":[{"price_minor":1}]}`), 404, "product_not_found", ""},
+		{"missing product delete", req(t, http.MethodDelete, storePath(a, "/products/"+id), tokOwnerA, ""), 404, "product_not_found", ""},
+		{"negative stock", req(t, http.MethodPut, storePath(a, "/variants/"+id+"/inventory"), tokOwnerA, `{"on_hand":-1}`), 422, "validation_failed", "on_hand"},
+		{"bad variant id", req(t, http.MethodPut, storePath(a, "/variants/nope/inventory"), tokOwnerA, `{"on_hand":1}`), 404, "variant_not_found", ""},
+		{"empty category name", req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":""}`), 422, "validation_failed", "name"},
+		{"malformed parent", req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"x","parent_id":"nope"}`), 422, "validation_failed", "parent_id"},
+		{"unknown parent", req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"x","parent_id":"`+id+`"}`), 422, "validation_failed", "parent_id"},
+		{"bad category id", req(t, http.MethodPut, storePath(a, "/categories/nope"), tokOwnerA, `{"name":"x"}`), 404, "category_not_found", ""},
+		{"missing category delete", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokOwnerA, ""), 404, "category_not_found", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			code, body := f.do(t, tt.rq)
+			if code != tt.status || (tt.code != "" && body["code"] != tt.code) {
+				t.Fatalf("= %d %v; want %d %q", code, body, tt.status, tt.code)
+			}
+			if tt.field == "" {
+				return
+			}
+			fields, _ := body["errors"].([]any)
+			for _, fe := range fields {
+				if fe.(map[string]any)["field"] == tt.field {
+					return
+				}
+			}
+			t.Fatalf("no error on field %q: %v", tt.field, body)
+		})
+	}
+}
+
+func TestConflicts(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	_, p := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, teeBody))
+	if c, body := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, strings.ReplaceAll(teeBody, "TEE-", "X-"))); c != 422 || body["errors"].([]any)[0].(map[string]any)["code"] != "taken" {
+		t.Fatalf("duplicate slug = %d %v", c, body)
+	}
+	_, parent := f.do(t, req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"Parent"}`))
+	f.do(t, req(t, http.MethodPost, storePath(a, "/categories"), tokOwnerA, `{"name":"Kid","parent_id":"`+parent["id"].(string)+`"}`))
+	if c, body := f.do(t, req(t, http.MethodDelete, storePath(a, "/categories/"+parent["id"].(string)), tokOwnerA, "")); c != http.StatusConflict || body["code"] != "category_has_children" {
+		t.Fatalf("delete parent = %d %v", c, body)
+	}
+
+	vid := p["variants"].([]any)[0].(map[string]any)["id"].(string)
+	ctxA := tenant.WithStore(t.Context(), a)
+	if _, err := f.svc.ReserveStock(ctxA, domain.ReserveRequest{Ref: "c1", Lines: []domain.ReserveLine{{VariantID: mustID(t, vid), Qty: 3}}}); err != nil {
+		t.Fatal(err)
+	}
+	if c, body := f.do(t, req(t, http.MethodPut, storePath(a, "/variants/"+vid+"/inventory"), tokOwnerA, `{"on_hand":2}`)); c != http.StatusConflict || body["code"] != "stock_below_reserved" {
+		t.Fatalf("below reserved = %d %v", c, body)
+	}
+}
+
+func mustID(t *testing.T, s string) ulid.ID {
+	t.Helper()
+	id, err := ulid.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestAuthorization(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	id := ulid.NewGenerator().New().String()
+	product := `{"title":"x","variants":[{"price_minor":1}]}`
+	tests := []struct {
+		name   string
+		rq     *http.Request
+		status int
+	}{
+		{"no session", req(t, http.MethodGet, storePath(a, "/products"), "", ""), http.StatusUnauthorized},
+		{"unknown token", req(t, http.MethodGet, storePath(a, "/categories"), "forged", ""), http.StatusUnauthorized},
+		{"support lists products", req(t, http.MethodGet, storePath(a, "/products"), tokSupportA, ""), http.StatusOK},
+		{"support lists categories", req(t, http.MethodGet, storePath(a, "/categories"), tokSupportA, ""), http.StatusOK},
+		{"support reads product", req(t, http.MethodGet, storePath(a, "/products/"+id), tokSupportA, ""), http.StatusNotFound},
+		{"support cannot create product", req(t, http.MethodPost, storePath(a, "/products"), tokSupportA, product), http.StatusForbidden},
+		{"support cannot update product", req(t, http.MethodPut, storePath(a, "/products/"+id), tokSupportA, product), http.StatusForbidden},
+		{"support cannot delete product", req(t, http.MethodDelete, storePath(a, "/products/"+id), tokSupportA, ""), http.StatusForbidden},
+		{"support cannot set stock", req(t, http.MethodPut, storePath(a, "/variants/"+id+"/inventory"), tokSupportA, `{"on_hand":1}`), http.StatusForbidden},
+		{"support cannot create category", req(t, http.MethodPost, storePath(a, "/categories"), tokSupportA, `{"name":"x"}`), http.StatusForbidden},
+		{"support cannot update category", req(t, http.MethodPut, storePath(a, "/categories/"+id), tokSupportA, `{"name":"x"}`), http.StatusForbidden},
+		{"support cannot delete category", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokSupportA, ""), http.StatusForbidden},
+		{"shipping sets stock", req(t, http.MethodPut, storePath(a, "/variants/"+id+"/inventory"), tokShippingA, `{"on_hand":1}`), http.StatusNotFound},
+		{"shipping cannot create product", req(t, http.MethodPost, storePath(a, "/products"), tokShippingA, product), http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if c, body := f.do(t, tt.rq); c != tt.status {
+				t.Fatalf("= %d %v; want %d", c, body, tt.status)
+			}
+		})
+	}
+}
+
+// TestCrossTenant: store A's owner reaches for store B, by B's store ID in
+// the path and by B's resource IDs under A's own path. Every attempt is a
+// 404 that says nothing about B, and B's data is unchanged.
+func TestCrossTenant(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, b := f.storeA, f.storeB
+	pid, vid, cid := f.productB.ID.String(), f.productB.Variants[0].ID.String(), f.catB.ID.String()
+	leaks := []string{"B secret product", "B secret category", "B-SKU-1", pid, vid, cid}
+	product := `{"title":"pwned","variants":[{"price_minor":1}]}`
+
+	unchanged := func(tb testing.TB) {
+		tb.Helper()
+		p, err := f.svc.GetProduct(f.ctxB, f.productB.ID)
+		if err != nil || p.Title != "B secret product" || len(p.Variants) != 1 || p.Variants[0].Stock.OnHand != 7 || len(p.CategoryIDs) != 1 {
+			tb.Errorf("store B's product changed: %+v %v", p, err)
+		}
+		cats, err := f.svc.ListCategories(f.ctxB)
+		if err != nil || len(cats) != 1 || cats[0].Name != "B secret category" {
+			tb.Errorf("store B's categories changed: %+v %v", cats, err)
+		}
+	}
+
+	cases := []testkit.CrossTenantCase{
+		// B's store in the path.
+		{OperationID: "listProducts", Request: req(t, http.MethodGet, storePath(b, "/products"), tokOwnerA, "")},
+		{OperationID: "createProduct", Request: req(t, http.MethodPost, storePath(b, "/products"), tokOwnerA, product), Unchanged: unchanged},
+		{OperationID: "getProduct", Request: req(t, http.MethodGet, storePath(b, "/products/"+pid), tokOwnerA, "")},
+		{OperationID: "listCategories", Request: req(t, http.MethodGet, storePath(b, "/categories"), tokOwnerA, "")},
+		{OperationID: "createCategory", Request: req(t, http.MethodPost, storePath(b, "/categories"), tokOwnerA, `{"name":"x"}`), Unchanged: unchanged},
+		// A's store, B's resource IDs.
+		{OperationID: "getProduct", Request: req(t, http.MethodGet, storePath(a, "/products/"+pid), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "updateProduct", Request: req(t, http.MethodPut, storePath(a, "/products/"+pid), tokOwnerA, product), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "updateProduct", Request: req(t, http.MethodPut, storePath(b, "/products/"+pid), tokOwnerA, product), Unchanged: unchanged},
+		{OperationID: "deleteProduct", Request: req(t, http.MethodDelete, storePath(a, "/products/"+pid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "deleteProduct", Request: req(t, http.MethodDelete, storePath(b, "/products/"+pid), tokOwnerA, ""), Unchanged: unchanged},
+		{OperationID: "setInventory", Request: req(t, http.MethodPut, storePath(a, "/variants/"+vid+"/inventory"), tokOwnerA, `{"on_hand":0}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "setInventory", Request: req(t, http.MethodPut, storePath(b, "/variants/"+vid+"/inventory"), tokOwnerA, `{"on_hand":0}`), Unchanged: unchanged},
+		{OperationID: "updateCategory", Request: req(t, http.MethodPut, storePath(a, "/categories/"+cid), tokOwnerA, `{"name":"pwned"}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "updateCategory", Request: req(t, http.MethodPut, storePath(b, "/categories/"+cid), tokOwnerA, `{"name":"pwned"}`), Unchanged: unchanged},
+		{OperationID: "deleteCategory", Request: req(t, http.MethodDelete, storePath(a, "/categories/"+cid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "deleteCategory", Request: req(t, http.MethodDelete, storePath(b, "/categories/"+cid), tokOwnerA, ""), Unchanged: unchanged},
+	}
+	for _, c := range cases {
+		testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, c)
+	}
+
+	// Lists under A's own path never show B's rows.
+	for _, path := range []string{"/products", "/products?category_id=" + cid, "/categories"} {
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, req(t, http.MethodGet, storePath(a, path), tokOwnerA, ""))
+		for _, leak := range leaks[:3] {
+			if strings.Contains(rec.Body.String(), leak) {
+				t.Errorf("%s leaks %q", path, leak)
+			}
+		}
+	}
+	// A cannot attach B's category to its own product.
+	code, _ := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+cid+`"],"variants":[{"price_minor":1}]}`))
+	if code != 422 {
+		t.Fatalf("foreign category accepted: %d", code)
+	}
+	unchanged(t)
+}

@@ -354,11 +354,20 @@ type StoreSettingsTimezone string
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
+// CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type CategoryID = ULID
+
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 
+// ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type ProductID = ULID
+
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
+
+// VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type VariantID = ULID
 
 // UpdateStoreJSONRequestBody defines body for UpdateStore for application/json ContentType.
 type UpdateStoreJSONRequestBody = StoreSettings

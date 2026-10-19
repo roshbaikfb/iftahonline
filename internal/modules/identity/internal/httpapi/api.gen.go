@@ -505,11 +505,20 @@ type User struct {
 	Phone *string `json:"phone,omitempty"`
 }
 
+// CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type CategoryID = ULID
+
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 
+// ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type ProductID = ULID
+
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
+
+// VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type VariantID = ULID
 
 // ListAuditLogParams defines parameters for ListAuditLog.
 type ListAuditLogParams struct {

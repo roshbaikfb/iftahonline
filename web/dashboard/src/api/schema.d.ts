@@ -586,6 +586,147 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List products
+         * @description Permission: catalog.read. Newest first, with variants, stock and
+         *     category IDs; follow `next_cursor`. Deleted products are never listed.
+         */
+        get: operations["listProducts"];
+        put?: never;
+        /**
+         * Create a product
+         * @description Permission: catalog.manage. Without `slug`, one is derived from the
+         *     title (Arabic letters are kept). Variants must not carry `id`.
+         */
+        post: operations["createProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a product
+         * @description Permission: catalog.read.
+         */
+        get: operations["getProduct"];
+        /**
+         * Replace a product
+         * @description Permission: catalog.manage. Replaces fields, options, variants and
+         *     categories. Variants with `id` keep their identity and stock;
+         *     variants without one are created (with `on_hand`); variants left
+         *     out are deleted. Stock of existing variants changes only through
+         *     the inventory endpoint.
+         */
+        put: operations["updateProduct"];
+        post?: never;
+        /**
+         * Delete a product
+         * @description Permission: catalog.manage. Soft delete: the slug and SKUs become free.
+         */
+        delete: operations["deleteProduct"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/variants/{variant_id}/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                variant_id: components["parameters"]["VariantID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a variant's stock
+         * @description Permission: inventory.manage. `on_hand` cannot go below the units
+         *     currently reserved by checkouts (409 stock_below_reserved).
+         */
+        put: operations["setInventory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the category tree
+         * @description Permission: catalog.read. Every category (at most 500), roots first.
+         */
+        get: operations["listCategories"];
+        put?: never;
+        /**
+         * Create a category
+         * @description Permission: catalog.manage. At most 3 levels deep.
+         */
+        post: operations["createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                category_id: components["parameters"]["CategoryID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace or move a category
+         * @description Permission: catalog.manage.
+         */
+        put: operations["updateCategory"];
+        post?: never;
+        /**
+         * Delete a category
+         * @description Permission: catalog.manage. A category with subcategories cannot be
+         *     deleted (409 category_has_children); its products simply leave it.
+         */
+        delete: operations["deleteCategory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1057,6 +1198,130 @@ export interface components {
         DomainList: {
             items: components["schemas"]["Domain"][];
         };
+        ProductOption: {
+            /** @example المقاس */
+            name: string;
+            /**
+             * @example [
+             *       "S",
+             *       "M",
+             *       "L"
+             *     ]
+             */
+            values: string[];
+        };
+        ProductInput: {
+            /** @example تيشيرت قطن */
+            title: string;
+            /** @description Derived from the title when empty. */
+            slug?: string;
+            description?: string;
+            /**
+             * @default draft
+             * @enum {string}
+             */
+            status: "draft" | "active" | "archived";
+            options?: components["schemas"]["ProductOption"][];
+            /** @description Exactly one when there are no options. */
+            variants: components["schemas"]["VariantInput"][];
+            category_ids?: components["schemas"]["ULID"][];
+        };
+        VariantInput: {
+            id?: components["schemas"]["ULID"];
+            sku?: string;
+            /** @description One value per option, in option order. */
+            option_values?: string[];
+            /**
+             * Format: int64
+             * @example 15000
+             */
+            price_minor: number;
+            /**
+             * Format: int64
+             * @description Must exceed price_minor.
+             */
+            compare_at_minor?: number;
+            /**
+             * @description New variants only.
+             * @default true
+             */
+            tracked: boolean;
+            /**
+             * @description New variants only.
+             * @default 0
+             */
+            on_hand: number;
+        };
+        Product: {
+            id: components["schemas"]["ULID"];
+            /** @example تيشيرت-قطن */
+            slug: string;
+            title: string;
+            description: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "archived";
+            options: components["schemas"]["ProductOption"][];
+            variants: components["schemas"]["Variant"][];
+            category_ids: components["schemas"]["ULID"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        Variant: {
+            id: components["schemas"]["ULID"];
+            sku?: string;
+            option_values: string[];
+            /** Format: int64 */
+            price_minor: number;
+            /** Format: int64 */
+            compare_at_minor?: number;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            position: number;
+            stock: components["schemas"]["Stock"];
+        };
+        Stock: {
+            /** @description Untracked stock never runs out. */
+            tracked: boolean;
+            on_hand: number;
+            /** @description Held by checkouts that have not completed. */
+            reserved: number;
+            /** @description on_hand - reserved (meaningless when untracked). */
+            available: number;
+        };
+        InventoryInput: {
+            /** @default true */
+            tracked: boolean;
+            on_hand: number;
+        };
+        ProductPage: {
+            items: components["schemas"]["Product"][];
+            next_cursor?: string;
+        };
+        CategoryInput: {
+            /** @example ملابس رجالي */
+            name: string;
+            /** @description Derived from the name when empty. */
+            slug?: string;
+            parent_id?: components["schemas"]["ULID"];
+            /** @default 0 */
+            position: number;
+        };
+        Category: {
+            id: components["schemas"]["ULID"];
+            parent_id?: components["schemas"]["ULID"];
+            slug: string;
+            name: string;
+            position: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CategoryList: {
+            items: components["schemas"]["Category"][];
+        };
         Health: {
             /** @enum {string} */
             status: "ok" | "unavailable" | "draining";
@@ -1107,6 +1372,9 @@ export interface components {
     parameters: {
         StoreID: components["schemas"]["ULID"];
         DomainID: components["schemas"]["ULID"];
+        ProductID: components["schemas"]["ULID"];
+        VariantID: components["schemas"]["ULID"];
+        CategoryID: components["schemas"]["ULID"];
     };
     requestBodies: never;
     headers: {
@@ -1900,6 +2168,263 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Domain"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProducts: {
+        parameters: {
+            query?: {
+                status?: "draft" | "active" | "archived";
+                category_id?: components["schemas"]["ULID"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductInput"];
+            };
+        };
+        responses: {
+            /** @description The product. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The product. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductInput"];
+            };
+        };
+        responses: {
+            /** @description The product. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                product_id: components["parameters"]["ProductID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                variant_id: components["parameters"]["VariantID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryInput"];
+            };
+        };
+        responses: {
+            /** @description The new stock level. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stock"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The categories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                category_id: components["parameters"]["CategoryID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                category_id: components["parameters"]["CategoryID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
