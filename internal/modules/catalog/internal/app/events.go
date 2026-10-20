@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
-	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -27,11 +25,7 @@ func (e Events) publish(ctx context.Context, tx pgx.Tx, typ string, mk func(even
 	if e.Pub == nil {
 		return nil
 	}
-	store, err := tenant.FromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("catalog: publish %s: %w", typ, err)
-	}
-	m, err := event.NewMeta(e.IDs, time.Now(), store, typ, 1)
+	m, err := event.MetaFor(ctx, e.IDs, typ, 1)
 	if err != nil {
 		return fmt.Errorf("catalog: publish %s: %w", typ, err)
 	}

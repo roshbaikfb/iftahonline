@@ -55,3 +55,20 @@ func TestNewMeta(t *testing.T) {
 		t.Fatal("version 0 must fail")
 	}
 }
+
+func TestMetaFor(t *testing.T) {
+	t.Parallel()
+	gen := ulid.NewGenerator()
+	store := tenant.StoreID{ID: gen.New()}
+	before := time.Now().UTC()
+	m, err := event.MetaFor(tenant.WithStore(t.Context(), store), gen, "storefront.page.changed", 1)
+	if err != nil || m.StoreID != store || m.Type != "storefront.page.changed" || m.ID.IsZero() || m.OccurredAt.Before(before) {
+		t.Fatalf("meta %+v, %v", m, err)
+	}
+	if _, err = event.MetaFor(t.Context(), gen, "storefront.page.changed", 1); !errors.Is(err, tenant.ErrNoTenant) {
+		t.Fatalf("no tenant: %v", err)
+	}
+	if _, err = event.MetaFor(tenant.WithStore(t.Context(), store), gen, "bad", 1); !errors.Is(err, event.ErrInvalidType) {
+		t.Fatalf("bad type: %v", err)
+	}
+}

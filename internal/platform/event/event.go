@@ -5,6 +5,7 @@
 package event
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -47,6 +48,15 @@ func NewMeta(gen *ulid.Generator, now time.Time, store tenant.StoreID, typ strin
 		return Meta{}, tenant.ErrNoTenant
 	}
 	return Meta{ID: gen.New(), Type: typ, Version: version, StoreID: store, OccurredAt: now.UTC()}, nil
+}
+
+// MetaFor builds an envelope for the store in ctx, stamped now.
+func MetaFor(ctx context.Context, gen *ulid.Generator, typ string, version int) (Meta, error) {
+	store, err := tenant.FromContext(ctx)
+	if err != nil {
+		return Meta{}, fmt.Errorf("event: %s: %w", typ, err)
+	}
+	return NewMeta(gen, time.Now(), store, typ, version)
 }
 
 // ValidateType checks the "<module>.<entity>.<verb>" naming convention.
