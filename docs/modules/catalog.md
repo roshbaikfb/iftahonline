@@ -129,7 +129,7 @@ like the documents (`domain.NormalizeSearch`).
 
 ## Tests
 
-- `domain`: table-driven rules; `FuzzSlugify`.
+- `domain`: table-driven rules (slug rules and `FuzzMake` live in `platform/slug`).
 - `search` (real Meilisearch): store A never sees store B's products,
   whatever the query; foreign upserts fail; foreign deletes are no-ops;
   Arabic forms match. `domain`: `FuzzNormalizeSearch`.
