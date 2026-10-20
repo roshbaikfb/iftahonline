@@ -85,6 +85,22 @@ func New(d Deps) (*Module, error) {
 	}, nil
 }
 
+// StorefrontDeps are what the storefront reader needs: the database and
+// the image delivery settings, not object storage credentials or search.
+type StorefrontDeps struct {
+	Pool  *pgxpool.Pool
+	Media config.Media
+}
+
+// NewStorefront builds the storefront's read side for roles that do not
+// run the whole module.
+func NewStorefront(d StorefrontDeps) (Storefront, error) {
+	if d.Pool == nil {
+		return nil, errors.New("catalog: missing dependency")
+	}
+	return app.NewStorefront(d.Pool, media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt)), nil
+}
+
 // PeriodicJobs are the module's scheduled jobs.
 func (m *Module) PeriodicJobs() []*river.PeriodicJob {
 	return []*river.PeriodicJob{app.SearchSettingsPeriodic()}

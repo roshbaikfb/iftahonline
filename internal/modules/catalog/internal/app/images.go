@@ -66,7 +66,7 @@ func (s *Service) CreateImageUpload(ctx context.Context, productID ulid.ID, cont
 		return txErr
 	})
 	if err != nil {
-		return domain.Image{}, media.Upload{}, notFound(err, errProductNotFound)
+		return domain.Image{}, media.Upload{}, notFound(err, ErrProductNotFound)
 	}
 	// Presigning is a local signature, not a network call.
 	up, err := s.media.Objects.PresignUpload(ctx, key, ct, s.media.Limits.MaxBytes, domain.UploadURLTTL)
