@@ -7,8 +7,8 @@ store's **category tree**. Design and stock semantics:
 [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 
 Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search:
-[ADR-0013](../adr/0013-tenant-safe-search.md). Importers follow in a later
-P2 pull request.
+[ADR-0013](../adr/0013-tenant-safe-search.md). Importers:
+[ADR-0014](../adr/0014-catalog-importers.md).
 
 ## Public API (`internal/modules/catalog/api.go`)
 
@@ -34,8 +34,7 @@ Every method acts on the store in `ctx`.
 | `catalog.delete_objects` | After processing, image deletion and product deletion | Removes objects; refuses keys outside the store's prefix |
 | `catalog.index_product` | Product create/replace/delete; image ready/updated/deleted | Upserts the product's search document from its current state, or deletes it |
 | `catalog.search_settings` (global, periodic) | Worker start, then every 6 hours | Creates the index and applies its settings |
-
-Product events for search indexing arrive with the search pull request.
+| `catalog.run_import` | `startImport` | Imports the source's records after the saved cursor; checkpoints every 25; `succeeded` or `failed` with a reason |
 
 ## Tables
 
@@ -50,6 +49,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | `stock_reservations` | One row per (ref, variant): `qty`, `counted`, `status`, `expires_at` |
 | `categories` | Tree via `parent_id` (≤ 3 levels, ≤ 500 per store); `slug` unique per store; a parent with children cannot be deleted |
 | `product_categories` | Product ↔ category links (≤ 20 per product) |
+| `catalog_imports` | `kind`, `status`, counters, `cursor` (resume point), first 100 `row_errors`; sealed WooCommerce credentials |
 | `product_images` | `pending` → `processing` → `ready` / `failed`; `upload_key`, master `object_key`, size, `alt`, `position` (≤ 20 per product) |
 
 ## HTTP API (tag `catalog`)
@@ -61,6 +61,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
 | `createImageUpload`, `completeImageUpload`, `updateImage`, `deleteImage` | `catalog.manage` |
+| `createImport`, `startImport`, `getImport`, `listImports` | `imports.manage` |
 
 - `updateProduct` replaces the product. Variants sent with `id` keep their
   identity and stock; variants without one are created with `on_hand`;
@@ -75,6 +76,22 @@ parent (`db/migrations/00015_catalog.sql`).
   `upload.fields`, file last as `file`); after the upload, call
   `completeImageUpload`. `ready` images carry signed imgproxy `urls` for
   four sizes in AVIF and WebP.
+
+## Imports
+
+CSV columns (header names are case-insensitive; Arabic aliases such
+as الاسم، السعر، الكمية، التصنيف are accepted):
+
+| Column | Meaning |
+|---|---|
+| `handle` | Product slug; consecutive rows with the same handle are variants of one product |
+| `title`, `description`, `status`, `categories` | From the product's first row; categories separated by `\|`, `;`, `،` or `؛` |
+| `option1_name` … `option3_name` | From the first row |
+| `option1_value` … `option3_value`, `sku`, `price`, `compare_at_price`, `stock`, `tracked` | Per variant row; prices in major units |
+
+Existing products (same slug) are updated, with variants matched by SKU;
+others are created. Bad rows are reported and skipped. Excel workbooks are
+not accepted yet: save as "CSV UTF-8" (ADR-0014).
 
 ## Search
 
@@ -96,6 +113,12 @@ like the documents (`domain.NormalizeSearch`).
 - `search` (real Meilisearch): store A never sees store B's products,
   whatever the query; foreign upserts fail; foreign deletes are no-ops;
   Arabic forms match. `domain`: `FuzzNormalizeSearch`.
+- `importer`: CSV dialects, Arabic headers, grouping, row errors, source
+  errors, a fake WooCommerce server (retry, auth, resume, loopback
+  refused); `FuzzCSV`, `FuzzStripHTML`.
+- `app` imports: 1,000-product CSV import as a job (and a second run that
+  updates), report with capped row errors, resume from a checkpoint,
+  WooCommerce with sealed keys, cross-tenant.
 - `media`: type sniffing, bombs, orientation, metadata stripping;
   `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
   SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).
