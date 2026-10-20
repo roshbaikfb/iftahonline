@@ -8,7 +8,8 @@ store's **category tree**. Design and stock semantics:
 
 Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search:
 [ADR-0013](../adr/0013-tenant-safe-search.md). Importers:
-[ADR-0014](../adr/0014-catalog-importers.md).
+[ADR-0014](../adr/0014-catalog-importers.md). Events and the storefront
+read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 
 ## Public API (`internal/modules/catalog/api.go`)
 
@@ -19,12 +20,27 @@ Image pipeline: [ADR-0012](../adr/0012-image-pipeline.md). Search:
 | `Catalog.ReleaseStock(ctx, ref)` | Gives the held stock back; idempotent; unknown ref is `ErrReservationNotFound` |
 | `ErrInsufficientStock`, `ErrVariantNotSellable` | Wrapped in a `*StockError` that names the variant |
 | `ErrReservationRefUsed` | The ref already holds a different set of lines |
+| `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with variants (`Available`, no stock numbers) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
+| `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
+| `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
+| `Storefront.Categories(ctx)` | The category tree, by position |
+| `NewStorefront(StorefrontDeps)` | The read side alone (pool + image delivery settings), for the storefront role |
+| `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `Event*` | Events the module publishes (below) |
 | `CurrencySource`, `CurrencyFunc` | How the module learns the store currency (cmd/platform adapts tenancy) |
 | `Module.Mount`, `Module.RegisterWorkers` | HTTP routes (behind identity's membership middleware) and the expiry job |
 
 Every method acts on the store in `ctx`.
 
 ## Events and jobs
+
+Events go through `platform/eventbus` (ADR-0015), in the transaction of
+the change. Payloads carry IDs; subscribers read current state.
+
+| Event | Published when |
+|---|---|
+| `catalog.product.changed` (`reason`) | `created`, `updated` (fields, variants, prices, categories), `images` (ready, updated, deleted), `stock` (on-hand set, or a reservation/release/expiry made a variant sell out or come back) |
+| `catalog.product.deleted` | A product is deleted |
+| `catalog.category.changed` (`reason`) | A category is created, updated or deleted |
 
 | Job | When | Effect |
 |---|---|---|
@@ -43,7 +59,7 @@ parent (`db/migrations/00015_catalog.sql`).
 
 | Table | Notes |
 |---|---|
-| `products` | `slug` unique per store among live rows; `options` JSONB; `status` draft/active/archived; soft delete |
+| `products` | `slug` (text, lower-case; 00018) unique per store among live rows; `options` JSONB; `status` draft/active/archived; soft delete |
 | `variants` | `sku` unique per store among live rows; `option_values text[]` unique per product; prices in minor units + currency; soft delete |
 | `inventory_levels` | `tracked`, `on_hand`, `reserved`; `CHECK (0 <= reserved <= on_hand)` |
 | `stock_reservations` | One row per (ref, variant): `qty`, `counted`, `status`, `expires_at` |
@@ -106,6 +122,10 @@ like the documents (`domain.NormalizeSearch`).
   `TestListProductsConstantQueries`). A category filter has its own
   query, driven by the category's links. Plans: ADR-0011 §7.
 - A reservation is one UPDATE per line on the variant's inventory row.
+- Storefront reads run six queries each whatever the size (BEGIN, tenant,
+  products, variants, images, COMMIT), asserted in `storefront_test.go`.
+  Slug lookups are index conditions under RLS
+  (`TestSlugLookupUsesIndexUnderRLS`); plans in ADR-0015.
 
 ## Tests
 
@@ -122,6 +142,10 @@ like the documents (`domain.NormalizeSearch`).
 - `media`: type sniffing, bombs, orientation, metadata stripping;
   `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
   SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).
+- `app` events: each write publishes the right event and reason; stock
+  events only on sell-out/back-in-stock; nothing on failed writes.
+- `app` storefront: active-only, order kept, repeats and foreign IDs
+  skipped, constant queries, renditions, cross-tenant, slug plan under RLS.
 - `app` (real PostgreSQL): lifecycle, uniqueness, constant query count,
   50 concurrent reservations on stock 10, multi-line deadlock freedom,
   idempotency, expiry, cross-tenant isolation.
