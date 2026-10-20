@@ -147,6 +147,13 @@ dash-ci: dash-deps build ## Dashboard lint, typecheck, unit tests, Playwright sm
 	cd $(DASH) && npm run --silent lint && npm run --silent typecheck && npm run --silent test
 	cd $(DASH) && PLATFORM_BIN="$$PWD/../../$(BIN)/platform" npx playwright test
 
+.PHONY: storefront-e2e
+storefront-e2e: dash-deps ## Storefront on a phone: Playwright journeys + Lighthouse budgets (demo store)
+	CGO_ENABLED=0 go build -trimpath -o $(BIN)/sfdemo ./internal/tools/sfdemo
+	cd $(DASH) && SFDEMO_BIN="$$PWD/../../$(BIN)/sfdemo" npx playwright test -c playwright.storefront.config.ts
+	cd $(DASH) && CHROME_PATH="$$(node -e "console.log(require('@playwright/test').chromium.executablePath())")" \
+		npx lhci autorun --config=lighthouserc.json
+
 ## ---- build -------------------------------------------------------------
 
 .PHONY: build
@@ -210,4 +217,5 @@ ci: ## Full pipeline (CLAUDE.md): run before saying a task is done
 	$(MAKE) --no-print-directory gates
 	$(MAKE) --no-print-directory systemd-verify
 	$(MAKE) --no-print-directory dash-ci
+	$(MAKE) --no-print-directory storefront-e2e
 	@echo "ci: all gates passed"

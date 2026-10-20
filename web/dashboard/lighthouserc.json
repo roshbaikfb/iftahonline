@@ -1,0 +1,27 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "../../bin/sfdemo -addr 127.0.0.1:18192",
+      "startServerReadyPattern": "sfdemo: ready",
+      "startServerReadyTimeout": 180000,
+      "url": ["http://souq.localhost:18192/p/royal-oud", "http://souq.localhost:18192/pages/summer"],
+      "numberOfRuns": 3,
+      "settings": {
+        "formFactor": "mobile",
+        "throttlingMethod": "simulate",
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
+        "chromeFlags": "--headless=new --no-sandbox"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "largest-contentful-paint": ["error", { "maxNumericValue": 1500, "aggregationMethod": "median-run" }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1, "aggregationMethod": "median-run" }],
+        "resource-summary:script:size": ["error", { "maxNumericValue": 30720 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:seo": ["error", { "minScore": 0.9 }]
+      }
+    },
+    "upload": { "target": "filesystem", "outputDir": ".lighthouseci" }
+  }
+}

@@ -409,7 +409,7 @@ func TestProductPage(t *testing.T) {
 	wantContains(t, body,
 		"<title>تيشيرت قطن | متجر منى</title>", `<h1>تيشيرت قطن</h1>`, `href="/c/tshirts"`,
 		`<select name="variant"`, "M — 150 ج.م", "L — 160 ج.م (نفدت الكمية)", ` disabled`,
-		`data-price="160 ج.م"`, `action="/cart"`, "قطن مصري ١٠٠٪.", "<p>يغسل في الغسالة.</p>",
+		`data-amount="160 ج.م"`, `action="/cart"`, "قطن مصري ١٠٠٪.", "<p>يغسل في الغسالة.</p>",
 		`<meta name="description" content="قطن مصري ١٠٠٪.">`, `property="og:image"`,
 	)
 	m := regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`).FindStringSubmatch(body)

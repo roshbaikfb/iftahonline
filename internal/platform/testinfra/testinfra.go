@@ -65,6 +65,18 @@ func Run(m *testing.M, infra *Infra) int {
 	return code
 }
 
+// Start brings up the same migrated PostgreSQL and Redis for tools that
+// are not tests (the storefront demo used by browser tests). Call stop
+// when done.
+func Start(ctx context.Context) (Infra, func(), error) {
+	var infra Infra
+	stop, err := start(ctx, &infra)
+	if err != nil && stop != nil {
+		stop()
+	}
+	return infra, stop, err
+}
+
 func start(ctx context.Context, infra *Infra) (func(), error) {
 	var containers []testcontainers.Container
 	cleanup := func() {
@@ -119,11 +131,27 @@ func start(ctx context.Context, infra *Infra) (func(), error) {
 	return cleanup, nil
 }
 
-// repoRoot finds the module root from this source file's location.
+// repoRoot finds the repository root: from this source file's location,
+// or, in a binary built with -trimpath (whose paths are module-relative),
+// by walking up from the working directory to the directory holding the
+// database init scripts (go.mod alone is not enough: web/dashboard has
+// one to keep itself out of the Go module).
 func repoRoot() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
+	if _, file, _, ok := runtime.Caller(0); ok && filepath.IsAbs(file) {
+		return filepath.Join(filepath.Dir(file), "..", "..", "..")
+	}
+	dir, err := os.Getwd()
+	if err != nil {
 		return "."
 	}
-	return filepath.Join(filepath.Dir(file), "..", "..", "..")
+	for {
+		if _, err = os.Stat(filepath.Join(dir, "deploy", "compose", "initdb", "01-roles.sql")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "."
+		}
+		dir = parent
+	}
 }

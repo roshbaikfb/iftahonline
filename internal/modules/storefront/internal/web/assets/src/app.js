@@ -35,7 +35,7 @@ function variantPickers() {
     const update = () => {
       const opt = select.selectedOptions[0];
       if (!opt) return;
-      price.replaceChildren(opt.dataset.price);
+      price.replaceChildren(opt.dataset.amount);
       if (opt.dataset.compare) {
         const s = document.createElement("s");
         s.textContent = opt.dataset.compare;
