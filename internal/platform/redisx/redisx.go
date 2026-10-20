@@ -3,7 +3,9 @@
 package redisx
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -23,4 +25,38 @@ func New(c config.Redis) (*redis.Client, error) {
 	opts.PoolTimeout = time.Second
 	opts.MaxRetries = 2
 	return redis.NewClient(opts), nil
+}
+
+// Subscribe streams the payloads published on channel until ctx ends;
+// the returned channel is closed then. go-redis reconnects (and
+// resubscribes) on its own. Messages published while disconnected are
+// lost, so subscribers must also expire what they cache (a TTL).
+func Subscribe(ctx context.Context, rdb *redis.Client, channel string, log *slog.Logger) <-chan string {
+	out := make(chan string, 64)
+	ps := rdb.Subscribe(ctx, channel)
+	go func() {
+		defer close(out)
+		defer func() {
+			if err := ps.Close(); err != nil {
+				log.DebugContext(ctx, "redisx: close subscription", "channel", channel, "err", err)
+			}
+		}()
+		ch := ps.Channel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case m, ok := <-ch:
+				if !ok {
+					return
+				}
+				select {
+				case out <- m.Payload:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return out
 }
