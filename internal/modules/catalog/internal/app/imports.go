@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
 	"github.com/roshbaikfb/iftahonline/internal/platform/safehttp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -390,25 +391,25 @@ func (s *Service) importRecord(ctx context.Context, rec domain.ImportRecord, cat
 // categoryFor finds a category by the slug of name, or creates it as a
 // root category. Results are cached for the run.
 func (s *Service) categoryFor(ctx context.Context, name string, cache map[string]ulid.ID) (ulid.ID, error) {
-	slug := domain.Slugify(name)
-	if id, ok := cache[slug]; ok {
+	key := slug.Make(name)
+	if id, ok := cache[key]; ok {
 		return id, nil
 	}
 	var id ulid.ID
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		id, txErr = store.CategoryIDBySlug(ctx, tx, slug)
+		id, txErr = store.CategoryIDBySlug(ctx, tx, key)
 		return txErr
 	})
 	if errors.Is(err, domain.ErrNotFound) {
 		var c domain.Category
-		if c, err = s.CreateCategory(ctx, domain.CategoryInput{Name: name, Slug: slug}); err == nil {
+		if c, err = s.CreateCategory(ctx, domain.CategoryInput{Name: name, Slug: key}); err == nil {
 			id = c.ID
 		}
 	}
 	if err != nil {
 		return ulid.ID{}, err
 	}
-	cache[slug] = id
+	cache[key] = id
 	return id, nil
 }
 
