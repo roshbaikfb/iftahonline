@@ -166,6 +166,27 @@ sql:
             go_type:
               type: string
               pointer: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/storefront
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: storefrontdb
+        out: internal/modules/storefront/internal/store/storefrontdb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: timestamptz
+            go_type: time.Time
 
 # sqlc expands SELECT * into explicit columns at generate time, so a
 # "no select star" rule could never fire; it is intentionally absent.
