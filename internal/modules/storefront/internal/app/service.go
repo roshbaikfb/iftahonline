@@ -20,6 +20,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -37,6 +38,8 @@ type Service struct {
 	audit    audit.Recorder
 	events   eventbus.Publisher
 	sections domain.SettingsValidator
+	jobs     jobs.Inserter
+	media    Media
 }
 
 // Deps are the service's dependencies.
@@ -46,6 +49,9 @@ type Deps struct {
 	Audit    audit.Recorder
 	Events   eventbus.Publisher
 	Sections domain.SettingsValidator
+	// Jobs and Media serve the logo (asset) use cases.
+	Jobs  jobs.Inserter
+	Media Media
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -56,7 +62,7 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections}
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections, jobs: d.Jobs, media: d.Media}
 }
 
 // GetTheme returns the saved theme, or the defaults at version 0.

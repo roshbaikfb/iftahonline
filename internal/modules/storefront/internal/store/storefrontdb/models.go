@@ -101,8 +101,8 @@ type CatalogImport struct {
 	StoreID        ulid.ID
 	Kind           string
 	Status         string
-	SourceKey      pgtype.Text
-	WooUrl         pgtype.Text
+	SourceKey      *string
+	WooUrl         *string
 	WooCredentials []byte
 	Total          int32
 	Cursor         int32
@@ -175,11 +175,11 @@ type ProductImage struct {
 	ProductID     ulid.ID
 	Status        string
 	UploadKey     string
-	ObjectKey     pgtype.Text
-	Format        pgtype.Text
-	Width         pgtype.Int4
-	Height        pgtype.Int4
-	Bytes         pgtype.Int8
+	ObjectKey     *string
+	Format        *string
+	Width         *int32
+	Height        *int32
+	Bytes         *int64
 	Alt           string
 	Position      int32
 	FailureReason string
@@ -262,6 +262,22 @@ type Store struct {
 	UpdatedAt time.Time
 }
 
+type StoreAsset struct {
+	ID            ulid.ID
+	StoreID       ulid.ID
+	Kind          string
+	Status        string
+	UploadKey     string
+	ObjectKey     *string
+	Format        *string
+	Width         *int32
+	Height        *int32
+	Bytes         *int64
+	FailureReason string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type StoreDomain struct {
 	ID                ulid.ID
 	StoreID           ulid.ID
@@ -329,7 +345,7 @@ type User struct {
 	Status          string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
-	Phone           pgtype.Text
+	Phone           *string
 	PhoneVerifiedAt pgtype.Timestamptz
 	TotpSecret      []byte
 	TotpEnabledAt   pgtype.Timestamptz
@@ -368,10 +384,10 @@ type Variant struct {
 	ID             ulid.ID
 	StoreID        ulid.ID
 	ProductID      ulid.ID
-	Sku            pgtype.Text
+	Sku            *string
 	OptionValues   []string
 	PriceMinor     int64
-	CompareAtMinor pgtype.Int8
+	CompareAtMinor *int64
 	Currency       string
 	Position       int32
 	CreatedAt      time.Time
