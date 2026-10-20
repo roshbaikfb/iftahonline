@@ -5,8 +5,9 @@ The storefront module owns the store's **look and pages**: the theme
 and **policies**. Pages are ordered **sections** whose settings follow a JSON
 schema per section type; merchants never supply HTML or scripts. Design:
 [ADR-0016](../adr/0016-storefront-themes-and-sections.md). Events:
-[ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
-Rendering for shoppers (templ, caching) comes in the next P3 change.
+[ADR-0015](../adr/0015-domain-events-and-storefront-reads.md). Rendering
+for shoppers, caching and freshness:
+[ADR-0018](../adr/0018-storefront-rendering-and-caching.md).
 
 ## Public API (`internal/modules/storefront/api.go`)
 
@@ -15,6 +16,9 @@ Rendering for shoppers (templ, caching) comes in the next P3 change.
 | `New(Deps)`, `Module.Mount` | Wiring, and the merchant HTTP API (behind identity's membership middleware) |
 | `ThemeChanged`, `PageChanged`, `EventThemeChanged`, `EventPageChanged` | Events the module publishes |
 | `PageKind`, `KindHome`, `KindLanding`, `KindPolicy` | Page kinds, as carried by `PageChanged` |
+| `NewShop(ShopDeps)`, `Shop.Pages`, `Shop.Assets`, `Shop.Listen` | The storefront role: pages (tenant from host resolution), static files, cache invalidations from Redis |
+| `InvalidatingEvents`, `InvalidateSubscriber`, `InvalidateHandler` | The event subscription every role makes, so the worker tells storefront instances which store changed |
+| `AssetsPrefix`, `CacheConfig`, `DefaultCacheConfig` | Shop wiring |
 
 ## Events
 
@@ -23,7 +27,35 @@ Rendering for shoppers (templ, caching) comes in the next P3 change.
 | `storefront.theme.changed` | The theme is saved, a new logo goes live, or the logo is deleted |
 | `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
 
-The module consumes no events yet.
+The module consumes `catalog.product.changed`, `catalog.product.deleted`,
+`catalog.category.changed` and its own two events: the subscriber
+`storefront.invalidate_pages` publishes the store ID on the Redis
+channel `storefront:invalidate`, and every storefront instance drops that
+store's cached pages.
+
+## Rendering (`internal/web`)
+
+| Path | Page |
+|---|---|
+| `/` | Home: the home page's sections |
+| `/p/{slug}` | Product: gallery, variant picker, description, schema.org `Product` + `BreadcrumbList` |
+| `/c/{slug}` | Category: 24 products per page, `?after=` cursor |
+| `/pages/{slug}` | A published landing page's sections |
+| `/policies/{slug}` | A published policy |
+
+Languages and responses:
+- The store's locale has no prefix; the other language is under `/en`
+  or `/ar`. Upper-case slugs redirect (301); anything else is the store's
+  404.
+- Responses carry `Cache-Control: public, max-age=0, s-maxage=60` and
+  `Cache-Tag` (`s-`, `p-`, `pg-`, `c-`).
+
+Styles, scripts and fonts:
+- The CSP allows the inlined stylesheet by its sha256 (`platform/csp`).
+- Static files are under `/assets/` with content-hashed names: one
+  module script and the self-hosted fonts.
+- Sources are in `internal/web/assets/src` and are minified by esbuild
+  at `make gen`. Font provenance and licenses are in `assets/fonts`.
 
 ## Section types
 
@@ -121,4 +153,6 @@ How saves work:
 | `sections` | Valid and invalid settings for every type, with exact field paths (links, enums, conditionals, `8.0`, date-time forms); defaults validate; `Decode`; `FuzzValidateSettings` |
 | `app` (real PostgreSQL) | Versions and conflicts for the theme, home and policies; landing CRUD, slug moves, slug taken, the 50-page limit per store; events and audit entries; isolation between stores; no tenant |
 | `app` logo | Upload, process, replace (old master deleted), rejection, abandon, expiry, delete; foreign keys refused; isolation between stores |
+| `web` (fakes) | Arabic and English pages, hreflang/canonical, prices, structured data, variant picker, pagination, landing sections (one `ProductsByIDs` call), ended countdowns, escaping of merchant text, the CSP hash of the inline style, the cache and `Invalidate`, HEAD/POST, failures, assets; `BenchmarkProductPage` (p95 warm and cold) |
+| module (real PostgreSQL + Redis) | `TestTwoStoresTwoHosts` (one process, two hosts, two themes, no cross-store leaks) and `TestPriceEditReachesStorefront` (edit → event → worker → Redis → fresh page, under 100 ms) |
 | `httpapi` | Happy path, validation, authorization (401/403) and cross-tenant cases for all 17 operations; `TestMain` fails if one has no cross-tenant test |
