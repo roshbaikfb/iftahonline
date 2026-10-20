@@ -84,6 +84,9 @@ The `api` and `worker` roles also need object storage and imgproxy
   index; the worker's also needs `indexes.create`, `settings.update` and
   `tasks.get`, because the worker applies the index settings
   ([ADR-0013](../docs/adr/0013-tenant-safe-search.md)).
+- **Egress** (worker): WooCommerce imports call merchants' shops over
+  HTTPS through `platform/safehttp` (private and metadata ranges are
+  refused). Allow outbound 443 from the worker; nothing else needs it.
 - **`MEDIA_IMAGE_WORKERS`** (worker): concurrent image jobs. Each holds
   up to about 220 MB at the default 25 MP limit; size `GOMEMLIMIT`
   accordingly.
