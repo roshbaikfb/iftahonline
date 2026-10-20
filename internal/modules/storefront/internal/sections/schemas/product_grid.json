@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/product_grid.json",
+  "title": "Product grid",
+  "description": "Products as cards: the newest, a category's, or a hand-picked list.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source"],
+  "properties": {
+    "title": { "$ref": "defs.json#/$defs/title" },
+    "source": { "enum": ["newest", "category", "manual"] },
+    "category_id": { "$ref": "defs.json#/$defs/id" },
+    "product_ids": {
+      "type": "array",
+      "maxItems": 24,
+      "uniqueItems": true,
+      "items": { "$ref": "defs.json#/$defs/id" }
+    },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 24, "default": 8 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "source": { "const": "category" } }, "required": ["source"] },
+      "then": { "required": ["category_id"] }
+    },
+    {
+      "if": { "properties": { "source": { "const": "manual" } }, "required": ["source"] },
+      "then": { "required": ["product_ids"], "properties": { "product_ids": { "minItems": 1 } } }
+    }
+  ]
+}

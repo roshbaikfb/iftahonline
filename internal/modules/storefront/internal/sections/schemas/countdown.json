@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/countdown.json",
+  "title": "Countdown",
+  "description": "Time left until an offer ends. The page is cached, so the browser counts down from ends_at.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ends_at"],
+  "properties": {
+    "title": { "$ref": "defs.json#/$defs/title" },
+    "subtitle": { "$ref": "defs.json#/$defs/line", "maxLength": 120 },
+    "ends_at": { "type": "string", "format": "date-time" },
+    "hide_when_ended": { "type": "boolean", "default": true }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/defs.json",
+  "title": "Shared definitions",
+  "$defs": {
+    "id": {
+      "description": "A ULID: product or category ID.",
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$"
+    },
+    "line": {
+      "description": "One line of text: no line breaks or other control characters.",
+      "type": "string",
+      "pattern": "^[^\\x00-\\x1f\\x7f]*$"
+    },
+    "link": {
+      "description": "Where a button goes: a path on the store (/p/shirt) or an https URL (https://wa.me/...). Nothing else, so no javascript: or data: links.",
+      "type": "string",
+      "maxLength": 500,
+      "pattern": "^(/([^/\\\\\\s][^\\s]*)?|https://[^\\s]+)$"
+    },
+    "title": {
+      "description": "A section heading; empty uses the default in the shopper's language.",
+      "$ref": "#/$defs/line",
+      "maxLength": 80
+    }
+  }
+}
