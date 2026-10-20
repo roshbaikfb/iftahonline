@@ -17,6 +17,8 @@ web/dashboard/node_modules/
 web/dashboard/dist/
 web/dashboard/test-results/
 web/dashboard/playwright-report/
+web/dashboard/playwright-report-storefront/
+web/dashboard/.lighthouseci/
 web/dashboard/blob-report/
 
 # editor / OS

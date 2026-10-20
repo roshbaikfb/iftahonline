@@ -1,0 +1,74 @@
+import { expect, test, type Page } from '@playwright/test';
+
+// watch fails the test on any console error: a CSP violation (inline
+// script or style the policy does not allow) shows up there.
+function watch(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(err.message));
+  return errors;
+}
+
+test('home → product → landing page → cart, on a phone, in Arabic', async ({ page }) => {
+  const errors = watch(page);
+
+  // Home: RTL Arabic, the store's hero and newest products.
+  const home = await page.goto('/');
+  expect(home?.status()).toBe(200);
+  expect(home?.headers()['content-security-policy']).toMatch(/style-src 'self' 'sha256-[A-Za-z0-9+/=]+'/);
+  expect(home?.headers()['cache-tag']).toMatch(/^s-[0-9A-Z]{26},/);
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('أهلًا بك في متجر العرض');
+  await expect(page.getByText('الدفع عند الاستلام')).toBeVisible();
+  const cards = page.locator('a.card');
+  await expect(cards).toHaveCount(8);
+
+  // Product: open the oud perfume from the grid.
+  await page.locator('a.card', { hasText: 'عطر العود الملكي' }).click();
+  await expect(page).toHaveURL(/\/p\/royal-oud$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('عطر العود الملكي');
+  const price = page.locator('form[data-buy] [data-price]');
+  await expect(price).toContainText('450 ج.م');
+  await expect(price.locator('s')).toHaveText('600 ج.م');
+  // The variant picker updates the price without a reload (our script).
+  await page.getByLabel('الحجم').selectOption({ label: '100 مل — 750 ج.م' });
+  await expect(price).toHaveText('750 ج.م');
+  await expect(page.getByRole('button', { name: 'أضف إلى السلة' })).toBeEnabled();
+  const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent()) ?? '[]') as { '@type': string }[];
+  expect(ld[0]?.['@type']).toBe('Product');
+
+  // Landing page: from the home hero's button.
+  await page.goto('/');
+  await page.getByRole('link', { name: 'شاهد عرض الصيف' }).click();
+  await expect(page).toHaveURL(/\/pages\/summer$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('عطر العود الملكي بخصم ٢٥٪');
+  await expect(page.getByText('ثبات أكثر من ١٢ ساعة')).toBeVisible();
+  const countdown = page.locator('[data-countdown] [data-unit]').last();
+  const before = await countdown.textContent();
+  await expect(countdown).not.toHaveText(before ?? '', { timeout: 3_000 }); // it ticks
+  await page.getByText('متى يصل الطلب؟').click();
+  await expect(page.getByText('خلال ٢ إلى ٤ أيام عمل.')).toBeVisible();
+
+  // Order from the landing page: the cart shows the line and the badge.
+  await page.getByRole('button', { name: 'اطلب الآن' }).click();
+  await expect(page).toHaveURL(/\/cart$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('السلة');
+  await expect(page.getByRole('link', { name: 'عطر العود الملكي' })).toBeVisible();
+  await expect(page.locator('.subtotal')).toContainText('450 ج.م');
+  await expect(page.locator('[data-cart-count]')).toHaveText('1');
+
+  expect(errors, 'no console errors (CSP violations, script errors)').toEqual([]);
+});
+
+test('the English store mirrors the Arabic one', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/en/p/royal-oud');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  await expect(page.locator('form[data-buy] [data-price]')).toContainText('EGP 450');
+  await page.getByRole('link', { name: 'العربية' }).click();
+  await expect(page).toHaveURL(/\/p\/royal-oud$/);
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  expect(errors).toEqual([]);
+});

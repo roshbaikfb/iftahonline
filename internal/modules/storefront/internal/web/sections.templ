@@ -68,7 +68,7 @@ templ buyForm(p *pageCtx, pr catalog.StorefrontProduct, cta string) {
 				for _, v := range pr.Variants {
 					<option
 						value={ v.ID.String() }
-						data-price={ p.priceOf(v).price }
+						data-amount={ p.priceOf(v).price }
 						data-compare={ p.priceOf(v).compare }
 						disabled?={ !v.Available }
 						selected?={ v.ID == pr.PriceFrom().ID }

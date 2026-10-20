@@ -5,7 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'src/api/schema.d.ts'] },
+  { ignores: ['dist', 'node_modules', 'playwright-report', 'playwright-report-storefront', 'test-results', '.lighthouseci', 'src/api/schema.d.ts'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
