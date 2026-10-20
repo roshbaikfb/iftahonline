@@ -170,7 +170,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err != nil {
 		return clients{}, err
 	}
-	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: eventbus.New(inserter)}, nil
+	bus := eventbus.New(inserter)
+	for _, typ := range storefront.InvalidatingEvents() {
+		if err = bus.Subscribe(typ, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+			return clients{}, err
+		}
+	}
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -314,7 +320,19 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	go ten.ListenInvalidations(ctx)
-	return server.MountStorefront(ten.Resolver()), nil
+	products, err := catalog.NewStorefront(catalog.StorefrontDeps{Pool: c.pool, Media: c.cfg.Media})
+	if err != nil {
+		return nil, err
+	}
+	shop, err := storefront.NewShop(storefront.ShopDeps{
+		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
+		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
+	})
+	if err != nil {
+		return nil, err
+	}
+	go shop.Listen(ctx)
+	return server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets()), nil
 }
 
 func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo, profile middleware.Profile, mountFor mountFunc) error {

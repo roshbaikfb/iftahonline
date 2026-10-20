@@ -1,0 +1,121 @@
+package storefront
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
+	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+// InvalidateChannel carries the IDs of stores whose rendered pages are
+// stale. The worker publishes on it when an event says something a
+// shopper sees changed; every storefront instance listens (ADR-0018).
+const InvalidateChannel = "storefront:invalidate"
+
+// AssetsPrefix is the path the shop's static files are served under.
+const AssetsPrefix = web.AssetsPrefix
+
+// InvalidatingEvents are the events after which a store's pages must be
+// rendered again.
+func InvalidatingEvents() []string {
+	return []string{
+		catalog.EventProductChanged, catalog.EventProductDeleted, catalog.EventCategoryChanged,
+		EventThemeChanged, EventPageChanged,
+	}
+}
+
+// InvalidateSubscriber is the event bus subscriber name of
+// InvalidateHandler.
+const InvalidateSubscriber = "storefront.invalidate_pages"
+
+// InvalidateHandler tells every storefront instance that the event's
+// store changed. Subscribe it to InvalidatingEvents on every role's bus.
+func InvalidateHandler(rdb *redis.Client) eventbus.Handler {
+	return func(ctx context.Context, d eventbus.Delivery) error {
+		return rdb.Publish(ctx, InvalidateChannel, d.Meta.StoreID.String()).Err()
+	}
+}
+
+// CacheConfig bounds the shop's in-memory caches.
+type CacheConfig = web.CacheConfig
+
+// DefaultCacheConfig is the shop's default cache.
+func DefaultCacheConfig() CacheConfig { return web.DefaultCacheConfig() }
+
+// ShopDeps are what the storefront role needs to render pages.
+type ShopDeps struct {
+	Pool    *pgxpool.Pool
+	Redis   *redis.Client
+	Catalog catalog.Storefront
+	Stores  web.Stores // tenancy.Service
+	Media   config.Media
+	Log     *slog.Logger
+	Cache   CacheConfig
+	HTTPS   bool
+}
+
+var _ web.Stores = (tenancy.Service)(nil)
+
+// Shop renders stores' pages for shoppers.
+type Shop struct {
+	shop   *web.Shop
+	assets *web.Assets
+	redis  *redis.Client
+	log    *slog.Logger
+}
+
+// NewShop builds the shop. It reads only: no jobs, no storage writes.
+func NewShop(d ShopDeps) (*Shop, error) {
+	if d.Pool == nil || d.Redis == nil || d.Catalog == nil || d.Stores == nil || d.Log == nil {
+		return nil, errors.New("storefront: missing shop dependency")
+	}
+	assets, err := web.LoadAssets()
+	if err != nil {
+		return nil, err
+	}
+	shop, err := web.New(web.Deps{
+		Catalog: d.Catalog, Stores: d.Stores, Content: app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator()}),
+		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Shop{shop: shop, assets: assets, redis: d.Redis, log: d.Log}, nil
+}
+
+// Pages serves a store's pages; the tenant must be in the context.
+func (s *Shop) Pages() http.Handler { return s.shop }
+
+// Assets serves the static files, the same for every store.
+func (s *Shop) Assets() http.Handler { return s.assets }
+
+// Invalidate drops a store's cached pages on this instance.
+func (s *Shop) Invalidate(store tenant.StoreID) { s.shop.Invalidate(store) }
+
+// Listen applies invalidations published on InvalidateChannel until ctx
+// ends. A lost message costs at most the cache TTL.
+func (s *Shop) Listen(ctx context.Context) {
+	for payload := range redisx.Subscribe(ctx, s.redis, InvalidateChannel, s.log) {
+		id, err := tenant.ParseStoreID(payload)
+		if err != nil {
+			s.log.WarnContext(ctx, "storefront: bad invalidation message", "err", err)
+			continue
+		}
+		s.shop.Invalidate(id)
+	}
+}

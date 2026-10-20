@@ -158,7 +158,7 @@ func TestUnknownRouteIsProblem(t *testing.T) {
 
 func TestStorefrontNotFoundPage(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, middleware.ProfileStorefront, server.MountStorefront(fakeResolver{err: tenancy.ErrUnknownHost}))
+	f := newFixture(t, middleware.ProfileStorefront, mountShop(fakeResolver{err: tenancy.ErrUnknownHost}))
 	rec := f.do(t, http.MethodGet, "/products/abc")
 	body := rec.Body.String()
 	if rec.Code != http.StatusNotFound || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") ||

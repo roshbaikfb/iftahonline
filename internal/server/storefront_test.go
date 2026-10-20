@@ -27,6 +27,27 @@ func (f fakeResolver) Resolve(context.Context, string) (tenancy.Resolution, erro
 	return f.res, f.err
 }
 
+// storePage stands in for the shop: it shows which store it served.
+var storePage = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	id, err := tenant.FromContext(r.Context())
+	if err != nil {
+		http.Error(w, "no tenant", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write([]byte("<p>store page " + strings.ToLower(id.String()) + "</p>"))
+})
+
+var assetFile = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript")
+	_, _ = w.Write([]byte("// asset"))
+})
+
+func mountShop(r fakeResolver) func(server.Routes) {
+	return server.MountStorefront(r, storePage, "/assets/", assetFile)
+}
+
 func TestStorefrontHostResolution(t *testing.T) {
 	t.Parallel()
 	store := tenant.StoreID{ID: ulid.NewGenerator().New()}
@@ -45,13 +66,13 @@ func TestStorefrontHostResolution(t *testing.T) {
 			[]string{"Store unavailable", "iftahonline"}, false},
 		{"resolver failure is a temporary error", fakeResolver{err: errors.New("db down")}, http.StatusServiceUnavailable,
 			[]string{"Temporary error"}, true},
-		{"active store serves", fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusActive}}, http.StatusOK,
-			[]string{"Coming soon"}, false},
+		{"active store serves its pages", fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusActive}}, http.StatusOK,
+			[]string{"store page " + strings.ToLower(store.String())}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			f := newFixture(t, middleware.ProfileStorefront, server.MountStorefront(tt.resolver))
+			f := newFixture(t, middleware.ProfileStorefront, mountShop(tt.resolver))
 			rec := f.do(t, http.MethodGet, "/")
 			body := rec.Body.String()
 			if rec.Code != tt.wantStatus || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
@@ -62,8 +83,8 @@ func TestStorefrontHostResolution(t *testing.T) {
 					t.Fatalf("body lacks %q: %s", want, body)
 				}
 			}
-			if strings.Contains(body, store.String()) {
-				t.Fatal("page leaks the store ID")
+			if tt.wantStatus != http.StatusOK && strings.Contains(strings.ToLower(body), strings.ToLower(store.String())) {
+				t.Fatal("error page leaks the store ID")
 			}
 			if (rec.Header().Get("Retry-After") != "") != tt.retryAfter {
 				t.Fatalf("Retry-After = %q", rec.Header().Get("Retry-After"))
@@ -72,6 +93,20 @@ func TestStorefrontHostResolution(t *testing.T) {
 				t.Fatalf("Cache-Control = %q", rec.Header().Get("Cache-Control"))
 			}
 		})
+	}
+}
+
+// TestStorefrontAssetsSkipResolution: static files are the same for every
+// host, so they are served even when the host is unknown or the
+// resolver is down.
+func TestStorefrontAssetsSkipResolution(t *testing.T) {
+	t.Parallel()
+	for _, r := range []fakeResolver{{err: tenancy.ErrUnknownHost}, {err: errors.New("db down")}} {
+		f := newFixture(t, middleware.ProfileStorefront, mountShop(r))
+		rec := f.do(t, http.MethodGet, "/assets/app.0123abcd.js")
+		if rec.Code != http.StatusOK || rec.Body.String() != "// asset" {
+			t.Fatalf("asset with resolver %v: %d %q", r.err, rec.Code, rec.Body.String())
+		}
 	}
 }
 
