@@ -41,6 +41,69 @@ func (e ImageUploadRequestContentType) Valid() bool {
 	}
 }
 
+// Defines values for ImportKind.
+const (
+	ImportKindCsv         ImportKind = "csv"
+	ImportKindWoocommerce ImportKind = "woocommerce"
+)
+
+// Valid indicates whether the value is a known member of the ImportKind enum.
+func (e ImportKind) Valid() bool {
+	switch e {
+	case ImportKindCsv:
+		return true
+	case ImportKindWoocommerce:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImportStatus.
+const (
+	ImportStatusFailed    ImportStatus = "failed"
+	ImportStatusPending   ImportStatus = "pending"
+	ImportStatusQueued    ImportStatus = "queued"
+	ImportStatusRunning   ImportStatus = "running"
+	ImportStatusSucceeded ImportStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ImportStatus enum.
+func (e ImportStatus) Valid() bool {
+	switch e {
+	case ImportStatusFailed:
+		return true
+	case ImportStatusPending:
+		return true
+	case ImportStatusQueued:
+		return true
+	case ImportStatusRunning:
+		return true
+	case ImportStatusSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImportRequestKind.
+const (
+	ImportRequestKindCsv         ImportRequestKind = "csv"
+	ImportRequestKindWoocommerce ImportRequestKind = "woocommerce"
+)
+
+// Valid indicates whether the value is a known member of the ImportRequestKind enum.
+func (e ImportRequestKind) Valid() bool {
+	switch e {
+	case ImportRequestKindCsv:
+		return true
+	case ImportRequestKindWoocommerce:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProductStatus.
 const (
 	ProductStatusActive   ProductStatus = "active"
@@ -91,22 +154,22 @@ func (e ProductImageFailureReason) Valid() bool {
 
 // Defines values for ProductImageStatus.
 const (
-	Failed     ProductImageStatus = "failed"
-	Pending    ProductImageStatus = "pending"
-	Processing ProductImageStatus = "processing"
-	Ready      ProductImageStatus = "ready"
+	ProductImageStatusFailed     ProductImageStatus = "failed"
+	ProductImageStatusPending    ProductImageStatus = "pending"
+	ProductImageStatusProcessing ProductImageStatus = "processing"
+	ProductImageStatusReady      ProductImageStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the ProductImageStatus enum.
 func (e ProductImageStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case ProductImageStatusFailed:
 		return true
-	case Pending:
+	case ProductImageStatusPending:
 		return true
-	case Processing:
+	case ProductImageStatusProcessing:
 		return true
-	case Ready:
+	case ProductImageStatusReady:
 		return true
 	default:
 		return false
@@ -315,6 +378,66 @@ type ImageUploadRequest struct {
 // ImageUploadRequestContentType defines model for ImageUploadRequest.ContentType.
 type ImageUploadRequestContentType string
 
+// Import defines model for Import.
+type Import struct {
+	Created   int       `json:"created"`
+	CreatedAt time.Time `json:"created_at"`
+	Failed    int       `json:"failed"`
+
+	// FailureReason Why a failed import could not read its source, e.g. bad_header,
+	// csv_malformed, not_utf8, upload_missing,
+	// woo_auth, woo_not_found, woo_blocked_address.
+	FailureReason *string    `json:"failure_reason,omitempty"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id        ULID       `json:"id"`
+	Kind      ImportKind `json:"kind"`
+	Processed int        `json:"processed"`
+
+	// RowErrors The first 100 records that could not be imported.
+	RowErrors []ImportRowError `json:"row_errors"`
+	StartedAt *time.Time       `json:"started_at,omitempty"`
+	Status    ImportStatus     `json:"status"`
+
+	// Total Products in the source (0 until known).
+	Total          int     `json:"total"`
+	Updated        int     `json:"updated"`
+	WoocommerceUrl *string `json:"woocommerce_url,omitempty"`
+}
+
+// ImportKind defines model for Import.Kind.
+type ImportKind string
+
+// ImportStatus defines model for Import.Status.
+type ImportStatus string
+
+// ImportCreated defines model for ImportCreated.
+type ImportCreated struct {
+	Import Import           `json:"import"`
+	Upload *PresignedUpload `json:"upload,omitempty"`
+}
+
+// ImportList defines model for ImportList.
+type ImportList struct {
+	Items []Import `json:"items"`
+}
+
+// ImportRequest defines model for ImportRequest.
+type ImportRequest struct {
+	Kind        ImportRequestKind  `json:"kind"`
+	Woocommerce *WooCommerceSource `json:"woocommerce,omitempty"`
+}
+
+// ImportRequestKind defines model for ImportRequest.Kind.
+type ImportRequestKind string
+
+// ImportRowError defines model for ImportRowError.
+type ImportRowError struct {
+	Line    int    `json:"line"`
+	Message string `json:"message"`
+}
+
 // InventoryInput defines model for InventoryInput.
 type InventoryInput struct {
 	OnHand  int   `json:"on_hand"`
@@ -509,6 +632,16 @@ type VariantInput struct {
 	Tracked *bool `json:"tracked,omitempty"`
 }
 
+// WooCommerceSource defines model for WooCommerceSource.
+type WooCommerceSource struct {
+	// ConsumerKey Example: ck_…
+	ConsumerKey    string `json:"consumer_key"`
+	ConsumerSecret string `json:"consumer_secret"`
+
+	// Url Example: https://shop.example.com
+	Url string `json:"url"`
+}
+
 // CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CategoryID = ULID
 
@@ -517,6 +650,9 @@ type DomainID = ULID
 
 // ImageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImageID = ULID
+
+// ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type ImportID = ULID
 
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID
@@ -556,6 +692,9 @@ type CreateCategoryJSONRequestBody = CategoryInput
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryInput
 
+// CreateImportJSONRequestBody defines body for CreateImport for application/json ContentType.
+type CreateImportJSONRequestBody = ImportRequest
+
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductInput
 
@@ -585,6 +724,18 @@ type ServerInterface interface {
 	// UpdateCategory Replace or move a category
 	// (PUT /v1/stores/{store_id}/categories/{category_id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, storeId StoreID, categoryId CategoryID)
+	// ListImports The store's latest imports
+	// (GET /v1/stores/{store_id}/imports)
+	ListImports(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CreateImport Create a product import
+	// (POST /v1/stores/{store_id}/imports)
+	CreateImport(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetImport An import's progress and report
+	// (GET /v1/stores/{store_id}/imports/{import_id})
+	GetImport(w http.ResponseWriter, r *http.Request, storeId StoreID, importId ImportID)
+	// StartImport Start a pending import
+	// (POST /v1/stores/{store_id}/imports/{import_id}/start)
+	StartImport(w http.ResponseWriter, r *http.Request, storeId StoreID, importId ImportID)
 	// ListProducts List products
 	// (GET /v1/stores/{store_id}/products)
 	ListProducts(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListProductsParams)
@@ -742,6 +893,128 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, storeId, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImports operation middleware
+func (siw *ServerInterfaceWrapper) ListImports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImports(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateImport operation middleware
+func (siw *ServerInterfaceWrapper) CreateImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateImport(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImport operation middleware
+func (siw *ServerInterfaceWrapper) GetImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "import_id" -------------
+	var importId ImportID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "import_id", r.PathValue("import_id"), &importId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "import_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImport(w, r, storeId, importId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartImport operation middleware
+func (siw *ServerInterfaceWrapper) StartImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "import_id" -------------
+	var importId ImportID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "import_id", r.PathValue("import_id"), &importId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "import_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartImport(w, r, storeId, importId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1389,6 +1662,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}", wrapper.DeleteImage)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}", wrapper.UpdateImage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete", wrapper.CompleteImageUpload)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/imports", wrapper.ListImports)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/imports", wrapper.CreateImport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/imports/{import_id}", wrapper.GetImport)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/imports/{import_id}/start", wrapper.StartImport)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/variants/{variant_id}/inventory", wrapper.SetInventory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.ListCategories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.CreateCategory)
@@ -1543,6 +1820,165 @@ type UpdateCategorydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateCategorydefaultApplicationProblemPlusJSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImportsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListImportsResponseObject interface {
+	VisitListImportsResponse(w http.ResponseWriter) error
+}
+
+type ListImports200JSONResponse ImportList
+
+func (response ListImports200JSONResponse) VisitListImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImportsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListImportsdefaultApplicationProblemPlusJSONResponse) VisitListImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImportRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *CreateImportJSONRequestBody
+}
+
+type CreateImportResponseObject interface {
+	VisitCreateImportResponse(w http.ResponseWriter) error
+}
+
+type CreateImport201JSONResponse ImportCreated
+
+func (response CreateImport201JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateImportdefaultApplicationProblemPlusJSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetImportRequestObject struct {
+	StoreId  StoreID  `json:"store_id"`
+	ImportId ImportID `json:"import_id"`
+}
+
+type GetImportResponseObject interface {
+	VisitGetImportResponse(w http.ResponseWriter) error
+}
+
+type GetImport200JSONResponse Import
+
+func (response GetImport200JSONResponse) VisitGetImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetImportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetImportdefaultApplicationProblemPlusJSONResponse) VisitGetImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImportRequestObject struct {
+	StoreId  StoreID  `json:"store_id"`
+	ImportId ImportID `json:"import_id"`
+}
+
+type StartImportResponseObject interface {
+	VisitStartImportResponse(w http.ResponseWriter) error
+}
+
+type StartImport202JSONResponse Import
+
+func (response StartImport202JSONResponse) VisitStartImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartImportdefaultApplicationProblemPlusJSONResponse) VisitStartImportResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2003,6 +2439,18 @@ type StrictServerInterface interface {
 	// UpdateCategory Replace or move a category
 	// (PUT /v1/stores/{store_id}/categories/{category_id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
+	// ListImports The store's latest imports
+	// (GET /v1/stores/{store_id}/imports)
+	ListImports(ctx context.Context, request ListImportsRequestObject) (ListImportsResponseObject, error)
+	// CreateImport Create a product import
+	// (POST /v1/stores/{store_id}/imports)
+	CreateImport(ctx context.Context, request CreateImportRequestObject) (CreateImportResponseObject, error)
+	// GetImport An import's progress and report
+	// (GET /v1/stores/{store_id}/imports/{import_id})
+	GetImport(ctx context.Context, request GetImportRequestObject) (GetImportResponseObject, error)
+	// StartImport Start a pending import
+	// (POST /v1/stores/{store_id}/imports/{import_id}/start)
+	StartImport(ctx context.Context, request StartImportRequestObject) (StartImportResponseObject, error)
 	// ListProducts List products
 	// (GET /v1/stores/{store_id}/products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -2190,6 +2638,119 @@ func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCategoryResponseObject); ok {
 		if err := validResponse.VisitUpdateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListImports operation middleware
+func (sh *strictHandler) ListImports(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListImportsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImports(ctx, request.(ListImportsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImports")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImportsResponseObject); ok {
+		if err := validResponse.VisitListImportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateImport operation middleware
+func (sh *strictHandler) CreateImport(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateImportRequestObject
+
+	request.StoreId = storeId
+
+	var body CreateImportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateImport(ctx, request.(CreateImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateImportResponseObject); ok {
+		if err := validResponse.VisitCreateImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetImport operation middleware
+func (sh *strictHandler) GetImport(w http.ResponseWriter, r *http.Request, storeId StoreID, importId ImportID) {
+	var request GetImportRequestObject
+
+	request.StoreId = storeId
+	request.ImportId = importId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetImport(ctx, request.(GetImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetImportResponseObject); ok {
+		if err := validResponse.VisitGetImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartImport operation middleware
+func (sh *strictHandler) StartImport(w http.ResponseWriter, r *http.Request, storeId StoreID, importId ImportID) {
+	var request StartImportRequestObject
+
+	request.StoreId = storeId
+	request.ImportId = importId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartImport(ctx, request.(StartImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartImportResponseObject); ok {
+		if err := validResponse.VisitStartImportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

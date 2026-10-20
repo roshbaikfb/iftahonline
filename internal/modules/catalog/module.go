@@ -19,6 +19,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
+	"github.com/roshbaikfb/iftahonline/internal/platform/safehttp"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -35,6 +38,8 @@ type Deps struct {
 	Media config.Media
 	// Search is the products index (ADR-0013).
 	Search config.Search
+	// Keyring seals WooCommerce credentials (ADR-0014).
+	Keyring *secretbox.Keyring
 }
 
 // Module is the wired catalog module.
@@ -48,7 +53,7 @@ type Module struct {
 
 // New wires the module.
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Jobs == nil || d.IDs == nil || d.Log == nil || d.Currency == nil {
+	if d.Pool == nil || d.Jobs == nil || d.IDs == nil || d.Log == nil || d.Currency == nil || d.Keyring == nil {
 		return nil, errors.New("catalog: missing dependency")
 	}
 	if d.Audit == nil {
@@ -67,6 +72,10 @@ func New(d Deps) (*Module, error) {
 	return &Module{
 		svc: app.NewService(app.Deps{
 			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index,
+			Imports: app.Imports{
+				Keyring: d.Keyring, Retry: retry.Default(),
+				HTTP: safehttp.New(safehttp.Options{Timeout: 30 * time.Second, MaxResponseBytes: 20 << 20}),
+			},
 		}),
 		media: m, index: index, deps: d,
 		signer: media.NewSigner(mc.ImgproxyURL, mc.S3Bucket, mc.ImgproxyKey, mc.ImgproxySalt),
@@ -96,6 +105,7 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 		wrap(river.AddWorkerSafely(w, &app.DeleteObjectsWorker{ImageWorkers: iw})),
 		wrap(river.AddWorkerSafely(w, &app.IndexWorker{DB: m.deps.Pool, Index: m.index})),
 		wrap(river.AddWorkerSafely(w, &app.SearchSettingsWorker{Index: m.index})),
+		wrap(river.AddWorkerSafely(w, &app.ImportWorker{Svc: m.svc})),
 	)
 }
 

@@ -48,3 +48,6 @@ WITH RECURSIVE down AS (
   WHERE c.store_id = @store_id AND down.depth < 16
 )
 SELECT coalesce(max(depth), 0)::int AS height FROM down;
+
+-- name: GetCategoryIDBySlug :one
+SELECT id FROM categories WHERE store_id = @store_id AND slug = @slug;

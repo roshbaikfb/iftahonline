@@ -36,6 +36,7 @@ type Service struct {
 	currency CurrencySource
 	media    Media
 	search   SearchIndex
+	imports  Imports
 	now      func() time.Time
 }
 
@@ -48,11 +49,12 @@ type Deps struct {
 	Currency CurrencySource
 	Media    Media
 	Search   SearchIndex
+	Imports  Imports
 }
 
 // NewService builds the service.
 func NewService(d Deps) *Service {
-	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, now: time.Now}
+	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, imports: d.Imports, now: time.Now}
 }
 
 // SetClock replaces the clock (tests).

@@ -835,6 +835,80 @@ paths:
               schema: { $ref: "#/components/schemas/ProductImage" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/imports:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: listImports
+      summary: The store's latest imports
+      description: "Permission: imports.manage. The 50 newest, newest first."
+      responses:
+        "200":
+          description: Imports.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [catalog]
+      operationId: createImport
+      summary: Create a product import
+      description: |
+        Permission: imports.manage (ADR-0014). For `csv`, upload
+        the file with the returned presigned POST (as for images), then call
+        `startImport`. For `woocommerce`, send the shop's https URL and a
+        read-only REST API key pair; they are stored encrypted and never
+        returned. Products are matched by handle/slug: existing ones are
+        updated (variants matched by SKU), others created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "201":
+          description: The pending import (and the upload for files).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportCreated" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/imports/{import_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ImportID"
+    get:
+      tags: [catalog]
+      operationId: getImport
+      summary: An import's progress and report
+      description: "Permission: imports.manage. Poll while `queued` or `running`."
+      responses:
+        "200":
+          description: The import.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Import" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/imports/{import_id}/start:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/ImportID"
+    post:
+      tags: [catalog]
+      operationId: startImport
+      summary: Start a pending import
+      description: "Permission: imports.manage. 409 import_already_started when it is not pending."
+      responses:
+        "202":
+          description: Queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Import" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/variants/{variant_id}/inventory:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -1142,6 +1216,11 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     ImageID:
       name: image_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    ImportID:
+      name: import_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -1590,6 +1669,64 @@ components:
           items: { $ref: "#/components/schemas/ProductImage" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    ImportRequest:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [csv, woocommerce] }
+        woocommerce: { $ref: "#/components/schemas/WooCommerceSource" }
+    WooCommerceSource:
+      type: object
+      required: [url, consumer_key, consumer_secret]
+      properties:
+        url: { type: string, maxLength: 2048, example: https://shop.example.com }
+        consumer_key: { type: string, maxLength: 200, example: ck_… }
+        consumer_secret: { type: string, maxLength: 200, format: password }
+    ImportCreated:
+      type: object
+      required: [import]
+      properties:
+        import: { $ref: "#/components/schemas/Import" }
+        upload: { $ref: "#/components/schemas/PresignedUpload" }
+    Import:
+      type: object
+      required: [id, kind, status, total, processed, created, updated, failed, row_errors, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { type: string, enum: [csv, woocommerce] }
+        status: { type: string, enum: [pending, queued, running, succeeded, failed] }
+        total: { type: integer, description: Products in the source (0 until known). }
+        processed: { type: integer }
+        created: { type: integer }
+        updated: { type: integer }
+        failed: { type: integer }
+        row_errors:
+          type: array
+          description: The first 100 records that could not be imported.
+          items: { $ref: "#/components/schemas/ImportRowError" }
+        failure_reason:
+          type: string
+          description: |
+            Why a failed import could not read its source, e.g. bad_header,
+            csv_malformed, not_utf8, upload_missing,
+            woo_auth, woo_not_found, woo_blocked_address.
+        woocommerce_url: { type: string }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    ImportRowError:
+      type: object
+      required: [line, message]
+      properties:
+        line: { type: integer }
+        message: { type: string }
+    ImportList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Import" }
     ProductSearchPage:
       type: object
       required: [items, estimated_total]

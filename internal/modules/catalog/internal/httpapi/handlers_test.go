@@ -32,6 +32,8 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/safehttp"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -108,6 +110,16 @@ type fixture struct {
 	productB domain.Product
 	catB     domain.Category
 	imageB   domain.Image
+	importB  domain.Import
+}
+
+func testImports(t *testing.T) app.Imports {
+	t.Helper()
+	kr, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=") // public dev key
+	if err != nil {
+		t.Fatal(err)
+	}
+	return app.Imports{Keyring: kr, HTTP: safehttp.New(safehttp.Options{})}
 }
 
 // storeIndex answers every search with one hit of the store in ctx, so
@@ -153,7 +165,7 @@ func newFixture(t *testing.T) fixture {
 	ids := ulid.NewGenerator()
 	svc := app.NewService(app.Deps{DB: pool, Jobs: ins, IDs: ids, Audit: audit.Nop{}, Currency: currency(money.EGP),
 		Media:  app.Media{Objects: presignOnly{}, Limits: media.Limits{MaxBytes: 1 << 20, MaxPixels: 1 << 20}},
-		Search: storeIndex{}})
+		Search: storeIndex{}, Imports: testImports(t)})
 	mk := func() (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}
 		sctx := tenant.WithStore(ctx, id)
@@ -193,7 +205,12 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB, imageB: imageB}
+	importB, _, err := svc.CreateImport(ctxB, app.NewImportInput{Kind: "woocommerce", WooURL: "https://b-secret-shop.example.com",
+		WooKey: "ck_bsecret", WooSecret: "cs_bsecret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB, imageB: imageB, importB: importB}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -319,6 +336,29 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("hit = %v (the store and normalized text must come from the handler)", hit)
 	}
 
+	code, ic := f.do(t, req(t, http.MethodPost, storePath(a, "/imports"), tokOwnerA, `{"kind":"csv"}`))
+	if code != http.StatusCreated || ic["import"].(map[string]any)["status"] != "pending" || ic["upload"].(map[string]any)["fields"].(map[string]any)["Content-Type"] != "text/csv" {
+		t.Fatalf("createImport = %d %v", code, ic)
+	}
+	impID := ic["import"].(map[string]any)["id"].(string)
+	code, wc := f.do(t, req(t, http.MethodPost, storePath(a, "/imports"), tokOwnerA,
+		`{"kind":"woocommerce","woocommerce":{"url":"https://shop.example.com","consumer_key":"ck_abc","consumer_secret":"cs_topsecret"}}`))
+	if code != http.StatusCreated || wc["upload"] != nil || wc["import"].(map[string]any)["woocommerce_url"] != "https://shop.example.com" {
+		t.Fatalf("createImport woocommerce = %d %v", code, wc)
+	}
+	if raw, _ := json.Marshal(wc); strings.Contains(string(raw), "cs_topsecret") || strings.Contains(string(raw), "ck_abc") {
+		t.Fatal("createImport echoes the WooCommerce keys")
+	}
+	if c, body := f.do(t, req(t, http.MethodPost, storePath(a, "/imports/"+impID+"/start"), tokOwnerA, "")); c != http.StatusAccepted || body["status"] != "queued" {
+		t.Fatalf("startImport = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodGet, storePath(a, "/imports/"+impID), tokOwnerA, "")); c != http.StatusOK || body["processed"] != float64(0) || body["row_errors"] == nil {
+		t.Fatalf("getImport = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodGet, storePath(a, "/imports"), tokOwnerA, "")); c != http.StatusOK || len(body["items"].([]any)) != 2 {
+		t.Fatalf("listImports = %d %v", c, body)
+	}
+
 	mustCreate := func(title string) {
 		if c, b := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"`+title+`","variants":[{"price_minor":1}]}`)); c != http.StatusCreated {
 			t.Fatalf("create %s = %d %v", title, code, b)
@@ -386,6 +426,11 @@ func TestValidation(t *testing.T) {
 		{"long search", req(t, http.MethodGet, storePath(a, "/products/search?q="+strings.Repeat("a", 201)), tokOwnerA, ""), 422, "validation_failed", "q"},
 		{"search offset", req(t, http.MethodGet, storePath(a, "/products/search?offset=5000"), tokOwnerA, ""), 422, "validation_failed", "offset"},
 		{"search category", req(t, http.MethodGet, storePath(a, "/products/search?category_id=nope"), tokOwnerA, ""), 422, "validation_failed", "category_id"},
+		{"import kind", req(t, http.MethodPost, storePath(a, "/imports"), tokOwnerA, `{"kind":"pdf"}`), 422, "validation_failed", "kind"},
+		{"woo without https", req(t, http.MethodPost, storePath(a, "/imports"), tokOwnerA, `{"kind":"woocommerce","woocommerce":{"url":"http://x.example.com","consumer_key":"ck_1","consumer_secret":"cs_1"}}`), 422, "validation_failed", "woocommerce.url"},
+		{"woo private address", req(t, http.MethodPost, storePath(a, "/imports"), tokOwnerA, `{"kind":"woocommerce","woocommerce":{"url":"https://192.168.1.1","consumer_key":"ck_1","consumer_secret":"cs_1"}}`), 422, "validation_failed", "woocommerce.url"},
+		{"missing import", req(t, http.MethodGet, storePath(a, "/imports/"+id), tokOwnerA, ""), 404, "import_not_found", ""},
+		{"bad import id", req(t, http.MethodPost, storePath(a, "/imports/nope/start"), tokOwnerA, ""), 404, "import_not_found", ""},
 		{"svg upload", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/svg+xml"}`), 422, "validation_failed", "content_type"},
 		{"upload to missing product", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokOwnerA, `{"content_type":"image/png"}`), 404, "product_not_found", ""},
 		{"long alt", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokOwnerA, `{"alt":"`+strings.Repeat("a", 201)+`"}`), 422, "validation_failed", "alt"},
@@ -473,6 +518,10 @@ func TestAuthorization(t *testing.T) {
 		{"support cannot delete category", req(t, http.MethodDelete, storePath(a, "/categories/"+id), tokSupportA, ""), http.StatusForbidden},
 		{"shipping sets stock", req(t, http.MethodPut, storePath(a, "/variants/"+id+"/inventory"), tokShippingA, `{"on_hand":1}`), http.StatusNotFound},
 		{"shipping cannot create product", req(t, http.MethodPost, storePath(a, "/products"), tokShippingA, product), http.StatusForbidden},
+		{"support cannot list imports", req(t, http.MethodGet, storePath(a, "/imports"), tokSupportA, ""), http.StatusForbidden},
+		{"support cannot create imports", req(t, http.MethodPost, storePath(a, "/imports"), tokSupportA, `{"kind":"csv"}`), http.StatusForbidden},
+		{"shipping cannot read imports", req(t, http.MethodGet, storePath(a, "/imports/"+id), tokShippingA, ""), http.StatusForbidden},
+		{"shipping cannot start imports", req(t, http.MethodPost, storePath(a, "/imports/"+id+"/start"), tokShippingA, ""), http.StatusForbidden},
 		{"support cannot upload images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images"), tokSupportA, `{"content_type":"image/png"}`), http.StatusForbidden},
 		{"support cannot complete images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokSupportA, ""), http.StatusForbidden},
 		{"shipping cannot edit images", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, `{"alt":"x"}`), http.StatusForbidden},
@@ -496,7 +545,8 @@ func TestCrossTenant(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.storeA, f.storeB
 	pid, vid, cid, iid := f.productB.ID.String(), f.productB.Variants[0].ID.String(), f.catB.ID.String(), f.imageB.ID.String()
-	leaks := []string{"B secret product", "B secret category", "B-SKU-1", "B secret alt", pid, vid, cid, iid}
+	mid := f.importB.ID.String()
+	leaks := []string{"B secret product", "B secret category", "B-SKU-1", "B secret alt", "b-secret-shop", "cs_bsecret", pid, vid, cid, iid, mid}
 	product := `{"title":"pwned","variants":[{"price_minor":1}]}`
 
 	unchanged := func(tb testing.TB) {
@@ -505,6 +555,12 @@ func TestCrossTenant(t *testing.T) {
 		if err != nil || p.Title != "B secret product" || len(p.Variants) != 1 || p.Variants[0].Stock.OnHand != 7 || len(p.CategoryIDs) != 1 ||
 			len(p.Images) != 1 || p.Images[0].Alt != "B secret alt" || p.Images[0].Status != domain.ImagePending {
 			tb.Errorf("store B's product changed: %+v %v", p, err)
+		}
+		if im, imErr := f.svc.GetImport(f.ctxB, f.importB.ID); imErr != nil || im.Status != domain.ImportPending {
+			tb.Errorf("store B's import changed: %+v %v", im, imErr)
+		}
+		if list, listErr := f.svc.ListImports(f.ctxB); listErr != nil || len(list) != 1 {
+			tb.Errorf("store B's imports changed: %d %v", len(list), listErr)
 		}
 		cats, err := f.svc.ListCategories(f.ctxB)
 		if err != nil || len(cats) != 1 || cats[0].Name != "B secret category" {
@@ -537,6 +593,12 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "completeImageUpload", Request: req(t, http.MethodPost, storePath(a, "/products/"+pid+"/images/"+iid+"/complete"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "updateImage", Request: req(t, http.MethodPatch, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, `{"alt":"pwned"}`), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "updateImage", Request: req(t, http.MethodPatch, storePath(b, "/products/"+pid+"/images/"+iid), tokOwnerA, `{"alt":"pwned"}`), Unchanged: unchanged},
+		{OperationID: "listImports", Request: req(t, http.MethodGet, storePath(b, "/imports"), tokOwnerA, "")},
+		{OperationID: "createImport", Request: req(t, http.MethodPost, storePath(b, "/imports"), tokOwnerA, `{"kind":"csv"}`), Unchanged: unchanged},
+		{OperationID: "getImport", Request: req(t, http.MethodGet, storePath(a, "/imports/"+mid), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "getImport", Request: req(t, http.MethodGet, storePath(b, "/imports/"+mid), tokOwnerA, "")},
+		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(a, "/imports/"+mid+"/start"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(b, "/imports/"+mid+"/start"), tokOwnerA, ""), Unchanged: unchanged},
 		{OperationID: "deleteImage", Request: req(t, http.MethodDelete, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 	}
 	for _, c := range cases {

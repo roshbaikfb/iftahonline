@@ -759,6 +759,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's latest imports
+         * @description Permission: imports.manage. The 50 newest, newest first.
+         */
+        get: operations["listImports"];
+        put?: never;
+        /**
+         * Create a product import
+         * @description Permission: imports.manage (ADR-0014). For `csv`, upload
+         *     the file with the returned presigned POST (as for images), then call
+         *     `startImport`. For `woocommerce`, send the shop's https URL and a
+         *     read-only REST API key pair; they are stored encrypted and never
+         *     returned. Products are matched by handle/slug: existing ones are
+         *     updated (variants matched by SKU), others created.
+         */
+        post: operations["createImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/imports/{import_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                import_id: components["parameters"]["ImportID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * An import's progress and report
+         * @description Permission: imports.manage. Poll while `queued` or `running`.
+         */
+        get: operations["getImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/imports/{import_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                import_id: components["parameters"]["ImportID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a pending import
+         * @description Permission: imports.manage. 409 import_already_started when it is not pending.
+         */
+        post: operations["startImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/variants/{variant_id}/inventory": {
         parameters: {
             query?: never;
@@ -1380,6 +1457,58 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        ImportRequest: {
+            /** @enum {string} */
+            kind: "csv" | "woocommerce";
+            woocommerce?: components["schemas"]["WooCommerceSource"];
+        };
+        WooCommerceSource: {
+            /** @example https://shop.example.com */
+            url: string;
+            /** @example ck_… */
+            consumer_key: string;
+            /** Format: password */
+            consumer_secret: string;
+        };
+        ImportCreated: {
+            import: components["schemas"]["Import"];
+            upload?: components["schemas"]["PresignedUpload"];
+        };
+        Import: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "csv" | "woocommerce";
+            /** @enum {string} */
+            status: "pending" | "queued" | "running" | "succeeded" | "failed";
+            /** @description Products in the source (0 until known). */
+            total: number;
+            processed: number;
+            created: number;
+            updated: number;
+            failed: number;
+            /** @description The first 100 records that could not be imported. */
+            row_errors: components["schemas"]["ImportRowError"][];
+            /**
+             * @description Why a failed import could not read its source, e.g. bad_header,
+             *     csv_malformed, not_utf8, upload_missing,
+             *     woo_auth, woo_not_found, woo_blocked_address.
+             */
+            failure_reason?: string;
+            woocommerce_url?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ImportRowError: {
+            line: number;
+            message: string;
+        };
+        ImportList: {
+            items: components["schemas"]["Import"][];
+        };
         ProductSearchPage: {
             items: components["schemas"]["ProductSearchHit"][];
             /** Format: int64 */
@@ -1561,6 +1690,7 @@ export interface components {
         VariantID: components["schemas"]["ULID"];
         CategoryID: components["schemas"]["ULID"];
         ImageID: components["schemas"]["ULID"];
+        ImportID: components["schemas"]["ULID"];
     };
     requestBodies: never;
     headers: {
@@ -2616,6 +2746,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductImage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description The pending import (and the upload for files). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                import_id: components["parameters"]["ImportID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The import. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                import_id: components["parameters"]["ImportID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
                 };
             };
             default: components["responses"]["Problem"];

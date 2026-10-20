@@ -193,7 +193,7 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	}
 	stores := ten.Service()
 	return catalog.New(catalog.Deps{
-		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media, Search: c.cfg.Search,
+		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media, Search: c.cfg.Search, Keyring: c.cfg.Secrets.Keyring,
 		Currency: catalog.CurrencyFunc(func(ctx context.Context) (money.Currency, error) {
 			st, err := stores.GetStore(ctx)
 			return st.Currency, err
