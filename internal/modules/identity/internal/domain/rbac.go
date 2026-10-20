@@ -20,7 +20,7 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermStoreRead, authz.PermStoreUpdate,
 			authz.PermDomainsRead, authz.PermDomainsManage,
 			authz.PermMembersRead, authz.PermAuditRead,
-			authz.PermCatalogRead, authz.PermCatalogManage, authz.PermInventoryManage,
+			authz.PermCatalogRead, authz.PermCatalogManage, authz.PermInventoryManage, authz.PermImportsManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
