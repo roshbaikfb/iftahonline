@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,10 +11,10 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -25,17 +24,9 @@ import (
 // concurrency bounds how many decoded images a worker holds at once.
 const QueueMedia = "media"
 
-// ObjectStore is the S3-compatible bucket (media.S3 in production).
-type ObjectStore interface {
-	PresignUpload(ctx context.Context, key, contentType string, maxBytes int64, ttl time.Duration) (media.Upload, error)
-	Get(ctx context.Context, key string, maxBytes int64) ([]byte, error)
-	Put(ctx context.Context, key, contentType string, data []byte) error
-	Delete(ctx context.Context, key string) error
-}
-
 // Media is the service's object storage and the limits on originals.
 type Media struct {
-	Objects ObjectStore
+	Objects media.Objects
 	Limits  media.Limits
 }
 
@@ -271,22 +262,12 @@ func (w *ProcessWorker) Work(ctx context.Context, job *river.Job[ProcessImageArg
 	if img.Status != domain.ImageProcessing {
 		return nil
 	}
-	data, err := w.Media.Objects.Get(ctx, img.UploadKey, w.Media.Limits.MaxBytes)
-	if errors.Is(err, media.ErrNoObject) {
-		return w.fail(ctx, img, "upload_missing")
-	}
-	if err != nil {
-		return err
-	}
-	m, err := media.Process(bytes.NewReader(data), w.Media.Limits)
+	m, key, err := media.Ingest(ctx, w.Media.Objects, w.Media.Limits, img.UploadKey,
+		func(format string) string { return domain.MasterKey(storeID, img.ID, format) })
 	if code, rejected := media.IsReject(err); rejected {
 		return w.fail(ctx, img, code)
 	}
 	if err != nil {
-		return err
-	}
-	key := domain.MasterKey(storeID, img.ID, m.Format)
-	if err = w.Media.Objects.Put(ctx, key, m.ContentType, m.Data); err != nil {
 		return err
 	}
 	return postgres.InTenantTx(ctx, w.DB, func(tx pgx.Tx) error {

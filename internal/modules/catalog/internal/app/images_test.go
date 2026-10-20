@@ -18,9 +18,9 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )

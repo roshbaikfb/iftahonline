@@ -139,7 +139,7 @@ like the documents (`domain.NormalizeSearch`).
 - `app` imports: 1,000-product CSV import as a job (and a second run that
   updates), report with capped row errors, resume from a checkpoint,
   WooCommerce with sealed keys, cross-tenant.
-- `media`: type sniffing, bombs, orientation, metadata stripping;
+- `platform/media` (shared with storefront): `Ingest`, type sniffing, bombs, orientation, metadata stripping;
   `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
   SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).
 - `app` events: each write publishes the right event and reason; stock

@@ -54,7 +54,7 @@ func startStack(t *testing.T) stack {
 	t.Cleanup(func() { _ = net.Remove(context.Background()) })
 
 	_, file, _, _ := runtime.Caller(0)
-	s3json := filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", "deploy", "compose", "seaweedfs", "s3.json")
+	s3json := filepath.Join(filepath.Dir(file), "..", "..", "..", "deploy", "compose", "seaweedfs", "s3.json")
 	weed, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{Started: true, ContainerRequest: testcontainers.ContainerRequest{
 		Image: seaweedImage,
 		Cmd: []string{"server", "-dir=/data", "-ip.bind=0.0.0.0", "-master.volumeSizeLimitMB=64", "-volume.max=0",
