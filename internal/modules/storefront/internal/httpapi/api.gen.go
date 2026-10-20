@@ -16,6 +16,51 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for LogoAssetStatus.
+const (
+	Failed     LogoAssetStatus = "failed"
+	Pending    LogoAssetStatus = "pending"
+	Processing LogoAssetStatus = "processing"
+	Ready      LogoAssetStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the LogoAssetStatus enum.
+func (e LogoAssetStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case Pending:
+		return true
+	case Processing:
+		return true
+	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LogoUploadRequestContentType.
+const (
+	Imagejpeg LogoUploadRequestContentType = "image/jpeg"
+	Imagepng  LogoUploadRequestContentType = "image/png"
+	Imagewebp LogoUploadRequestContentType = "image/webp"
+)
+
+// Valid indicates whether the value is a known member of the LogoUploadRequestContentType enum.
+func (e LogoUploadRequestContentType) Valid() bool {
+	switch e {
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	case Imagewebp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PageKind.
 const (
 	Home    PageKind = "home"
@@ -191,6 +236,54 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
+// ImageFormats defines model for ImageFormats.
+type ImageFormats struct {
+	Avif string `json:"avif"`
+	Webp string `json:"webp"`
+}
+
+// ImageURLs Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px).
+type ImageURLs struct {
+	Large  ImageFormats `json:"large"`
+	Medium ImageFormats `json:"medium"`
+	Small  ImageFormats `json:"small"`
+	Thumb  ImageFormats `json:"thumb"`
+}
+
+// LogoAsset defines model for LogoAsset.
+type LogoAsset struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// FailureReason Why a failed upload was rejected (unsupported_type, file_too_large, too_many_pixels, corrupt_image, upload_missing).
+	FailureReason *string `json:"failure_reason,omitempty"`
+	Height        *int    `json:"height,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id     ULID            `json:"id"`
+	Status LogoAssetStatus `json:"status"`
+
+	// Urls Signed imgproxy URLs, fitted into a square box and never enlarged (thumb 160, small 400, medium 800, large 1600 px).
+	Urls  *ImageURLs `json:"urls,omitempty"`
+	Width *int       `json:"width,omitempty"`
+}
+
+// LogoAssetStatus defines model for LogoAsset.Status.
+type LogoAssetStatus string
+
+// LogoUpload defines model for LogoUpload.
+type LogoUpload struct {
+	Asset  LogoAsset       `json:"asset"`
+	Upload PresignedUpload `json:"upload"`
+}
+
+// LogoUploadRequest defines model for LogoUploadRequest.
+type LogoUploadRequest struct {
+	ContentType LogoUploadRequestContentType `json:"content_type"`
+}
+
+// LogoUploadRequestContentType defines model for LogoUploadRequest.ContentType.
+type LogoUploadRequestContentType string
+
 // Page defines model for Page.
 type Page struct {
 	Body        string     `json:"body"`
@@ -248,6 +341,14 @@ type PageList struct {
 	Items []Page `json:"items"`
 }
 
+// PresignedUpload defines model for PresignedUpload.
+type PresignedUpload struct {
+	ExpiresAt time.Time         `json:"expires_at"`
+	Fields    map[string]string `json:"fields"`
+	MaxBytes  int64             `json:"max_bytes"`
+	Url       string            `json:"url"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -288,6 +389,12 @@ type SectionTypeList struct {
 	// Definitions The shared schema (defs.json) the section schemas reference.
 	Definitions json.RawMessage   `json:"definitions"`
 	Items       []SectionTypeInfo `json:"items"`
+}
+
+// StoreLogo defines model for StoreLogo.
+type StoreLogo struct {
+	Current *LogoAsset `json:"current,omitempty"`
+	Latest  *LogoAsset `json:"latest,omitempty"`
 }
 
 // Theme defines model for Theme.
@@ -337,6 +444,9 @@ type ThemeSettingsRadius string
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
+// AssetID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type AssetID = ULID
+
 // CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CategoryID = ULID
 
@@ -367,6 +477,9 @@ type VariantID = ULID
 // SaveHomePageJSONRequestBody defines body for SaveHomePage for application/json ContentType.
 type SaveHomePageJSONRequestBody = PageInput
 
+// CreateLogoUploadJSONRequestBody defines body for CreateLogoUpload for application/json ContentType.
+type CreateLogoUploadJSONRequestBody = LogoUploadRequest
+
 // CreateLandingPageJSONRequestBody defines body for CreateLandingPage for application/json ContentType.
 type CreateLandingPageJSONRequestBody = PageInput
 
@@ -387,6 +500,18 @@ type ServerInterface interface {
 	// SaveHomePage Save the home page
 	// (PUT /v1/stores/{store_id}/storefront/home)
 	SaveHomePage(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DeleteStoreLogo Remove the logo
+	// (DELETE /v1/stores/{store_id}/storefront/logo)
+	DeleteStoreLogo(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetStoreLogo Get the logo and any upload in progress
+	// (GET /v1/stores/{store_id}/storefront/logo)
+	GetStoreLogo(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CreateLogoUpload Start a logo upload
+	// (POST /v1/stores/{store_id}/storefront/logo/uploads)
+	CreateLogoUpload(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CompleteLogoUpload Process an uploaded logo
+	// (POST /v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete)
+	CompleteLogoUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, assetId AssetID)
 	// ListLandingPages List landing pages
 	// (GET /v1/stores/{store_id}/storefront/pages)
 	ListLandingPages(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -474,6 +599,119 @@ func (siw *ServerInterfaceWrapper) SaveHomePage(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SaveHomePage(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteStoreLogo operation middleware
+func (siw *ServerInterfaceWrapper) DeleteStoreLogo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteStoreLogo(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStoreLogo operation middleware
+func (siw *ServerInterfaceWrapper) GetStoreLogo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStoreLogo(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateLogoUpload operation middleware
+func (siw *ServerInterfaceWrapper) CreateLogoUpload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateLogoUpload(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteLogoUpload operation middleware
+func (siw *ServerInterfaceWrapper) CompleteLogoUpload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "asset_id" -------------
+	var assetId AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "asset_id", r.PathValue("asset_id"), &assetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asset_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteLogoUpload(w, r, storeId, assetId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -936,6 +1174,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/theme", wrapper.GetStorefrontTheme)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/theme", wrapper.UpdateStorefrontTheme)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/logo", wrapper.DeleteStoreLogo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/logo", wrapper.GetStoreLogo)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/logo/uploads", wrapper.CreateLogoUpload)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete", wrapper.CompleteLogoUpload)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/section-types", wrapper.ListSectionTypes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/home", wrapper.GetHomePage)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/home", wrapper.SaveHomePage)
@@ -1021,6 +1263,158 @@ type SaveHomePagedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SaveHomePagedefaultApplicationProblemPlusJSONResponse) VisitSaveHomePageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteStoreLogoRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type DeleteStoreLogoResponseObject interface {
+	VisitDeleteStoreLogoResponse(w http.ResponseWriter) error
+}
+
+type DeleteStoreLogo204Response struct {
+}
+
+func (response DeleteStoreLogo204Response) VisitDeleteStoreLogoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteStoreLogodefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteStoreLogodefaultApplicationProblemPlusJSONResponse) VisitDeleteStoreLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStoreLogoRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetStoreLogoResponseObject interface {
+	VisitGetStoreLogoResponse(w http.ResponseWriter) error
+}
+
+type GetStoreLogo200JSONResponse StoreLogo
+
+func (response GetStoreLogo200JSONResponse) VisitGetStoreLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStoreLogodefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetStoreLogodefaultApplicationProblemPlusJSONResponse) VisitGetStoreLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLogoUploadRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *CreateLogoUploadJSONRequestBody
+}
+
+type CreateLogoUploadResponseObject interface {
+	VisitCreateLogoUploadResponse(w http.ResponseWriter) error
+}
+
+type CreateLogoUpload201JSONResponse LogoUpload
+
+func (response CreateLogoUpload201JSONResponse) VisitCreateLogoUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLogoUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateLogoUploaddefaultApplicationProblemPlusJSONResponse) VisitCreateLogoUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteLogoUploadRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	AssetId AssetID `json:"asset_id"`
+}
+
+type CompleteLogoUploadResponseObject interface {
+	VisitCompleteLogoUploadResponse(w http.ResponseWriter) error
+}
+
+type CompleteLogoUpload202JSONResponse LogoAsset
+
+func (response CompleteLogoUpload202JSONResponse) VisitCompleteLogoUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteLogoUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CompleteLogoUploaddefaultApplicationProblemPlusJSONResponse) VisitCompleteLogoUploadResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1472,6 +1866,18 @@ type StrictServerInterface interface {
 	// SaveHomePage Save the home page
 	// (PUT /v1/stores/{store_id}/storefront/home)
 	SaveHomePage(ctx context.Context, request SaveHomePageRequestObject) (SaveHomePageResponseObject, error)
+	// DeleteStoreLogo Remove the logo
+	// (DELETE /v1/stores/{store_id}/storefront/logo)
+	DeleteStoreLogo(ctx context.Context, request DeleteStoreLogoRequestObject) (DeleteStoreLogoResponseObject, error)
+	// GetStoreLogo Get the logo and any upload in progress
+	// (GET /v1/stores/{store_id}/storefront/logo)
+	GetStoreLogo(ctx context.Context, request GetStoreLogoRequestObject) (GetStoreLogoResponseObject, error)
+	// CreateLogoUpload Start a logo upload
+	// (POST /v1/stores/{store_id}/storefront/logo/uploads)
+	CreateLogoUpload(ctx context.Context, request CreateLogoUploadRequestObject) (CreateLogoUploadResponseObject, error)
+	// CompleteLogoUpload Process an uploaded logo
+	// (POST /v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete)
+	CompleteLogoUpload(ctx context.Context, request CompleteLogoUploadRequestObject) (CompleteLogoUploadResponseObject, error)
 	// ListLandingPages List landing pages
 	// (GET /v1/stores/{store_id}/storefront/pages)
 	ListLandingPages(ctx context.Context, request ListLandingPagesRequestObject) (ListLandingPagesResponseObject, error)
@@ -1598,6 +2004,118 @@ func (sh *strictHandler) SaveHomePage(w http.ResponseWriter, r *http.Request, st
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SaveHomePageResponseObject); ok {
 		if err := validResponse.VisitSaveHomePageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteStoreLogo operation middleware
+func (sh *strictHandler) DeleteStoreLogo(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request DeleteStoreLogoRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteStoreLogo(ctx, request.(DeleteStoreLogoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteStoreLogo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteStoreLogoResponseObject); ok {
+		if err := validResponse.VisitDeleteStoreLogoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStoreLogo operation middleware
+func (sh *strictHandler) GetStoreLogo(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetStoreLogoRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStoreLogo(ctx, request.(GetStoreLogoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStoreLogo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStoreLogoResponseObject); ok {
+		if err := validResponse.VisitGetStoreLogoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateLogoUpload operation middleware
+func (sh *strictHandler) CreateLogoUpload(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateLogoUploadRequestObject
+
+	request.StoreId = storeId
+
+	var body CreateLogoUploadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateLogoUpload(ctx, request.(CreateLogoUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateLogoUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateLogoUploadResponseObject); ok {
+		if err := validResponse.VisitCreateLogoUploadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteLogoUpload operation middleware
+func (sh *strictHandler) CompleteLogoUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, assetId AssetID) {
+	var request CompleteLogoUploadRequestObject
+
+	request.StoreId = storeId
+	request.AssetId = assetId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteLogoUpload(ctx, request.(CompleteLogoUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteLogoUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteLogoUploadResponseObject); ok {
+		if err := validResponse.VisitCompleteLogoUploadResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

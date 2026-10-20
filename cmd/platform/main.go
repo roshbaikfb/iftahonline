@@ -216,6 +216,16 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	})
 }
 
+func newStorefront(c clients) (*storefront.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	return storefront.New(storefront.Deps{
+		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events, Jobs: inserter, Media: c.cfg.Media,
+	})
+}
+
 // mountAPI wires the merchant API: identity's routes, and every store
 // module's routes behind identity's membership middleware and policy.
 func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
@@ -231,7 +241,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	shop, err := storefront.New(storefront.Deps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events})
+	shop, err := newStorefront(c)
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +411,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	if err = cat.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	shop, err := newStorefront(c)
+	if err != nil {
+		return err
+	}
+	if err = shop.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{

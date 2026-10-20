@@ -19,10 +19,16 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+// URLSigner builds delivery URLs of an image master (media.Signer).
+type URLSigner interface {
+	URLs(objectKey string) map[string]map[string]string
+}
+
 // Handlers implements StrictServerInterface.
 type Handlers struct {
 	svc      *app.Service
 	sections *sections.Registry
+	urls     URLSigner
 	auth     authz.Authorizer
 }
 
@@ -31,11 +37,11 @@ var _ StrictServerInterface = (*Handlers)(nil)
 // Mount registers the storefront routes on mux. scope is the membership
 // middleware: it authenticates, returns 404 to non-members, and sets the
 // tenant and principal (ADR-0006).
-func Mount(mux *http.ServeMux, svc *app.Service, reg *sections.Registry, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+func Mount(mux *http.ServeMux, svc *app.Service, reg *sections.Registry, urls URLSigner, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
 	badRequest := func(w http.ResponseWriter, r *http.Request, err error) {
 		resp.Write(w, r, errs.BadRequest("invalid request", err))
 	}
-	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, sections: reg, auth: auth}, nil, StrictHTTPServerOptions{
+	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, sections: reg, urls: urls, auth: auth}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: resp.Write,
 	})
@@ -237,6 +243,89 @@ func (h *Handlers) SavePolicy(ctx context.Context, req SavePolicyRequestObject) 
 		return nil, err
 	}
 	return SavePolicy200JSONResponse(toPage(p)), nil
+}
+
+// GetStoreLogo implements StrictServerInterface.
+func (h *Handlers) GetStoreLogo(ctx context.Context, _ GetStoreLogoRequestObject) (GetStoreLogoResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	l, err := h.svc.GetLogo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out GetStoreLogo200JSONResponse
+	if l.Current != nil {
+		a := h.toLogoAsset(*l.Current)
+		out.Current = &a
+	}
+	if l.Latest != nil {
+		a := h.toLogoAsset(*l.Latest)
+		out.Latest = &a
+	}
+	return out, nil
+}
+
+// DeleteStoreLogo implements StrictServerInterface.
+func (h *Handlers) DeleteStoreLogo(ctx context.Context, _ DeleteStoreLogoRequestObject) (DeleteStoreLogoResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteLogo(ctx); err != nil {
+		return nil, err
+	}
+	return DeleteStoreLogo204Response{}, nil
+}
+
+// CreateLogoUpload implements StrictServerInterface.
+func (h *Handlers) CreateLogoUpload(ctx context.Context, req CreateLogoUploadRequestObject) (CreateLogoUploadResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	a, up, err := h.svc.CreateLogoUpload(ctx, string(req.Body.ContentType))
+	if err != nil {
+		return nil, err
+	}
+	return CreateLogoUpload201JSONResponse{
+		Asset:  h.toLogoAsset(a),
+		Upload: PresignedUpload{Url: up.URL, Fields: up.Fields, ExpiresAt: up.ExpiresAt, MaxBytes: up.MaxBytes},
+	}, nil
+}
+
+// CompleteLogoUpload implements StrictServerInterface.
+func (h *Handlers) CompleteLogoUpload(ctx context.Context, req CompleteLogoUploadRequestObject) (CompleteLogoUploadResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	id, err := ulid.Parse(req.AssetId)
+	if err != nil {
+		return nil, app.ErrAssetNotFound
+	}
+	a, err := h.svc.CompleteLogoUpload(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return CompleteLogoUpload202JSONResponse(h.toLogoAsset(a)), nil
+}
+
+func (h *Handlers) toLogoAsset(a domain.Asset) LogoAsset {
+	out := LogoAsset{Id: a.ID.String(), Status: LogoAssetStatus(a.Status), CreatedAt: timePtr(a.CreatedAt)}
+	if a.FailureReason != "" {
+		out.FailureReason = &a.FailureReason
+	}
+	if a.Status == domain.AssetReady {
+		w, ht := a.Width, a.Height
+		out.Width, out.Height = &w, &ht
+		u := h.urls.URLs(a.ObjectKey)
+		f := func(preset string) ImageFormats {
+			return ImageFormats{Avif: u[preset]["avif"], Webp: u[preset]["webp"]}
+		}
+		out.Urls = &ImageURLs{Thumb: f("thumb"), Small: f("small"), Medium: f("medium"), Large: f("large")}
+	}
+	return out
 }
 
 // pageID parses a path ID. A malformed ID is simply not found.

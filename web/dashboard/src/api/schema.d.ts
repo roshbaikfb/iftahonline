@@ -940,6 +940,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/storefront/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the logo and any upload in progress
+         * @description `current` is the live logo; `latest` is the newest upload that is
+         *     not live yet (pending, processing or failed with a reason).
+         */
+        get: operations["getStoreLogo"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove the logo
+         * @description 404 logo_not_found when there is none.
+         */
+        delete: operations["deleteStoreLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/logo/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a logo upload
+         * @description Returns a presigned POST (PNG, JPEG or WebP, at most 2 MiB; SVG
+         *     and GIF are refused). Upload the file, then call
+         *     completeLogoUpload. The current logo stays live until the new one
+         *     is processed; earlier unfinished uploads are abandoned.
+         */
+        post: operations["createLogoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                asset_id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process an uploaded logo
+         * @description Queues the re-encoding; poll getStoreLogo for the result. Repeating
+         *     it is harmless; a rejected upload is 409 asset_failed.
+         */
+        post: operations["completeLogoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/storefront/section-types": {
         parameters: {
             query?: never;
@@ -1834,6 +1910,30 @@ export interface components {
             /** @description The version you read; 0 for the first save. */
             version: number;
         };
+        LogoAsset: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            status: "pending" | "processing" | "ready" | "failed";
+            /** @description Why a failed upload was rejected (unsupported_type, file_too_large, too_many_pixels, corrupt_image, upload_missing). */
+            failure_reason?: string;
+            width?: number;
+            height?: number;
+            urls?: components["schemas"]["ImageURLs"];
+            /** Format: date-time */
+            created_at?: string;
+        };
+        StoreLogo: {
+            current?: components["schemas"]["LogoAsset"];
+            latest?: components["schemas"]["LogoAsset"];
+        };
+        LogoUploadRequest: {
+            /** @enum {string} */
+            content_type: "image/png" | "image/jpeg" | "image/webp";
+        };
+        LogoUpload: {
+            asset: components["schemas"]["LogoAsset"];
+            upload: components["schemas"]["PresignedUpload"];
+        };
         /** @enum {string} */
         SectionType: "hero" | "product_grid" | "product_landing" | "reviews" | "faq" | "trust_badges" | "countdown";
         SectionTypeInfo: {
@@ -1957,6 +2057,7 @@ export interface components {
         CategoryID: components["schemas"]["ULID"];
         ImageID: components["schemas"]["ULID"];
         ImportID: components["schemas"]["ULID"];
+        AssetID: components["schemas"]["ULID"];
         PageID: components["schemas"]["ULID"];
         PolicySlug: "shipping" | "refund" | "privacy" | "terms";
     };
@@ -3290,6 +3391,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Theme"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getStoreLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The logo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreLogo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteStoreLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createLogoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description The pending upload. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoUpload"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeLogoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                asset_id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Processing. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoAsset"];
                 };
             };
             default: components["responses"]["Problem"];
