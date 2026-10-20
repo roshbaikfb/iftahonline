@@ -188,6 +188,30 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for PolicySlug.
+const (
+	PolicySlugPrivacy  PolicySlug = "privacy"
+	PolicySlugRefund   PolicySlug = "refund"
+	PolicySlugShipping PolicySlug = "shipping"
+	PolicySlugTerms    PolicySlug = "terms"
+)
+
+// Valid indicates whether the value is a known member of the PolicySlug enum.
+func (e PolicySlug) Valid() bool {
+	switch e {
+	case PolicySlugPrivacy:
+		return true
+	case PolicySlugRefund:
+		return true
+	case PolicySlugShipping:
+		return true
+	case PolicySlugTerms:
+		return true
+	default:
+		return false
+	}
+}
+
 // AcceptInvitationRequest defines model for AcceptInvitationRequest.
 type AcceptInvitationRequest struct {
 	// Client `mobile` returns the session token in the body instead of a cookie.
@@ -516,6 +540,12 @@ type ImageID = ULID
 
 // ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImportID = ULID
+
+// PageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type PageID = ULID
+
+// PolicySlug defines model for PolicySlug.
+type PolicySlug string
 
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID

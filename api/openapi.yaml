@@ -40,6 +40,15 @@ tags:
       scoped to one store; a caller who is not a member of that store, or
       who names another store's product, variant or category, gets 404.
       Prices are integer minor units in the store's currency.
+  - name: storefront
+    description: |
+      The store's look and pages (ADR-0016): theme settings, the home
+      page, landing pages and policies. Pages are ordered sections whose
+      settings follow each section type's JSON schema
+      (listSectionTypes); merchants never supply HTML or scripts.
+      Every save sends the `version` it read (0 to create) and fails with
+      409 version_conflict if someone saved in between.
+      Permission: storefront.manage for every operation.
 paths:
   /livez:
     get:
@@ -1001,6 +1010,218 @@ paths:
           description: Deleted.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/theme:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: getStorefrontTheme
+      summary: Get the theme
+      description: The saved theme, or the defaults with version 0.
+      responses:
+        "200":
+          description: The theme.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Theme" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [storefront]
+      operationId: updateStorefrontTheme
+      summary: Save the theme
+      description: Body text must contrast with the background at least 4.5:1 (422 low_contrast).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ThemeInput" }
+      responses:
+        "200":
+          description: The saved theme.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Theme" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/section-types:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: listSectionTypes
+      summary: List section types with their settings schemas
+      description: JSON Schema (2020-12) of each section type's settings, for the page editor.
+      responses:
+        "200":
+          description: The section types.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SectionTypeList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/home:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: getHomePage
+      summary: Get the home page
+      description: The saved home page, or the default one with version 0 and no id.
+      responses:
+        "200":
+          description: The home page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [storefront]
+      operationId: saveHomePage
+      summary: Save the home page
+      description: The home page is always published; its slug is fixed and a body is not allowed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PageInput" }
+      responses:
+        "200":
+          description: The saved home page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/pages:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: listLandingPages
+      summary: List landing pages
+      description: Every landing page by slug, without its sections.
+      responses:
+        "200":
+          description: The landing pages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [storefront]
+      operationId: createLandingPage
+      summary: Create a landing page
+      description: |
+        At most 50 per store (409 page_limit). The slug is derived from the
+        title when empty; a slug in use is 422 slug taken.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PageInput" }
+      responses:
+        "201":
+          description: The landing page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/pages/{page_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/PageID"
+    get:
+      tags: [storefront]
+      operationId: getLandingPage
+      summary: Get a landing page
+      responses:
+        "200":
+          description: The landing page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [storefront]
+      operationId: updateLandingPage
+      summary: Replace a landing page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PageInput" }
+      responses:
+        "200":
+          description: The landing page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [storefront]
+      operationId: deleteLandingPage
+      summary: Delete a landing page
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/policies:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: listPolicies
+      summary: List policies
+      description: Every policy in display order; unwritten ones are drafts with version 0 and no id.
+      responses:
+        "200":
+          description: The policies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/policies/{policy}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/PolicySlug"
+    get:
+      tags: [storefront]
+      operationId: getPolicy
+      summary: Get a policy
+      responses:
+        "200":
+          description: The policy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [storefront]
+      operationId: savePolicy
+      summary: Save a policy
+      description: A policy has a plain-text body (paragraphs separated by blank lines) and no sections.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PageInput" }
+      responses:
+        "200":
+          description: The policy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/auth/login:
     post:
       tags: [admin]
@@ -1224,6 +1445,18 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
+    PageID:
+      name: page_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    PolicySlug:
+      name: policy
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [shipping, refund, privacy, terms]
   responses:
     Problem:
       description: Error (RFC 9457).
@@ -1869,6 +2102,126 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Category" }
+    Color:
+      type: string
+      pattern: "^#[0-9a-fA-F]{6}$"
+      example: "#0f766e"
+    ThemeSettings:
+      type: object
+      required: [colors, font, radius]
+      properties:
+        colors:
+          type: object
+          required: [primary, accent, background, text]
+          properties:
+            primary: { $ref: "#/components/schemas/Color" }
+            accent: { $ref: "#/components/schemas/Color" }
+            background: { $ref: "#/components/schemas/Color" }
+            text: { $ref: "#/components/schemas/Color" }
+        font:
+          type: string
+          enum: [cairo, tajawal, ibm-plex-sans-arabic, noto-kufi-arabic, system]
+          description: Self-hosted fonts only; system uses the device's font.
+        radius:
+          type: string
+          enum: [none, small, medium, large]
+    Theme:
+      type: object
+      required: [settings, version]
+      properties:
+        settings: { $ref: "#/components/schemas/ThemeSettings" }
+        version: { type: integer, description: 0 until the theme is first saved. }
+        updated_at: { type: string, format: date-time }
+    ThemeInput:
+      type: object
+      required: [settings, version]
+      properties:
+        settings: { $ref: "#/components/schemas/ThemeSettings" }
+        version: { type: integer, minimum: 0, description: The version you read; 0 for the first save. }
+    SectionType:
+      type: string
+      enum: [hero, product_grid, product_landing, reviews, faq, trust_badges, countdown]
+    SectionTypeInfo:
+      type: object
+      required: [type, schema]
+      properties:
+        type: { $ref: "#/components/schemas/SectionType" }
+        schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema 2020-12 of the settings; $refs point into `definitions`.
+          x-go-type: json.RawMessage
+    SectionTypeList:
+      type: object
+      required: [items, definitions]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SectionTypeInfo" }
+        definitions:
+          type: object
+          additionalProperties: true
+          description: The shared schema (defs.json) the section schemas reference.
+          x-go-type: json.RawMessage
+    Section:
+      type: object
+      required: [type]
+      properties:
+        id:
+          type: string
+          maxLength: 32
+          description: Stable within the page; assigned when empty.
+        type: { $ref: "#/components/schemas/SectionType" }
+        settings:
+          type: object
+          additionalProperties: true
+          description: Validated against the type's schema (listSectionTypes).
+          x-go-type: json.RawMessage
+    PageInput:
+      type: object
+      properties:
+        title: { type: string, maxLength: 200, description: Required for landing pages. }
+        slug: { type: string, maxLength: 120, description: Landing pages only; derived from the title when empty. }
+        description: { type: string, maxLength: 300, description: Meta description for search engines. }
+        sections:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/Section" }
+          description: Home and landing pages only.
+        body: { type: string, maxLength: 20000, description: Policies only; plain text. }
+        status:
+          type: string
+          enum: [draft, published]
+          description: Landing pages and policies (default draft); the home page is always published.
+        version: { type: integer, minimum: 0, default: 0, description: The version you read; 0 to create. }
+    Page:
+      type: object
+      required: [kind, slug, title, description, sections, body, status, version]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind:
+          type: string
+          enum: [home, landing, policy]
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/Section" }
+        body: { type: string }
+        status:
+          type: string
+          enum: [draft, published]
+        version: { type: integer, description: 0 for a default that was never saved. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Page" }
     Health:
       type: object
       required: [status]
