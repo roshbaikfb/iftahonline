@@ -40,6 +40,7 @@ type Service struct {
 	sections domain.SettingsValidator
 	jobs     jobs.Inserter
 	media    Media
+	variants Variants
 }
 
 // Deps are the service's dependencies.
@@ -52,6 +53,8 @@ type Deps struct {
 	// Jobs and Media serve the logo (asset) use cases.
 	Jobs  jobs.Inserter
 	Media Media
+	// Variants serves the cart (the catalog's sellable variants).
+	Variants Variants
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -62,7 +65,7 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections, jobs: d.Jobs, media: d.Media}
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections, jobs: d.Jobs, media: d.Media, variants: d.Variants}
 }
 
 // GetTheme returns the saved theme, or the defaults at version 0.

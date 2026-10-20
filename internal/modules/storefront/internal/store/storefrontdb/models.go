@@ -96,6 +96,23 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type Cart struct {
+	ID        ulid.ID
+	StoreID   ulid.ID
+	TokenHash []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type CartItem struct {
+	StoreID   ulid.ID
+	CartID    ulid.ID
+	VariantID ulid.ID
+	Qty       int32
+	AddedAt   time.Time
+}
+
 type CatalogImport struct {
 	ID             ulid.ID
 	StoreID        ulid.ID
