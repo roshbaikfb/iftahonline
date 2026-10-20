@@ -52,6 +52,26 @@ func (s *Service) GetSellableVariant(ctx context.Context, id ulid.ID) (domain.Se
 	return v, notFound(err, ErrVariantNotFound)
 }
 
+// MaxSellableIDs bounds one SellableVariants call (a cart's lines).
+const MaxSellableIDs = 100
+
+// SellableVariants returns the sellable variants among ids in the order
+// given, skipping the others, in a constant number of queries.
+func (s *Service) SellableVariants(ctx context.Context, ids []ulid.ID) ([]domain.SellableVariant, error) {
+	if len(ids) > MaxSellableIDs {
+		return nil, errs.Validation(errs.FieldError{Field: "ids", Code: "too_many", Message: fmt.Sprintf("at most %d variants", MaxSellableIDs)})
+	}
+	if len(ids) == 0 {
+		return []domain.SellableVariant{}, nil
+	}
+	var out []domain.SellableVariant
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.ListSellableVariants(ctx, tx, ids)
+		return txErr
+	})
+	return out, err
+}
+
 // ReserveStock holds stock for every line of req, all or nothing, until
 // ReleaseStock or the TTL. Each line is one conditional UPDATE on the
 // variant's inventory row (ADR-0011), so concurrent reservations can

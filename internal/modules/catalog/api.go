@@ -66,6 +66,7 @@ const (
 
 // Storefront limits.
 const (
+	MaxSellableIDs     = app.MaxSellableIDs
 	MaxStorefrontLimit = app.MaxStorefrontLimit
 	MaxStorefrontIDs   = app.MaxStorefrontIDs
 )
@@ -97,6 +98,10 @@ type Catalog interface {
 	// GetSellableVariant returns a variant of an active, live product, or
 	// ErrVariantNotFound.
 	GetSellableVariant(ctx context.Context, variantID ulid.ID) (SellableVariant, error)
+	// SellableVariants is GetSellableVariant for many IDs (at most
+	// MaxSellableIDs), in the order given, skipping the unsellable, in a
+	// constant number of queries.
+	SellableVariants(ctx context.Context, ids []ulid.ID) ([]SellableVariant, error)
 	// ReserveStock holds stock for every line, all or nothing, until
 	// ReleaseStock or the TTL (default 15 minutes). It never oversells,
 	// whatever the concurrency. Repeating a ref with the same lines

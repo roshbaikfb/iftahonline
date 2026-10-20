@@ -372,3 +372,32 @@ func TestSlugLookupUsesIndexUnderRLS(t *testing.T) {
 		t.Fatalf("slug is not an index condition under RLS:\n%s", plan.String())
 	}
 }
+
+func TestSellableVariants(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.ctxA
+	a := mustCreate(ctx, t, f, tee("Sellable", 3))
+	draft := tee("Hidden", 3)
+	draft.Status = "draft"
+	d := mustCreate(ctx, t, f, draft)
+	other := mustCreate(f.ctxB, t, f, tee("Other", 3))
+
+	ids := []ulid.ID{a.Variants[1].ID, d.Variants[0].ID, other.Variants[0].ID, f.ids.New(), a.Variants[0].ID}
+	var got []domain.SellableVariant
+	n := countQueries(t, f, func() (e error) { got, e = f.svc.SellableVariants(ctx, ids); return e })
+	if n != 4 { // BEGIN, tenant, one lookup for all, COMMIT
+		t.Fatalf("%d queries for %d IDs, want 4", n, len(ids))
+	}
+	if len(got) != 2 || got[0].VariantID != a.Variants[1].ID || got[1].VariantID != a.Variants[0].ID ||
+		got[0].ProductTitle != "Sellable" || got[0].Price != egp(t, 16000) || got[0].Stock.OnHand != 3 {
+		t.Fatalf("got %+v", got)
+	}
+	if empty, err := f.svc.SellableVariants(ctx, nil); err != nil || len(empty) != 0 {
+		t.Fatalf("no IDs: %v %v", empty, err)
+	}
+	many := make([]ulid.ID, app.MaxSellableIDs+1)
+	if _, err := f.svc.SellableVariants(ctx, many); err == nil {
+		t.Fatal("too many IDs accepted")
+	}
+}
