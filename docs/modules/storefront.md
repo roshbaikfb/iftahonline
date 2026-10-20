@@ -1,8 +1,8 @@
 # Module: storefront
 
 The storefront module owns the store's **look and pages**: the theme
-(colors, font, radius), the **home page**, **landing pages** and
-**policies**. Pages are ordered **sections** whose settings follow a JSON
+(colors, font, radius), the **logo**, the **home page**, **landing pages**
+and **policies**. Pages are ordered **sections** whose settings follow a JSON
 schema per section type; merchants never supply HTML or scripts. Design:
 [ADR-0016](../adr/0016-storefront-themes-and-sections.md). Events:
 [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
@@ -20,7 +20,7 @@ Rendering for shoppers (templ, caching) comes in the next P3 change.
 
 | Event | Published when |
 |---|---|
-| `storefront.theme.changed` | The theme is saved |
+| `storefront.theme.changed` | The theme is saved, a new logo goes live, or the logo is deleted |
 | `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
 
 The module consumes no events yet.
@@ -52,6 +52,25 @@ has a Go type in `internal/sections/types.go` (`sections.Decode`).
 5. a templ component;
 6. test cases in `sections_test.go`.
 
+## Logo
+
+The logo follows the product image pipeline (ADR-0012, ADR-0017) through
+`platform/media`:
+1. `createLogoUpload` returns a presigned POST. PNG, JPEG or WebP are
+   accepted, at most 2 MiB; SVG and GIF are refused.
+2. The browser uploads the file.
+3. `completeLogoUpload` queues `storefront.process_asset` on the `media`
+   queue, which runs `media.Ingest` (sniff, bound, re-encode).
+
+How the live logo changes:
+- A new logo goes live only once it is ready, and the old master is then
+  deleted.
+- A failed upload keeps the live logo and reports `failure_reason`.
+- An upload that is never completed expires after an hour
+  (`storefront.expire_asset_upload`).
+- Objects are removed by `storefront.delete_objects`, which refuses keys
+  outside the store's prefix (`media.DeleteStoreObjects`).
+
 ## Tables
 
 Both are tenant-owned with RLS (`db/migrations/00019_storefront.sql`).
@@ -59,6 +78,7 @@ Both are tenant-owned with RLS (`db/migrations/00019_storefront.sql`).
 | Table | Notes |
 |---|---|
 | `store_themes` | One row per store (`store_id` PK); `settings` JSON; `version` |
+| `store_assets` | `kind` (logo); `pending` → `processing` → `ready` / `failed`; at most one `ready` per (store, kind) (partial unique index); `upload_key`, master `object_key`, size |
 | `store_pages` | `kind` home/landing/policy; `slug` (text, lower-case) unique per (store, kind); `sections` JSON; `body` (policies); `status`; `version` |
 
 ## HTTP API (tag `storefront`, permission `storefront.manage`)
@@ -68,6 +88,7 @@ All paths are under `/v1/stores/{store_id}/storefront`.
 | Path | Operations |
 |---|---|
 | `/theme` | `getStorefrontTheme`, `updateStorefrontTheme` |
+| `/logo`, `/logo/uploads`, `/logo/uploads/{asset_id}/complete` | `getStoreLogo` (`current` + `latest`), `deleteStoreLogo`, `createLogoUpload`, `completeLogoUpload` |
 | `/section-types` | `listSectionTypes`: schemas for the editor |
 | `/home` | `getHomePage`, `saveHomePage` |
 | `/pages`, `/pages/{page_id}` | landing pages: list (without sections), create, get, update, delete |
@@ -99,4 +120,5 @@ How saves work:
 | `domain` | Theme (hex, enums, WCAG contrast, `OnColor`); page rules per kind; section IDs, sizes and field naming; defaults |
 | `sections` | Valid and invalid settings for every type, with exact field paths (links, enums, conditionals, `8.0`, date-time forms); defaults validate; `Decode`; `FuzzValidateSettings` |
 | `app` (real PostgreSQL) | Versions and conflicts for the theme, home and policies; landing CRUD, slug moves, slug taken, the 50-page limit per store; events and audit entries; isolation between stores; no tenant |
-| `httpapi` | Happy path, validation, authorization (401/403) and cross-tenant cases for all 13 operations; `TestMain` fails if one has no cross-tenant test |
+| `app` logo | Upload, process, replace (old master deleted), rejection, abandon, expiry, delete; foreign keys refused; isolation between stores |
+| `httpapi` | Happy path, validation, authorization (401/403) and cross-tenant cases for all 17 operations; `TestMain` fails if one has no cross-tenant test |
