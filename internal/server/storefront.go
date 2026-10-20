@@ -12,19 +12,19 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/server/views"
 )
 
-// MountStorefront returns the storefront's Mount function. Every page
-// first resolves the Host header to a store (ADR-0004):
+// MountStorefront returns the storefront's Mount function. Static files
+// (assets, under assetsPrefix) are the same on every host and skip host
+// resolution. Every page first resolves the Host header to a store
+// (ADR-0004):
 //
 //   - unknown host or closed store: platform-branded 404;
 //   - suspended store: 503 "store unavailable";
 //   - resolver failure (database down): 503 "try again";
-//   - otherwise the page runs with the store in tenant context.
-func MountStorefront(resolver tenancy.HostResolver) func(Routes) {
+//   - otherwise pages runs with the store in tenant context.
+func MountStorefront(resolver tenancy.HostResolver, pages http.Handler, assetsPrefix string, assets http.Handler) func(Routes) {
 	return func(rt Routes) {
-		home := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writePage(rt, w, r, http.StatusOK, "no-store", views.ComingSoon())
-		})
-		rt.Mux.Handle("GET /", StoreHost(rt, resolver, home))
+		rt.Mux.Handle("GET "+assetsPrefix, assets)
+		rt.Mux.Handle("GET /", StoreHost(rt, resolver, pages))
 	}
 }
 
