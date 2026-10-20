@@ -1,0 +1,102 @@
+# Module: storefront
+
+The storefront module owns the store's **look and pages**: the theme
+(colors, font, radius), the **home page**, **landing pages** and
+**policies**. Pages are ordered **sections** whose settings follow a JSON
+schema per section type; merchants never supply HTML or scripts. Design:
+[ADR-0016](../adr/0016-storefront-themes-and-sections.md). Events:
+[ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
+Rendering for shoppers (templ, caching) comes in the next P3 change.
+
+## Public API (`internal/modules/storefront/api.go`)
+
+| Symbol | Purpose |
+|---|---|
+| `New(Deps)`, `Module.Mount` | Wiring, and the merchant HTTP API (behind identity's membership middleware) |
+| `ThemeChanged`, `PageChanged`, `EventThemeChanged`, `EventPageChanged` | Events the module publishes |
+| `PageKind`, `KindHome`, `KindLanding`, `KindPolicy` | Page kinds, as carried by `PageChanged` |
+
+## Events
+
+| Event | Published when |
+|---|---|
+| `storefront.theme.changed` | The theme is saved |
+| `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
+
+The module consumes no events yet.
+
+## Section types
+
+Each type has a schema in `internal/sections/schemas/<type>.json`, with
+shared definitions in `defs.json` (IDs, single lines, links). It also
+has a Go type in `internal/sections/types.go` (`sections.Decode`).
+
+| Type | Settings |
+|---|---|
+| `hero` | `heading`, `subheading`, `button_label` + `button_link`, `image_product_id`, `align` |
+| `product_grid` | `title`, `source` (newest / category + `category_id` / manual + `product_ids` ≤ 24), `limit` ≤ 24 |
+| `product_landing` | `product_id`, `headline`, `highlights` (≤ 6), `show_description`, `cta_label` |
+| `reviews` | `title`, `items` (1–20 of `name`, `location`, `rating` 1–5, `text`) |
+| `faq` | `title`, `items` (1–30 of `question`, `answer`) |
+| `trust_badges` | `items` (1–6 of `icon` from shipping/cod/returns/secure/support/quality, `title`, `text`) |
+| `countdown` | `title`, `subtitle`, `ends_at` (RFC 3339), `hide_when_ended` |
+
+**Links** are `/path` on the store or `https://…`, and nothing else.
+**Empty texts** are filled at render time in the shopper's language.
+
+**Adding a type** takes:
+1. a schema;
+2. a Go type and a case in `Decode`;
+3. a `domain.SectionType` constant;
+4. the enum in `api/openapi.yaml`;
+5. a templ component;
+6. test cases in `sections_test.go`.
+
+## Tables
+
+Both are tenant-owned with RLS (`db/migrations/00019_storefront.sql`).
+
+| Table | Notes |
+|---|---|
+| `store_themes` | One row per store (`store_id` PK); `settings` JSON; `version` |
+| `store_pages` | `kind` home/landing/policy; `slug` (text, lower-case) unique per (store, kind); `sections` JSON; `body` (policies); `status`; `version` |
+
+## HTTP API (tag `storefront`, permission `storefront.manage`)
+
+All paths are under `/v1/stores/{store_id}/storefront`.
+
+| Path | Operations |
+|---|---|
+| `/theme` | `getStorefrontTheme`, `updateStorefrontTheme` |
+| `/section-types` | `listSectionTypes`: schemas for the editor |
+| `/home` | `getHomePage`, `saveHomePage` |
+| `/pages`, `/pages/{page_id}` | landing pages: list (without sections), create, get, update, delete |
+| `/policies`, `/policies/{policy}` | `listPolicies` (defaults included), `getPolicy`, `savePolicy` |
+
+How saves work:
+- Every save sends the `version` it read; 0 means create. A stale
+  version is 409 `version_conflict`.
+- Unsaved pages and the theme read as defaults with version 0, and pages
+  without an id.
+- Validation errors name the field, e.g.
+  `sections[1].settings.items[0].rating`.
+
+## Limits
+
+| Limit | Value |
+|---|---|
+| Sections per page | 30 |
+| Sections JSON per page | 64 KiB |
+| Landing pages per store | 50 (409 `page_limit`) |
+| Title | 200 characters |
+| Meta description | 300 characters |
+| Policy body | 20,000 characters |
+
+## Tests
+
+| Package | What it covers |
+|---|---|
+| `domain` | Theme (hex, enums, WCAG contrast, `OnColor`); page rules per kind; section IDs, sizes and field naming; defaults |
+| `sections` | Valid and invalid settings for every type, with exact field paths (links, enums, conditionals, `8.0`, date-time forms); defaults validate; `Decode`; `FuzzValidateSettings` |
+| `app` (real PostgreSQL) | Versions and conflicts for the theme, home and policies; landing CRUD, slug moves, slug taken, the 50-page limit per store; events and audit entries; isolation between stores; no tenant |
+| `httpapi` | Happy path, validation, authorization (401/403) and cross-tenant cases for all 13 operations; `TestMain` fails if one has no cross-tenant test |
