@@ -62,3 +62,6 @@ DELETE FROM product_categories WHERE store_id = @store_id AND product_id = @prod
 -- name: InsertProductCategories :exec
 INSERT INTO product_categories (store_id, product_id, category_id)
 SELECT @store_id, @product_id, c FROM unnest(@category_ids::uuid[]) AS c;
+
+-- name: GetProductIDBySlug :one
+SELECT id FROM products WHERE store_id = @store_id AND slug = @slug AND deleted_at IS NULL;

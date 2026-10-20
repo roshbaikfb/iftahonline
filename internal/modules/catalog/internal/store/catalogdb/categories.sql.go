@@ -128,6 +128,22 @@ func (q *Queries) GetCategory(ctx context.Context, arg GetCategoryParams) (Categ
 	return i, err
 }
 
+const getCategoryIDBySlug = `-- name: GetCategoryIDBySlug :one
+SELECT id FROM categories WHERE store_id = $1 AND slug = $2
+`
+
+type GetCategoryIDBySlugParams struct {
+	StoreID ulid.ID
+	Slug    string
+}
+
+func (q *Queries) GetCategoryIDBySlug(ctx context.Context, arg GetCategoryIDBySlugParams) (ulid.ID, error) {
+	row := q.db.QueryRow(ctx, getCategoryIDBySlug, arg.StoreID, arg.Slug)
+	var id ulid.ID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertCategory = `-- name: InsertCategory :one
 INSERT INTO categories (id, store_id, parent_id, slug, name, position)
 VALUES ($1, $2, $3, $4, $5, $6)

@@ -514,6 +514,9 @@ type DomainID = ULID
 // ImageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImageID = ULID
 
+// ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type ImportID = ULID
+
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID
 

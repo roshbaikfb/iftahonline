@@ -525,3 +525,94 @@ func (h *Handlers) SearchProducts(ctx context.Context, req SearchProductsRequest
 	}
 	return out, nil
 }
+
+var errImportNotFound = errs.NotFound("import_not_found", "import not found")
+
+// ListImports implements StrictServerInterface.
+func (h *Handlers) ListImports(ctx context.Context, _ ListImportsRequestObject) (ListImportsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermImportsManage); err != nil {
+		return nil, err
+	}
+	list, err := h.svc.ListImports(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := ListImports200JSONResponse{Items: make([]Import, len(list))}
+	for i, im := range list {
+		out.Items[i] = toImport(im)
+	}
+	return out, nil
+}
+
+// CreateImport implements StrictServerInterface.
+func (h *Handlers) CreateImport(ctx context.Context, req CreateImportRequestObject) (CreateImportResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermImportsManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	in := app.NewImportInput{Kind: string(req.Body.Kind)}
+	if w := req.Body.Woocommerce; w != nil {
+		in.WooURL, in.WooKey, in.WooSecret = w.Url, w.ConsumerKey, w.ConsumerSecret
+	}
+	im, up, err := h.svc.CreateImport(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	out := CreateImport201JSONResponse{Import: toImport(im)}
+	if up != nil {
+		out.Upload = &PresignedUpload{Url: up.URL, Fields: up.Fields, ExpiresAt: up.ExpiresAt, MaxBytes: up.MaxBytes}
+	}
+	return out, nil
+}
+
+// GetImport implements StrictServerInterface.
+func (h *Handlers) GetImport(ctx context.Context, req GetImportRequestObject) (GetImportResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermImportsManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.ImportId, errImportNotFound)
+	if err != nil {
+		return nil, err
+	}
+	im, err := h.svc.GetImport(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return GetImport200JSONResponse(toImport(im)), nil
+}
+
+// StartImport implements StrictServerInterface.
+func (h *Handlers) StartImport(ctx context.Context, req StartImportRequestObject) (StartImportResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermImportsManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.ImportId, errImportNotFound)
+	if err != nil {
+		return nil, err
+	}
+	im, err := h.svc.StartImport(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return StartImport202JSONResponse(toImport(im)), nil
+}
+
+func toImport(im domain.Import) Import {
+	out := Import{
+		Id: im.ID.String(), Kind: ImportKind(im.Kind), Status: ImportStatus(im.Status), Total: im.Total, Processed: im.Cursor,
+		Created: im.Created, Updated: im.Updated, Failed: im.Failed, RowErrors: make([]ImportRowError, len(im.RowErrors)),
+		CreatedAt: im.CreatedAt, StartedAt: im.StartedAt, FinishedAt: im.FinishedAt,
+	}
+	for i, e := range im.RowErrors {
+		out.RowErrors[i] = ImportRowError{Line: e.Line, Message: e.Message}
+	}
+	if im.FailureReason != "" {
+		out.FailureReason = &im.FailureReason
+	}
+	if im.WooURL != "" {
+		out.WoocommerceUrl = &im.WooURL
+	}
+	return out
+}

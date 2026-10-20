@@ -65,6 +65,7 @@ func (r *recorder) has(action string) bool {
 
 type fixture struct {
 	objects *memStore
+	deps    app.Deps
 	index   *memIndex
 	ins     *river.Client[pgx.Tx]
 	svc     *app.Service
@@ -88,9 +89,10 @@ func newFixture(t *testing.T) fixture {
 	ids := ulid.NewGenerator()
 	rec := &recorder{}
 	objects, index := newMemStore(), newMemIndex()
-	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids, objects: objects, ins: ins, index: index,
-		svc: app.NewService(app.Deps{DB: pool, Jobs: ins, IDs: ids, Audit: rec, Currency: fixedCurrency(money.EGP),
-			Media: app.Media{Objects: objects, Limits: testLimits}, Search: index})}
+	deps := app.Deps{DB: pool, Jobs: ins, IDs: ids, Audit: rec, Currency: fixedCurrency(money.EGP),
+		Media: app.Media{Objects: objects, Limits: testLimits}, Search: index, Imports: testImports(t)}
+	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids, objects: objects, ins: ins, index: index, deps: deps,
+		svc: app.NewService(deps)}
 	f.ctxA = createStore(t, pool, ids, "EGP")
 	f.ctxB = createStore(t, pool, ids, "SAR")
 	return f

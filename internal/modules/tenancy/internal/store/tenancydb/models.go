@@ -96,6 +96,27 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type CatalogImport struct {
+	ID             ulid.ID
+	StoreID        ulid.ID
+	Kind           string
+	Status         string
+	SourceKey      pgtype.Text
+	WooUrl         pgtype.Text
+	WooCredentials []byte
+	Total          int32
+	Cursor         int32
+	CreatedCount   int32
+	UpdatedCount   int32
+	FailedCount    int32
+	RowErrors      []byte
+	FailureReason  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
+}
+
 type Category struct {
 	ID        ulid.ID
 	StoreID   ulid.ID

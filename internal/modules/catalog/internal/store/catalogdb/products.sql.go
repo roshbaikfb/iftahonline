@@ -76,6 +76,22 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (GetProd
 	return i, err
 }
 
+const getProductIDBySlug = `-- name: GetProductIDBySlug :one
+SELECT id FROM products WHERE store_id = $1 AND slug = $2 AND deleted_at IS NULL
+`
+
+type GetProductIDBySlugParams struct {
+	StoreID ulid.ID
+	Slug    string
+}
+
+func (q *Queries) GetProductIDBySlug(ctx context.Context, arg GetProductIDBySlugParams) (ulid.ID, error) {
+	row := q.db.QueryRow(ctx, getProductIDBySlug, arg.StoreID, arg.Slug)
+	var id ulid.ID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertProduct = `-- name: InsertProduct :one
 INSERT INTO products (id, store_id, slug, title, description, status, options)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
