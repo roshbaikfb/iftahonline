@@ -22,3 +22,4 @@ supersedes it.
 | [0014](0014-catalog-importers.md) | Catalog importers: CSV and WooCommerce as resumable jobs | Accepted |
 | [0015](0015-domain-events-and-storefront-reads.md) | Domain events between modules; the catalog's storefront read side | Accepted |
 | [0016](0016-storefront-themes-and-sections.md) | Storefront themes and pages built from schema-validated sections | Accepted |
+| [0017](0017-store-assets-shared-image-pipeline.md) | Store assets (the logo) share the product image pipeline | Accepted |
