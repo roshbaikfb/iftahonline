@@ -12,6 +12,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -117,15 +118,15 @@ type StorefrontPage struct {
 	NextCursor string // empty on the last page
 }
 
-// ProductBySlug returns the active product at slug, or
+// ProductBySlug returns the active product at productSlug, or
 // ErrProductNotFound. A malformed slug costs no query.
-func (s *Storefront) ProductBySlug(ctx context.Context, slug string) (StorefrontProduct, error) {
-	if _, ok := domain.CheckSlug("slug", slug); !ok {
+func (s *Storefront) ProductBySlug(ctx context.Context, productSlug string) (StorefrontProduct, error) {
+	if _, ok := slug.Check("slug", productSlug); !ok {
 		return StorefrontProduct{}, ErrProductNotFound
 	}
 	var p domain.Product
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		p, txErr = store.GetActiveProductBySlug(ctx, tx, slug)
+		p, txErr = store.GetActiveProductBySlug(ctx, tx, productSlug)
 		return txErr
 	})
 	if err != nil {

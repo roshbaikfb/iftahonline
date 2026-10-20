@@ -29,65 +29,6 @@ func fieldCodes(t *testing.T, err error) []string {
 	return out
 }
 
-func TestSlugify(t *testing.T) {
-	t.Parallel()
-	tests := []struct{ in, want string }{
-		{"Red T-Shirt", "red-t-shirt"},
-		{"  Hello,   World!  ", "hello-world"},
-		{"قميص أحمر", "قميص-أحمر"},
-		{"مَلابِس رِجالـــية", "ملابس-رجالية"}, // diacritics and tatweel dropped
-		{"iPhone ١٥ Pro", "iphone-15-pro"},     // Arabic-Indic digits
-		{"ساعة ۱۲", "ساعة-12"},                 // Eastern Arabic-Indic digits
-		{"!!!", ""},
-		{"", ""},
-		{"a--b__c", "a-b-c"},
-		{strings.Repeat("a", 130), strings.Repeat("a", domain.MaxSlugLen)},
-		{strings.Repeat("ab ", 60), strings.TrimSuffix(strings.Repeat("ab-", 40), "-")},
-	}
-	for _, tt := range tests {
-		if got := domain.Slugify(tt.in); got != tt.want {
-			t.Errorf("Slugify(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
-// FuzzSlugify: whatever a merchant types, a non-empty derived slug is a
-// valid slug, and slugifying is idempotent.
-func FuzzSlugify(f *testing.F) {
-	for _, s := range []string{"Red T-Shirt", "قميص أحمر", "مَلابِس", "١٥", "a--b", "\x00\xff", "ǅ", "İstanbul"} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		got := domain.Slugify(s)
-		if got == "" {
-			return
-		}
-		if _, ok := domain.CheckSlug("slug", got); !ok {
-			t.Fatalf("Slugify(%q) = %q, which CheckSlug rejects", s, got)
-		}
-		if again := domain.Slugify(got); again != got {
-			t.Fatalf("Slugify not idempotent: %q -> %q -> %q", s, got, again)
-		}
-		if utf8.RuneCountInString(got) > domain.MaxSlugLen {
-			t.Fatalf("slug too long: %d runes", utf8.RuneCountInString(got))
-		}
-	})
-}
-
-func TestCheckSlug(t *testing.T) {
-	t.Parallel()
-	for _, ok := range []string{"a", "red-shirt", "قميص-أحمر", "x1"} {
-		if _, valid := domain.CheckSlug("slug", ok); !valid {
-			t.Errorf("CheckSlug(%q) rejected", ok)
-		}
-	}
-	for _, bad := range []string{"", "-a", "a-", "a--b", "Red", "a b", "a/b", "مَ", strings.Repeat("a", 121), "\xff"} {
-		if _, valid := domain.CheckSlug("slug", bad); valid {
-			t.Errorf("CheckSlug(%q) accepted", bad)
-		}
-	}
-}
-
 func validInput() domain.ProductInput {
 	return domain.ProductInput{
 		Title: "  Basic Tee ",

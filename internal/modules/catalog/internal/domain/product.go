@@ -15,6 +15,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -142,7 +143,7 @@ func ValidateProduct(in ProductInput) (ProductInput, error) {
 		Status:      strings.TrimSpace(in.Status),
 		CategoryIDs: in.CategoryIDs,
 	}
-	out.Slug = normalizeSlug(in.Slug, out.Title)
+	out.Slug = slug.Normalize(in.Slug, out.Title)
 	if out.Status == "" {
 		out.Status = string(StatusDraft)
 	}
@@ -182,11 +183,11 @@ func ValidateProduct(in ProductInput) (ProductInput, error) {
 	return out, nil
 }
 
-func checkSlugOrDerived(slug string) (errs.FieldError, bool) {
-	if slug == "" {
+func checkSlugOrDerived(s string) (errs.FieldError, bool) {
+	if s == "" {
 		return errs.FieldError{Field: "slug", Code: "required", Message: "slug is required when the title has no letters or digits"}, false
 	}
-	return CheckSlug("slug", slug)
+	return slug.Check("slug", s)
 }
 
 // checkText validates a single-line display string.

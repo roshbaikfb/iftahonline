@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -39,7 +40,7 @@ type CategoryInput struct {
 // ValidateCategory normalizes and checks a category input.
 func ValidateCategory(in CategoryInput) (CategoryInput, error) {
 	out := CategoryInput{ParentID: in.ParentID, Name: strings.TrimSpace(in.Name), Position: in.Position}
-	out.Slug = normalizeSlug(in.Slug, out.Name)
+	out.Slug = slug.Normalize(in.Slug, out.Name)
 	var fields []errs.FieldError
 	if fe, ok := checkText("name", out.Name, MaxCategoryNameLen, false); !ok {
 		fields = append(fields, fe)
