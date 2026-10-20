@@ -15,6 +15,7 @@ import (
 
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -124,35 +125,23 @@ const (
 	// ProfileAPI is for JSON APIs: nothing may render or frame responses.
 	ProfileAPI Profile = iota
 	// ProfileStorefront is for server-rendered HTML. Pages are edge-cached,
-	// so per-request CSP nonces are not usable: scripts and styles come
-	// only from our origin, never inline (Alpine uses its CSP build).
+	// so per-request CSP nonces are not usable: scripts come only from our
+	// origin; a page may add hashes of its inline styles (StorefrontCSP).
 	ProfileStorefront
 )
 
 // SecurityHeaders sets strict defaults (CLAUDE.md security rules).
 func SecurityHeaders(p Profile) Middleware {
-	csp := "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+	policy := csp.API
 	referrer := "no-referrer"
 	if p == ProfileStorefront {
-		csp = strings.Join([]string{
-			"default-src 'self'",
-			"script-src 'self'",
-			"style-src 'self'",
-			"img-src 'self' https: data:",
-			"font-src 'self'",
-			"connect-src 'self'",
-			"object-src 'none'",
-			"base-uri 'none'",
-			"form-action 'self'",
-			"frame-ancestors 'none'",
-			"upgrade-insecure-requests",
-		}, "; ")
+		policy = csp.Storefront()
 		referrer = "strict-origin-when-cross-origin"
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
-			h.Set("Content-Security-Policy", csp)
+			h.Set("Content-Security-Policy", policy)
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 			h.Set("X-Content-Type-Options", "nosniff")
 			h.Set("X-Frame-Options", "DENY")

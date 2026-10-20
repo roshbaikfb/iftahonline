@@ -1,0 +1,92 @@
+package web
+
+import (
+	"strings"
+
+	"github.com/a-h/templ"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+)
+
+func orString(s, fallback string) string {
+	if s != "" {
+		return s
+	}
+	return fallback
+}
+
+func boolAttr(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+func imageOf(pr catalog.StorefrontProduct) *image {
+	img, ok := firstImage(pr)
+	if !ok {
+		return nil
+	}
+	return &img
+}
+
+// stars draws a 1-5 rating.
+func stars(n int) string {
+	n = min(max(n, 0), 5)
+	return strings.Repeat("★", n) + strings.Repeat("☆", 5-n)
+}
+
+// optionsLabel names the variant picker by the product's options.
+func optionsLabel(l Locale, pr catalog.StorefrontProduct) string {
+	names := make([]string, len(pr.Options))
+	for i, o := range pr.Options {
+		names[i] = o.Name
+	}
+	return orString(strings.Join(names, " / "), l.T(MsgOptions))
+}
+
+// variantLabel reads "M / Red — 150 ج.م", plus "sold out" when it is.
+func variantLabel(l Locale, pr catalog.StorefrontProduct, v catalog.StorefrontVariant) string {
+	label := orString(strings.Join(v.OptionValues, " / "), pr.Title) + " — " + l.Price(v.Price)
+	if !v.Available {
+		label += " (" + l.T(MsgSoldOut) + ")"
+	}
+	return label
+}
+
+// policyTitle is a policy's title, or its default name in the shopper's
+// language.
+func (p *pageCtx) policyTitle(title, slug string) string {
+	return orString(title, p.l.PolicyTitle(slug))
+}
+
+// link is a merchant's button target. The schema allows only store paths
+// and https URLs; anything else (stored before a rule change, say) goes
+// nowhere rather than somewhere unsafe.
+func (p *pageCtx) link(target string) templ.SafeURL {
+	switch {
+	case strings.HasPrefix(target, "https://"):
+		return templ.SafeURL(target) //nolint:gosec // https only, validated on save
+	case strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//") && !strings.HasPrefix(target, "/\\"):
+		return p.URL(target)
+	}
+	return "#"
+}
+
+// badgeSVG is the icon of a trust badge: our own static markup.
+func badgeSVG(icon string) string {
+	const open = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+	paths := map[string]string{
+		"shipping": `<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.5"/><circle cx="17" cy="17.5" r="1.5"/>`,
+		"cod":      `<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/>`,
+		"returns":  `<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/>`,
+		"secure":   `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>`,
+		"support":  `<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1"/><rect x="17" y="13" width="4" height="6" rx="1"/>`,
+		"quality":  `<circle cx="12" cy="9" r="5"/><path d="M9 13.5 8 21l4-2 4 2-1-7.5"/>`,
+	}
+	p, ok := paths[icon]
+	if !ok {
+		return ""
+	}
+	return open + p + `</svg>`
+}

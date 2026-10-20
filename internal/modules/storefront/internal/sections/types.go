@@ -23,6 +23,9 @@ type Hero struct {
 	Align          string   `json:"align"`
 }
 
+// MaxGridLimit is the most products a grid shows (the schema's maximum).
+const MaxGridLimit = 24
+
 // ProductGrid shows products as cards.
 type ProductGrid struct {
 	Title      string    `json:"title"`

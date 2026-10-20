@@ -1,0 +1,240 @@
+package web
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+)
+
+// picture is one image in AVIF and WebP at every size; the first image
+// of a page loads eagerly at high priority (it is the LCP element).
+templ picture(img image, sizes string, eager bool) {
+	<picture>
+		if img.avif != "" {
+			<source type="image/avif" srcset={ img.avif } sizes={ sizes }/>
+		}
+		<img
+			src={ img.src }
+			srcset={ img.webp }
+			sizes={ sizes }
+			width={ strconv.Itoa(img.width) }
+			height={ strconv.Itoa(img.height) }
+			alt={ img.alt }
+			decoding="async"
+			if eager {
+				fetchpriority="high"
+			} else {
+				loading="lazy"
+			}
+		/>
+	</picture>
+}
+
+templ price(pv priceView) {
+	<span class="price" data-price>
+		{ pv.price }
+		if pv.compare != "" {
+			<s>{ pv.compare }</s>
+		}
+	</span>
+}
+
+templ card(p *pageCtx, pr catalog.StorefrontProduct) {
+	<a class="card" href={ p.URL(productPath(pr.Slug)) }>
+		<div class="ph">
+			if img := imageOf(pr); img != nil {
+				@picture(*img, "(min-width: 48rem) 25vw, 50vw", p.eager())
+			}
+			if !pr.Available() {
+				<span class="badge">{ p.l.T(MsgSoldOut) }</span>
+			}
+		</div>
+		<h3>{ pr.Title }</h3>
+		@price(p.priceOf(pr.PriceFrom()))
+	</a>
+}
+
+// buyForm picks a variant and quantity. It posts to the cart; without
+// JavaScript the select shows every price, with it the price follows the
+// choice.
+templ buyForm(p *pageCtx, pr catalog.StorefrontProduct, cta string) {
+	<form class="buy" method="post" action={ p.URL("/cart") } data-buy>
+		@price(p.priceOf(pr.PriceFrom()))
+		if len(pr.Variants) > 1 {
+			<label for={ "v-" + pr.ID.String() }>{ optionsLabel(p.l, pr) }</label>
+			<select name="variant" id={ "v-" + pr.ID.String() }>
+				for _, v := range pr.Variants {
+					<option
+						value={ v.ID.String() }
+						data-price={ p.priceOf(v).price }
+						data-compare={ p.priceOf(v).compare }
+						disabled?={ !v.Available }
+						selected?={ v.ID == pr.PriceFrom().ID }
+					>
+						{ variantLabel(p.l, pr, v) }
+					</option>
+				}
+			</select>
+		} else {
+			<input type="hidden" name="variant" value={ pr.Variants[0].ID.String() }/>
+		}
+		<label for={ "q-" + pr.ID.String() }>{ p.l.T(MsgQuantity) }</label>
+		<input type="number" name="qty" id={ "q-" + pr.ID.String() } min="1" max="20" value="1" inputmode="numeric"/>
+		<button class="btn btn-block" type="submit" disabled?={ !pr.Available() }>{ p.l.Or(cta, MsgAddToCart) }</button>
+	</form>
+}
+
+templ sectionsPage(p *pageCtx, secs []sectionView) {
+	for i, s := range secs {
+		@section(p, s, i == 0)
+	}
+	if len(secs) == 0 {
+		<p class="empty">{ p.l.T(MsgNoProducts) }</p>
+	}
+}
+
+templ section(p *pageCtx, s sectionView, first bool) {
+	switch {
+		case s.hero != nil:
+			@hero(p, s.hero, first)
+		case s.grid != nil:
+			@grid(p, s.grid)
+		case s.landing != nil:
+			@productLanding(p, s.landing, first)
+		case s.reviews != nil:
+			<section class="sec" id={ "s-" + s.id }>
+				<h2>{ p.l.Or(s.reviews.Title, MsgReviews) }</h2>
+				<div class="reviews">
+					for _, r := range s.reviews.Items {
+						<figure class="review">
+							<div class="stars" role="img" aria-label={ fmt.Sprintf(p.l.T(MsgRatingOf), r.Rating) }>{ stars(r.Rating) }</div>
+							<blockquote><p>{ r.Text }</p></blockquote>
+							<figcaption>
+								{ r.Name }
+								if r.Location != "" {
+									· { r.Location }
+								}
+							</figcaption>
+						</figure>
+					}
+				</div>
+			</section>
+		case s.faq != nil:
+			<section class="sec faq" id={ "s-" + s.id }>
+				<h2>{ p.l.Or(s.faq.Title, MsgFAQ) }</h2>
+				for _, qa := range s.faq.Items {
+					<details>
+						<summary>{ qa.Question }</summary>
+						<p>{ qa.Answer }</p>
+					</details>
+				}
+			</section>
+		case s.badges != nil:
+			<section class="sec badges" id={ "s-" + s.id }>
+				for _, b := range s.badges.Items {
+					<div>
+						@badgeIcon(b.Icon)
+						<strong>{ orString(b.Title, p.l.BadgeTitle(b.Icon)) }</strong>
+						if b.Text != "" {
+							<span>{ b.Text }</span>
+						}
+					</div>
+				}
+			</section>
+		case s.countdown != nil:
+			@countdown(p, s.id, s.countdown)
+	}
+}
+
+templ hero(p *pageCtx, h *heroView, first bool) {
+	<section class="sec hero" data-align={ orString(h.cfg.Align, "center") }>
+		if h.image != nil {
+			@picture(*h.image, "100vw", p.eager())
+		}
+		if first {
+			<h1>{ orString(h.cfg.Heading, p.v.name) }</h1>
+		} else {
+			<h2>{ orString(h.cfg.Heading, p.v.name) }</h2>
+		}
+		if h.cfg.Subheading != "" {
+			<p>{ h.cfg.Subheading }</p>
+		}
+		if h.cfg.ButtonLabel != "" && h.cfg.ButtonLink != "" {
+			<a class="btn" href={ p.link(h.cfg.ButtonLink) }>{ h.cfg.ButtonLabel }</a>
+		}
+	</section>
+}
+
+templ grid(p *pageCtx, g *gridView) {
+	<section class="sec">
+		if g.title != "" {
+			<h2>{ g.title }</h2>
+		}
+		if len(g.products) == 0 {
+			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
+		} else {
+			<div class="grid">
+				for _, pr := range g.products {
+					@card(p, pr)
+				}
+			</div>
+		}
+		if g.more != "" {
+			<p class="more"><a href={ p.URL(g.more) }>{ p.l.T(MsgShowMore) }</a></p>
+		}
+	</section>
+}
+
+templ productLanding(p *pageCtx, lv *landingView, first bool) {
+	<section class="sec prod">
+		<div class="gallery">
+			for i, img := range lv.product.Images {
+				if i < 5 {
+					@picture(pictureOf(img, lv.product.Title), "(min-width: 48rem) 50vw, 100vw", i == 0 && p.eager())
+				}
+			}
+		</div>
+		<div>
+			if first {
+				<h1>{ orString(lv.cfg.Headline, lv.product.Title) }</h1>
+			} else {
+				<h2>{ orString(lv.cfg.Headline, lv.product.Title) }</h2>
+			}
+			if len(lv.cfg.Highlights) > 0 {
+				<ul class="highlights">
+					for _, h := range lv.cfg.Highlights {
+						<li>{ h }</li>
+					}
+				</ul>
+			}
+			@buyForm(p, lv.product, orString(lv.cfg.CTALabel, p.l.T(MsgOrderNow)))
+			if lv.cfg.ShowDescription == nil || *lv.cfg.ShowDescription {
+				<div class="desc">
+					for _, para := range paragraphs(lv.product.Description) {
+						<p>{ para }</p>
+					}
+				</div>
+			}
+		</div>
+	</section>
+}
+
+templ countdown(p *pageCtx, id string, c *countdownView) {
+	<section class="sec countdown" id={ "s-" + id } data-countdown={ c.cfg.EndsAt.UTC().Format(time.RFC3339) } data-hide={ boolAttr(c.hide) }>
+		<h2>{ p.l.Or(c.cfg.Title, MsgOfferEnds) }</h2>
+		if c.cfg.Subtitle != "" {
+			<p>{ c.cfg.Subtitle }</p>
+		}
+		<div class="clock" aria-hidden="true">
+			for i, unit := range []Msg{MsgDays, MsgHours, MsgMinutes, MsgSeconds} {
+				<div><span data-unit>{ fmt.Sprintf("%02d", c.left[i]) }</span><small>{ p.l.T(unit) }</small></div>
+			}
+		</div>
+	</section>
+}
+
+templ badgeIcon(icon string) {
+	@templ.Raw(badgeSVG(icon))
+}
