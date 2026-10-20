@@ -35,6 +35,14 @@ type Deps struct {
 	// EdgeTTL is how long the edge may keep a page (s-maxage); 60s or
 	// less unless the worker purges (ADR-0019). Zero means 60s.
 	EdgeTTL time.Duration
+	// Carts serves the cart; Orders the thank-you page (nil until the
+	// orders module exists: the page is then a 404).
+	Carts  Carts
+	Orders Orders
+	// Limiter rate-limits cart writes per IP and per store; nil disables.
+	Limiter Limiter
+	// ClientIP is the shopper's address as the trusted proxies report it.
+	ClientIP func(*http.Request) string
 	// Now is the clock (tests); nil means time.Now.
 	Now func() time.Time
 }
@@ -42,21 +50,25 @@ type Deps struct {
 // Shop serves a store's pages. The tenant must already be in the request
 // context (the host was resolved before).
 type Shop struct {
-	catalog Catalog
-	stores  Stores
-	content Content
-	signer  Signer
-	assets  *Assets
-	log     *slog.Logger
-	caches  *caches
-	scheme  string
-	edge    string // Cache-Control of a page
-	now     func() time.Time
+	catalog  Catalog
+	stores   Stores
+	content  Content
+	signer   Signer
+	assets   *Assets
+	log      *slog.Logger
+	caches   *caches
+	scheme   string
+	edge     string // Cache-Control of a page
+	carts    Carts
+	orders   Orders
+	limiter  Limiter
+	clientIP func(*http.Request) string
+	now      func() time.Time
 }
 
 // New builds the shop.
 func New(d Deps) (*Shop, error) {
-	if d.Catalog == nil || d.Stores == nil || d.Content == nil || d.Signer == nil || d.Assets == nil || d.Log == nil {
+	if d.Catalog == nil || d.Stores == nil || d.Content == nil || d.Carts == nil || d.Signer == nil || d.Assets == nil || d.Log == nil {
 		return nil, errors.New("web: missing dependency")
 	}
 	if d.Cache == (CacheConfig{}) {
@@ -64,6 +76,9 @@ func New(d Deps) (*Shop, error) {
 	}
 	if d.Now == nil {
 		d.Now = time.Now
+	}
+	if d.ClientIP == nil {
+		d.ClientIP = func(r *http.Request) string { return r.RemoteAddr }
 	}
 	scheme := "http"
 	if d.HTTPS {
@@ -74,7 +89,8 @@ func New(d Deps) (*Shop, error) {
 	}
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
-		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, now: d.Now}, nil
+		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders,
+		limiter: d.Limiter, clientIP: d.ClientIP, now: d.Now}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -87,13 +103,9 @@ type result struct {
 	redirect string
 }
 
-// ServeHTTP serves GET and HEAD for every storefront page.
+// ServeHTTP serves every storefront page (GET and HEAD) and the cart's
+// form posts.
 func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.Header().Set("Allow", "GET, HEAD")
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-		return
-	}
 	ctx := r.Context()
 	store, err := tenant.FromContext(ctx)
 	if err != nil {
@@ -112,6 +124,15 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rest = "/"
 		}
 	}
+	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
+	if s.cartRoute(w, r, store, p, rest) {
+		return
+	}
+	if !isRead(r) {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	after := r.URL.Query().Get("after")
 	if _, perr := ulid.Parse(after); perr != nil {
 		after = "" // only a valid cursor is part of the page (and its cache key)
@@ -121,7 +142,6 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.write(w, r, c)
 		return
 	}
-	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
 	res, err := s.route(ctx, p, rest, after)
 	if err != nil {
 		s.unavailable(w, r, err)
@@ -296,10 +316,8 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 // the edge may keep them for EdgeTTL; the worker purges their tags when
 // what they show changes (ADR-0019).
 func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
+	s.writeHeaders(w, c)
 	h := w.Header()
-	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
-	h.Set("Content-Language", string(c.language))
 	if c.status == http.StatusOK {
 		h.Set("Cache-Control", s.edge)
 		h.Set("Cache-Tag", c.tags)
@@ -313,6 +331,15 @@ func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
 	if _, err := w.Write(c.body); err != nil {
 		s.log.DebugContext(r.Context(), "storefront: client went away", "err", err)
 	}
+}
+
+// writeHeaders sets what every HTML page carries: its type, language and
+// the CSP that allows exactly its inline style.
+func (s *Shop) writeHeaders(w http.ResponseWriter, c cached) {
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
+	h.Set("Content-Language", string(c.language))
 }
 
 // unavailable answers when the store's data cannot be read (database

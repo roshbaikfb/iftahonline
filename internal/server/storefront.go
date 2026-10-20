@@ -25,6 +25,7 @@ func MountStorefront(resolver tenancy.HostResolver, pages http.Handler, assetsPr
 	return func(rt Routes) {
 		rt.Mux.Handle("GET "+assetsPrefix, assets)
 		rt.Mux.Handle("GET /", StoreHost(rt, resolver, pages))
+		rt.Mux.Handle("POST /", StoreHost(rt, resolver, pages)) // the cart's forms
 	}
 }
 

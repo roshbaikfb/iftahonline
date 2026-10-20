@@ -1,0 +1,74 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+)
+
+// cartPage lists the shopper's cart with forms to change it; every form
+// works without JavaScript.
+templ cartPage(p *pageCtx, v app.CartView, problem string) {
+	<section class="sec cart">
+		<h1>{ p.l.T(MsgCart) }</h1>
+		if problem != "" {
+			<p class="alert" role="alert">{ problem }</p>
+		}
+		if len(v.Lines) == 0 {
+			<p class="empty">{ p.l.T(MsgCartEmpty) }</p>
+			<p class="more"><a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a></p>
+		} else {
+			<ul class="lines">
+				for _, l := range v.Lines {
+					<li class="line">
+						<div class="what">
+							<a href={ p.URL(productPath(l.ProductSlug)) }>{ l.ProductTitle }</a>
+							if len(l.OptionValues) > 0 {
+								<small>{ joinOptions(l.OptionValues) }</small>
+							}
+							<span class="price">{ p.l.Price(l.Price) }</span>
+							if !l.Available {
+								<span class="badge">{ p.l.T(MsgLineUnavailable) }</span>
+							}
+						</div>
+						<form method="post" action={ p.URL("/cart/update") } class="qty">
+							<input type="hidden" name="variant" value={ l.VariantID.String() }/>
+							<label class="sr" for={ "q-" + l.VariantID.String() }>{ p.l.T(MsgQuantity) }</label>
+							<input type="number" name="qty" id={ "q-" + l.VariantID.String() } min="1" max="20" value={ strconv.Itoa(l.Qty) } inputmode="numeric"/>
+							<button class="btn" type="submit">{ p.l.T(MsgUpdate) }</button>
+						</form>
+						<form method="post" action={ p.URL("/cart/update") }>
+							<input type="hidden" name="variant" value={ l.VariantID.String() }/>
+							<input type="hidden" name="qty" value="0"/>
+							<button class="link" type="submit">{ p.l.T(MsgRemove) }</button>
+						</form>
+						<strong class="total">{ p.l.Price(l.Total) }</strong>
+					</li>
+				}
+			</ul>
+			if v.Subtotal != nil {
+				<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(*v.Subtotal) }</strong></p>
+			}
+			<button class="btn btn-block" type="button" disabled>{ p.l.T(MsgCheckout) }</button>
+			<p class="empty">{ p.l.T(MsgCheckoutSoon) }</p>
+		}
+	</section>
+}
+
+templ thankYouPage(p *pageCtx, o OrderSummary) {
+	<section class="sec cart">
+		<h1>{ p.l.T(MsgThankYou) }</h1>
+		<p>{ p.l.T(MsgThankYouText) }</p>
+		<p>{ p.l.T(MsgOrderRef) }: <strong dir="ltr">{ o.Ref }</strong></p>
+		<ul class="lines">
+			for _, l := range o.Lines {
+				<li class="line">
+					<div class="what">{ l.Title } × { strconv.Itoa(l.Qty) }</div>
+					<strong class="total">{ p.l.Price(l.Total) }</strong>
+				</li>
+			}
+		</ul>
+		<p class="subtotal">{ p.l.T(MsgTotal) }: <strong>{ p.l.Price(o.Total) }</strong></p>
+		<p class="more"><a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a></p>
+	</section>
+}

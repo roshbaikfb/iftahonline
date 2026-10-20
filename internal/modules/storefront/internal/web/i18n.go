@@ -83,47 +83,83 @@ const (
 	MsgBadgeSecure
 	MsgBadgeSupport
 	MsgBadgeQuality
+	MsgCart
+	MsgCartEmpty
+	MsgSubtotal
+	MsgUpdate
+	MsgRemove
+	MsgCheckout
+	MsgCheckoutSoon
+	MsgContinueShopping
+	MsgLineUnavailable
+	MsgErrUnavailable
+	MsgErrStock
+	MsgErrCartFull
+	MsgErrQty
+	MsgErrBusy
+	MsgThankYou
+	MsgThankYouText
+	MsgOrderRef
+	MsgTotal
 	msgCount
 )
 
 // messages holds each message in both languages side by side, so a
 // translation cannot go missing in one of them.
 var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // constant translation table
-	MsgHome:           {"الرئيسية", "Home"},
-	MsgAddToCart:      {"أضف إلى السلة", "Add to cart"},
-	MsgOrderNow:       {"اطلب الآن", "Order now"},
-	MsgSoldOut:        {"نفدت الكمية", "Sold out"},
-	MsgOptions:        {"الاختيار", "Option"},
-	MsgQuantity:       {"الكمية", "Quantity"},
-	MsgDescription:    {"الوصف", "Description"},
-	MsgNewArrivals:    {"وصل حديثًا", "New arrivals"},
-	MsgProducts:       {"المنتجات", "Products"},
-	MsgReviews:        {"آراء العملاء", "Customer reviews"},
-	MsgFAQ:            {"الأسئلة الشائعة", "Frequently asked questions"},
-	MsgOfferEnds:      {"ينتهي العرض خلال", "Offer ends in"},
-	MsgDays:           {"يوم", "days"},
-	MsgHours:          {"ساعة", "hours"},
-	MsgMinutes:        {"دقيقة", "minutes"},
-	MsgSeconds:        {"ثانية", "seconds"},
-	MsgShowMore:       {"عرض المزيد", "Show more"},
-	MsgNoProducts:     {"لا توجد منتجات هنا بعد.", "No products here yet."},
-	MsgNotFoundTitle:  {"الصفحة غير موجودة", "Page not found"},
-	MsgNotFoundText:   {"ربما نُقلت هذه الصفحة أو لم تعد متاحة.", "This page may have moved or is no longer available."},
-	MsgBackHome:       {"العودة إلى المتجر", "Back to the store"},
-	MsgLanguageName:   {"العربية", "English"},
-	MsgPoweredBy:      {"يعمل بواسطة iftahonline", "Powered by iftahonline"},
-	MsgRatingOf:       {"التقييم %d من 5", "Rated %d out of 5"},
-	MsgSkipToContent:  {"انتقل إلى المحتوى", "Skip to content"},
-	MsgPolicyShipping: {"سياسة الشحن", "Shipping policy"},
-	MsgPolicyRefund:   {"سياسة الاسترجاع", "Refund policy"},
-	MsgPolicyPrivacy:  {"سياسة الخصوصية", "Privacy policy"},
-	MsgPolicyTerms:    {"الشروط والأحكام", "Terms of service"},
-	MsgBadgeShipping:  {"شحن سريع", "Fast shipping"},
-	MsgBadgeCOD:       {"الدفع عند الاستلام", "Cash on delivery"},
-	MsgBadgeReturns:   {"استرجاع سهل", "Easy returns"},
-	MsgBadgeSecure:    {"دفع آمن", "Secure payment"},
-	MsgBadgeSupport:   {"دعم العملاء", "Customer support"},
-	MsgBadgeQuality:   {"جودة مضمونة", "Quality guaranteed"},
+	MsgHome:             {"الرئيسية", "Home"},
+	MsgAddToCart:        {"أضف إلى السلة", "Add to cart"},
+	MsgOrderNow:         {"اطلب الآن", "Order now"},
+	MsgSoldOut:          {"نفدت الكمية", "Sold out"},
+	MsgOptions:          {"الاختيار", "Option"},
+	MsgQuantity:         {"الكمية", "Quantity"},
+	MsgDescription:      {"الوصف", "Description"},
+	MsgNewArrivals:      {"وصل حديثًا", "New arrivals"},
+	MsgProducts:         {"المنتجات", "Products"},
+	MsgReviews:          {"آراء العملاء", "Customer reviews"},
+	MsgFAQ:              {"الأسئلة الشائعة", "Frequently asked questions"},
+	MsgOfferEnds:        {"ينتهي العرض خلال", "Offer ends in"},
+	MsgDays:             {"يوم", "days"},
+	MsgHours:            {"ساعة", "hours"},
+	MsgMinutes:          {"دقيقة", "minutes"},
+	MsgSeconds:          {"ثانية", "seconds"},
+	MsgShowMore:         {"عرض المزيد", "Show more"},
+	MsgNoProducts:       {"لا توجد منتجات هنا بعد.", "No products here yet."},
+	MsgNotFoundTitle:    {"الصفحة غير موجودة", "Page not found"},
+	MsgNotFoundText:     {"ربما نُقلت هذه الصفحة أو لم تعد متاحة.", "This page may have moved or is no longer available."},
+	MsgBackHome:         {"العودة إلى المتجر", "Back to the store"},
+	MsgLanguageName:     {"العربية", "English"},
+	MsgPoweredBy:        {"يعمل بواسطة iftahonline", "Powered by iftahonline"},
+	MsgRatingOf:         {"التقييم %d من 5", "Rated %d out of 5"},
+	MsgSkipToContent:    {"انتقل إلى المحتوى", "Skip to content"},
+	MsgPolicyShipping:   {"سياسة الشحن", "Shipping policy"},
+	MsgPolicyRefund:     {"سياسة الاسترجاع", "Refund policy"},
+	MsgPolicyPrivacy:    {"سياسة الخصوصية", "Privacy policy"},
+	MsgPolicyTerms:      {"الشروط والأحكام", "Terms of service"},
+	MsgBadgeShipping:    {"شحن سريع", "Fast shipping"},
+	MsgBadgeCOD:         {"الدفع عند الاستلام", "Cash on delivery"},
+	MsgBadgeReturns:     {"استرجاع سهل", "Easy returns"},
+	MsgBadgeSecure:      {"دفع آمن", "Secure payment"},
+	MsgBadgeSupport:     {"دعم العملاء", "Customer support"},
+	MsgBadgeQuality:     {"جودة مضمونة", "Quality guaranteed"},
+	MsgCart:             {"السلة", "Cart"},
+	MsgCartEmpty:        {"سلتك فارغة.", "Your cart is empty."},
+	MsgSubtotal:         {"المجموع", "Subtotal"},
+	MsgUpdate:           {"تحديث", "Update"},
+	MsgRemove:           {"حذف", "Remove"},
+	MsgCheckout:         {"إتمام الطلب", "Checkout"},
+	MsgCheckoutSoon:     {"إتمام الطلب أونلاين متاح قريبًا.", "Online checkout is coming soon."},
+	MsgContinueShopping: {"متابعة التسوق", "Continue shopping"},
+	MsgLineUnavailable:  {"غير متوفر بهذه الكمية", "Not available in this quantity"},
+	MsgErrUnavailable:   {"هذا المنتج لم يعد متاحًا.", "This item is no longer available."},
+	MsgErrStock:         {"الكمية المطلوبة غير متوفرة.", "Not enough of this item is left."},
+	MsgErrCartFull:      {"السلة ممتلئة؛ احذف بعض المنتجات أولًا.", "Your cart is full; remove some items first."},
+	MsgErrQty:           {"اختر كمية من 1 إلى 20.", "Choose a quantity from 1 to 20."},
+	MsgErrBusy:          {"طلبات كثيرة؛ حاول مرة أخرى بعد قليل.", "Too many requests; please try again shortly."},
+	MsgThankYou:         {"شكرًا لطلبك!", "Thank you for your order!"},
+	MsgThankYouText:     {"استلمنا طلبك وسنتواصل معك قريبًا.", "We received your order and will be in touch soon."},
+	MsgOrderRef:         {"رقم الطلب", "Order number"},
+	MsgTotal:            {"الإجمالي", "Total"},
 }
 
 // T returns the message in l.

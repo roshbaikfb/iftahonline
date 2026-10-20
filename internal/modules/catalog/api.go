@@ -126,6 +126,8 @@ type Storefront interface {
 	ListProducts(ctx context.Context, q StorefrontQuery) (StorefrontPage, error)
 	// Categories returns the store's categories, by position.
 	Categories(ctx context.Context) ([]Category, error)
+	// SellableVariants is Catalog.SellableVariants, for the cart.
+	SellableVariants(ctx context.Context, ids []ulid.ID) ([]SellableVariant, error)
 }
 
 // CurrencySource returns the currency of the store in ctx. cmd/platform

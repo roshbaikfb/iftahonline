@@ -90,3 +90,5 @@ func badgeSVG(icon string) string {
 	}
 	return open + p + `</svg>`
 }
+
+func joinOptions(vs []string) string { return strings.Join(vs, " / ") }

@@ -95,7 +95,6 @@ main { display: block; min-block-size: 50vh; }
 @media (min-width: 48rem) { .reviews { grid-template-columns: repeat(3, 1fr); } }
 .review { padding: 1rem; border-radius: var(--radius); background: color-mix(in srgb, var(--c-text) 5%, transparent); margin: 0; }
 .stars { color: var(--c-accent); letter-spacing: .1em; }
-.review footer { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
 .faq details { border-block-end: 1px solid color-mix(in srgb, var(--c-text) 12%, transparent); padding-block: .75rem; }
 .faq summary { cursor: pointer; font-weight: 700; }
 .faq details p { margin-block: .5rem 0; white-space: pre-line; }
@@ -109,3 +108,20 @@ main { display: block; min-block-size: 50vh; }
 .countdown[hidden] { display: none; }
 .policy { max-inline-size: 48rem; margin-block: 2rem; }
 .policy p { white-space: pre-line; }
+
+/* Cart */
+.cartlink { font-size: .9rem; color: var(--c-text); display: inline-flex; gap: .35rem; align-items: center; }
+.alert { padding: .75rem 1rem; border-radius: var(--radius); background: color-mix(in srgb, var(--c-accent) 25%, transparent); }
+.lines { list-style: none; padding: 0; margin: 0 0 1rem; }
+.line { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; align-items: center; padding-block: 1rem;
+  border-block-end: 1px solid color-mix(in srgb, var(--c-text) 12%, transparent); }
+.line .what { display: grid; gap: .15rem; grid-column: 1 / -1; }
+.line .qty { display: flex; gap: .5rem; }
+.line .qty input { inline-size: 5rem; font: inherit; padding: .4rem; border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--c-text) 25%, transparent); background: var(--c-bg); color: var(--c-text); }
+.line .qty .btn { padding: .4rem .9rem; }
+.line .total { justify-self: end; }
+.link { background: none; border: 0; padding: 0; font: inherit; color: var(--c-primary); cursor: pointer; text-decoration: underline; }
+.subtotal { font-size: 1.15rem; text-align: end; }
+.review figcaption { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
+.review blockquote { margin: 0; }

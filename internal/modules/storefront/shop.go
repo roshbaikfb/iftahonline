@@ -19,6 +19,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -111,7 +112,25 @@ type ShopDeps struct {
 	Cache   CacheConfig
 	HTTPS   bool
 	EdgeTTL time.Duration // s-maxage of pages (config.Edge.CacheTTL)
+	// ClientIP is the shopper's address from the trusted proxies, for the
+	// cart's per-IP rate limit.
+	ClientIP func(*http.Request) string
+	// Orders backs the thank-you page; nil until the orders module exists.
+	Orders OrderSummaries
 }
+
+// OrderSummary is what the thank-you page shows of an order.
+type OrderSummary = web.OrderSummary
+
+// OrderLine is a line of an OrderSummary.
+type OrderLine = web.OrderLine
+
+// OrderSummaries finds a placed order by reference (the orders module
+// implements it); ErrOrderNotFound when there is none.
+type OrderSummaries = web.Orders
+
+// ErrOrderNotFound means no order has that reference.
+var ErrOrderNotFound = web.ErrOrderNotFound
 
 var _ web.Stores = (tenancy.Service)(nil)
 
@@ -132,8 +151,14 @@ func NewShop(d ShopDeps) (*Shop, error) {
 	if err != nil {
 		return nil, err
 	}
+	limiter, err := ratelimit.New(d.Redis, "storefront")
+	if err != nil {
+		return nil, err
+	}
+	content := app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator(), Variants: d.Catalog})
 	shop, err := web.New(web.Deps{
-		Catalog: d.Catalog, Stores: d.Stores, Content: app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator()}),
+		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: d.Orders,
+		Limiter: limiter, ClientIP: d.ClientIP,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
 		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL,
 	})

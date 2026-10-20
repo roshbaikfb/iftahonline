@@ -180,6 +180,12 @@ func (s *Storefront) ListProducts(ctx context.Context, q StorefrontQuery) (Store
 	return StorefrontPage{Items: s.views(page.Items), NextCursor: page.NextCursor}, nil
 }
 
+// SellableVariants is Service.SellableVariants for the storefront role
+// (a cart's lines).
+func (s *Storefront) SellableVariants(ctx context.Context, ids []ulid.ID) ([]domain.SellableVariant, error) {
+	return sellableVariants(ctx, s.db, ids)
+}
+
 // Categories returns the store's categories, by position.
 func (s *Storefront) Categories(ctx context.Context) ([]domain.Category, error) {
 	var out []domain.Category

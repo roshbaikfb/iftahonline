@@ -173,8 +173,13 @@ func TestStorefrontNotFoundPage(t *testing.T) {
 	if rec := f.do(t, http.MethodGet, "/livez"); rec.Code != http.StatusOK {
 		t.Fatalf("storefront livez = %d", rec.Code)
 	}
-	// Non-GET falls through to the problem 404.
-	if rec := f.do(t, http.MethodPost, "/cart"); rec.Header().Get("Content-Type") != problem.ContentType {
+	// Methods the storefront does not serve fall through to the problem 404.
+	if rec := f.do(t, http.MethodPut, "/cart"); rec.Header().Get("Content-Type") != problem.ContentType {
+		t.Fatalf("PUT = %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	// POST reaches the store (the cart's forms), so an unknown host gets
+	// the branded 404 page, like GET.
+	if rec := f.do(t, http.MethodPost, "/cart"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Store not found") {
 		t.Fatalf("POST = %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
 }
