@@ -39,6 +39,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
@@ -170,9 +171,20 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err != nil {
 		return clients{}, err
 	}
+	// Only the worker runs handlers; the other roles need the same
+	// subscriber list to publish, so their purger is a no-op.
+	var purger cdn.Purger = cdn.Nop{}
+	if cfg.Edge.Purges() {
+		if purger, err = cdn.NewCloudflare(cdn.CloudflareOptions{ZoneID: cfg.Edge.CloudflareZoneID, Token: cfg.Edge.CloudflareToken}); err != nil {
+			return clients{}, err
+		}
+	}
 	bus := eventbus.New(inserter)
 	for _, typ := range storefront.InvalidatingEvents() {
 		if err = bus.Subscribe(typ, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+			return clients{}, err
+		}
+		if err = bus.Subscribe(typ, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
 			return clients{}, err
 		}
 	}
@@ -327,6 +339,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	shop, err := storefront.NewShop(storefront.ShopDeps{
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
+		EdgeTTL: c.cfg.Edge.CacheTTL,
 	})
 	if err != nil {
 		return nil, err
