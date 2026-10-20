@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,9 @@ type Deps struct {
 	// HTTPS builds absolute URLs (canonical, hreflang, structured data)
 	// with https; off for local development.
 	HTTPS bool
+	// EdgeTTL is how long the edge may keep a page (s-maxage); 60s or
+	// less unless the worker purges (ADR-0019). Zero means 60s.
+	EdgeTTL time.Duration
 	// Now is the clock (tests); nil means time.Now.
 	Now func() time.Time
 }
@@ -46,6 +50,7 @@ type Shop struct {
 	log     *slog.Logger
 	caches  *caches
 	scheme  string
+	edge    string // Cache-Control of a page
 	now     func() time.Time
 }
 
@@ -64,8 +69,12 @@ func New(d Deps) (*Shop, error) {
 	if d.HTTPS {
 		scheme = "https"
 	}
+	if d.EdgeTTL <= 0 {
+		d.EdgeTTL = time.Minute
+	}
+	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
-		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, now: d.Now}, nil
+		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, now: d.Now}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -112,7 +121,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.write(w, r, c)
 		return
 	}
-	p := &pageCtx{v: v, l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
+	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
 	res, err := s.route(ctx, p, rest, after)
 	if err != nil {
 		s.unavailable(w, r, err)
@@ -122,7 +131,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, res.redirect, http.StatusMovedPermanently)
 		return
 	}
-	res.tags = p.cacheTags(store.String())
+	res.tags = p.cacheTags()
 	s.caches.putPage(prefix, key, res.cached)
 	s.write(w, r, res.cached)
 }
@@ -184,6 +193,7 @@ func (s *Shop) home(ctx context.Context, p *pageCtx) (result, error) {
 	if !page.ID.IsZero() {
 		p.tag("pg-" + page.ID.String())
 	}
+	p.tagListing()
 	return s.render(p, http.StatusOK, sectionsPage(p, secs))
 }
 
@@ -224,6 +234,7 @@ func (s *Shop) category(ctx context.Context, p *pageCtx, slug, after string) (re
 	}
 	p.title = c.Name + " | " + p.v.name
 	p.tag("c-" + c.ID.String())
+	p.tagListing()
 	p.tagProducts(page.Items)
 	more := ""
 	if page.NextCursor != "" {
@@ -246,6 +257,7 @@ func (s *Shop) landing(ctx context.Context, p *pageCtx, slug string) (result, er
 	}
 	p.title, p.desc = page.Title+" | "+p.v.name, page.Description
 	p.tag("pg-" + page.ID.String())
+	p.tagListing()
 	return s.render(p, http.StatusOK, sectionsPage(p, secs))
 }
 
@@ -281,15 +293,15 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 }
 
 // write sends a rendered page. Pages are the same for every shopper, so
-// the edge may keep them; s-maxage stays within the 60-second promise
-// until edge purges arrive (ADR-0018).
+// the edge may keep them for EdgeTTL; the worker purges their tags when
+// what they show changes (ADR-0019).
 func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
 	h.Set("Content-Language", string(c.language))
 	if c.status == http.StatusOK {
-		h.Set("Cache-Control", "public, max-age=0, s-maxage=60")
+		h.Set("Cache-Control", s.edge)
 		h.Set("Cache-Tag", c.tags)
 	} else {
 		h.Set("Cache-Control", "public, max-age=0, s-maxage=30")

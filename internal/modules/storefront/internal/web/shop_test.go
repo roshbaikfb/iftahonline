@@ -187,7 +187,7 @@ func product(title, slug string, price int64, available bool, cats ...ulid.ID) c
 	}
 }
 
-func newFixture(t testing.TB) fixture {
+func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	t.Helper()
 	cat := catalog.Category{ID: gen.New(), Slug: "tshirts", Name: "تيشيرتات"}
 	shirt := product("تيشيرت قطن", "cotton-tee", 15000, true, cat.ID)
@@ -208,11 +208,15 @@ func newFixture(t testing.TB) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shop, err := web.New(web.Deps{
+	deps := web.Deps{
 		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar"}}, Content: content,
 		Signer: fakeSigner{}, Assets: assets, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPS: true,
 		Now: func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	shop, err := web.New(deps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +297,8 @@ func TestHomeArabicAndEnglish(t *testing.T) {
 	if h.Get("Cache-Control") != "public, max-age=0, s-maxage=60" || h.Get("Content-Language") != "ar" {
 		t.Fatalf("headers %v", h)
 	}
-	if tags := h.Get("Cache-Tag"); !strings.HasPrefix(tags, "s-"+f.store.String()) || !strings.Contains(tags, "p-"+f.shirt.ID.String()) {
+	if tags := h.Get("Cache-Tag"); !strings.HasPrefix(tags, "s-"+f.store.String()) || !strings.Contains(tags, "p-"+f.shirt.ID.String()) ||
+		!strings.Contains(tags, "l-"+f.store.String()) {
 		t.Fatalf("Cache-Tag %q", tags)
 	}
 
@@ -544,5 +549,22 @@ func TestSystemFontDownloadsNothing(t *testing.T) {
 	body := f.get(t, "/").Body.String()
 	if strings.Contains(body, "@font-face") || strings.Contains(body, `rel="preload"`) {
 		t.Fatal("the system font must not download or preload anything")
+	}
+}
+
+func TestEdgeTTLAndTags(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, func(d *web.Deps) { d.EdgeTTL = 10 * time.Minute })
+	rec := f.get(t, "/p/cotton-tee")
+	if rec.Header().Get("Cache-Control") != "public, max-age=0, s-maxage=600" {
+		t.Fatalf("Cache-Control %q", rec.Header().Get("Cache-Control"))
+	}
+	// A product page is not a listing: a new product elsewhere does not
+	// purge it.
+	if tags := rec.Header().Get("Cache-Tag"); strings.Contains(tags, "l-") || !strings.Contains(tags, "p-"+f.shirt.ID.String()) {
+		t.Fatalf("product page tags %q", tags)
+	}
+	if tags := f.get(t, "/c/tshirts").Header().Get("Cache-Tag"); !strings.Contains(tags, "c-"+f.cat.ID.String()) || !strings.Contains(tags, "l-") {
+		t.Fatalf("category page tags %q", tags)
 	}
 }

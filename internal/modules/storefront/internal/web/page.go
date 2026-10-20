@@ -14,6 +14,7 @@ import (
 // and where the page lives.
 type pageCtx struct {
 	v      *storeView
+	store  string // the store's ID, for cache tags
 	l      Locale
 	base   string // scheme://host
 	path   string // without the language prefix, e.g. /p/shirt
@@ -69,6 +70,11 @@ func categoryPath(slug string) string { return "/c/" + slug }
 // page reaches it (ADR-0018).
 func (p *pageCtx) tag(t string) { p.tags = append(p.tags, t) }
 
+// tagListing marks a page that lists products (home, category, landing
+// pages): a product created, edited or removed may change any of them,
+// even one that does not show it yet.
+func (p *pageCtx) tagListing() { p.tag("l-" + p.store) }
+
 func (p *pageCtx) tagProducts(ps []catalog.StorefrontProduct) {
 	for _, pr := range ps {
 		p.tag("p-" + pr.ID.String())
@@ -77,9 +83,9 @@ func (p *pageCtx) tagProducts(ps []catalog.StorefrontProduct) {
 
 // cacheTags is the Cache-Tag header: the store, then the page's own tags,
 // without repeats, within Cloudflare's 16 KiB limit.
-func (p *pageCtx) cacheTags(store string) string {
+func (p *pageCtx) cacheTags() string {
 	seen := map[string]bool{}
-	out := []string{"s-" + store}
+	out := []string{"s-" + p.store}
 	n := len(out[0])
 	for _, t := range p.tags {
 		if seen[t] || n+len(t)+1 > 16000 {

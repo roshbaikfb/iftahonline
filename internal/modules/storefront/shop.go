@@ -5,14 +5,17 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
@@ -50,6 +53,47 @@ func InvalidateHandler(rdb *redis.Client) eventbus.Handler {
 	}
 }
 
+// PurgeSubscriber is the event bus subscriber name of PurgeHandler.
+const PurgeSubscriber = "storefront.purge_edge"
+
+// PurgeHandler purges the edge cache's pages that show what an event
+// changed (ADR-0019). Subscribe it to InvalidatingEvents on every role's
+// bus; with cdn.Nop it does nothing.
+func PurgeHandler(p cdn.Purger) eventbus.Handler {
+	return func(ctx context.Context, d eventbus.Delivery) error {
+		tags, err := PurgeTags(d)
+		if err != nil {
+			return river.JobCancel(err) // retrying cannot fix a payload that does not decode
+		}
+		return p.PurgeTags(ctx, tags)
+	}
+}
+
+// PurgeTags maps an event to the Cache-Tags of the pages it changes:
+//   - a product: its page (p-) and every listing (l-), which may show it;
+//   - a category or the theme: the whole store (s-), since the header
+//     and the look are on every page;
+//   - a policy: the whole store (its link is in every footer);
+//   - another page: that page (pg-).
+func PurgeTags(d eventbus.Delivery) ([]string, error) {
+	store := d.Meta.StoreID.String()
+	switch d.Meta.Type {
+	case catalog.EventProductChanged:
+		ev, err := eventbus.Decode[catalog.ProductChanged](d)
+		return []string{"p-" + ev.ProductID.String(), "l-" + store}, err
+	case catalog.EventProductDeleted:
+		ev, err := eventbus.Decode[catalog.ProductDeleted](d)
+		return []string{"p-" + ev.ProductID.String(), "l-" + store}, err
+	case EventPageChanged:
+		ev, err := eventbus.Decode[PageChanged](d)
+		if ev.Kind == KindPolicy {
+			return []string{"s-" + store}, err
+		}
+		return []string{"pg-" + ev.PageID.String()}, err
+	}
+	return []string{"s-" + store}, nil // categories, theme, logo
+}
+
 // CacheConfig bounds the shop's in-memory caches.
 type CacheConfig = web.CacheConfig
 
@@ -66,6 +110,7 @@ type ShopDeps struct {
 	Log     *slog.Logger
 	Cache   CacheConfig
 	HTTPS   bool
+	EdgeTTL time.Duration // s-maxage of pages (config.Edge.CacheTTL)
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -90,7 +135,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 	shop, err := web.New(web.Deps{
 		Catalog: d.Catalog, Stores: d.Stores, Content: app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator()}),
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL,
 	})
 	if err != nil {
 		return nil, err
