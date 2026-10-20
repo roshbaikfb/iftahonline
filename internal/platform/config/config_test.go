@@ -330,3 +330,32 @@ func TestSearch(t *testing.T) {
 		}
 	}
 }
+
+func TestEdge(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleStorefront, env(base()))
+	if err != nil || c.Edge.CacheTTL != time.Minute {
+		t.Fatalf("default edge TTL: %v %+v", err, c.Edge)
+	}
+	if c, err = config.Load(config.RoleStorefront, env(with("EDGE_CACHE_TTL", "10m"))); err != nil || c.Edge.CacheTTL != 10*time.Minute {
+		t.Fatalf("edge TTL: %v %+v", err, c.Edge)
+	}
+	for _, bad := range []string{"0s", "48h", "soon"} {
+		if _, err = config.Load(config.RoleStorefront, env(with("EDGE_CACHE_TTL", bad))); err == nil {
+			t.Errorf("EDGE_CACHE_TTL=%s accepted", bad)
+		}
+	}
+	if c, err = config.Load(config.RoleWorker, env(base())); err != nil || c.Edge.Purges() {
+		t.Fatalf("worker without Cloudflare: %v %+v", err, c.Edge)
+	}
+	c, err = config.Load(config.RoleWorker, env(with("CLOUDFLARE_ZONE_ID", "zone", "CLOUDFLARE_API_TOKEN", "cf-secret-token")))
+	if err != nil || !c.Edge.Purges() || c.Edge.CloudflareToken != "cf-secret-token" {
+		t.Fatalf("worker with Cloudflare: %v", err)
+	}
+	if _, err = config.Load(config.RoleWorker, env(with("CLOUDFLARE_ZONE_ID", "zone"))); err == nil {
+		t.Fatal("a zone without a token accepted")
+	}
+	if c, err = config.Load(config.RoleAPI, env(with("CLOUDFLARE_API_TOKEN", "cf-secret-token"))); err != nil || c.Edge.CloudflareToken != "" {
+		t.Fatalf("the api must not hold the purge token: %v", err)
+	}
+}
