@@ -20,3 +20,4 @@ supersedes it.
 | [0012](0012-image-pipeline.md) | Product image pipeline: presigned uploads, re-encoded masters, signed imgproxy delivery | Accepted |
 | [0013](0013-tenant-safe-search.md) | Tenant-safe product search with Arabic normalization | Accepted |
 | [0014](0014-catalog-importers.md) | Catalog importers: CSV and WooCommerce as resumable jobs | Accepted |
+| [0015](0015-domain-events-and-storefront-reads.md) | Domain events between modules; the catalog's storefront read side | Accepted |
