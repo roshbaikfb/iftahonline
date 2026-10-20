@@ -33,10 +33,11 @@ func TestMatrix(t *testing.T) {
 		authz.PermMembersManage: {O},
 		authz.PermAuditRead:     {O, M},
 
-		authz.PermCatalogRead:     {O, M, S, H},
-		authz.PermCatalogManage:   {O, M},
-		authz.PermInventoryManage: {O, M, H},
-		authz.PermImportsManage:   {O, M},
+		authz.PermCatalogRead:      {O, M, S, H},
+		authz.PermCatalogManage:    {O, M},
+		authz.PermInventoryManage:  {O, M, H},
+		authz.PermImportsManage:    {O, M},
+		authz.PermStorefrontManage: {O, M},
 	}
 	pol, err := domain.NewPolicy()
 	if err != nil {
