@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/media"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
