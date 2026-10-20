@@ -63,7 +63,25 @@ type Config struct {
 	AdminDB DB
 	Media   Media
 	Search  Search
+	Edge    Edge
 }
+
+// Edge configures the CDN in front of the storefront (ADR-0019). The
+// worker purges by tag when Cloudflare is configured; the storefront
+// tells the edge how long it may keep pages.
+type Edge struct {
+	// CacheTTL is the storefront's s-maxage. Keep it at 60s or less
+	// without purging (the freshness promise); raise it (e.g. 10m) once
+	// the worker purges.
+	CacheTTL time.Duration
+	// CloudflareZoneID and CloudflareToken (Cache Purge permission) let
+	// the worker purge; both empty disables purging.
+	CloudflareZoneID string
+	CloudflareToken  string
+}
+
+// Purges reports whether the worker purges the edge cache.
+func (e Edge) Purges() bool { return e.CloudflareZoneID != "" }
 
 // Search configures Meilisearch (api and worker). Use a key limited to
 // the index's search and document actions in production, never the
@@ -282,6 +300,17 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 
 	if role == RoleStorefront {
 		c.Media = r.delivery()
+		c.Edge.CacheTTL = r.duration("EDGE_CACHE_TTL", time.Minute)
+		if c.Edge.CacheTTL > 24*time.Hour {
+			r.errorf("EDGE_CACHE_TTL: at most 24h")
+		}
+	}
+	if role == RoleWorker {
+		c.Edge.CloudflareZoneID = r.str("CLOUDFLARE_ZONE_ID", "")
+		c.Edge.CloudflareToken = r.secretOptional("CLOUDFLARE_API_TOKEN")
+		if (c.Edge.CloudflareZoneID == "") != (c.Edge.CloudflareToken == "") {
+			r.errorf("CLOUDFLARE_ZONE_ID and CLOUDFLARE_API_TOKEN go together")
+		}
 	}
 	if role == RoleAPI || role == RoleWorker {
 		c.Media = r.media()
@@ -321,6 +350,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("s3_endpoint", redactURL(c.Media.S3Endpoint)),
 		slog.String("s3_bucket", c.Media.S3Bucket),
 		slog.String("imgproxy", redactURL(c.Media.ImgproxyURL)),
+		slog.Duration("edge_cache_ttl", c.Edge.CacheTTL),
+		slog.Bool("edge_purge", c.Edge.Purges()),
 		slog.String("meili", redactURL(c.Search.URL)),
 	)
 }
