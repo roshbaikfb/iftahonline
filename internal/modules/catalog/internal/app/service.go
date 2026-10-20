@@ -15,6 +15,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -37,6 +38,7 @@ type Service struct {
 	media    Media
 	search   SearchIndex
 	imports  Imports
+	events   Events
 	now      func() time.Time
 }
 
@@ -50,11 +52,14 @@ type Deps struct {
 	Media    Media
 	Search   SearchIndex
 	Imports  Imports
+	// Events receives the catalog's domain events; nil discards them.
+	Events eventbus.Publisher
 }
 
 // NewService builds the service.
 func NewService(d Deps) *Service {
-	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, imports: d.Imports, now: time.Now}
+	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, imports: d.Imports,
+		events: Events{Pub: d.Events, IDs: d.IDs}, now: time.Now}
 }
 
 // SetClock replaces the clock (tests).
@@ -113,7 +118,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur money
 	if err := s.auditProduct(ctx, tx, "product.created", id, in.Title); err != nil {
 		return domain.Product{}, err
 	}
-	if err := s.reindex(ctx, tx, id); err != nil {
+	if err := s.changed(ctx, tx, id, domain.ReasonCreated); err != nil {
 		return domain.Product{}, err
 	}
 	return store.GetProduct(ctx, tx, id)
@@ -201,7 +206,7 @@ func (s *Service) replaceTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur mone
 	if err = s.auditProduct(ctx, tx, "product.updated", id, in.Title); err != nil {
 		return domain.Product{}, err
 	}
-	if err = s.reindex(ctx, tx, id); err != nil {
+	if err = s.changed(ctx, tx, id, domain.ReasonUpdated); err != nil {
 		return domain.Product{}, err
 	}
 	return store.GetProduct(ctx, tx, id)
@@ -234,6 +239,9 @@ func (s *Service) DeleteProduct(ctx context.Context, id ulid.ID) error {
 			return err
 		}
 		if err = s.reindex(ctx, tx, id); err != nil {
+			return err
+		}
+		if err = s.events.productDeleted(ctx, tx, id); err != nil {
 			return err
 		}
 		return s.auditProduct(ctx, tx, "product.deleted", id, "")
@@ -304,8 +312,12 @@ func (s *Service) SetStock(ctx context.Context, variantID ulid.ID, in domain.Sto
 	}
 	var st domain.Stock
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		var productID ulid.ID
 		var err error
-		if st, err = store.SetStock(ctx, tx, variantID, in); err != nil {
+		if st, productID, err = store.SetStock(ctx, tx, variantID, in); err != nil {
+			return err
+		}
+		if err = s.events.productChanged(ctx, tx, productID, domain.ReasonStock); err != nil {
 			return err
 		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "inventory.updated", TargetType: "variant", TargetID: variantID.String(),

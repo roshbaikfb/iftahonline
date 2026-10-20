@@ -72,6 +72,7 @@ type fixture struct {
 	pool    *pgxpool.Pool
 	qc      *testkit.QueryCounter
 	audit   *recorder
+	events  *eventLog
 	ctxA    context.Context
 	ctxB    context.Context
 	ids     *ulid.Generator
@@ -88,10 +89,10 @@ func newFixture(t *testing.T) fixture {
 	}
 	ids := ulid.NewGenerator()
 	rec := &recorder{}
-	objects, index := newMemStore(), newMemIndex()
+	objects, index, events := newMemStore(), newMemIndex(), &eventLog{}
 	deps := app.Deps{DB: pool, Jobs: ins, IDs: ids, Audit: rec, Currency: fixedCurrency(money.EGP),
-		Media: app.Media{Objects: objects, Limits: testLimits}, Search: index, Imports: testImports(t)}
-	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids, objects: objects, ins: ins, index: index, deps: deps,
+		Media: app.Media{Objects: objects, Limits: testLimits}, Search: index, Imports: testImports(t), Events: events}
+	f := fixture{pool: pool, qc: qc, audit: rec, ids: ids, objects: objects, ins: ins, index: index, deps: deps, events: events,
 		svc: app.NewService(deps)}
 	f.ctxA = createStore(t, pool, ids, "EGP")
 	f.ctxB = createStore(t, pool, ids, "SAR")

@@ -95,6 +95,15 @@ func (s *Service) reindex(ctx context.Context, tx pgx.Tx, productID ulid.ID) err
 	return s.enqueue(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return IndexProductArgs{TenantArgs: t, ProductID: productID} }, nil)
 }
 
+// changed records in tx that a product changed: its search document is
+// refreshed and catalog.product.changed is published.
+func (s *Service) changed(ctx context.Context, tx pgx.Tx, productID ulid.ID, reason string) error {
+	if err := s.reindex(ctx, tx, productID); err != nil {
+		return err
+	}
+	return s.events.productChanged(ctx, tx, productID, reason)
+}
+
 func reindexTx(ctx context.Context, ins jobs.Inserter, tx pgx.Tx, productID ulid.ID) error {
 	return enqueueTx(ctx, ins, tx, func(t jobs.TenantArgs) river.JobArgs { return IndexProductArgs{TenantArgs: t, ProductID: productID} }, nil)
 }

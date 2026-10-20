@@ -59,6 +59,9 @@ func (s *Service) createCategoryTx(ctx context.Context, tx pgx.Tx, in domain.Cat
 	if err != nil {
 		return domain.Category{}, err
 	}
+	if err = s.events.categoryChanged(ctx, tx, c.ID, domain.CategoryCreated); err != nil {
+		return domain.Category{}, err
+	}
 	return c, s.auditCategory(ctx, tx, "category.created", c)
 }
 
@@ -85,6 +88,9 @@ func (s *Service) updateCategoryTx(ctx context.Context, tx pgx.Tx, id ulid.ID, i
 	}
 	c, err := store.SaveCategory(ctx, tx, id, in, false)
 	if err != nil {
+		return domain.Category{}, err
+	}
+	if err = s.events.categoryChanged(ctx, tx, c.ID, domain.CategoryUpdated); err != nil {
 		return domain.Category{}, err
 	}
 	return c, s.auditCategory(ctx, tx, "category.updated", c)
@@ -118,6 +124,9 @@ func (s *Service) DeleteCategory(ctx context.Context, id ulid.ID) error {
 			return err
 		}
 		if err := store.DeleteCategory(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := s.events.categoryChanged(ctx, tx, id, domain.CategoryDeleted); err != nil {
 			return err
 		}
 		return s.auditCategory(ctx, tx, "category.deleted", c)

@@ -140,7 +140,8 @@ WHERE i.store_id = $2 AND i.variant_id = $3
     SELECT 1 FROM variants v JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
     WHERE v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
       AND p.deleted_at IS NULL AND p.status = 'active')
-RETURNING i.tracked
+RETURNING i.tracked, (i.on_hand - i.reserved)::int AS available,
+  (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id
 `
 
 type ReserveInventoryParams struct {
@@ -149,14 +150,20 @@ type ReserveInventoryParams struct {
 	VariantID ulid.ID
 }
 
+type ReserveInventoryRow struct {
+	Tracked   bool
+	Available int32
+	ProductID ulid.ID
+}
+
 // The race-safe step (ADR-0011): the row lock serializes concurrent
 // reservations of one variant, and the WHERE re-checks availability on
 // the locked row. No row means the variant is not sellable or short.
-func (q *Queries) ReserveInventory(ctx context.Context, arg ReserveInventoryParams) (bool, error) {
+func (q *Queries) ReserveInventory(ctx context.Context, arg ReserveInventoryParams) (ReserveInventoryRow, error) {
 	row := q.db.QueryRow(ctx, reserveInventory, arg.Qty, arg.StoreID, arg.VariantID)
-	var tracked bool
-	err := row.Scan(&tracked)
-	return tracked, err
+	var i ReserveInventoryRow
+	err := row.Scan(&i.Tracked, &i.Available, &i.ProductID)
+	return i, err
 }
 
 const setInventoryLevel = `-- name: SetInventoryLevel :one
@@ -165,7 +172,7 @@ SET on_hand = $1, tracked = $2, updated_at = now()
 FROM variants v
 WHERE i.store_id = $3 AND i.variant_id = $4
   AND v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
-RETURNING i.variant_id, i.tracked, i.on_hand, i.reserved
+RETURNING i.variant_id, i.tracked, i.on_hand, i.reserved, v.product_id
 `
 
 type SetInventoryLevelParams struct {
@@ -180,6 +187,7 @@ type SetInventoryLevelRow struct {
 	Tracked   bool
 	OnHand    int32
 	Reserved  int32
+	ProductID ulid.ID
 }
 
 // Fails the inventory_levels_bounds CHECK when on_hand < reserved.
@@ -196,13 +204,16 @@ func (q *Queries) SetInventoryLevel(ctx context.Context, arg SetInventoryLevelPa
 		&i.Tracked,
 		&i.OnHand,
 		&i.Reserved,
+		&i.ProductID,
 	)
 	return i, err
 }
 
-const unreserveInventory = `-- name: UnreserveInventory :exec
-UPDATE inventory_levels SET reserved = reserved - $1::int, updated_at = now()
-WHERE store_id = $2 AND variant_id = $3
+const unreserveInventory = `-- name: UnreserveInventory :one
+UPDATE inventory_levels AS i SET reserved = i.reserved - $1::int, updated_at = now()
+WHERE i.store_id = $2 AND i.variant_id = $3
+RETURNING (i.on_hand - i.reserved)::int AS available,
+  (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id
 `
 
 type UnreserveInventoryParams struct {
@@ -211,7 +222,16 @@ type UnreserveInventoryParams struct {
 	VariantID ulid.ID
 }
 
-func (q *Queries) UnreserveInventory(ctx context.Context, arg UnreserveInventoryParams) error {
-	_, err := q.db.Exec(ctx, unreserveInventory, arg.Qty, arg.StoreID, arg.VariantID)
-	return err
+type UnreserveInventoryRow struct {
+	Available int32
+	ProductID ulid.ID
+}
+
+// Returns what is available afterwards and the product, so the caller
+// can tell a variant coming back in stock (ADR-0015).
+func (q *Queries) UnreserveInventory(ctx context.Context, arg UnreserveInventoryParams) (UnreserveInventoryRow, error) {
+	row := q.db.QueryRow(ctx, unreserveInventory, arg.Qty, arg.StoreID, arg.VariantID)
+	var i UnreserveInventoryRow
+	err := row.Scan(&i.Available, &i.ProductID)
+	return i, err
 }
