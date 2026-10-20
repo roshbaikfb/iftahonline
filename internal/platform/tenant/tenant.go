@@ -21,6 +21,10 @@ var ErrNoTenant = errors.New("tenant: no store in context")
 // String, JSON/text and database encodings.
 type StoreID struct{ ulid.ID }
 
+// ObjectPrefix is the object-storage key prefix every object of the store
+// lives under (images, imports, assets); workers refuse keys outside it.
+func (s StoreID) ObjectPrefix() string { return "stores/" + s.String() + "/" }
+
 // ParseStoreID parses a public store ID.
 func ParseStoreID(s string) (StoreID, error) {
 	id, err := ulid.Parse(s)

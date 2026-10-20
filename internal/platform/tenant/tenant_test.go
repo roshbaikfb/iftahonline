@@ -43,3 +43,14 @@ func TestParseStoreID(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestObjectPrefix(t *testing.T) {
+	t.Parallel()
+	id, err := tenant.ParseStoreID("01J9ZQ3W5Y8V4K2N6M7P0R1S2T")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := id.ObjectPrefix(); got != "stores/01J9ZQ3W5Y8V4K2N6M7P0R1S2T/" {
+		t.Fatalf("ObjectPrefix = %q", got)
+	}
+}

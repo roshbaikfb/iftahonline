@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
 
 // memObjects is an in-memory bucket.
@@ -103,3 +105,40 @@ func TestIngest(t *testing.T) {
 }
 
 var errBoom = errors.New("boom")
+
+func TestDeleteStoreObjects(t *testing.T) {
+	t.Parallel()
+	a, err := tenant.ParseStoreID("01J9ZQ3W5Y8V4K2N6M7P0R1S2T")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := tenant.ParseStoreID("01J9ZQ3W5Y8V4K2N6M7P0R1S2V")
+	if err != nil {
+		t.Fatal(err)
+	}
+	objs := newMem()
+	mine, theirs := a.ObjectPrefix()+"assets/logo.png", b.ObjectPrefix()+"assets/logo.png"
+	objs.objects[mine], objs.objects[theirs] = []byte("a"), []byte("b")
+
+	for _, keys := range [][]string{
+		{mine, theirs},
+		{a.ObjectPrefix() + "../" + theirs},
+		{"elsewhere/x"},
+	} {
+		if err = DeleteStoreObjects(t.Context(), objs, a, keys); !errors.Is(err, ErrForeignKey) {
+			t.Fatalf("%q: err = %v", keys, err)
+		}
+	}
+	if _, ok := objs.objects[mine]; !ok {
+		t.Fatal("a refused batch must delete nothing")
+	}
+	if err = DeleteStoreObjects(t.Context(), objs, a, []string{mine, a.ObjectPrefix() + "missing"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := objs.objects[mine]; ok {
+		t.Fatal("own object not deleted")
+	}
+	if _, ok := objs.objects[theirs]; !ok {
+		t.Fatal("another store's object was deleted")
+	}
+}

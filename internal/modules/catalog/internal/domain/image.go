@@ -90,9 +90,8 @@ func ValidateContentType(ct string) (string, error) {
 	return ct, nil
 }
 
-// StorePrefix is the object-key prefix every object of a store lives
-// under; workers refuse keys outside it.
-func StorePrefix(store tenant.StoreID) string { return "stores/" + store.String() + "/" }
+// StorePrefix is the store's object-key prefix (tenant.StoreID.ObjectPrefix).
+func StorePrefix(store tenant.StoreID) string { return store.ObjectPrefix() }
 
 // UploadKey is where the browser uploads the original of an image.
 func UploadKey(store tenant.StoreID, image ulid.ID) string {

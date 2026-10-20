@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
 
 // Objects is an S3-compatible bucket: S3 in production, fakes in tests.
@@ -42,4 +46,26 @@ func Ingest(ctx context.Context, objects Objects, lim Limits, uploadKey string, 
 		return Master{}, "", err
 	}
 	return m, key, nil
+}
+
+// ErrForeignKey means a key is outside the store's object prefix.
+var ErrForeignKey = errors.New("media: key outside the store's prefix")
+
+// DeleteStoreObjects deletes keys of one store. If any key is outside
+// store's prefix (or climbs out of it with ".."), nothing is deleted and
+// the error wraps ErrForeignKey: a job can only ever delete its own
+// store's objects. Missing objects are not an error.
+func DeleteStoreObjects(ctx context.Context, objects Objects, store tenant.StoreID, keys []string) error {
+	prefix := store.ObjectPrefix()
+	for _, k := range keys {
+		if !strings.HasPrefix(k, prefix) || strings.Contains(k, "..") {
+			return fmt.Errorf("%w: %q is not under %s", ErrForeignKey, k, prefix)
+		}
+	}
+	for _, k := range keys {
+		if err := objects.Delete(ctx, k); err != nil {
+			return err
+		}
+	}
+	return nil
 }
