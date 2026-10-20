@@ -296,6 +296,28 @@ type StoreMembership struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type StorePage struct {
+	ID          pgtype.UUID
+	StoreID     pgtype.UUID
+	Kind        string
+	Slug        string
+	Title       string
+	Description string
+	Sections    []byte
+	Body        string
+	Status      string
+	Version     int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type StoreTheme struct {
+	StoreID   pgtype.UUID
+	Settings  []byte
+	Version   int32
+	UpdatedAt pgtype.Timestamptz
+}
+
 type User struct {
 	ID              pgtype.UUID
 	Email           string

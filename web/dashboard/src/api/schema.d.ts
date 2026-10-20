@@ -914,6 +914,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/storefront/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the theme
+         * @description The saved theme, or the defaults with version 0.
+         */
+        get: operations["getStorefrontTheme"];
+        /**
+         * Save the theme
+         * @description Body text must contrast with the background at least 4.5:1 (422 low_contrast).
+         */
+        put: operations["updateStorefrontTheme"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/section-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List section types with their settings schemas
+         * @description JSON Schema (2020-12) of each section type's settings, for the page editor.
+         */
+        get: operations["listSectionTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the home page
+         * @description The saved home page, or the default one with version 0 and no id.
+         */
+        get: operations["getHomePage"];
+        /**
+         * Save the home page
+         * @description The home page is always published; its slug is fixed and a body is not allowed.
+         */
+        put: operations["saveHomePage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List landing pages
+         * @description Every landing page by slug, without its sections.
+         */
+        get: operations["listLandingPages"];
+        put?: never;
+        /**
+         * Create a landing page
+         * @description At most 50 per store (409 page_limit). The slug is derived from the
+         *     title when empty; a slug in use is 422 slug taken.
+         */
+        post: operations["createLandingPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/pages/{page_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                page_id: components["parameters"]["PageID"];
+            };
+            cookie?: never;
+        };
+        /** Get a landing page */
+        get: operations["getLandingPage"];
+        /** Replace a landing page */
+        put: operations["updateLandingPage"];
+        post?: never;
+        /** Delete a landing page */
+        delete: operations["deleteLandingPage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List policies
+         * @description Every policy in display order; unwritten ones are drafts with version 0 and no id.
+         */
+        get: operations["listPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/policies/{policy}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                policy: components["parameters"]["PolicySlug"];
+            };
+            cookie?: never;
+        };
+        /** Get a policy */
+        get: operations["getPolicy"];
+        /**
+         * Save a policy
+         * @description A policy has a plain-text body (paragraphs separated by blank lines) and no sections.
+         */
+        put: operations["savePolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1636,6 +1805,103 @@ export interface components {
         CategoryList: {
             items: components["schemas"]["Category"][];
         };
+        /** @example #0f766e */
+        Color: string;
+        ThemeSettings: {
+            colors: {
+                primary: components["schemas"]["Color"];
+                accent: components["schemas"]["Color"];
+                background: components["schemas"]["Color"];
+                text: components["schemas"]["Color"];
+            };
+            /**
+             * @description Self-hosted fonts only; system uses the device's font.
+             * @enum {string}
+             */
+            font: "cairo" | "tajawal" | "ibm-plex-sans-arabic" | "noto-kufi-arabic" | "system";
+            /** @enum {string} */
+            radius: "none" | "small" | "medium" | "large";
+        };
+        Theme: {
+            settings: components["schemas"]["ThemeSettings"];
+            /** @description 0 until the theme is first saved. */
+            version: number;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        ThemeInput: {
+            settings: components["schemas"]["ThemeSettings"];
+            /** @description The version you read; 0 for the first save. */
+            version: number;
+        };
+        /** @enum {string} */
+        SectionType: "hero" | "product_grid" | "product_landing" | "reviews" | "faq" | "trust_badges" | "countdown";
+        SectionTypeInfo: {
+            type: components["schemas"]["SectionType"];
+            /** @description JSON Schema 2020-12 of the settings; $refs point into `definitions`. */
+            schema: {
+                [key: string]: unknown;
+            };
+        };
+        SectionTypeList: {
+            items: components["schemas"]["SectionTypeInfo"][];
+            /** @description The shared schema (defs.json) the section schemas reference. */
+            definitions: {
+                [key: string]: unknown;
+            };
+        };
+        Section: {
+            /** @description Stable within the page; assigned when empty. */
+            id?: string;
+            type: components["schemas"]["SectionType"];
+            /** @description Validated against the type's schema (listSectionTypes). */
+            settings?: {
+                [key: string]: unknown;
+            };
+        };
+        PageInput: {
+            /** @description Required for landing pages. */
+            title?: string;
+            /** @description Landing pages only; derived from the title when empty. */
+            slug?: string;
+            /** @description Meta description for search engines. */
+            description?: string;
+            /** @description Home and landing pages only. */
+            sections?: components["schemas"]["Section"][];
+            /** @description Policies only; plain text. */
+            body?: string;
+            /**
+             * @description Landing pages and policies (default draft); the home page is always published.
+             * @enum {string}
+             */
+            status?: "draft" | "published";
+            /**
+             * @description The version you read; 0 to create.
+             * @default 0
+             */
+            version: number;
+        };
+        Page: {
+            id?: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "home" | "landing" | "policy";
+            slug: string;
+            title: string;
+            description: string;
+            sections: components["schemas"]["Section"][];
+            body: string;
+            /** @enum {string} */
+            status: "draft" | "published";
+            /** @description 0 for a default that was never saved. */
+            version: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        PageList: {
+            items: components["schemas"]["Page"][];
+        };
         Health: {
             /** @enum {string} */
             status: "ok" | "unavailable" | "draining";
@@ -1691,6 +1957,8 @@ export interface components {
         CategoryID: components["schemas"]["ULID"];
         ImageID: components["schemas"]["ULID"];
         ImportID: components["schemas"]["ULID"];
+        PageID: components["schemas"]["ULID"];
+        PolicySlug: "shipping" | "refund" | "privacy" | "terms";
     };
     requestBodies: never;
     headers: {
@@ -2973,6 +3241,328 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getStorefrontTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The theme. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Theme"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateStorefrontTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeInput"];
+            };
+        };
+        responses: {
+            /** @description The saved theme. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Theme"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSectionTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The section types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionTypeList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getHomePage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The home page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveHomePage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description The saved home page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLandingPages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The landing pages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createLandingPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description The landing page. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getLandingPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                page_id: components["parameters"]["PageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The landing page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateLandingPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                page_id: components["parameters"]["PageID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description The landing page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteLandingPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                page_id: components["parameters"]["PageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                policy: components["parameters"]["PolicySlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    savePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                policy: components["parameters"]["PolicySlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description The policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
             };
             default: components["responses"]["Problem"];
         };

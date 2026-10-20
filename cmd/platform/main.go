@@ -37,6 +37,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
@@ -230,6 +231,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	shop, err := storefront.New(storefront.Deps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events})
+	if err != nil {
+		return nil, err
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -246,6 +251,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		id.Mount(rt.Mux, rt.Problems)
 		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cat.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
 			if mountErr != nil {

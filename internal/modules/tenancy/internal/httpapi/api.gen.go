@@ -229,6 +229,30 @@ func (e StoreSettingsTimezone) Valid() bool {
 	}
 }
 
+// Defines values for PolicySlug.
+const (
+	Privacy  PolicySlug = "privacy"
+	Refund   PolicySlug = "refund"
+	Shipping PolicySlug = "shipping"
+	Terms    PolicySlug = "terms"
+)
+
+// Valid indicates whether the value is a known member of the PolicySlug enum.
+func (e PolicySlug) Valid() bool {
+	switch e {
+	case Privacy:
+		return true
+	case Refund:
+		return true
+	case Shipping:
+		return true
+	case Terms:
+		return true
+	default:
+		return false
+	}
+}
+
 // Domain defines model for Domain.
 type Domain struct {
 	CreatedAt     time.Time            `json:"created_at"`
@@ -365,6 +389,12 @@ type ImageID = ULID
 
 // ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImportID = ULID
+
+// PageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type PageID = ULID
+
+// PolicySlug defines model for PolicySlug.
+type PolicySlug string
 
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID

@@ -298,6 +298,28 @@ type StoreMembership struct {
 	UpdatedAt time.Time
 }
 
+type StorePage struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Kind        string
+	Slug        string
+	Title       string
+	Description string
+	Sections    []byte
+	Body        string
+	Status      string
+	Version     int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type StoreTheme struct {
+	StoreID   ulid.ID
+	Settings  []byte
+	Version   int32
+	UpdatedAt time.Time
+}
+
 type User struct {
 	ID              ulid.ID
 	Email           string
