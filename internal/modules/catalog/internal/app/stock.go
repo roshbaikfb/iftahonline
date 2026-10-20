@@ -85,15 +85,19 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 		return domain.Reservation{}, err
 	}
 	lines := make([]store.ReservedLine, len(req.Lines))
+	var soldOut []ulid.ID
 	for i, l := range req.Lines {
-		var counted, ok bool
-		if counted, ok, err = store.Reserve(ctx, tx, l.VariantID, l.Qty); err != nil {
+		var r store.Reserved
+		if r, err = store.Reserve(ctx, tx, l.VariantID, l.Qty); err != nil {
 			return domain.Reservation{}, err
 		}
-		if !ok {
+		if !r.OK {
 			return domain.Reservation{}, s.whyNotReserved(ctx, tx, l)
 		}
-		lines[i] = store.ReservedLine{ID: s.ids.New(), Line: l, Counted: counted}
+		if r.SoldOut {
+			soldOut = append(soldOut, r.ProductID)
+		}
+		lines[i] = store.ReservedLine{ID: s.ids.New(), Line: l, Counted: r.Counted}
 	}
 	expires := s.now().Add(req.TTL).UTC().Truncate(time.Microsecond)
 	if err = store.InsertReservation(ctx, tx, req.Ref, expires, lines); err != nil {
@@ -103,6 +107,9 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 		return domain.Reservation{}, err
 	}
 	if err = s.scheduleExpiry(ctx, tx, req.Ref, expires); err != nil {
+		return domain.Reservation{}, err
+	}
+	if err = s.events.stockChanged(ctx, tx, soldOut); err != nil {
 		return domain.Reservation{}, err
 	}
 	return domain.Reservation{Ref: req.Ref, Lines: req.Lines, Status: domain.ReservationActive, ExpiresAt: expires}, nil
@@ -127,7 +134,7 @@ func (s *Service) ReleaseStock(ctx context.Context, ref string) error {
 		return err
 	}
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		n, err := endReservation(ctx, tx, ref, domain.ReservationReleased, false)
+		n, err := endReservation(ctx, tx, s.events, ref, domain.ReservationReleased, false)
 		if err != nil || n > 0 {
 			return err
 		}
@@ -139,8 +146,9 @@ func (s *Service) ReleaseStock(ctx context.Context, ref string) error {
 }
 
 // endReservation ends ref's active lines and gives their counted units
-// back, in variant ID order. It returns the number of lines ended.
-func endReservation(ctx context.Context, tx pgx.Tx, ref string, status domain.ReservationStatus, onlyExpired bool) (int, error) {
+// back, in variant ID order, publishing a stock change for products that
+// come back in stock. It returns the number of lines ended.
+func endReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, status domain.ReservationStatus, onlyExpired bool) (int, error) {
 	lines, err := store.EndReservation(ctx, tx, ref, status, onlyExpired)
 	if err != nil {
 		return 0, err
@@ -148,15 +156,20 @@ func endReservation(ctx context.Context, tx pgx.Tx, ref string, status domain.Re
 	slices.SortFunc(lines, func(a, b store.ReservedLine) int {
 		return bytes.Compare(a.Line.VariantID[:], b.Line.VariantID[:])
 	})
+	var restocked []ulid.ID
 	for _, l := range lines {
 		if !l.Counted {
 			continue
 		}
-		if err := store.Unreserve(ctx, tx, l.Line.VariantID, l.Line.Qty); err != nil {
+		productID, back, err := store.Unreserve(ctx, tx, l.Line.VariantID, l.Line.Qty)
+		if err != nil {
 			return 0, err
 		}
+		if back {
+			restocked = append(restocked, productID)
+		}
 	}
-	return len(lines), nil
+	return len(lines), ev.stockChanged(ctx, tx, restocked)
 }
 
 // ExpireReservationArgs releases a reservation once its TTL has passed.
@@ -176,7 +189,8 @@ func (s *Service) scheduleExpiry(ctx context.Context, tx pgx.Tx, ref string, at 
 // ExpireWorker runs ExpireReservationArgs.
 type ExpireWorker struct {
 	river.WorkerDefaults[ExpireReservationArgs]
-	DB postgres.Beginner
+	DB     postgres.Beginner
+	Events Events
 }
 
 // Work expires the ref's lines whose TTL has passed. If the job ran
@@ -185,7 +199,7 @@ type ExpireWorker struct {
 func (w *ExpireWorker) Work(ctx context.Context, job *river.Job[ExpireReservationArgs]) error {
 	var snooze time.Duration
 	err := postgres.InTenantTx(ctx, w.DB, func(tx pgx.Tx) error {
-		n, err := endReservation(ctx, tx, job.Args.Ref, domain.ReservationExpired, true)
+		n, err := endReservation(ctx, tx, w.Events, job.Args.Ref, domain.ReservationExpired, true)
 		if err != nil || n > 0 {
 			return err
 		}

@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
@@ -40,6 +41,8 @@ type Deps struct {
 	Search config.Search
 	// Keyring seals WooCommerce credentials (ADR-0014).
 	Keyring *secretbox.Keyring
+	// Events receives the catalog's domain events (ADR-0015).
+	Events eventbus.Publisher
 }
 
 // Module is the wired catalog module.
@@ -53,7 +56,7 @@ type Module struct {
 
 // New wires the module.
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Jobs == nil || d.IDs == nil || d.Log == nil || d.Currency == nil || d.Keyring == nil {
+	if d.Pool == nil || d.Jobs == nil || d.IDs == nil || d.Log == nil || d.Currency == nil || d.Keyring == nil || d.Events == nil {
 		return nil, errors.New("catalog: missing dependency")
 	}
 	if d.Audit == nil {
@@ -71,7 +74,7 @@ func New(d Deps) (*Module, error) {
 	index := search.New(d.Search.URL, d.Search.APIKey, d.Search.Index, 10*time.Second)
 	return &Module{
 		svc: app.NewService(app.Deps{
-			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index,
+			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index, Events: d.Events,
 			Imports: app.Imports{
 				Keyring: d.Keyring, Retry: retry.Default(),
 				HTTP: safehttp.New(safehttp.Options{Timeout: 30 * time.Second, MaxResponseBytes: 20 << 20}),
@@ -97,9 +100,10 @@ func (m *Module) Catalog() Catalog { return m.svc }
 
 // RegisterWorkers adds the module's job workers.
 func (m *Module) RegisterWorkers(w *river.Workers) error {
-	iw := &app.ImageWorkers{DB: m.deps.Pool, Jobs: m.deps.Jobs, Media: m.media}
+	events := app.Events{Pub: m.deps.Events, IDs: m.deps.IDs}
+	iw := &app.ImageWorkers{DB: m.deps.Pool, Jobs: m.deps.Jobs, Media: m.media, Events: events}
 	return errors.Join(
-		wrap(river.AddWorkerSafely(w, &app.ExpireWorker{DB: m.deps.Pool})),
+		wrap(river.AddWorkerSafely(w, &app.ExpireWorker{DB: m.deps.Pool, Events: events})),
 		wrap(river.AddWorkerSafely(w, &app.ProcessWorker{ImageWorkers: iw})),
 		wrap(river.AddWorkerSafely(w, &app.ExpireUploadWorker{ImageWorkers: iw})),
 		wrap(river.AddWorkerSafely(w, &app.DeleteObjectsWorker{ImageWorkers: iw})),

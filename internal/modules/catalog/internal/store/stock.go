@@ -19,59 +19,67 @@ import (
 // by reservations.
 var ErrBelowReserved = errs.Conflict("stock_below_reserved", "on_hand cannot be lower than the units currently reserved")
 
-// SetStock sets a live variant's stock level.
-func SetStock(ctx context.Context, tx Tx, variantID ulid.ID, in domain.StockInput) (domain.Stock, error) {
+// SetStock sets a live variant's stock level and returns it with the
+// variant's product.
+func SetStock(ctx context.Context, tx Tx, variantID ulid.ID, in domain.StockInput) (domain.Stock, ulid.ID, error) {
 	store, err := current(ctx)
 	if err != nil {
-		return domain.Stock{}, err
+		return domain.Stock{}, ulid.ID{}, err
 	}
 	row, err := catalogdb.New(tx).SetInventoryLevel(ctx, catalogdb.SetInventoryLevelParams{
 		StoreID: store, VariantID: variantID, OnHand: int32(in.OnHand), Tracked: in.Tracked, //nolint:gosec // bounded by domain.MaxOnHand
 	})
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return domain.Stock{}, domain.ErrNotFound
+		return domain.Stock{}, ulid.ID{}, domain.ErrNotFound
 	case postgres.IsCheckViolation(err, "inventory_levels_bounds"):
-		return domain.Stock{}, ErrBelowReserved
+		return domain.Stock{}, ulid.ID{}, ErrBelowReserved
 	case err != nil:
-		return domain.Stock{}, fmt.Errorf("catalog store: set stock: %w", err)
+		return domain.Stock{}, ulid.ID{}, fmt.Errorf("catalog store: set stock: %w", err)
 	}
-	return domain.Stock{Tracked: row.Tracked, OnHand: int(row.OnHand), Reserved: int(row.Reserved)}, nil
+	return domain.Stock{Tracked: row.Tracked, OnHand: int(row.OnHand), Reserved: int(row.Reserved)}, row.ProductID, nil
 }
 
-// Reserve holds qty units of a sellable variant. ok is false when the
-// variant is not sellable or has too little stock; counted reports
-// whether the units were counted against tracked stock.
-func Reserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (counted, ok bool, err error) {
+// Reserved is the outcome of Reserve.
+type Reserved struct {
+	OK        bool    // false: the variant is not sellable or has too little stock
+	Counted   bool    // the units were counted against tracked stock
+	SoldOut   bool    // this reservation took the last available unit
+	ProductID ulid.ID // set when OK
+}
+
+// Reserve holds qty units of a sellable variant.
+func Reserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (Reserved, error) {
 	store, err := current(ctx)
 	if err != nil {
-		return false, false, err
+		return Reserved{}, err
 	}
-	tracked, err := catalogdb.New(tx).ReserveInventory(ctx, catalogdb.ReserveInventoryParams{
+	row, err := catalogdb.New(tx).ReserveInventory(ctx, catalogdb.ReserveInventoryParams{
 		StoreID: store, VariantID: variantID, Qty: int32(qty), //nolint:gosec // bounded by domain.MaxReserveQty
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, false, nil
+		return Reserved{}, nil
 	}
 	if err != nil {
-		return false, false, fmt.Errorf("catalog store: reserve: %w", err)
+		return Reserved{}, fmt.Errorf("catalog store: reserve: %w", err)
 	}
-	return tracked, true, nil
+	return Reserved{OK: true, Counted: row.Tracked, SoldOut: row.Tracked && row.Available == 0, ProductID: row.ProductID}, nil
 }
 
-// Unreserve gives back qty counted units of a variant.
-func Unreserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) error {
+// Unreserve gives back qty counted units of a variant. restocked reports
+// that the variant had none available before.
+func Unreserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (productID ulid.ID, restocked bool, err error) {
 	store, err := current(ctx)
 	if err != nil {
-		return err
+		return ulid.ID{}, false, err
 	}
-	err = catalogdb.New(tx).UnreserveInventory(ctx, catalogdb.UnreserveInventoryParams{
+	row, err := catalogdb.New(tx).UnreserveInventory(ctx, catalogdb.UnreserveInventoryParams{
 		StoreID: store, VariantID: variantID, Qty: int32(qty), //nolint:gosec // bounded by domain.MaxReserveQty
 	})
 	if err != nil {
-		return fmt.Errorf("catalog store: unreserve: %w", err)
+		return ulid.ID{}, false, fmt.Errorf("catalog store: unreserve: %w", err)
 	}
-	return nil
+	return row.ProductID, int(row.Available) == qty, nil
 }
 
 // ReservedLine is a reservation line as stored.

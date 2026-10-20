@@ -125,7 +125,8 @@ func takeJobs[T river.JobArgs](ctx context.Context, t *testing.T, f fixture) []T
 }
 
 func workers(f fixture) *app.ImageWorkers {
-	return &app.ImageWorkers{DB: f.pool, Jobs: f.ins, Media: app.Media{Objects: f.objects, Limits: testLimits}}
+	return &app.ImageWorkers{DB: f.pool, Jobs: f.ins, Media: app.Media{Objects: f.objects, Limits: testLimits},
+		Events: app.Events{Pub: f.events, IDs: f.ids}}
 }
 
 // runJobs runs every queued image job of the store until none is left,

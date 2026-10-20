@@ -39,6 +39,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
@@ -157,6 +158,18 @@ type clients struct {
 	pool      *pgxpool.Pool
 	rdb       *redis.Client
 	adminPool *pgxpool.Pool // api role with ADMIN_DATABASE_URL only
+	events    *eventbus.Bus // one per process; subscriptions are made in newClients
+}
+
+// newClients builds the shared clients and the process's event bus. Every
+// role makes the same subscriptions (ADR-0015): publishers need the
+// subscriber list, the worker needs the handlers.
+func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *pgxpool.Pool, rdb *redis.Client) (clients, error) {
+	inserter, err := server.NewRiverInserter(pool, log)
+	if err != nil {
+		return clients{}, err
+	}
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: eventbus.New(inserter)}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -194,6 +207,7 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	stores := ten.Service()
 	return catalog.New(catalog.Deps{
 		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media, Search: c.cfg.Search, Keyring: c.cfg.Secrets.Keyring,
+		Events: c.events,
 		Currency: catalog.CurrencyFunc(func(ctx context.Context) (money.Currency, error) {
 			st, err := stores.GetStore(ctx)
 			return st.Currency, err
@@ -309,7 +323,10 @@ func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build ser
 		}
 	}()
 
-	c := clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb}
+	c, err := newClients(cfg, log, d.ids, pool, rdb)
+	if err != nil {
+		return err
+	}
 	if cfg.AdminDB.URL != "" {
 		adminPool, poolErr := postgres.NewPool(ctx, cfg.AdminDB, "iftahonline-admin")
 		if poolErr != nil {
@@ -359,7 +376,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}()
 
 	workers := river.NewWorkers()
-	c := clients{cfg: cfg, log: log, ids: d.ids, pool: pool, rdb: rdb}
+	c, err := newClients(cfg, log, d.ids, pool, rdb)
+	if err != nil {
+		return err
+	}
+	if err = river.AddWorkerSafely(workers, c.events.Worker()); err != nil {
+		return fmt.Errorf("event bus: %w", err)
+	}
 	ten, err := newTenancy(c)
 	if err != nil {
 		return err

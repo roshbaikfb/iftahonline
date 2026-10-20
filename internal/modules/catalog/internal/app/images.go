@@ -150,7 +150,7 @@ func (s *Service) UpdateImage(ctx context.Context, productID, imageID ulid.ID, i
 		if img, txErr = store.UpdateImage(ctx, tx, productID, imageID, in); txErr != nil {
 			return txErr
 		}
-		if txErr = s.reindex(ctx, tx, productID); txErr != nil {
+		if txErr = s.changed(ctx, tx, productID, domain.ReasonImages); txErr != nil {
 			return txErr
 		}
 		return s.auditImage(ctx, tx, "image.updated", img)
@@ -168,7 +168,7 @@ func (s *Service) DeleteImage(ctx context.Context, productID, imageID ulid.ID) e
 		if err = s.deleteObjects(ctx, tx, keys); err != nil {
 			return err
 		}
-		if err = s.reindex(ctx, tx, productID); err != nil {
+		if err = s.changed(ctx, tx, productID, domain.ReasonImages); err != nil {
 			return err
 		}
 		return s.auditImage(ctx, tx, "image.deleted", domain.Image{ID: imageID})
@@ -236,9 +236,10 @@ func (DeleteObjectsArgs) Kind() string { return "catalog.delete_objects" }
 
 // ImageWorkers run the image jobs.
 type ImageWorkers struct {
-	DB    postgres.Beginner
-	Jobs  jobs.Inserter
-	Media Media
+	DB     postgres.Beginner
+	Jobs   jobs.Inserter
+	Media  Media
+	Events Events
 }
 
 // ProcessWorker runs ProcessImageArgs.
@@ -298,6 +299,9 @@ func (w *ProcessWorker) Work(ctx context.Context, job *river.Job[ProcessImageArg
 			return markErr
 		default:
 			if err := reindexTx(ctx, w.Jobs, tx, img.ProductID); err != nil {
+				return err
+			}
+			if err := w.Events.productChanged(ctx, tx, img.ProductID, domain.ReasonImages); err != nil {
 				return err
 			}
 		}
