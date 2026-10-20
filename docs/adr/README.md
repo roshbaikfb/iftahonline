@@ -24,3 +24,4 @@ supersedes it.
 | [0016](0016-storefront-themes-and-sections.md) | Storefront themes and pages built from schema-validated sections | Accepted |
 | [0017](0017-store-assets-shared-image-pipeline.md) | Store assets (the logo) share the product image pipeline | Accepted |
 | [0018](0018-storefront-rendering-and-caching.md) | Storefront rendering, caching and freshness | Accepted |
+| [0019](0019-cart-edge-purge-and-browser-budgets.md) | Carts, edge purges, and browser budgets for the storefront | Accepted |
