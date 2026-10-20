@@ -166,6 +166,32 @@ func GetSellableVariant(ctx context.Context, tx Tx, variantID ulid.ID) (domain.S
 	if err != nil {
 		return domain.SellableVariant{}, fmt.Errorf("catalog store: get sellable variant: %w", err)
 	}
+	return toSellable(catalogdb.ListSellableVariantsRow(r))
+}
+
+// ListSellableVariants returns the sellable variants among ids, in the
+// order given, in one query.
+func ListSellableVariants(ctx context.Context, tx Tx, ids []ulid.ID) ([]domain.SellableVariant, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := catalogdb.New(tx).ListSellableVariants(ctx, catalogdb.ListSellableVariantsParams{StoreID: store, Ids: ids})
+	if err != nil {
+		return nil, fmt.Errorf("catalog store: list sellable variants: %w", err)
+	}
+	out := make([]domain.SellableVariant, 0, len(rows))
+	for _, r := range rows {
+		v, convErr := toSellable(r)
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func toSellable(r catalogdb.ListSellableVariantsRow) (domain.SellableVariant, error) {
 	price, compareAt, err := prices(r.Currency, r.PriceMinor, r.CompareAtMinor)
 	if err != nil {
 		return domain.SellableVariant{}, err

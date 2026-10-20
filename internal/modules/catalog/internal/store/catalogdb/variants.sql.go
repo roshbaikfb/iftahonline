@@ -155,6 +155,72 @@ func (q *Queries) ListProductVariantIDs(ctx context.Context, arg ListProductVari
 	return items, nil
 }
 
+const listSellableVariants = `-- name: ListSellableVariants :many
+SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
+       v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved
+FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(id, ord)
+JOIN variants v ON v.id = ids.id AND v.store_id = $2 AND v.deleted_at IS NULL
+JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
+JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
+WHERE p.deleted_at IS NULL AND p.status = 'active'
+ORDER BY ids.ord
+`
+
+type ListSellableVariantsParams struct {
+	Ids     []ulid.ID
+	StoreID ulid.ID
+}
+
+type ListSellableVariantsRow struct {
+	ID             ulid.ID
+	ProductID      ulid.ID
+	ProductTitle   string
+	ProductSlug    string
+	Sku            *string
+	OptionValues   []string
+	PriceMinor     int64
+	CompareAtMinor *int64
+	Currency       string
+	Tracked        bool
+	OnHand         int32
+	Reserved       int32
+}
+
+// GetSellableVariant for many IDs (a cart), one primary-key lookup per
+// ID in the order given; IDs that are not sellable are skipped.
+func (q *Queries) ListSellableVariants(ctx context.Context, arg ListSellableVariantsParams) ([]ListSellableVariantsRow, error) {
+	rows, err := q.db.Query(ctx, listSellableVariants, arg.Ids, arg.StoreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSellableVariantsRow{}
+	for rows.Next() {
+		var i ListSellableVariantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ProductTitle,
+			&i.ProductSlug,
+			&i.Sku,
+			&i.OptionValues,
+			&i.PriceMinor,
+			&i.CompareAtMinor,
+			&i.Currency,
+			&i.Tracked,
+			&i.OnHand,
+			&i.Reserved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVariantsByProducts = `-- name: ListVariantsByProducts :many
 SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
        v.tracked, v.on_hand, v.reserved

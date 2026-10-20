@@ -60,3 +60,15 @@ JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
 WHERE v.store_id = @store_id AND v.id = @id AND v.deleted_at IS NULL
   AND p.deleted_at IS NULL AND p.status = 'active';
+
+-- name: ListSellableVariants :many
+-- GetSellableVariant for many IDs (a cart), one primary-key lookup per
+-- ID in the order given; IDs that are not sellable are skipped.
+SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
+       v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved
+FROM unnest(@ids::uuid[]) WITH ORDINALITY AS ids(id, ord)
+JOIN variants v ON v.id = ids.id AND v.store_id = @store_id AND v.deleted_at IS NULL
+JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
+JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
+WHERE p.deleted_at IS NULL AND p.status = 'active'
+ORDER BY ids.ord;
