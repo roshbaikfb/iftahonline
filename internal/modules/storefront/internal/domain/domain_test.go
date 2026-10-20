@@ -11,6 +11,8 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 func fields(t *testing.T, err error) []string {
@@ -221,5 +223,37 @@ func TestDefaults(t *testing.T) {
 	}
 	if len(domain.Fonts()) != 5 || len(domain.Radii()) != 4 || len(domain.SectionTypes()) != 7 {
 		t.Fatal("enum lists changed: update the OpenAPI enums and docs too")
+	}
+}
+
+func TestLogoUploadRules(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{" IMAGE/PNG ": "image/png", "image/jpeg": "image/jpeg", "image/webp": "image/webp"} {
+		if got, err := domain.ValidateLogoContentType(in); err != nil || got != want {
+			t.Errorf("ValidateLogoContentType(%q) = %q, %v", in, got, err)
+		}
+	}
+	for _, bad := range []string{"image/svg+xml", "image/gif", "text/html", ""} {
+		_, err := domain.ValidateLogoContentType(bad)
+		if got := fields(t, err); !slices.Equal(got, []string{"content_type:unsupported"}) {
+			t.Errorf("%q: %q", bad, got)
+		}
+	}
+	store, err := tenant.ParseStoreID("01J9ZQ3W5Y8V4K2N6M7P0R1S2T")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := ulid.Parse("01JB8Z3W5Q9X2M4N6P7R8S9T0V")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := domain.AssetUploadKey(store, id); got != "stores/01J9ZQ3W5Y8V4K2N6M7P0R1S2T/uploads/01JB8Z3W5Q9X2M4N6P7R8S9T0V" {
+		t.Errorf("upload key %q", got)
+	}
+	if got := domain.AssetMasterKey(store, id, "png"); !strings.HasSuffix(got, "/assets/01JB8Z3W5Q9X2M4N6P7R8S9T0V.png") {
+		t.Errorf("png master %q", got)
+	}
+	if got := domain.AssetMasterKey(store, id, "jpeg"); !strings.HasSuffix(got, ".jpg") || !strings.HasPrefix(got, store.ObjectPrefix()) {
+		t.Errorf("jpeg master %q", got)
 	}
 }
