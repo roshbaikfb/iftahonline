@@ -278,8 +278,16 @@ func TestMedia(t *testing.T) {
 	if err != nil || c.Media.S3PublicEndpoint != "https://up.example.com" {
 		t.Fatalf("public endpoint: %v %+v", err, c.Media)
 	}
-	if c, err := config.Load(config.RoleStorefront, env(with("S3_ENDPOINT", "<unset>"))); err != nil || c.Media.S3Endpoint != "" {
-		t.Fatalf("storefront needs no media config: %v", err)
+	// The storefront signs delivery URLs but never touches storage.
+	c, err = config.Load(config.RoleStorefront, env(with("S3_ENDPOINT", "<unset>", "S3_ACCESS_KEY", "<unset>", "S3_SECRET_KEY", "<unset>")))
+	if err != nil || c.Media.S3Endpoint != "" || c.Media.S3SecretKey != "" || c.Media.S3Bucket != "iftah-media" ||
+		c.Media.ImgproxyURL == "" || len(c.Media.ImgproxyKey) != 32 {
+		t.Fatalf("storefront delivery config: %v %+v", err, c.Media)
+	}
+	for _, key := range []string{"S3_BUCKET", "IMGPROXY_URL", "IMGPROXY_KEY"} {
+		if _, err = config.Load(config.RoleStorefront, env(with(key, "<unset>"))); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("storefront without %s: %v", key, err)
+		}
 	}
 	tests := map[string][]string{
 		"missing endpoint": {"S3_ENDPOINT", "<unset>"},

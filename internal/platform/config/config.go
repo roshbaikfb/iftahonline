@@ -74,7 +74,9 @@ type Search struct {
 	Index  string // the one products index shared by every store (ADR-0013)
 }
 
-// Media configures object storage and image delivery (api and worker).
+// Media configures object storage and image delivery. The api and worker
+// get all of it; the storefront only what delivery needs (the bucket name
+// and imgproxy), never storage credentials.
 type Media struct {
 	S3Endpoint string // e.g. https://s3.eu-central-1.amazonaws.com or http://localhost:18333
 	// S3PublicEndpoint is where browsers send uploads (presigned POSTs);
@@ -278,6 +280,9 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		}
 	}
 
+	if role == RoleStorefront {
+		c.Media = r.delivery()
+	}
 	if role == RoleAPI || role == RoleWorker {
 		c.Media = r.media()
 		c.Search = Search{
@@ -321,22 +326,29 @@ func (c Config) LogValue() slog.Value {
 }
 
 func (r *reader) media() Media {
-	m := Media{
-		S3Endpoint:     r.url("S3_ENDPOINT", true, "http", "https"),
-		S3Region:       r.str("S3_REGION", "us-east-1"),
-		S3Bucket:       r.str("S3_BUCKET", ""),
-		S3AccessKey:    r.secret("S3_ACCESS_KEY"),
-		S3SecretKey:    r.secret("S3_SECRET_KEY"),
-		ImgproxyURL:    r.url("IMGPROXY_URL", true, "http", "https"),
-		ImgproxyKey:    r.hexSecret("IMGPROXY_KEY"),
-		ImgproxySalt:   r.hexSecret("IMGPROXY_SALT"),
-		MaxUploadBytes: r.int64("MEDIA_MAX_UPLOAD_BYTES", 15<<20, 1<<20, 100<<20),
-		MaxImagePixels: r.int64("MEDIA_MAX_IMAGE_PIXELS", 25_000_000, 1_000_000, 100_000_000),
-		ImageWorkers:   int(r.int64("MEDIA_IMAGE_WORKERS", 2, 1, 64)),
-	}
+	m := r.delivery()
+	m.S3Endpoint = r.url("S3_ENDPOINT", true, "http", "https")
+	m.S3Region = r.str("S3_REGION", "us-east-1")
+	m.S3AccessKey = r.secret("S3_ACCESS_KEY")
+	m.S3SecretKey = r.secret("S3_SECRET_KEY")
+	m.MaxUploadBytes = r.int64("MEDIA_MAX_UPLOAD_BYTES", 15<<20, 1<<20, 100<<20)
+	m.MaxImagePixels = r.int64("MEDIA_MAX_IMAGE_PIXELS", 25_000_000, 1_000_000, 100_000_000)
+	m.ImageWorkers = int(r.int64("MEDIA_IMAGE_WORKERS", 2, 1, 64))
 	m.S3PublicEndpoint = r.url("S3_PUBLIC_ENDPOINT", false, "http", "https")
 	if m.S3PublicEndpoint == "" {
 		m.S3PublicEndpoint = m.S3Endpoint
+	}
+	return m
+}
+
+// delivery reads what serving images needs: the bucket the masters are
+// in (part of every signed URL) and imgproxy.
+func (r *reader) delivery() Media {
+	m := Media{
+		S3Bucket:     r.str("S3_BUCKET", ""),
+		ImgproxyURL:  r.url("IMGPROXY_URL", true, "http", "https"),
+		ImgproxyKey:  r.hexSecret("IMGPROXY_KEY"),
+		ImgproxySalt: r.hexSecret("IMGPROXY_SALT"),
 	}
 	if m.S3Bucket == "" {
 		r.errorf("S3_BUCKET is required")
