@@ -14,6 +14,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			if p.desc != "" {
 				<meta name="description" content={ p.desc }/>
 			}
+			if p.noindex {
+				<meta name="robots" content="noindex"/>
+			}
 			<link rel="canonical" href={ p.abs(p.l, p.path) }/>
 			<link rel="alternate" hreflang={ string(p.v.locale) } href={ p.abs(p.v.locale, p.path) }/>
 			<link rel="alternate" hreflang={ string(p.v.locale.Other()) } href={ p.abs(p.v.locale.Other(), p.path) }/>
@@ -51,6 +54,10 @@ templ layout(p *pageCtx, body templ.Component) {
 					</nav>
 					<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
 						{ p.l.Other().T(MsgLanguageName) }
+					</a>
+					<a class="cartlink" href={ p.URL("/cart") }>
+						{ p.l.T(MsgCart) }
+						<span class="badge" data-cart-count hidden></span>
 					</a>
 				</div>
 			</header>

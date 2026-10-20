@@ -1,0 +1,301 @@
+package web
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/a-h/templ"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+// Carts is the cart's use cases (app.Service).
+type Carts interface {
+	AddToCart(ctx context.Context, token authtoken.Token, variantID ulid.ID, qty int) (authtoken.Token, error)
+	UpdateCartLine(ctx context.Context, token authtoken.Token, variantID ulid.ID, qty int) error
+	Cart(ctx context.Context, token authtoken.Token) (app.CartView, error)
+	CartUnits(ctx context.Context, token authtoken.Token) (int, error)
+}
+
+var _ Carts = (*app.Service)(nil)
+
+// OrderSummary is what the thank-you page shows of a placed order. The
+// orders module (P4) provides it.
+type OrderSummary struct {
+	Ref   string
+	Lines []OrderLine
+	Total money.Money
+}
+
+// OrderLine is one line of an OrderSummary.
+type OrderLine struct {
+	Title string
+	Qty   int
+	Total money.Money
+}
+
+// Orders finds a placed order of the store in ctx by its public
+// reference; ErrOrderNotFound when there is none.
+type Orders interface {
+	OrderSummary(ctx context.Context, ref string) (OrderSummary, error)
+}
+
+// ErrOrderNotFound means no order has that reference.
+var ErrOrderNotFound = errors.New("web: order not found")
+
+// Limiter is the rate limiter (ratelimit.Limiter).
+type Limiter interface {
+	Allow(ctx context.Context, key string, lim ratelimit.Limit) (ratelimit.Result, error)
+}
+
+// Cart limits on public writes (CLAUDE.md: rate-limit public endpoints
+// per store and per IP).
+var (
+	cartPerIP    = ratelimit.Limit{Burst: 30, Period: time.Minute}   //nolint:gochecknoglobals // constant policy
+	cartPerStore = ratelimit.Limit{Burst: 1200, Period: time.Minute} //nolint:gochecknoglobals // constant policy
+	maxFormBytes = int64(4 << 10)                                    //nolint:gochecknoglobals // constant policy
+	cartMaxAge   = int(domain.CartTTL / time.Second)                 //nolint:gochecknoglobals // constant policy
+	noStore      = "private, no-store"                               //nolint:gochecknoglobals // constant policy
+)
+
+func (s *Shop) cookieName() string {
+	if s.scheme == "https" {
+		return "__Host-cart" // Secure, host-only, path /: cannot be set by a sibling subdomain
+	}
+	return "cart"
+}
+
+func (s *Shop) cartToken(r *http.Request) authtoken.Token {
+	c, err := r.Cookie(s.cookieName())
+	if err != nil {
+		return ""
+	}
+	t, ok := authtoken.Parse(c.Value)
+	if !ok {
+		return ""
+	}
+	return t
+}
+
+func (s *Shop) setCartCookie(w http.ResponseWriter, t authtoken.Token) {
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is off only on plain-HTTP development hosts
+		Name: s.cookieName(), Value: string(t), Path: "/", MaxAge: cartMaxAge,
+		HttpOnly: true, Secure: s.scheme == "https", SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// unitsCookie is the cart's unit count for the header badge. Pages are
+// the same for everyone (edge-cached), so the count cannot be in them;
+// the script reads this cookie instead of asking the origin on every
+// page view. It holds no secret.
+const unitsCookie = "cart_n"
+
+func (s *Shop) setUnitsCookie(w http.ResponseWriter, n int) {
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // readable by the page script on purpose: a count, not a secret
+		Name: unitsCookie, Value: strconv.Itoa(n), Path: "/", MaxAge: cartMaxAge,
+		Secure: s.scheme == "https", SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// sameOrigin rejects cross-site form posts (CSRF): the browser says where
+// the request comes from, and it must be this store's host.
+func sameOrigin(r *http.Request) bool {
+	if o := r.Header.Get("Origin"); o != "" && o != "null" {
+		u, err := url.Parse(o)
+		return err == nil && u.Host == r.Host
+	}
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "same-origin":
+		return true
+	case "":
+		if ref := r.Referer(); ref != "" {
+			u, err := url.Parse(ref)
+			return err == nil && u.Host == r.Host
+		}
+	}
+	return false
+}
+
+// allow applies the per-IP and per-store limits. If Redis is down the
+// request goes through: a shop that cannot take orders loses more than a
+// limit protects.
+func (s *Shop) allow(r *http.Request, store tenant.StoreID) bool {
+	if s.limiter == nil {
+		return true
+	}
+	for _, c := range []struct {
+		key string
+		lim ratelimit.Limit
+	}{{"cart:ip:" + s.clientIP(r), cartPerIP}, {"cart:store:" + store.String(), cartPerStore}} {
+		res, err := s.limiter.Allow(r.Context(), c.key, c.lim)
+		if err != nil {
+			s.log.WarnContext(r.Context(), "storefront: rate limiter unavailable", "err", err)
+			return true
+		}
+		if !res.Allowed {
+			return false
+		}
+	}
+	return true
+}
+
+// cartRoute serves the cart and thank-you routes; ok is false for other
+// paths.
+func (s *Shop) cartRoute(w http.ResponseWriter, r *http.Request, store tenant.StoreID, p *pageCtx, rest string) bool {
+	switch {
+	case rest == "/cart" && r.Method == http.MethodPost:
+		s.cartWrite(w, r, store, p, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
+			return s.carts.AddToCart(r.Context(), tok, id, qty)
+		})
+	case rest == "/cart/update" && r.Method == http.MethodPost:
+		s.cartWrite(w, r, store, p, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
+			return tok, s.carts.UpdateCartLine(r.Context(), tok, id, qty)
+		})
+	case rest == "/cart" && isRead(r):
+		s.cartPage(w, r, p, http.StatusOK, 0)
+	case len(rest) > len("/thank-you/") && rest[:len("/thank-you/")] == "/thank-you/" && isRead(r):
+		s.thankYou(w, r, p, rest[len("/thank-you/"):])
+	default:
+		return false
+	}
+	return true
+}
+
+func isRead(r *http.Request) bool { return r.Method == http.MethodGet || r.Method == http.MethodHead }
+
+// cartWrite runs a form post that changes the cart, then sends the
+// shopper to the cart (post/redirect/get). Errors show on the cart page.
+func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.StoreID, p *pageCtx,
+	do func(authtoken.Token, ulid.ID, int) (authtoken.Token, error)) {
+	if !sameOrigin(r) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+	if !s.allow(r, store) {
+		w.Header().Set("Retry-After", "60")
+		s.cartPage(w, r, p, http.StatusTooManyRequests, MsgErrBusy)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	id, idErr := ulid.Parse(r.PostForm.Get("variant"))
+	qty, qtyErr := strconv.Atoi(r.PostForm.Get("qty"))
+	if idErr != nil {
+		s.cartPage(w, r, p, http.StatusUnprocessableEntity, MsgErrUnavailable)
+		return
+	}
+	if qtyErr != nil {
+		s.cartPage(w, r, p, http.StatusUnprocessableEntity, MsgErrQty)
+		return
+	}
+	old := s.cartToken(r)
+	tok, err := do(old, id, qty)
+	if err != nil {
+		msg, status := cartError(err)
+		if status == 0 {
+			s.unavailable(w, r, err)
+			return
+		}
+		s.cartPage(w, r, p, status, msg)
+		return
+	}
+	if tok != "" && tok != old {
+		s.setCartCookie(w, tok)
+	}
+	if n, err := s.carts.CartUnits(r.Context(), tok); err == nil {
+		s.setUnitsCookie(w, n)
+	}
+	w.Header().Set("Cache-Control", noStore)
+	http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
+}
+
+// cartError maps a cart error to its message and status; 0 means an
+// unexpected failure.
+func cartError(err error) (Msg, int) {
+	switch {
+	case errors.Is(err, app.ErrInsufficientStock):
+		return MsgErrStock, http.StatusConflict
+	case errors.Is(err, app.ErrVariantUnavailable):
+		return MsgErrUnavailable, http.StatusConflict
+	case errors.Is(err, app.ErrCartFull):
+		return MsgErrCartFull, http.StatusConflict
+	}
+	var e *errs.Error
+	if errors.As(err, &e) && e.Kind == errs.KindValidation {
+		return MsgErrQty, http.StatusUnprocessableEntity
+	}
+	return 0, 0
+}
+
+// cartPage renders the shopper's cart; never cached, never indexed.
+func (s *Shop) cartPage(w http.ResponseWriter, r *http.Request, p *pageCtx, status int, problem Msg) {
+	view, err := s.carts.Cart(r.Context(), s.cartToken(r))
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	p.title, p.noindex = p.l.T(MsgCart)+" | "+p.v.name, true
+	s.setUnitsCookie(w, view.Units) // lines may have dropped out since
+	msg := ""
+	if problem != 0 {
+		msg = p.l.T(problem)
+	}
+	s.writePrivate(w, r, p, status, cartPage(p, view, msg))
+}
+
+func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref string) {
+	if s.orders == nil || len(ref) > 64 {
+		s.writeNotFoundPrivate(w, r, p)
+		return
+	}
+	o, err := s.orders.OrderSummary(r.Context(), ref)
+	if errors.Is(err, ErrOrderNotFound) {
+		s.writeNotFoundPrivate(w, r, p)
+		return
+	}
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	p.title, p.noindex = p.l.T(MsgThankYou)+" | "+p.v.name, true
+	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, o))
+}
+
+func (s *Shop) writeNotFoundPrivate(w http.ResponseWriter, r *http.Request, p *pageCtx) {
+	p.title, p.noindex = p.l.T(MsgNotFoundTitle)+" | "+p.v.name, true
+	s.writePrivate(w, r, p, http.StatusNotFound, notFoundPage(p))
+}
+
+// writePrivate renders a page for one shopper: no shared caching.
+func (s *Shop) writePrivate(w http.ResponseWriter, r *http.Request, p *pageCtx, status int, body templ.Component) {
+	var buf bytes.Buffer
+	if err := layout(p, body).Render(r.Context(), &buf); err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l}
+	s.writeHeaders(w, c)
+	w.Header().Set("Cache-Control", noStore)
+	w.Header().Del("Cache-Tag")
+	w.WriteHeader(status)
+	if r.Method != http.MethodHead {
+		if _, err := w.Write(c.body); err != nil {
+			s.log.DebugContext(r.Context(), "storefront: client went away", "err", err)
+		}
+	}
+}

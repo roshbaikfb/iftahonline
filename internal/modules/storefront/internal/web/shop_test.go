@@ -21,6 +21,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -158,6 +159,82 @@ func (f *fakeContent) PublishedPolicy(_ context.Context, slug string) (domain.Pa
 	return domain.Page{}, app.ErrPageNotFound
 }
 
+// fakeCarts keeps carts in memory, keyed by token.
+type fakeCarts struct {
+	mu    sync.Mutex
+	carts map[authtoken.Token]map[ulid.ID]int
+	price map[ulid.ID]catalog.StorefrontProduct
+	err   error
+}
+
+func (c *fakeCarts) AddToCart(_ context.Context, tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return "", c.err
+	}
+	if _, ok := c.price[id]; !ok {
+		return "", app.ErrVariantUnavailable
+	}
+	if qty < 1 || qty > 20 {
+		return "", domain.ValidateQty(qty, false)
+	}
+	if _, ok := c.carts[tok]; !ok || tok == "" {
+		tok, _ = authtoken.New()
+		c.carts[tok] = map[ulid.ID]int{}
+	}
+	c.carts[tok][id] += qty
+	return tok, nil
+}
+
+func (c *fakeCarts) UpdateCartLine(_ context.Context, tok authtoken.Token, id ulid.ID, qty int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cart, ok := c.carts[tok]; ok {
+		if qty == 0 {
+			delete(cart, id)
+		} else {
+			cart[id] = qty
+		}
+	}
+	return nil
+}
+
+func (c *fakeCarts) Cart(_ context.Context, tok authtoken.Token) (app.CartView, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	v := app.CartView{Lines: []app.CartLineView{}}
+	for id, qty := range c.carts[tok] {
+		pr := c.price[id]
+		var variant catalog.StorefrontVariant
+		for _, pv := range pr.Variants {
+			if pv.ID == id {
+				variant = pv
+			}
+		}
+		total, _ := variant.Price.MulInt(int64(qty))
+		v.Lines = append(v.Lines, app.CartLineView{SellableVariant: catalog.SellableVariant{VariantID: id, ProductTitle: pr.Title,
+			ProductSlug: pr.Slug, OptionValues: variant.OptionValues, Price: variant.Price}, Qty: qty, Total: total, Available: true})
+		v.Units += qty
+		v.Subtotal = &total
+	}
+	return v, nil
+}
+
+func (c *fakeCarts) CartUnits(ctx context.Context, tok authtoken.Token) (int, error) {
+	v, err := c.Cart(ctx, tok)
+	return v.Units, err
+}
+
+type fakeOrders struct{}
+
+func (fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummary, error) {
+	if ref != "IFT-1001" {
+		return web.OrderSummary{}, web.ErrOrderNotFound
+	}
+	return web.OrderSummary{Ref: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}}, Total: egp(30000)}, nil
+}
+
 type fakeSigner struct{}
 
 func (fakeSigner) URL(key string, size int, format string) string {
@@ -165,6 +242,7 @@ func (fakeSigner) URL(key string, size int, format string) string {
 }
 
 type fixture struct {
+	carts   *fakeCarts
 	shop    *web.Shop
 	h       http.Handler
 	catalog *fakeCatalog
@@ -208,8 +286,14 @@ func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	carts := &fakeCarts{carts: map[authtoken.Token]map[ulid.ID]int{}, price: map[ulid.ID]catalog.StorefrontProduct{}}
+	for _, pr := range fc.products {
+		for _, v := range pr.Variants {
+			carts.price[v.ID] = pr
+		}
+	}
 	deps := web.Deps{
-		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar"}}, Content: content,
+		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar"}}, Content: content, Carts: carts,
 		Signer: fakeSigner{}, Assets: assets, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPS: true,
 		Now: func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
 	}
@@ -224,7 +308,7 @@ func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shop.ServeHTTP(w, r.WithContext(tenant.WithStore(r.Context(), store)))
 	})
-	return fixture{shop: shop, h: h, catalog: fc, content: content, store: store, shirt: shirt, cat: cat}
+	return fixture{carts: carts, shop: shop, h: h, catalog: fc, content: content, store: store, shirt: shirt, cat: cat}
 }
 
 func (f fixture) get(t testing.TB, path string) *httptest.ResponseRecorder {
@@ -485,11 +569,11 @@ func TestCacheAndInvalidate(t *testing.T) {
 func TestMethodsAndFailures(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	rq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	rq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/p/cotton-tee", nil)
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, rq)
 	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, HEAD" {
-		t.Fatalf("POST: %d", rec.Code)
+		t.Fatalf("POST to a page: %d", rec.Code)
 	}
 	rq = httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/", nil)
 	rec = httptest.NewRecorder()

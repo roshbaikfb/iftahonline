@@ -58,6 +58,10 @@ const MaxSellableIDs = 100
 // SellableVariants returns the sellable variants among ids in the order
 // given, skipping the others, in a constant number of queries.
 func (s *Service) SellableVariants(ctx context.Context, ids []ulid.ID) ([]domain.SellableVariant, error) {
+	return sellableVariants(ctx, s.db, ids)
+}
+
+func sellableVariants(ctx context.Context, db postgres.Beginner, ids []ulid.ID) ([]domain.SellableVariant, error) {
 	if len(ids) > MaxSellableIDs {
 		return nil, errs.Validation(errs.FieldError{Field: "ids", Code: "too_many", Message: fmt.Sprintf("at most %d variants", MaxSellableIDs)})
 	}
@@ -65,7 +69,7 @@ func (s *Service) SellableVariants(ctx context.Context, ids []ulid.ID) ([]domain
 		return []domain.SellableVariant{}, nil
 	}
 	var out []domain.SellableVariant
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+	err := postgres.InTenantTx(ctx, db, func(tx pgx.Tx) (txErr error) {
 		out, txErr = store.ListSellableVariants(ctx, tx, ids)
 		return txErr
 	})

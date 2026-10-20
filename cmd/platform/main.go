@@ -23,6 +23,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -340,6 +341,12 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL,
+		ClientIP: func(r *http.Request) string {
+			if ip, ok := middleware.ClientIP(r.Context()); ok {
+				return ip.String()
+			}
+			return ""
+		},
 	})
 	if err != nil {
 		return nil, err

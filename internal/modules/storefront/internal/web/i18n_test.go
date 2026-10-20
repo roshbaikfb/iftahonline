@@ -48,7 +48,7 @@ func TestLocales(t *testing.T) {
 		t.Fatal("direction or other language wrong")
 	}
 	for _, l := range []web.Locale{web.Arabic, web.English} {
-		for m := web.MsgHome; m <= web.MsgBadgeQuality; m++ {
+		for m := web.MsgHome; m <= web.MsgTotal; m++ {
 			if l.T(m) == "" {
 				t.Errorf("%s: message %d has no text", l, m)
 			}

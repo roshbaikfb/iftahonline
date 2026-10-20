@@ -48,5 +48,18 @@ function variantPickers() {
   }
 }
 
+// cartBadge shows how many units the cart holds, from the cart_n cookie
+// the server sets on every cart change: pages are cached for everyone,
+// so the count cannot be in them, and asking the origin on every view
+// would undo the edge cache.
+function cartBadge() {
+  const badge = document.querySelector("[data-cart-count]");
+  const m = document.cookie.match(/(?:^|; )cart_n=(\d+)/);
+  if (!badge || !m || m[1] === "0") return;
+  badge.textContent = m[1];
+  badge.hidden = false;
+}
+
 countdowns();
 variantPickers();
+cartBadge();
