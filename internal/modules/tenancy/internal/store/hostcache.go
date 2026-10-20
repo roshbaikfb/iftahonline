@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
 
@@ -89,33 +90,18 @@ func (c *HostCache) Invalidate(ctx context.Context, hosts []string) error {
 	return nil
 }
 
-// Subscribe streams invalidated host lists until ctx ends. go-redis
-// reconnects (and resubscribes) on its own; messages published while
-// disconnected are lost, which the L1 TTL bounds.
+// Subscribe streams invalidated host lists until ctx ends (see
+// redisx.Subscribe); the L1 TTL bounds what a lost message costs.
 func (c *HostCache) Subscribe(ctx context.Context, log *slog.Logger) <-chan []string {
+	in := redisx.Subscribe(ctx, c.rdb, InvalidateChannel, log)
 	out := make(chan []string, 64)
-	ps := c.rdb.Subscribe(ctx, InvalidateChannel)
 	go func() {
 		defer close(out)
-		defer func() {
-			if err := ps.Close(); err != nil {
-				log.DebugContext(ctx, "tenancy hostcache: close subscription", "err", err)
-			}
-		}()
-		ch := ps.Channel()
-		for {
+		for payload := range in {
 			select {
+			case out <- strings.Split(payload, "\n"):
 			case <-ctx.Done():
 				return
-			case m, ok := <-ch:
-				if !ok {
-					return
-				}
-				select {
-				case out <- strings.Split(m.Payload, "\n"):
-				case <-ctx.Done():
-					return
-				}
 			}
 		}
 	}()
