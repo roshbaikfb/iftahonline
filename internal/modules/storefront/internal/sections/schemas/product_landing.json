@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/product_landing.json",
+  "title": "Single-product landing",
+  "description": "One product, big: images, price, highlights and an order button. The heart of a campaign landing page.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["product_id"],
+  "properties": {
+    "product_id": { "$ref": "defs.json#/$defs/id" },
+    "headline": { "description": "Empty shows the product's title.", "$ref": "defs.json#/$defs/line", "maxLength": 120 },
+    "highlights": {
+      "type": "array",
+      "maxItems": 6,
+      "items": { "$ref": "defs.json#/$defs/line", "minLength": 1, "maxLength": 80 }
+    },
+    "show_description": { "type": "boolean", "default": true },
+    "cta_label": { "description": "Empty shows the default order button text.", "$ref": "defs.json#/$defs/line", "maxLength": 40 }
+  }
+}

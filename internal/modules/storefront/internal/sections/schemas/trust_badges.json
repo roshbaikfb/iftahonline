@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/trust_badges.json",
+  "title": "Trust badges",
+  "description": "Small promises with an icon: cash on delivery, fast shipping, easy returns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["icon"],
+        "properties": {
+          "icon": { "enum": ["shipping", "cod", "returns", "secure", "support", "quality"] },
+          "title": { "description": "Empty uses the icon's default text.", "$ref": "defs.json#/$defs/line", "maxLength": 40 },
+          "text": { "$ref": "defs.json#/$defs/line", "maxLength": 120 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/hero.json",
+  "title": "Hero",
+  "description": "A large opening banner: heading, subheading and one button. The image, if any, is a product's first image.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "heading": { "description": "Empty shows the store's name.", "$ref": "defs.json#/$defs/line", "maxLength": 120 },
+    "subheading": { "$ref": "defs.json#/$defs/line", "maxLength": 300 },
+    "button_label": { "$ref": "defs.json#/$defs/line", "maxLength": 40 },
+    "button_link": { "$ref": "defs.json#/$defs/link" },
+    "image_product_id": { "$ref": "defs.json#/$defs/id" },
+    "align": { "enum": ["start", "center"], "default": "center" }
+  },
+  "dependentRequired": { "button_label": ["button_link"] }
+}
