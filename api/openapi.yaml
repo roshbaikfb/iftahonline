@@ -1044,6 +1044,78 @@ paths:
               schema: { $ref: "#/components/schemas/Theme" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/logo:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: getStoreLogo
+      summary: Get the logo and any upload in progress
+      description: |
+        `current` is the live logo; `latest` is the newest upload that is
+        not live yet (pending, processing or failed with a reason).
+      responses:
+        "200":
+          description: The logo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreLogo" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [storefront]
+      operationId: deleteStoreLogo
+      summary: Remove the logo
+      description: 404 logo_not_found when there is none.
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/logo/uploads:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [storefront]
+      operationId: createLogoUpload
+      summary: Start a logo upload
+      description: |
+        Returns a presigned POST (PNG, JPEG or WebP, at most 2 MiB; SVG
+        and GIF are refused). Upload the file, then call
+        completeLogoUpload. The current logo stays live until the new one
+        is processed; earlier unfinished uploads are abandoned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoUploadRequest" }
+      responses:
+        "201":
+          description: The pending upload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogoUpload" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/AssetID"
+    post:
+      tags: [storefront]
+      operationId: completeLogoUpload
+      summary: Process an uploaded logo
+      description: |
+        Queues the re-encoding; poll getStoreLogo for the result. Repeating
+        it is harmless; a rejected upload is 409 asset_failed.
+      responses:
+        "202":
+          description: Processing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogoAsset" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/storefront/section-types:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -1442,6 +1514,11 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     ImportID:
       name: import_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    AssetID:
+      name: asset_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -2138,6 +2215,37 @@ components:
       properties:
         settings: { $ref: "#/components/schemas/ThemeSettings" }
         version: { type: integer, minimum: 0, description: The version you read; 0 for the first save. }
+    LogoAsset:
+      type: object
+      required: [id, status]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        status:
+          type: string
+          enum: [pending, processing, ready, failed]
+        failure_reason:
+          type: string
+          description: Why a failed upload was rejected (unsupported_type, file_too_large, too_many_pixels, corrupt_image, upload_missing).
+        width: { type: integer }
+        height: { type: integer }
+        urls: { $ref: "#/components/schemas/ImageURLs" }
+        created_at: { type: string, format: date-time }
+    StoreLogo:
+      type: object
+      properties:
+        current: { $ref: "#/components/schemas/LogoAsset" }
+        latest: { $ref: "#/components/schemas/LogoAsset" }
+    LogoUploadRequest:
+      type: object
+      required: [content_type]
+      properties:
+        content_type: { type: string, enum: [image/png, image/jpeg, image/webp] }
+    LogoUpload:
+      type: object
+      required: [asset, upload]
+      properties:
+        asset: { $ref: "#/components/schemas/LogoAsset" }
+        upload: { $ref: "#/components/schemas/PresignedUpload" }
     SectionType:
       type: string
       enum: [hero, product_grid, product_landing, reviews, faq, trust_badges, countdown]

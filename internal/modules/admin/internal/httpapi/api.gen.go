@@ -393,6 +393,9 @@ type StoreStatus string
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
+// AssetID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type AssetID = ULID
+
 // CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CategoryID = ULID
 

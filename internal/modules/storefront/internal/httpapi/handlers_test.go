@@ -1,9 +1,12 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,17 +15,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/sections"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -73,11 +83,89 @@ const (
 type fixture struct {
 	h       http.Handler
 	svc     *app.Service
+	workers *app.AssetWorkers
+	objects *memObjects
 	storeA  tenant.StoreID
 	storeB  tenant.StoreID
+	ctxA    context.Context
 	ctxB    context.Context
 	landing domain.Page // store B's
 	homeB   domain.Page
+	logoB   domain.Asset // ready
+	uploadB domain.Asset // pending
+}
+
+// memObjects is an in-memory bucket; uploads are simulated with Put.
+type memObjects struct {
+	mu      sync.Mutex
+	objects map[string][]byte
+}
+
+func (m *memObjects) PresignUpload(_ context.Context, key, ct string, maxBytes int64, ttl time.Duration) (media.Upload, error) {
+	return media.Upload{URL: "https://s3.test/bucket", Fields: map[string]string{"key": key, "Content-Type": ct},
+		MaxBytes: maxBytes, ExpiresAt: time.Now().Add(ttl)}, nil
+}
+
+func (m *memObjects) Get(_ context.Context, key string, _ int64) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.objects[key]
+	if !ok {
+		return nil, media.ErrNoObject
+	}
+	return b, nil
+}
+
+func (m *memObjects) Put(_ context.Context, key, _ string, data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.objects[key] = data
+	return nil
+}
+
+func (m *memObjects) Delete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.objects, key)
+	return nil
+}
+
+func logoPNG(t *testing.T) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewNRGBA(image.Rect(0, 0, 120, 40))); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// readyLogo uploads and processes a logo for the store in ctx, as the
+// browser and the worker would.
+func (f fixture) readyLogo(ctx context.Context, t *testing.T) domain.Asset {
+	t.Helper()
+	a, up, err := f.svc.CreateLogoUpload(ctx, "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.objects.Put(ctx, up.Fields["key"], "image/png", logoPNG(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.CompleteLogoUpload(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	store, err := tenant.FromContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := app.ProcessAssetArgs{TenantArgs: jobs.TenantArgs{StoreID: store}, AssetID: a.ID}
+	if err = (&app.ProcessAssetWorker{AssetWorkers: f.workers}).Work(ctx, &river.Job[app.ProcessAssetArgs]{Args: args}); err != nil {
+		t.Fatal(err)
+	}
+	l, err := f.svc.GetLogo(ctx)
+	if err != nil || l.Current == nil {
+		t.Fatalf("logo not ready: %+v %v", l, err)
+	}
+	return *l.Current
 }
 
 func newFixture(t *testing.T) fixture {
@@ -93,7 +181,14 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Sections: reg})
+	ins, err := river.NewClient(riverpgxv5.New(pool), &river.Config{Middleware: jobs.Middleware()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objs := &memObjects{objects: map[string][]byte{}}
+	m := app.Media{Objects: objs, Limits: media.Limits{MaxBytes: 8 << 20, MaxPixels: 4 << 20}}
+	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Sections: reg, Jobs: ins, Media: m})
+	workers := &app.AssetWorkers{DB: pool, Jobs: ins, Media: m, Events: eventbus.Nop{}, IDs: ids}
 	mk := func() (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}
 		sctx := tenant.WithStore(ctx, id)
@@ -107,7 +202,7 @@ func newFixture(t *testing.T) fixture {
 		}
 		return sctx, id
 	}
-	_, a := mk()
+	ctxA, a := mk()
 	ctxB, b := mk()
 
 	// Store B's secrets, which store A must never see or change.
@@ -143,8 +238,14 @@ func newFixture(t *testing.T) fixture {
 		tokOwnerB:   {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{b: authz.RoleOwner}},
 	}
 	mux := http.NewServeMux()
-	httpapi.Mount(mux, svc, reg, pol, testkit.FakeStoreScope(resp, members), resp)
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, landing: landing, homeB: homeB}
+	signer := media.NewSigner("https://img.test", "bucket", []byte("0123456789abcdef"), []byte("salt-0123456789a"))
+	httpapi.Mount(mux, svc, reg, signer, pol, testkit.FakeStoreScope(resp, members), resp)
+	f := fixture{h: mux, svc: svc, workers: workers, objects: objs, storeA: a, storeB: b, ctxA: ctxA, ctxB: ctxB, landing: landing, homeB: homeB}
+	f.logoB = f.readyLogo(ctxB, t)
+	if f.uploadB, _, err = svc.CreateLogoUpload(ctxB, "image/webp"); err != nil {
+		t.Fatal(err)
+	}
+	return f
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -250,6 +351,35 @@ func TestHappyPath(t *testing.T) {
 	if c, got := f.do(t, req(t, http.MethodGet, storePath(a, "/policies/refund"), tokOwnerA, "")); c != http.StatusOK || got["title"] != "الاسترجاع" {
 		t.Fatalf("getPolicy = %d %v", c, got)
 	}
+
+	if c, logo := f.do(t, req(t, http.MethodGet, storePath(a, "/logo"), tokOwnerA, "")); c != http.StatusOK || logo["current"] != nil || logo["latest"] != nil {
+		t.Fatalf("getStoreLogo empty = %d %v", c, logo)
+	}
+	code, lu := f.do(t, req(t, http.MethodPost, storePath(a, "/logo/uploads"), tokOwnerA, `{"content_type":"image/png"}`))
+	asset, upload := lu["asset"].(map[string]any), lu["upload"].(map[string]any)
+	if code != http.StatusCreated || asset["status"] != "pending" || asset["urls"] != nil || upload["max_bytes"] != float64(2<<20) {
+		t.Fatalf("createLogoUpload = %d %v", code, lu)
+	}
+	if err := f.objects.Put(t.Context(), upload["fields"].(map[string]any)["key"].(string), "image/png", logoPNG(t)); err != nil {
+		t.Fatal(err)
+	}
+	aid := asset["id"].(string)
+	if c, got := f.do(t, req(t, http.MethodPost, storePath(a, "/logo/uploads/"+aid+"/complete"), tokOwnerA, "")); c != http.StatusAccepted || got["status"] != "processing" {
+		t.Fatalf("completeLogoUpload = %d %v", c, got)
+	}
+	if c, logo := f.do(t, req(t, http.MethodGet, storePath(a, "/logo"), tokOwnerA, "")); c != http.StatusOK || logo["latest"].(map[string]any)["status"] != "processing" {
+		t.Fatalf("getStoreLogo processing = %d %v", c, logo)
+	}
+	f.readyLogo(f.ctxA, t) // the worker's side; a second logo replaces the first
+	code, logo := f.do(t, req(t, http.MethodGet, storePath(a, "/logo"), tokOwnerA, ""))
+	cur, _ := logo["current"].(map[string]any)
+	if code != http.StatusOK || cur["status"] != "ready" || cur["width"] != float64(120) ||
+		!strings.HasPrefix(cur["urls"].(map[string]any)["small"].(map[string]any)["webp"].(string), "https://img.test/") {
+		t.Fatalf("getStoreLogo ready = %d %v", code, logo)
+	}
+	if c, _ := f.do(t, req(t, http.MethodDelete, storePath(a, "/logo"), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("deleteStoreLogo = %d", c)
+	}
 }
 
 func problemFields(m map[string]any) []string {
@@ -293,6 +423,12 @@ func TestValidation(t *testing.T) {
 		{"malformed page ID", req(t, http.MethodGet, storePath(a, "/pages/not-an-id"), tokOwnerA, ""), http.StatusNotFound, nil},
 		{"stale theme", req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, fmt.Sprintf(themeBody, 7)), http.StatusConflict, nil},
 		{"stale home", req(t, http.MethodPut, storePath(a, "/home"), tokOwnerA, `{"version":3}`), http.StatusConflict, nil},
+		{"svg logo", req(t, http.MethodPost, storePath(a, "/logo/uploads"), tokOwnerA, `{"content_type":"image/svg+xml"}`),
+			http.StatusUnprocessableEntity, []string{"content_type:unsupported"}},
+		{"logo upload without body", req(t, http.MethodPost, storePath(a, "/logo/uploads"), tokOwnerA, ""), http.StatusBadRequest, nil},
+		{"complete unknown upload", req(t, http.MethodPost, storePath(a, "/logo/uploads/"+ulid.NewGenerator().New().String()+"/complete"), tokOwnerA, ""), http.StatusNotFound, nil},
+		{"complete malformed ID", req(t, http.MethodPost, storePath(a, "/logo/uploads/nope/complete"), tokOwnerA, ""), http.StatusNotFound, nil},
+		{"delete missing logo", req(t, http.MethodDelete, storePath(a, "/logo"), tokOwnerA, ""), http.StatusNotFound, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -327,6 +463,8 @@ func TestAuthorization(t *testing.T) {
 		{http.MethodGet, "/pages", ""}, {http.MethodPost, "/pages", `{"title":"x"}`},
 		{http.MethodGet, "/pages/" + id, ""}, {http.MethodPut, "/pages/" + id, `{"title":"x"}`}, {http.MethodDelete, "/pages/" + id, ""},
 		{http.MethodGet, "/policies", ""}, {http.MethodGet, "/policies/refund", ""}, {http.MethodPut, "/policies/refund", `{}`},
+		{http.MethodGet, "/logo", ""}, {http.MethodDelete, "/logo", ""},
+		{http.MethodPost, "/logo/uploads", `{"content_type":"image/png"}`}, {http.MethodPost, "/logo/uploads/" + id + "/complete", ""},
 	}
 	for _, o := range ops {
 		t.Run(o.method+o.path, func(t *testing.T) {
@@ -349,7 +487,8 @@ func TestCrossTenant(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.storeA, f.storeB
 	lid, hid := f.landing.ID.String(), f.homeB.ID.String()
-	leaks := []string{"B secret", "b-secret-hero", "#b0b0b1", "noto-kufi-arabic", lid, hid}
+	logoID, uploadID := f.logoB.ID.String(), f.uploadB.ID.String()
+	leaks := []string{"B secret", "b-secret-hero", "#b0b0b1", "noto-kufi-arabic", lid, hid, logoID, uploadID, f.logoB.ObjectKey}
 
 	unchanged := func(tb testing.TB) {
 		tb.Helper()
@@ -369,6 +508,10 @@ func TestCrossTenant(t *testing.T) {
 		if p, err := f.svc.GetPolicy(ctx, domain.PolicyRefund); err != nil || p.Version != 1 || p.Body != "B secret refund terms" {
 			tb.Errorf("store B's policy changed: %+v %v", p, err)
 		}
+		if l, err := f.svc.GetLogo(ctx); err != nil || l.Current == nil || l.Current.ID != f.logoB.ID ||
+			l.Latest == nil || l.Latest.ID != f.uploadB.ID || l.Latest.Status != domain.AssetPending {
+			tb.Errorf("store B's logo changed: %+v %v", l, err)
+		}
 	}
 	page := `{"title":"pwned","version":1}`
 
@@ -387,7 +530,12 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "listPolicies", Request: req(t, http.MethodGet, storePath(b, "/policies"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "getPolicy", Request: req(t, http.MethodGet, storePath(b, "/policies/refund"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "savePolicy", Request: req(t, http.MethodPut, storePath(b, "/policies/refund"), tokOwnerA, page), Leaks: leaks, Unchanged: unchanged},
-		// A's store, B's page IDs.
+		{OperationID: "getStoreLogo", Request: req(t, http.MethodGet, storePath(b, "/logo"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "deleteStoreLogo", Request: req(t, http.MethodDelete, storePath(b, "/logo"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "createLogoUpload", Request: req(t, http.MethodPost, storePath(b, "/logo/uploads"), tokOwnerA, `{"content_type":"image/png"}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "completeLogoUpload", Request: req(t, http.MethodPost, storePath(b, "/logo/uploads/"+uploadID+"/complete"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		// A's store, B's page and asset IDs.
+		{OperationID: "completeLogoUpload", Request: req(t, http.MethodPost, storePath(a, "/logo/uploads/"+uploadID+"/complete"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "getLandingPage", Request: req(t, http.MethodGet, storePath(a, "/pages/"+lid), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "updateLandingPage", Request: req(t, http.MethodPut, storePath(a, "/pages/"+lid), tokOwnerA, page), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "deleteLandingPage", Request: req(t, http.MethodDelete, storePath(a, "/pages/"+lid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},

@@ -262,6 +262,22 @@ type Store struct {
 	UpdatedAt time.Time
 }
 
+type StoreAsset struct {
+	ID            ulid.ID
+	StoreID       ulid.ID
+	Kind          string
+	Status        string
+	UploadKey     string
+	ObjectKey     pgtype.Text
+	Format        pgtype.Text
+	Width         pgtype.Int4
+	Height        pgtype.Int4
+	Bytes         pgtype.Int8
+	FailureReason string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type StoreDomain struct {
 	ID                ulid.ID
 	StoreID           ulid.ID
