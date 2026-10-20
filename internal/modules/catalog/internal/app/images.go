@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -334,16 +333,9 @@ func (w *DeleteObjectsWorker) Work(ctx context.Context, job *river.Job[DeleteObj
 	if err != nil {
 		return err
 	}
-	prefix := domain.StorePrefix(storeID)
-	for _, k := range job.Args.Keys {
-		if !strings.HasPrefix(k, prefix) || strings.Contains(k, "..") {
-			return river.JobCancel(fmt.Errorf("catalog: refusing to delete %q outside %s", k, prefix))
-		}
+	err = media.DeleteStoreObjects(ctx, w.Media.Objects, storeID, job.Args.Keys)
+	if errors.Is(err, media.ErrForeignKey) {
+		return river.JobCancel(fmt.Errorf("catalog: %w", err))
 	}
-	for _, k := range job.Args.Keys {
-		if err := w.Media.Objects.Delete(ctx, k); err != nil {
-			return err
-		}
-	}
-	return nil
+	return err
 }
