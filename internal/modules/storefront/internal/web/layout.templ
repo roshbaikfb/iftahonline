@@ -1,0 +1,74 @@
+package web
+
+import "strconv"
+
+// layout is every storefront page: head (SEO, the store's inline
+// stylesheet, structured data, our one script), header, main, footer.
+templ layout(p *pageCtx, body templ.Component) {
+	<!DOCTYPE html>
+	<html lang={ string(p.l) } dir={ p.l.Dir() }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ p.title }</title>
+			if p.desc != "" {
+				<meta name="description" content={ p.desc }/>
+			}
+			<link rel="canonical" href={ p.abs(p.l, p.path) }/>
+			<link rel="alternate" hreflang={ string(p.v.locale) } href={ p.abs(p.v.locale, p.path) }/>
+			<link rel="alternate" hreflang={ string(p.v.locale.Other()) } href={ p.abs(p.v.locale.Other(), p.path) }/>
+			<meta property="og:site_name" content={ p.v.name }/>
+			<meta property="og:title" content={ p.title }/>
+			<meta property="og:url" content={ p.abs(p.l, p.path) }/>
+			if p.image != "" {
+				<meta property="og:image" content={ p.image }/>
+			}
+			if p.font != "" {
+				<link rel="preload" href={ p.font } as="font" type="font/woff2" crossorigin/>
+			}
+			@p.styleTag()
+			@p.ldScript()
+			<script type="module" src={ p.jsURL }></script>
+		</head>
+		<body>
+			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>
+			<header class="top">
+				<div class="wrap">
+					<a class="brand" href={ p.URL("/") }>
+						if p.v.logo != nil {
+							<picture>
+								<source type="image/avif" srcset={ p.v.logo.avif }/>
+								<img src={ p.v.logo.webp } width={ strconv.Itoa(p.v.logo.width) } height={ strconv.Itoa(p.v.logo.height) } alt={ p.v.name }/>
+							</picture>
+						} else {
+							{ p.v.name }
+						}
+					</a>
+					<nav class="nav" aria-label={ p.l.T(MsgProducts) }>
+						for _, c := range p.v.topCategories() {
+							<a href={ p.URL(categoryPath(c.Slug)) }>{ c.Name }</a>
+						}
+					</nav>
+					<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
+						{ p.l.Other().T(MsgLanguageName) }
+					</a>
+				</div>
+			</header>
+			<main id="main" class="wrap">
+				@body
+			</main>
+			<footer class="foot">
+				<div class="wrap">
+					if len(p.v.policies) > 0 {
+						<ul>
+							for _, pol := range p.v.policies {
+								<li><a href={ p.URL("/policies/" + pol.Slug) }>{ p.policyTitle(pol.Title, pol.Slug) }</a></li>
+							}
+						</ul>
+					}
+					<small>© { p.v.name } · { p.l.T(MsgPoweredBy) }</small>
+				</div>
+			</footer>
+		</body>
+	</html>
+}

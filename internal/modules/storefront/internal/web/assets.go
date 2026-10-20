@@ -1,0 +1,150 @@
+package web
+
+import (
+	"crypto/sha256"
+	"embed"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"path"
+	"strings"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
+)
+
+//go:embed assets/dist/site.css assets/dist/app.js assets/fonts/*.woff2
+var assetFiles embed.FS
+
+// AssetsPrefix is where static files are served, on every store host.
+const AssetsPrefix = "/assets/"
+
+// asset is one static file served under a content-hashed name, so it can
+// be cached forever (a new build gets a new name).
+type asset struct {
+	data        []byte
+	contentType string
+}
+
+// Assets are the storefront's embedded static files: the script and the
+// fonts, served from our origin (CSP 'self'), and the base stylesheet,
+// which is inlined into pages.
+type Assets struct {
+	baseCSS string
+	jsURL   string
+	fonts   map[string]string // "cairo-arabic-400" → URL
+	files   map[string]asset  // "app.3f2a9c1b.js" → file
+}
+
+// LoadAssets reads the embedded files and names them by content hash.
+func LoadAssets() (*Assets, error) {
+	css, err := assetFiles.ReadFile("assets/dist/site.css")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	a := &Assets{baseCSS: strings.TrimSpace(string(css)), fonts: map[string]string{}, files: map[string]asset{}}
+	js, err := assetFiles.ReadFile("assets/dist/app.js")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	a.jsURL = a.add("app", ".js", "text/javascript; charset=utf-8", js)
+	fonts, err := fs.Glob(assetFiles, "assets/fonts/*.woff2")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	for _, f := range fonts {
+		b, readErr := assetFiles.ReadFile(f)
+		if readErr != nil {
+			return nil, fmt.Errorf("web: %w", readErr)
+		}
+		name := strings.TrimSuffix(path.Base(f), ".woff2")
+		a.fonts[name] = a.add(name, ".woff2", "font/woff2", b)
+	}
+	return a, nil
+}
+
+func (a *Assets) add(name, ext, contentType string, data []byte) string {
+	sum := sha256.Sum256(data)
+	file := name + "." + hex.EncodeToString(sum[:4]) + ext
+	a.files[file] = asset{data: data, contentType: contentType}
+	return AssetsPrefix + file
+}
+
+// ServeHTTP serves a hashed file with a year-long immutable cache, or 404.
+func (a *Assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f, ok := a.files[strings.TrimPrefix(r.URL.Path, AssetsPrefix)]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", f.contentType)
+	h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	h.Set("Cross-Origin-Resource-Policy", "same-origin")
+	if _, err := w.Write(f.data); err != nil {
+		return // the client went away
+	}
+}
+
+// fontFamilies maps a theme font to its file prefix and CSS family name.
+// The system font downloads nothing.
+var fontFamilies = map[domain.Font]struct{ file, family string }{ //nolint:gochecknoglobals // constant lookup table
+	domain.FontCairo:      {"cairo", "Cairo"},
+	domain.FontTajawal:    {"tajawal", "Tajawal"},
+	domain.FontPlexArabic: {"ibm-plex-sans-arabic", "IBM Plex Sans Arabic"},
+	domain.FontNotoKufi:   {"noto-kufi-arabic", "Noto Kufi Arabic"},
+}
+
+// Unicode ranges of the two subsets, as Fontsource builds them.
+const (
+	rangeArabic = "U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC"
+	rangeLatin  = "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+)
+
+// themeCSS is a store's stylesheet: its font faces and palette as custom
+// properties, then the base rules. Every value comes from validated
+// theme settings (hex colors, enum font and radius) or from us, so
+// nothing a merchant typed reaches CSS as text.
+func (a *Assets) themeCSS(t domain.ThemeSettings) string {
+	var b strings.Builder
+	family := "system-ui"
+	if f, ok := fontFamilies[t.Font]; ok {
+		family = `"` + f.family + `"`
+		for _, w := range []string{"400", "700"} {
+			for _, sub := range []struct{ name, rng string }{{"arabic", rangeArabic}, {"latin", rangeLatin}} {
+				fmt.Fprintf(&b, "@font-face{font-family:%q;font-style:normal;font-weight:%s;font-display:swap;src:url(%s) format(\"woff2\");unicode-range:%s}",
+					f.family, w, a.fonts[f.file+"-"+sub.name+"-"+w], sub.rng)
+			}
+		}
+	}
+	radius := map[domain.Radius]string{domain.RadiusNone: "0", domain.RadiusSmall: ".25rem", domain.RadiusMedium: ".5rem", domain.RadiusLarge: "1rem"}[t.Radius]
+	if radius == "" {
+		radius = ".5rem"
+	}
+	c := t.Colors
+	fmt.Fprintf(&b, ":root{--font:%s;--radius:%s;--c-primary:%s;--c-accent:%s;--c-bg:%s;--c-text:%s;--c-on-primary:%s;--c-on-accent:%s}",
+		family, radius, c.Primary, c.Accent, c.Background, c.Text, domain.OnColor(c.Primary), domain.OnColor(c.Accent))
+	b.WriteString(a.baseCSS)
+	return b.String()
+}
+
+// fontPreload is the font file the first paint needs most: the regular
+// weight in the shopper's script.
+func (a *Assets) fontPreload(t domain.ThemeSettings, l Locale) string {
+	f, ok := fontFamilies[t.Font]
+	if !ok {
+		return ""
+	}
+	sub := "latin"
+	if l == Arabic {
+		sub = "arabic"
+	}
+	return a.fonts[f.file+"-"+sub+"-400"]
+}
+
+// styleHash is the CSP source that allows exactly this inline style.
+func styleHash(css string) string {
+	sum := sha256.Sum256([]byte(css))
+	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+}

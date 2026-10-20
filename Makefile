@@ -25,12 +25,14 @@ COVER_MIN ?= 80
 # Coverage is enforced for business-module domain/app packages (CLAUDE.md)
 # and for the platform packages that hold core rules.
 COVER_MATCH := -match '/internal/modules/[^/]+/internal/(domain|app)$$' \
-	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox|audit|totp|authtoken|password|email|clientinfo|eventbus|arabic|slug)$$'
+	-match '/internal/platform/(money|phone|ulid|tenant|event|errs|problem|safehttp|config|retry|logging|authz|jobs|ratelimit|secretbox|audit|totp|authtoken|password|email|clientinfo|eventbus|arabic|slug|csp)$$'
 
 API_ADDR        ?= 127.0.0.1:18080
 STOREFRONT_ADDR ?= 127.0.0.1:18081
 
-GO_GENERATED := internal/server/apigen internal/server/dbgen internal/modules/*/internal/httpapi/*.gen.go internal/modules/*/internal/store/*db internal/server/views/*_templ.go $(DASH)/src/api/schema.d.ts
+SF_ASSETS := internal/modules/storefront/internal/web/assets
+
+GO_GENERATED := internal/server/apigen internal/server/dbgen internal/modules/*/internal/httpapi/*.gen.go internal/modules/*/internal/store/*db internal/server/views/*_templ.go internal/modules/storefront/internal/web/*_templ.go $(SF_ASSETS)/dist $(DASH)/src/api/schema.d.ts
 
 .PHONY: help
 help: ## Show this help
@@ -63,6 +65,9 @@ gen: dash-deps ## Regenerate code: oapi-codegen, sqlc, templ, TS client
 	go tool oapi-codegen -config api/oapi-codegen.storefront.yaml api/openapi.yaml
 	$(SQLC) generate
 	go tool templ generate -path internal/server/views
+	go tool templ generate -path internal/modules/storefront/internal/web
+	go tool esbuild $(SF_ASSETS)/src/site.css --minify --log-level=warning --outfile=$(SF_ASSETS)/dist/site.css
+	go tool esbuild $(SF_ASSETS)/src/app.js --minify --format=esm --target=es2020 --log-level=warning --outfile=$(SF_ASSETS)/dist/app.js
 	cd $(DASH) && npm run --silent gen:api
 
 .PHONY: gen-check
@@ -109,7 +114,7 @@ fuzz: ## Run every fuzz target for FUZZTIME (default 10s)
 
 .PHONY: bench
 bench: ## Benchmarks for storefront-path code
-	go test -run='^$$' -bench=. -benchmem ./internal/platform/money/
+	go test -run='^$$' -bench=. -benchmem ./internal/platform/money/ ./internal/modules/storefront/internal/web/
 
 .PHONY: vuln
 vuln: ## govulncheck

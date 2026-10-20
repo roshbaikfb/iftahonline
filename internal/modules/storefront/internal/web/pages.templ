@@ -1,0 +1,76 @@
+package web
+
+import "github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+
+templ productPage(p *pageCtx, pr catalog.StorefrontProduct, crumb *catalog.Category) {
+	<nav class="crumbs" aria-label="breadcrumb">
+		<a href={ p.URL("/") }>{ p.l.T(MsgHome) }</a>
+		if crumb != nil {
+			› <a href={ p.URL(categoryPath(crumb.Slug)) }>{ crumb.Name }</a>
+		}
+		› <span aria-current="page">{ pr.Title }</span>
+	</nav>
+	<div class="prod">
+		<div class="gallery">
+			if len(pr.Images) > 0 {
+				@picture(pictureOf(pr.Images[0], pr.Title), "(min-width: 48rem) 50vw, 100vw", p.eager())
+			}
+			if len(pr.Images) > 1 {
+				<div class="thumbs">
+					for i, img := range pr.Images {
+						if i > 0 && i < 9 {
+							@picture(pictureOf(img, pr.Title), "25vw", false)
+						}
+					}
+				</div>
+			}
+		</div>
+		<div>
+			<h1>{ pr.Title }</h1>
+			@buyForm(p, pr, "")
+			if desc := paragraphs(pr.Description); len(desc) > 0 {
+				<div class="desc">
+					<h2>{ p.l.T(MsgDescription) }</h2>
+					for _, para := range desc {
+						<p>{ para }</p>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ categoryPage(p *pageCtx, c catalog.Category, products []catalog.StorefrontProduct, more string) {
+	<section class="sec">
+		<h1>{ c.Name }</h1>
+		if len(products) == 0 {
+			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
+		} else {
+			<div class="grid">
+				for _, pr := range products {
+					@card(p, pr)
+				}
+			</div>
+		}
+		if more != "" {
+			<p class="more"><a href={ templ.SafeURL(more) }>{ p.l.T(MsgShowMore) }</a></p>
+		}
+	</section>
+}
+
+templ policyPage(title string, paras []string) {
+	<article class="policy">
+		<h1>{ title }</h1>
+		for _, para := range paras {
+			<p>{ para }</p>
+		}
+	</article>
+}
+
+templ notFoundPage(p *pageCtx) {
+	<section class="sec empty">
+		<h1>{ p.l.T(MsgNotFoundTitle) }</h1>
+		<p>{ p.l.T(MsgNotFoundText) }</p>
+		<a class="btn" href={ p.URL("/") }>{ p.l.T(MsgBackHome) }</a>
+	</section>
+}
