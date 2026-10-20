@@ -26,6 +26,54 @@ func (q *Queries) DeleteProductCategories(ctx context.Context, arg DeleteProduct
 	return err
 }
 
+const getActiveProductBySlug = `-- name: GetActiveProductBySlug :one
+
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM products p
+WHERE p.store_id = $1 AND p.slug = $2 AND p.deleted_at IS NULL AND p.status = 'active'
+`
+
+type GetActiveProductBySlugParams struct {
+	StoreID ulid.ID
+	Slug    string
+}
+
+type GetActiveProductBySlugRow struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	CategoryIds []ulid.ID
+}
+
+// Storefront reads (ADR-0015): active, live products only.
+func (q *Queries) GetActiveProductBySlug(ctx context.Context, arg GetActiveProductBySlugParams) (GetActiveProductBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getActiveProductBySlug, arg.StoreID, arg.Slug)
+	var i GetActiveProductBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.Slug,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Options,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.CategoryIds,
+	)
+	return i, err
+}
+
 const getProduct = `-- name: GetProduct :one
 
 SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
@@ -148,6 +196,71 @@ type InsertProductCategoriesParams struct {
 func (q *Queries) InsertProductCategories(ctx context.Context, arg InsertProductCategoriesParams) error {
 	_, err := q.db.Exec(ctx, insertProductCategories, arg.StoreID, arg.ProductID, arg.CategoryIds)
 	return err
+}
+
+const listActiveProductsByIDs = `-- name: ListActiveProductsByIDs :many
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(id, ord)
+CROSS JOIN LATERAL (
+  SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at FROM products pr
+  WHERE pr.id = ids.id AND pr.store_id = $2 AND pr.deleted_at IS NULL AND pr.status = 'active') p
+ORDER BY ids.ord
+`
+
+type ListActiveProductsByIDsParams struct {
+	Ids     []ulid.ID
+	StoreID ulid.ID
+}
+
+type ListActiveProductsByIDsRow struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Slug        string
+	Title       string
+	Description string
+	Status      string
+	Options     []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	CategoryIds []ulid.ID
+}
+
+// In the order given, one primary-key lookup per ID (a plain
+// `id = ANY(...)` can turn into a store-wide scan under generic plans;
+// ADR-0011). IDs that are not active, live products are skipped.
+func (q *Queries) ListActiveProductsByIDs(ctx context.Context, arg ListActiveProductsByIDsParams) ([]ListActiveProductsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveProductsByIDs, arg.Ids, arg.StoreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveProductsByIDsRow{}
+	for rows.Next() {
+		var i ListActiveProductsByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Options,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.CategoryIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listProducts = `-- name: ListProducts :many

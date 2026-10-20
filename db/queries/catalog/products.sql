@@ -65,3 +65,25 @@ SELECT @store_id, @product_id, c FROM unnest(@category_ids::uuid[]) AS c;
 
 -- name: GetProductIDBySlug :one
 SELECT id FROM products WHERE store_id = @store_id AND slug = @slug AND deleted_at IS NULL;
+
+-- Storefront reads (ADR-0015): active, live products only.
+
+-- name: GetActiveProductBySlug :one
+SELECT p.*, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM products p
+WHERE p.store_id = @store_id AND p.slug = @slug AND p.deleted_at IS NULL AND p.status = 'active';
+
+-- name: ListActiveProductsByIDs :many
+-- In the order given, one primary-key lookup per ID (a plain
+-- `id = ANY(...)` can turn into a store-wide scan under generic plans;
+-- ADR-0011). IDs that are not active, live products are skipped.
+SELECT p.*, ARRAY(
+    SELECT pc.category_id FROM product_categories pc
+    WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
+FROM unnest(@ids::uuid[]) WITH ORDINALITY AS ids(id, ord)
+CROSS JOIN LATERAL (
+  SELECT * FROM products pr
+  WHERE pr.id = ids.id AND pr.store_id = @store_id AND pr.deleted_at IS NULL AND pr.status = 'active') p
+ORDER BY ids.ord;

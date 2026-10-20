@@ -31,6 +31,43 @@ type (
 	// StockError names the variant a reservation failed on; it matches
 	// ErrInsufficientStock or ErrVariantNotSellable with errors.Is.
 	StockError = app.StockError
+
+	// StorefrontProduct is an active product as a shopper sees it.
+	StorefrontProduct = app.StorefrontProduct
+	// StorefrontVariant is a variant with its price and availability.
+	StorefrontVariant = app.StorefrontVariant
+	// StorefrontImage is a ready image with its delivery renditions.
+	StorefrontImage = app.StorefrontImage
+	// Rendition is one signed image URL with its served size.
+	Rendition = app.Rendition
+	// StorefrontQuery selects a page of products.
+	StorefrontQuery = app.StorefrontQuery
+	// StorefrontPage is one page of products, newest first.
+	StorefrontPage = app.StorefrontPage
+	// Option is a product dimension such as size, with its values.
+	Option = domain.Option
+	// Category is a node of the store's category tree.
+	Category = domain.Category
+
+	// ProductChanged is the catalog.product.changed event.
+	ProductChanged = domain.ProductChanged
+	// ProductDeleted is the catalog.product.deleted event.
+	ProductDeleted = domain.ProductDeleted
+	// CategoryChanged is the catalog.category.changed event.
+	CategoryChanged = domain.CategoryChanged
+)
+
+// Event types the catalog publishes (ADR-0015).
+const (
+	EventProductChanged  = domain.EventProductChanged
+	EventProductDeleted  = domain.EventProductDeleted
+	EventCategoryChanged = domain.EventCategoryChanged
+)
+
+// Storefront limits.
+const (
+	MaxStorefrontLimit = app.MaxStorefrontLimit
+	MaxStorefrontIDs   = app.MaxStorefrontIDs
 )
 
 // Reservation statuses.
@@ -46,6 +83,7 @@ const DefaultReservationTTL = domain.DefaultReservationTTL
 
 // Errors. Match with errors.Is.
 var (
+	ErrProductNotFound     = app.ErrProductNotFound
 	ErrVariantNotFound     = app.ErrVariantNotFound
 	ErrVariantNotSellable  = app.ErrVariantNotSellable
 	ErrInsufficientStock   = app.ErrInsufficientStock
@@ -69,6 +107,22 @@ type Catalog interface {
 	ReleaseStock(ctx context.Context, ref string) error
 }
 
+// Storefront is the read side the storefront renders: active, live
+// products only, with signed image URLs and no stock levels. Every method
+// acts on the store in ctx and runs a constant number of queries.
+type Storefront interface {
+	// ProductBySlug returns the active product at slug, or
+	// ErrProductNotFound.
+	ProductBySlug(ctx context.Context, slug string) (StorefrontProduct, error)
+	// ProductsByIDs returns the active products among ids in the order
+	// given (at most MaxStorefrontIDs), skipping the others.
+	ProductsByIDs(ctx context.Context, ids []ulid.ID) ([]StorefrontProduct, error)
+	// ListProducts returns a page of active products, newest first.
+	ListProducts(ctx context.Context, q StorefrontQuery) (StorefrontPage, error)
+	// Categories returns the store's categories, by position.
+	Categories(ctx context.Context) ([]Category, error)
+}
+
 // CurrencySource returns the currency of the store in ctx. cmd/platform
 // adapts the tenancy module to it.
 type CurrencySource = app.CurrencySource
@@ -79,4 +133,7 @@ type CurrencyFunc func(ctx context.Context) (money.Currency, error)
 // StoreCurrency implements CurrencySource.
 func (f CurrencyFunc) StoreCurrency(ctx context.Context) (money.Currency, error) { return f(ctx) }
 
-var _ Catalog = (*app.Service)(nil)
+var (
+	_ Catalog    = (*app.Service)(nil)
+	_ Storefront = (*app.Storefront)(nil)
+)

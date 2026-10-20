@@ -65,10 +65,11 @@ func NewService(d Deps) *Service {
 // SetClock replaces the clock (tests).
 func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
-var (
-	errProductNotFound = errs.NotFound("product_not_found", "product not found")
-	errBadCursor       = errs.Validation(errs.FieldError{Field: "cursor", Code: "invalid", Message: "invalid cursor"})
-)
+// ErrProductNotFound means no live product (for the storefront: no
+// active, live product) matches.
+var ErrProductNotFound = errs.NotFound("product_not_found", "product not found")
+
+var errBadCursor = errs.Validation(errs.FieldError{Field: "cursor", Code: "invalid", Message: "invalid cursor"})
 
 func notFound(err error, what error) error {
 	if errors.Is(err, domain.ErrNotFound) {
@@ -154,7 +155,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id ulid.ID, in domain.Produ
 		p, txErr = s.replaceTx(ctx, tx, id, cur, in)
 		return txErr
 	})
-	return p, notFound(err, errProductNotFound)
+	return p, notFound(err, ErrProductNotFound)
 }
 
 func (s *Service) replaceTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur money.Currency, in domain.ProductInput) (domain.Product, error) {
@@ -220,7 +221,7 @@ func (s *Service) GetProduct(ctx context.Context, id ulid.ID) (domain.Product, e
 		p, err = store.GetProduct(ctx, tx, id)
 		return err
 	})
-	return p, notFound(err, errProductNotFound)
+	return p, notFound(err, ErrProductNotFound)
 }
 
 // DeleteProduct soft-deletes a product and its variants. Its slug and SKUs
@@ -246,7 +247,7 @@ func (s *Service) DeleteProduct(ctx context.Context, id ulid.ID) error {
 		}
 		return s.auditProduct(ctx, tx, "product.deleted", id, "")
 	})
-	return notFound(err, errProductNotFound)
+	return notFound(err, ErrProductNotFound)
 }
 
 // ProductQuery selects a page of products.
@@ -278,8 +279,14 @@ func (s *Service) ListProducts(ctx context.Context, q ProductQuery) (ProductPage
 		}
 		f.Status = &st
 	}
-	if q.Cursor != "" {
-		after, err := ulid.Parse(q.Cursor)
+	return listPage(ctx, s.db, f, q.Cursor)
+}
+
+// listPage runs one page of f after cursor (a product ID, or empty for
+// the first page).
+func listPage(ctx context.Context, db postgres.Beginner, f store.ProductFilter, cursor string) (ProductPage, error) {
+	if cursor != "" {
+		after, err := ulid.Parse(cursor)
 		if err != nil {
 			return ProductPage{}, errBadCursor
 		}
@@ -289,7 +296,7 @@ func (s *Service) ListProducts(ctx context.Context, q ProductQuery) (ProductPage
 	want := f.Limit
 	f.Limit++
 	var items []domain.Product
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+	err := postgres.InTenantTx(ctx, db, func(tx pgx.Tx) error {
 		var err error
 		items, err = store.ListProducts(ctx, tx, f)
 		return err
