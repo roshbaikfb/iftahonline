@@ -564,37 +564,11 @@ func TestAuditLog(t *testing.T) {
 	testkit.AssertNoRowsWithoutTenant(t, f.app)
 }
 
-func TestAuditPartitionsWorker(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t)
-	w := &app.AuditPartitionsWorker{DB: f.app}
-	if err := w.Work(t.Context(), &river.Job[app.AuditPartitionsArgs]{}); err != nil {
-		t.Fatal(err)
-	}
-	var n int
-	if err := f.owner.QueryRow(t.Context(),
-		"SELECT count(*) FROM pg_inherits WHERE inhparent = 'public.audit_log'::regclass").Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n < app.AuditPartitionsMonthsAhead+1 {
-		t.Fatalf("partitions = %d", n)
-	}
-	// Idempotent, and every partition passes the RLS catalog check.
-	if err := w.Work(t.Context(), &river.Job[app.AuditPartitionsArgs]{}); err != nil {
-		t.Fatal(err)
-	}
-	testkit.AssertTenantTablesUseRLS(t, f.owner, "store_memberships.member_self_read")
-	if app.AuditPartitionsPeriodic() == nil {
-		t.Fatal("periodic job")
-	}
-}
-
 // TestPartitionCreationDoesNotDeadlockWriters reproduces the CI deadlock:
 // creating partitions while sign-ups insert into stores and audit_log.
 // Partition creation must never take a lock that conflicts with inserts.
 func TestPartitionCreationDoesNotDeadlockWriters(t *testing.T) {
 	f := newFixture(t)
-	w := &app.AuditPartitionsWorker{DB: f.app}
 	stop := make(chan struct{})
 	errc := make(chan error, 64)
 	var wg sync.WaitGroup
@@ -625,7 +599,8 @@ func TestPartitionCreationDoesNotDeadlockWriters(t *testing.T) {
 			t.Fatalf("ensure %d months: %v", months, err)
 		}
 	}
-	if err := w.Work(t.Context(), &river.Job[app.AuditPartitionsArgs]{}); err != nil {
+	// What the platform's partitions job runs, as app_user.
+	if _, err := f.app.Exec(t.Context(), "SELECT app.ensure_monthly_partitions(3)"); err != nil {
 		t.Fatal(err)
 	}
 	close(stop)

@@ -173,7 +173,6 @@ func (w *DeviceAlertWorker) Work(ctx context.Context, job *river.Job[NewDeviceAl
 // RegisterWorkers adds every identity worker.
 func RegisterWorkers(workers *river.Workers, d WorkerDeps) error {
 	for _, add := range []func() error{
-		func() error { return river.AddWorkerSafely(workers, &AuditPartitionsWorker{DB: d.DB}) },
 		func() error { return river.AddWorkerSafely(workers, &SendOTPWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &InviteEmailWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &DeviceAlertWorker{D: d}) },

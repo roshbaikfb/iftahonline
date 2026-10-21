@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
-	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -128,34 +126,4 @@ func decodeCursor(c string) (time.Time, ulid.ID, error) {
 		return time.Time{}, ulid.ID{}, err
 	}
 	return time.UnixMicro(n).UTC(), id, nil
-}
-
-// AuditPartitionsArgs keeps audit_log partitions ahead of time (daily).
-type AuditPartitionsArgs struct {
-	jobs.GlobalArgs
-}
-
-// Kind implements river.JobArgs.
-func (AuditPartitionsArgs) Kind() string { return "identity.audit.partitions" }
-
-// AuditPartitionsMonthsAhead is how far ahead partitions exist.
-const AuditPartitionsMonthsAhead = 3
-
-// AuditPartitionsWorker runs AuditPartitionsArgs.
-type AuditPartitionsWorker struct {
-	river.WorkerDefaults[AuditPartitionsArgs]
-	DB store.Tx
-}
-
-// Work implements river.Worker.
-func (w *AuditPartitionsWorker) Work(ctx context.Context, _ *river.Job[AuditPartitionsArgs]) error {
-	_, err := store.EnsureAuditPartitions(ctx, w.DB, AuditPartitionsMonthsAhead)
-	return err
-}
-
-// AuditPartitionsPeriodic runs the job daily and once at worker start.
-func AuditPartitionsPeriodic() *river.PeriodicJob {
-	return river.NewPeriodicJob(river.PeriodicInterval(24*time.Hour),
-		func() (river.JobArgs, *river.InsertOpts) { return AuditPartitionsArgs{}, nil },
-		&river.PeriodicJobOpts{RunOnStart: true})
 }

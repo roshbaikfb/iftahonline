@@ -10,6 +10,3 @@ WHERE store_id = @store_id
        OR (occurred_at, id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid))
 ORDER BY occurred_at DESC, id DESC
 LIMIT @lim;
-
--- name: EnsureAuditPartitions :one
-SELECT app.ensure_audit_log_partitions(@months_ahead::int)::int AS created;

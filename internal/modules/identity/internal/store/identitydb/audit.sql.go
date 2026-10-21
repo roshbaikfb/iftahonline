@@ -12,17 +12,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-const ensureAuditPartitions = `-- name: EnsureAuditPartitions :one
-SELECT app.ensure_audit_log_partitions($1::int)::int AS created
-`
-
-func (q *Queries) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) (int32, error) {
-	row := q.db.QueryRow(ctx, ensureAuditPartitions, monthsAhead)
-	var created int32
-	err := row.Scan(&created)
-	return created, err
-}
-
 const insertAuditEntry = `-- name: InsertAuditEntry :exec
 INSERT INTO audit_log (id, store_id, actor_user_id, action, target_type, target_id, ip_prefix, metadata)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

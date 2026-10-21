@@ -127,8 +127,3 @@ func RegisterWorkers(w *river.Workers, d WorkerDeps) error {
 		Stores: d.Tenancy, DashboardURL: d.Mail.DashboardURL, Log: d.Log,
 	})
 }
-
-// PeriodicJobs are the module's scheduled jobs.
-func PeriodicJobs() []*river.PeriodicJob {
-	return []*river.PeriodicJob{app.AuditPartitionsPeriodic()}
-}

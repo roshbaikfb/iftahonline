@@ -84,6 +84,12 @@ type AdminSession struct {
 	RevokedAt  pgtype.Timestamptz
 }
 
+type AppMonthlyPartitioned struct {
+	Parent     string
+	KeyColumn  string
+	AppendOnly bool
+}
+
 type AuditLog struct {
 	ID          ulid.ID
 	StoreID     ulid.ID
