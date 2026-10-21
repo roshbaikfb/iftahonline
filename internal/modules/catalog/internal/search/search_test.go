@@ -10,7 +10,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/arabic"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -55,7 +55,7 @@ func startMeili(t *testing.T) *Client {
 
 func doc(store tenant.StoreID, id ulid.ID, title, status string, cats ...string) Doc {
 	return Doc{ID: id.String(), StoreID: store.String(), Title: title, Status: status, CategoryIDs: cats, PriceMinor: 100,
-		Currency: "EGP", CreatedAt: id.Time().Unix(), SearchTitle: domain.NormalizeSearch(title), SearchText: ""}
+		Currency: "EGP", CreatedAt: id.Time().Unix(), SearchTitle: arabic.NormalizeSearch(title), SearchText: ""}
 }
 
 func ids(r Result) []string {
@@ -89,7 +89,7 @@ func TestTenantIsolation(t *testing.T) {
 	}
 
 	for _, q := range []Query{
-		{Text: ""}, {Text: domain.NormalizeSearch("احذيه")}, {Text: domain.NormalizeSearch("فاخرة")},
+		{Text: ""}, {Text: arabic.NormalizeSearch("احذيه")}, {Text: arabic.NormalizeSearch("فاخرة")},
 		{Text: `" OR store_id = "` + b.String()}, {Text: b.String()}, {Status: "active"}, {CategoryID: &catID},
 	} {
 		q.Limit = 50
@@ -105,11 +105,11 @@ func TestTenantIsolation(t *testing.T) {
 	}
 
 	// Arabic forms meet: the merchant wrote "أحذية", the shopper types "احذيه".
-	res, err := cl.Search(ctxA, Query{Text: domain.NormalizeSearch("احذيه"), Limit: 10})
+	res, err := cl.Search(ctxA, Query{Text: arabic.NormalizeSearch("احذيه"), Limit: 10})
 	if err != nil || !slices.Equal(ids(res), []string{"أحذية رياضية"}) {
 		t.Fatalf("arabic search = %v %v", ids(res), err)
 	}
-	if res, _ = cl.Search(ctxB, Query{Text: domain.NormalizeSearch("إحذية"), Limit: 10}); !slices.Equal(ids(res), []string{"أحذية رياضية فاخرة"}) {
+	if res, _ = cl.Search(ctxB, Query{Text: arabic.NormalizeSearch("إحذية"), Limit: 10}); !slices.Equal(ids(res), []string{"أحذية رياضية فاخرة"}) {
 		t.Fatalf("store B search = %v", ids(res))
 	}
 	if res, _ = cl.Search(ctxA, Query{Status: "draft", Limit: 10}); !slices.Equal(ids(res), []string{"قميص قطن"}) {

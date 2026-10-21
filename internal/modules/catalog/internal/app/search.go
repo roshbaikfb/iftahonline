@@ -14,6 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/search"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/arabic"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -72,7 +73,7 @@ func (s *Service) SearchProducts(ctx context.Context, q SearchQuery) (search.Res
 		return search.Result{}, errs.Validation(fields...)
 	}
 	res, err := s.search.Search(ctx, search.Query{
-		Text: domain.NormalizeSearch(q.Text), Status: q.Status, CategoryID: q.CategoryID, Limit: q.Limit, Offset: q.Offset,
+		Text: arabic.NormalizeSearch(q.Text), Status: q.Status, CategoryID: q.CategoryID, Limit: q.Limit, Offset: q.Offset,
 	})
 	if err != nil && !errors.Is(err, tenant.ErrNoTenant) {
 		return search.Result{}, errs.Unavailable(time.Second, err)
@@ -142,7 +143,7 @@ func ToDoc(storeID tenant.StoreID, p domain.Product) search.Doc {
 	d := search.Doc{
 		ID: p.ID.String(), StoreID: storeID.String(), Title: p.Title, Slug: p.Slug, Status: string(p.Status),
 		CategoryIDs: make([]string, len(p.CategoryIDs)), CreatedAt: p.CreatedAt.Unix(),
-		SearchTitle: domain.NormalizeSearch(p.Title),
+		SearchTitle: arabic.NormalizeSearch(p.Title),
 	}
 	for i, c := range p.CategoryIDs {
 		d.CategoryIDs[i] = c.String()
@@ -167,7 +168,7 @@ func ToDoc(storeID tenant.StoreID, p domain.Product) search.Doc {
 			t = t[:len(t)-1]
 		}
 	}
-	d.SearchText = domain.NormalizeSearch(t)
+	d.SearchText = arabic.NormalizeSearch(t)
 	for _, img := range p.Images {
 		if img.Status == domain.ImageReady {
 			d.ImageKey = img.ObjectKey
