@@ -20,7 +20,7 @@ import (
 )
 
 // Doc is one product in the index. search_* fields hold the normalized
-// text (domain.NormalizeSearch); the rest is what results display.
+// text (arabic.NormalizeSearch); the rest is what results display.
 type Doc struct {
 	ID          string   `json:"id"`
 	StoreID     string   `json:"store_id"`

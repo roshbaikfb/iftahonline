@@ -113,7 +113,7 @@ not accepted yet: save as "CSV UTF-8" (ADR-0014).
 
 `searchProducts` goes to Meilisearch only (no database query). The search
 client adds the store filter from the context; the text is normalized
-like the documents (`domain.NormalizeSearch`).
+like the documents (`arabic.NormalizeSearch`, in platform/arabic since P4).
 
 ## Performance
 
@@ -132,7 +132,7 @@ like the documents (`domain.NormalizeSearch`).
 - `domain`: table-driven rules (slug rules and `FuzzMake` live in `platform/slug`).
 - `search` (real Meilisearch): store A never sees store B's products,
   whatever the query; foreign upserts fail; foreign deletes are no-ops;
-  Arabic forms match. `domain`: `FuzzNormalizeSearch`.
+  Arabic forms match. `platform/arabic`: `FuzzNormalizeSearch`.
 - `importer`: CSV dialects, Arabic headers, grouping, row errors, source
   errors, a fake WooCommerce server (retry, auth, resume, loopback
   refused); `FuzzCSV`, `FuzzStripHTML`.
