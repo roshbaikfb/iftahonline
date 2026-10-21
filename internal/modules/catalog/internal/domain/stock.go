@@ -28,6 +28,11 @@ const (
 	ReservationActive   ReservationStatus = "active"
 	ReservationReleased ReservationStatus = "released"
 	ReservationExpired  ReservationStatus = "expired"
+	// ReservationCommitted: the units left the warehouse (the order
+	// shipped); on_hand dropped with reserved.
+	ReservationCommitted ReservationStatus = "committed"
+	// ReservationReturned: committed units came back into stock.
+	ReservationReturned ReservationStatus = "returned"
 )
 
 // ReserveLine asks for Qty units of one variant.
@@ -44,20 +49,27 @@ type ReserveRequest struct {
 	Lines []ReserveLine
 	// TTL is how long the stock is held; zero means DefaultReservationTTL.
 	TTL time.Duration
+	// Hold keeps the stock until it is released or committed, with no
+	// expiry: an order waiting for the merchant (ADR-0020). TTL must be
+	// zero.
+	Hold bool
 }
 
 // Reservation is the stock held for one ref.
 type Reservation struct {
-	Ref       string
-	Lines     []ReserveLine
-	Status    ReservationStatus
+	Ref    string
+	Lines  []ReserveLine
+	Status ReservationStatus
+	// Held reservations have no expiry (ReserveRequest.Hold).
+	Held bool
+	// ExpiresAt is zero when Held.
 	ExpiresAt time.Time
 }
 
 // SameLines reports whether r holds exactly the lines of req (both
-// sorted by variant, as ValidateReserve leaves them).
+// sorted by variant, as ValidateReserve leaves them), held the same way.
 func (r Reservation) SameLines(req ReserveRequest) bool {
-	return slices.Equal(r.Lines, req.Lines)
+	return slices.Equal(r.Lines, req.Lines) && r.Held == req.Hold
 }
 
 // SellableVariant is what checkout needs to sell a variant: price, stock
@@ -87,6 +99,9 @@ func ValidateReserve(in ReserveRequest) (ReserveRequest, error) {
 		add("ref", "invalid", fmt.Sprintf("ref must be 1 to %d characters of A-Z a-z 0-9 . _ : -", MaxRefLen))
 	}
 	switch {
+	case in.Hold && in.TTL != 0:
+		add("ttl", "conflict", "a held reservation has no ttl")
+	case in.Hold:
 	case in.TTL == 0:
 		in.TTL = DefaultReservationTTL
 	case in.TTL < time.Minute || in.TTL > MaxReservationTTL:

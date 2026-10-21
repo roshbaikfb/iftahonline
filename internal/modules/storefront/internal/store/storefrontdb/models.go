@@ -260,16 +260,18 @@ type RiverQueue struct {
 }
 
 type StockReservation struct {
-	ID         ulid.ID
-	StoreID    ulid.ID
-	Ref        string
-	VariantID  ulid.ID
-	Qty        int32
-	Counted    bool
-	Status     string
-	ExpiresAt  time.Time
-	CreatedAt  time.Time
-	ReleasedAt pgtype.Timestamptz
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Ref         string
+	VariantID   ulid.ID
+	Qty         int32
+	Counted     bool
+	Status      string
+	ExpiresAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	ReleasedAt  pgtype.Timestamptz
+	CommittedAt pgtype.Timestamptz
+	ReturnedAt  pgtype.Timestamptz
 }
 
 type Store struct {

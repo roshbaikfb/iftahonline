@@ -26,6 +26,7 @@ var (
 	ErrInsufficientStock   = errs.Conflict("insufficient_stock", "not enough stock")
 	ErrReservationRefUsed  = errs.Conflict("reservation_ref_used", "this ref already holds a different reservation")
 	ErrReservationNotFound = errs.NotFound("reservation_not_found", "reservation not found")
+	ErrReservationState    = errs.Conflict("reservation_state", "the reservation's state does not allow this")
 )
 
 // StockError names the variant a reservation failed on. It matches
@@ -86,16 +87,22 @@ func sellableVariants(ctx context.Context, db postgres.Beginner, ids []ulid.ID) 
 // existing reservation; the same ref with other lines is
 // ErrReservationRefUsed.
 func (s *Service) ReserveStock(ctx context.Context, req domain.ReserveRequest) (domain.Reservation, error) {
+	var res domain.Reservation
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		res, txErr = s.ReserveStockTx(ctx, tx, req)
+		return txErr
+	})
+	return res, err
+}
+
+// ReserveStockTx is ReserveStock in the caller's tenant transaction
+// (ADR-0007), so an order and its stock commit or roll back together.
+func (s *Service) ReserveStockTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRequest) (domain.Reservation, error) {
 	req, err := domain.ValidateReserve(req)
 	if err != nil {
 		return domain.Reservation{}, err
 	}
-	var res domain.Reservation
-	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		res, txErr = s.reserveTx(ctx, tx, req)
-		return txErr
-	})
-	return res, err
+	return s.reserveTx(ctx, tx, req)
 }
 
 func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRequest) (domain.Reservation, error) {
@@ -123,20 +130,27 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 		}
 		lines[i] = store.ReservedLine{ID: s.ids.New(), Line: l, Counted: r.Counted}
 	}
-	expires := s.now().Add(req.TTL).UTC().Truncate(time.Microsecond)
-	if err = store.InsertReservation(ctx, tx, req.Ref, expires, lines); err != nil {
+	var expires time.Time
+	var expiresAt *time.Time
+	if !req.Hold {
+		expires = s.now().Add(req.TTL).UTC().Truncate(time.Microsecond)
+		expiresAt = &expires
+	}
+	if err = store.InsertReservation(ctx, tx, req.Ref, expiresAt, lines); err != nil {
 		if postgres.IsUniqueViolation(err, "stock_reservations_ref_variant_key") {
 			return domain.Reservation{}, ErrReservationRefUsed // a concurrent call with the same ref won
 		}
 		return domain.Reservation{}, err
 	}
-	if err = s.scheduleExpiry(ctx, tx, req.Ref, expires); err != nil {
-		return domain.Reservation{}, err
+	if expiresAt != nil {
+		if err = s.scheduleExpiry(ctx, tx, req.Ref, expires); err != nil {
+			return domain.Reservation{}, err
+		}
 	}
 	if err = s.events.stockChanged(ctx, tx, soldOut); err != nil {
 		return domain.Reservation{}, err
 	}
-	return domain.Reservation{Ref: req.Ref, Lines: req.Lines, Status: domain.ReservationActive, ExpiresAt: expires}, nil
+	return domain.Reservation{Ref: req.Ref, Lines: req.Lines, Status: domain.ReservationActive, Held: req.Hold, ExpiresAt: expires}, nil
 }
 
 // whyNotReserved tells a short line from one that is not for sale. It
@@ -152,28 +166,77 @@ func (s *Service) whyNotReserved(ctx context.Context, tx pgx.Tx, l domain.Reserv
 }
 
 // ReleaseStock gives back the stock held for ref. Releasing a ref that
-// was already released or has expired does nothing.
+// was already released or has expired does nothing; a committed or
+// returned ref is ErrReservationState.
 func (s *Service) ReleaseStock(ctx context.Context, ref string) error {
+	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.ReleaseStockTx(ctx, tx, ref) })
+}
+
+// ReleaseStockTx is ReleaseStock in the caller's tenant transaction.
+func (s *Service) ReleaseStockTx(ctx context.Context, tx pgx.Tx, ref string) error {
+	return s.step(ctx, tx, ref, release(), domain.ReservationReleased, domain.ReservationExpired)
+}
+
+// CommitStockTx ships the units held for ref: on_hand and reserved both
+// drop, so availability does not change. Committing again does nothing;
+// a released, expired or returned ref is ErrReservationState.
+func (s *Service) CommitStockTx(ctx context.Context, tx pgx.Tx, ref string) error {
+	return s.step(ctx, tx, ref, commit(), domain.ReservationCommitted)
+}
+
+// RestockTx puts the units committed for ref back on hand (a returned
+// order). Restocking again does nothing; a ref that was never committed
+// is ErrReservationState.
+func (s *Service) RestockTx(ctx context.Context, tx pgx.Tx, ref string) error {
+	return s.step(ctx, tx, ref, restock(), domain.ReservationReturned)
+}
+
+// step applies mv to ref. When no line moved, a ref already in one of
+// done is a repeat (no-op); any other existing ref is in the wrong state.
+func (s *Service) step(ctx context.Context, tx pgx.Tx, ref string, mv move, done ...domain.ReservationStatus) error {
 	if err := domain.ValidateRef(ref); err != nil {
 		return err
 	}
-	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		n, err := endReservation(ctx, tx, s.events, ref, domain.ReservationReleased, false)
-		if err != nil || n > 0 {
-			return err
-		}
-		if _, err := store.GetReservation(ctx, tx, ref); err != nil {
-			return notFound(err, ErrReservationNotFound)
-		}
+	n, err := moveReservation(ctx, tx, s.events, ref, mv, false)
+	if err != nil || n > 0 {
+		return err
+	}
+	r, err := store.GetReservation(ctx, tx, ref)
+	if err != nil {
+		return notFound(err, ErrReservationNotFound)
+	}
+	if slices.Contains(done, r.Status) {
 		return nil
-	})
+	}
+	return ErrReservationState
 }
 
-// endReservation ends ref's active lines and gives their counted units
-// back, in variant ID order, publishing a stock change for products that
-// come back in stock. It returns the number of lines ended.
-func endReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, status domain.ReservationStatus, onlyExpired bool) (int, error) {
-	lines, err := store.EndReservation(ctx, tx, ref, status, onlyExpired)
+// move is one step of a reservation's life, with what it does to the
+// inventory row of each counted line.
+type move struct {
+	from, to             domain.ReservationStatus
+	onHandSign, holdSign int // multiplied by qty
+}
+
+// The steps. Functions, not package variables: no global state.
+func release() move {
+	return move{from: domain.ReservationActive, to: domain.ReservationReleased, holdSign: -1}
+}
+func expire() move {
+	return move{from: domain.ReservationActive, to: domain.ReservationExpired, holdSign: -1}
+}
+func commit() move {
+	return move{from: domain.ReservationActive, to: domain.ReservationCommitted, onHandSign: -1, holdSign: -1}
+}
+func restock() move {
+	return move{from: domain.ReservationCommitted, to: domain.ReservationReturned, onHandSign: 1}
+}
+
+// moveReservation applies mv to ref's lines and their counted units, in
+// variant ID order (no deadlocks), publishing a stock change for products
+// that come back in stock. It returns the number of lines moved.
+func moveReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, mv move, onlyExpired bool) (int, error) {
+	lines, err := store.MoveReservation(ctx, tx, ref, mv.from, mv.to, onlyExpired)
 	if err != nil {
 		return 0, err
 	}
@@ -185,11 +248,13 @@ func endReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, statu
 		if !l.Counted {
 			continue
 		}
-		productID, back, err := store.Unreserve(ctx, tx, l.Line.VariantID, l.Line.Qty)
+		productID, available, err := store.Adjust(ctx, tx, l.Line.VariantID, mv.onHandSign*l.Line.Qty, mv.holdSign*l.Line.Qty)
 		if err != nil {
 			return 0, err
 		}
-		if back {
+		// Availability rose by qty only when units came back; if it is
+		// exactly qty now, the variant was sold out before.
+		if mv.onHandSign-mv.holdSign > 0 && available == l.Line.Qty {
 			restocked = append(restocked, productID)
 		}
 	}
@@ -223,7 +288,7 @@ type ExpireWorker struct {
 func (w *ExpireWorker) Work(ctx context.Context, job *river.Job[ExpireReservationArgs]) error {
 	var snooze time.Duration
 	err := postgres.InTenantTx(ctx, w.DB, func(tx pgx.Tx) error {
-		n, err := endReservation(ctx, tx, w.Events, job.Args.Ref, domain.ReservationExpired, true)
+		n, err := moveReservation(ctx, tx, w.Events, job.Args.Ref, expire(), true)
 		if err != nil || n > 0 {
 			return err
 		}
@@ -234,7 +299,7 @@ func (w *ExpireWorker) Work(ctx context.Context, job *river.Job[ExpireReservatio
 		if err != nil {
 			return err
 		}
-		if r.Status == domain.ReservationActive {
+		if r.Status == domain.ReservationActive && !r.Held { // a held ref never expires
 			snooze = max(time.Until(r.ExpiresAt), 0) + time.Second
 		}
 		return nil

@@ -66,20 +66,21 @@ func Reserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (Reserved, 
 	return Reserved{OK: true, Counted: row.Tracked, SoldOut: row.Tracked && row.Available == 0, ProductID: row.ProductID}, nil
 }
 
-// Unreserve gives back qty counted units of a variant. restocked reports
-// that the variant had none available before.
-func Unreserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (productID ulid.ID, restocked bool, err error) {
+// Adjust moves a variant's on_hand and reserved by the given deltas and
+// returns its product and the units available afterwards.
+func Adjust(ctx context.Context, tx Tx, variantID ulid.ID, onHandDelta, reservedDelta int) (productID ulid.ID, available int, err error) {
 	store, err := current(ctx)
 	if err != nil {
-		return ulid.ID{}, false, err
+		return ulid.ID{}, 0, err
 	}
-	row, err := catalogdb.New(tx).UnreserveInventory(ctx, catalogdb.UnreserveInventoryParams{
-		StoreID: store, VariantID: variantID, Qty: int32(qty), //nolint:gosec // bounded by domain.MaxReserveQty
+	row, err := catalogdb.New(tx).AdjustInventory(ctx, catalogdb.AdjustInventoryParams{
+		StoreID: store, VariantID: variantID,
+		OnHandDelta: int32(onHandDelta), ReservedDelta: int32(reservedDelta), //nolint:gosec // bounded by domain.MaxReserveQty
 	})
 	if err != nil {
-		return ulid.ID{}, false, fmt.Errorf("catalog store: unreserve: %w", err)
+		return ulid.ID{}, 0, fmt.Errorf("catalog store: adjust inventory: %w", err)
 	}
-	return row.ProductID, int(row.Available) == qty, nil
+	return row.ProductID, int(row.Available), nil
 }
 
 // ReservedLine is a reservation line as stored.
@@ -89,8 +90,9 @@ type ReservedLine struct {
 	Counted bool
 }
 
-// InsertReservation records the lines of ref.
-func InsertReservation(ctx context.Context, tx Tx, ref string, expiresAt time.Time, lines []ReservedLine) error {
+// InsertReservation records the lines of ref. A nil expiresAt holds them
+// until they are released or committed.
+func InsertReservation(ctx context.Context, tx Tx, ref string, expiresAt *time.Time, lines []ReservedLine) error {
 	store, err := current(ctx)
 	if err != nil {
 		return err
@@ -124,27 +126,31 @@ func GetReservation(ctx context.Context, tx Tx, ref string) (domain.Reservation,
 	if len(rows) == 0 {
 		return domain.Reservation{}, domain.ErrNotFound
 	}
-	r := domain.Reservation{Ref: ref, Status: domain.ReservationStatus(rows[0].Status), ExpiresAt: rows[0].ExpiresAt,
-		Lines: make([]domain.ReserveLine, len(rows))}
+	r := domain.Reservation{Ref: ref, Status: domain.ReservationStatus(rows[0].Status), Lines: make([]domain.ReserveLine, len(rows))}
+	if rows[0].ExpiresAt != nil {
+		r.ExpiresAt = *rows[0].ExpiresAt
+	} else {
+		r.Held = true
+	}
 	for i, row := range rows {
 		r.Lines[i] = domain.ReserveLine{VariantID: row.VariantID, Qty: int(row.Qty)}
 	}
 	return r, nil
 }
 
-// EndReservation moves ref's active lines to status (released or
-// expired; onlyExpired keeps lines that have not expired yet) and returns
-// the lines it ended, sorted by variant.
-func EndReservation(ctx context.Context, tx Tx, ref string, status domain.ReservationStatus, onlyExpired bool) ([]ReservedLine, error) {
+// MoveReservation moves ref's lines in status from to status to
+// (onlyExpired keeps lines that have not expired yet) and returns the
+// lines it moved.
+func MoveReservation(ctx context.Context, tx Tx, ref string, from, to domain.ReservationStatus, onlyExpired bool) ([]ReservedLine, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := catalogdb.New(tx).EndReservations(ctx, catalogdb.EndReservationsParams{
-		StoreID: store, Ref: ref, Status: string(status), OnlyExpired: onlyExpired,
+	rows, err := catalogdb.New(tx).MoveReservations(ctx, catalogdb.MoveReservationsParams{
+		StoreID: store, Ref: ref, FromStatus: string(from), ToStatus: string(to), OnlyExpired: onlyExpired,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("catalog store: end reservation: %w", err)
+		return nil, fmt.Errorf("catalog store: move reservation: %w", err)
 	}
 	out := make([]ReservedLine, len(rows))
 	for i, r := range rows {

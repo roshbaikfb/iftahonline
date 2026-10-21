@@ -6,6 +6,8 @@ package catalog
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
@@ -76,6 +78,10 @@ const (
 	ReservationActive   = domain.ReservationActive
 	ReservationReleased = domain.ReservationReleased
 	ReservationExpired  = domain.ReservationExpired
+	// ReservationCommitted: the units shipped (on_hand dropped).
+	ReservationCommitted = domain.ReservationCommitted
+	// ReservationReturned: committed units are back on hand.
+	ReservationReturned = domain.ReservationReturned
 )
 
 // DefaultReservationTTL is how long stock is held when a request does not
@@ -90,6 +96,7 @@ var (
 	ErrInsufficientStock   = app.ErrInsufficientStock
 	ErrReservationRefUsed  = app.ErrReservationRefUsed
 	ErrReservationNotFound = app.ErrReservationNotFound
+	ErrReservationState    = app.ErrReservationState
 )
 
 // Catalog is what other modules (checkout, orders) use. Every method acts
@@ -110,6 +117,22 @@ type Catalog interface {
 	// ReleaseStock gives back the stock held for ref. It is idempotent;
 	// an unknown ref is ErrReservationNotFound.
 	ReleaseStock(ctx context.Context, ref string) error
+
+	// The …Tx methods run in the caller's tenant transaction (ADR-0007),
+	// so an order's state and its stock commit or roll back together
+	// (ADR-0020). Each is idempotent; a ref in a state that does not
+	// allow the step is ErrReservationState.
+
+	// ReserveStockTx is ReserveStock in tx. With req.Hold the stock is
+	// held without expiry until released or committed.
+	ReserveStockTx(ctx context.Context, tx pgx.Tx, req ReserveRequest) (Reservation, error)
+	// ReleaseStockTx is ReleaseStock in tx (an order cancelled before it
+	// shipped).
+	ReleaseStockTx(ctx context.Context, tx pgx.Tx, ref string) error
+	// CommitStockTx ships the held units: on_hand and reserved both drop.
+	CommitStockTx(ctx context.Context, tx pgx.Tx, ref string) error
+	// RestockTx puts committed units back on hand (a returned order).
+	RestockTx(ctx context.Context, tx pgx.Tx, ref string) error
 }
 
 // Storefront is the read side the storefront renders: active, live
