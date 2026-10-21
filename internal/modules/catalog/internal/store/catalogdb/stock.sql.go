@@ -12,57 +12,46 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-const endReservations = `-- name: EndReservations :many
-UPDATE stock_reservations
-SET status = $1, released_at = now()
-WHERE store_id = $2 AND ref = $3 AND status = 'active'
-  AND (NOT $4::boolean OR expires_at <= now())
-RETURNING variant_id, qty, counted
+const adjustInventory = `-- name: AdjustInventory :one
+UPDATE inventory_levels AS i
+SET on_hand = i.on_hand + $1::int, reserved = i.reserved + $2::int, updated_at = now()
+WHERE i.store_id = $3 AND i.variant_id = $4
+RETURNING (i.on_hand - i.reserved)::int AS available,
+  (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id
 `
 
-type EndReservationsParams struct {
-	Status      string
-	StoreID     ulid.ID
-	Ref         string
-	OnlyExpired bool
+type AdjustInventoryParams struct {
+	OnHandDelta   int32
+	ReservedDelta int32
+	StoreID       ulid.ID
+	VariantID     ulid.ID
 }
 
-type EndReservationsRow struct {
-	VariantID ulid.ID
-	Qty       int32
-	Counted   bool
+type AdjustInventoryRow struct {
+	Available int32
+	ProductID ulid.ID
 }
 
-// Ends the ref's active lines. With only_expired, lines that have not
-// expired yet are kept (the expiry job may run early or twice).
-func (q *Queries) EndReservations(ctx context.Context, arg EndReservationsParams) ([]EndReservationsRow, error) {
-	rows, err := q.db.Query(ctx, endReservations,
-		arg.Status,
+// Moves on_hand and reserved by the given deltas: a release gives back
+// reserved units (0, -qty), a commit ships them (-qty, -qty), a return
+// restocks them (+qty, 0). Returns what is available afterwards and the
+// product, so the caller can tell a variant coming back in stock
+// (ADR-0015).
+func (q *Queries) AdjustInventory(ctx context.Context, arg AdjustInventoryParams) (AdjustInventoryRow, error) {
+	row := q.db.QueryRow(ctx, adjustInventory,
+		arg.OnHandDelta,
+		arg.ReservedDelta,
 		arg.StoreID,
-		arg.Ref,
-		arg.OnlyExpired,
+		arg.VariantID,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []EndReservationsRow{}
-	for rows.Next() {
-		var i EndReservationsRow
-		if err := rows.Scan(&i.VariantID, &i.Qty, &i.Counted); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+	var i AdjustInventoryRow
+	err := row.Scan(&i.Available, &i.ProductID)
+	return i, err
 }
 
 const insertReservations = `-- name: InsertReservations :exec
 INSERT INTO stock_reservations (id, store_id, ref, variant_id, qty, counted, expires_at)
-SELECT ($1::uuid[])[n], $2, $3, ($4::uuid[])[n], ($5::int[])[n], ($6::boolean[])[n], $7
+SELECT ($1::uuid[])[n], $2, $3, ($4::uuid[])[n], ($5::int[])[n], ($6::boolean[])[n], $7::timestamptz
 FROM generate_subscripts($1::uuid[], 1) AS n
 `
 
@@ -73,7 +62,7 @@ type InsertReservationsParams struct {
 	VariantIds []ulid.ID
 	Qtys       []int32
 	Counted    []bool
-	ExpiresAt  time.Time
+	ExpiresAt  *time.Time
 }
 
 func (q *Queries) InsertReservations(ctx context.Context, arg InsertReservationsParams) error {
@@ -90,7 +79,7 @@ func (q *Queries) InsertReservations(ctx context.Context, arg InsertReservations
 }
 
 const listReservations = `-- name: ListReservations :many
-SELECT id, store_id, ref, variant_id, qty, counted, status, expires_at, created_at, released_at FROM stock_reservations
+SELECT id, store_id, ref, variant_id, qty, counted, status, expires_at, created_at, released_at, committed_at, returned_at FROM stock_reservations
 WHERE store_id = $1 AND ref = $2
 ORDER BY variant_id
 `
@@ -120,7 +109,63 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 			&i.ExpiresAt,
 			&i.CreatedAt,
 			&i.ReleasedAt,
+			&i.CommittedAt,
+			&i.ReturnedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const moveReservations = `-- name: MoveReservations :many
+UPDATE stock_reservations
+SET status = $1,
+  released_at = CASE WHEN $1 IN ('released', 'expired') THEN now() ELSE released_at END,
+  committed_at = CASE WHEN $1 = 'committed' THEN now() ELSE committed_at END,
+  returned_at = CASE WHEN $1 = 'returned' THEN now() ELSE returned_at END
+WHERE store_id = $2 AND ref = $3 AND status = $4
+  AND (NOT $5::boolean OR expires_at <= now())
+RETURNING variant_id, qty, counted
+`
+
+type MoveReservationsParams struct {
+	ToStatus    string
+	StoreID     ulid.ID
+	Ref         string
+	FromStatus  string
+	OnlyExpired bool
+}
+
+type MoveReservationsRow struct {
+	VariantID ulid.ID
+	Qty       int32
+	Counted   bool
+}
+
+// Moves the ref's lines from one status to the next and stamps when.
+// With only_expired, lines that have not expired yet are kept (the expiry
+// job may run early or twice); held lines (no expiry) never expire.
+func (q *Queries) MoveReservations(ctx context.Context, arg MoveReservationsParams) ([]MoveReservationsRow, error) {
+	rows, err := q.db.Query(ctx, moveReservations,
+		arg.ToStatus,
+		arg.StoreID,
+		arg.Ref,
+		arg.FromStatus,
+		arg.OnlyExpired,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MoveReservationsRow{}
+	for rows.Next() {
+		var i MoveReservationsRow
+		if err := rows.Scan(&i.VariantID, &i.Qty, &i.Counted); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -206,32 +251,5 @@ func (q *Queries) SetInventoryLevel(ctx context.Context, arg SetInventoryLevelPa
 		&i.Reserved,
 		&i.ProductID,
 	)
-	return i, err
-}
-
-const unreserveInventory = `-- name: UnreserveInventory :one
-UPDATE inventory_levels AS i SET reserved = i.reserved - $1::int, updated_at = now()
-WHERE i.store_id = $2 AND i.variant_id = $3
-RETURNING (i.on_hand - i.reserved)::int AS available,
-  (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id
-`
-
-type UnreserveInventoryParams struct {
-	Qty       int32
-	StoreID   ulid.ID
-	VariantID ulid.ID
-}
-
-type UnreserveInventoryRow struct {
-	Available int32
-	ProductID ulid.ID
-}
-
-// Returns what is available afterwards and the product, so the caller
-// can tell a variant coming back in stock (ADR-0015).
-func (q *Queries) UnreserveInventory(ctx context.Context, arg UnreserveInventoryParams) (UnreserveInventoryRow, error) {
-	row := q.db.QueryRow(ctx, unreserveInventory, arg.Qty, arg.StoreID, arg.VariantID)
-	var i UnreserveInventoryRow
-	err := row.Scan(&i.Available, &i.ProductID)
 	return i, err
 }
