@@ -273,13 +273,3 @@ func ListAudit(ctx context.Context, tx Tx, beforeAt *time.Time, beforeID *ulid.I
 	}
 	return out, nil
 }
-
-// EnsureAuditPartitions creates missing monthly partitions up to
-// monthsAhead months from now and returns how many it created.
-func EnsureAuditPartitions(ctx context.Context, db Tx, monthsAhead int) (int, error) {
-	n, err := identitydb.New(db).EnsureAuditPartitions(ctx, int32(monthsAhead)) //nolint:gosec // small constant.
-	if err != nil {
-		return 0, fmt.Errorf("identity store: ensure partitions: %w", err)
-	}
-	return int(n), nil
-}

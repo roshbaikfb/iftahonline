@@ -9,6 +9,9 @@ import (
 )
 
 type Querier interface {
+	// Keeps every table registered in app.monthly_partitioned partitioned
+	// months_ahead months ahead (migration 00022).
+	EnsureMonthlyPartitions(ctx context.Context, monthsAhead int32) (int32, error)
 	// Highest applied River migration; the worker is not ready below the
 	// version its River library expects.
 	RiverSchemaVersion(ctx context.Context) (int64, error)

@@ -463,7 +463,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}); err != nil {
 		return err
 	}
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), append(identity.PeriodicJobs(), cat.PeriodicJobs()...)...)
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), cat.PeriodicJobs()...)
 	if err != nil {
 		return err
 	}
