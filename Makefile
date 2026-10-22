@@ -201,6 +201,11 @@ loadtest-smoke: ## k6 smoke against BASE_URL (default: make dev's API)
 	docker run --rm -i --add-host=host.docker.internal:host-gateway \
 		-e BASE_URL=$${BASE_URL:-http://host.docker.internal:18080} grafana/k6:1.8.2 run - < loadtest/smoke.js
 
+.PHONY: loadtest-orders
+loadtest-orders: ## k6: 50 one-step orders/s against the demo store in load mode (P4 acceptance)
+	CGO_ENABLED=0 go build -trimpath -o $(BIN)/sfdemo ./internal/tools/sfdemo
+	./scripts/loadtest-orders.sh $(BIN)/sfdemo
+
 ## ---- the pipeline ------------------------------------------------------
 
 .PHONY: ci

@@ -1,10 +1,16 @@
 package web_test
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 )
 
 // BenchmarkProductPage is the storefront's hottest path: a product page
@@ -39,4 +45,36 @@ func BenchmarkProductPage(b *testing.B) {
 			b.ReportMetric(float64(p95.Microseconds())/1000, "p95-ms")
 		})
 	}
+}
+
+// BenchmarkQuickOrder is the one-step form's submit through our own code:
+// same-origin check, form parsing, the limits (a fake limiter), the
+// order port (a fake) and the redirect. The real order's database work
+// is measured by make loadtest-orders.
+func BenchmarkQuickOrder(b *testing.B) {
+	ord := fakeOrders{log: &orderLog{}}
+	f := newFixture(b, func(d *web.Deps) {
+		d.Orders, d.Limiter = ord, &countLimiter{used: map[string]int{}, allow: map[string]int{}}
+	})
+	form := url.Values{"variant": {f.shirt.Variants[0].ID.String()}, "qty": {"1"}, "key": {"bench"}, "name": {"منى أحمد"},
+		"phone": {"01012345678"}, "governorate": {"EG-C"}, "city": {"مدينة نصر"}, "address": {"12 شارع عباس العقاد"}}.Encode()
+	durations := make([]time.Duration, 0, b.N)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		rq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/order", strings.NewReader(form))
+		rq.Host = host
+		rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rq.Header.Set("Origin", "https://"+host)
+		rec := httptest.NewRecorder()
+		start := time.Now()
+		f.h.ServeHTTP(rec, rq)
+		durations = append(durations, time.Since(start))
+		if rec.Code != http.StatusSeeOther {
+			b.Fatalf("status %d", rec.Code)
+		}
+	}
+	b.StopTimer()
+	slices.Sort(durations)
+	b.ReportMetric(float64(durations[len(durations)*95/100].Microseconds())/1000, "p95-ms")
 }
