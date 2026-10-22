@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -55,14 +56,15 @@ import (
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:18190", "listen address")
+	load := flag.Bool("load", false, "load-test mode: seed a product with deep stock (/p/load-test) and trust the loopback proxy's X-Forwarded-For")
 	flag.Parse()
-	if err := run(*addr); err != nil {
+	if err := run(*addr, *load); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "sfdemo:", err)
 		os.Exit(1)
 	}
 }
 
-func run(addr string) error {
+func run(addr string, load bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
@@ -95,7 +97,7 @@ func run(addr string) error {
 	if err != nil {
 		return err
 	}
-	if err = seed(ctx, pool, ten, api); err != nil {
+	if err = seed(ctx, pool, ten, api, load); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 
@@ -105,6 +107,12 @@ func run(addr string) error {
 	}
 	httpCfg := config.HTTP{Addr: addr, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second,
 		IdleTimeout: time.Minute, RequestTimeout: 10 * time.Second, MaxBodyBytes: 1 << 20, ShutdownTimeout: 5 * time.Second}
+	if load {
+		// k6 on this machine plays the edge proxy: each request names its
+		// shopper's address, so per-IP limits apply per shopper as they do
+		// behind Cloudflare in production.
+		httpCfg.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")}
+	}
 	handler := server.NewHandler(server.Deps{
 		Log: log, IDs: ulid.NewGenerator(), Telemetry: tel, HTTP: httpCfg, Profile: middleware.ProfileStorefront,
 		Health: server.NewHealth(log, server.BuildInfo{Version: "demo", Role: "storefront"}),
@@ -205,7 +213,13 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 		return nil, demo{}, nil, err
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig(), Orders: shopOrders})
+		Cache: storefront.DefaultCacheConfig(), Orders: shopOrders,
+		ClientIP: func(r *http.Request) string {
+			if ip, ok := middleware.ClientIP(r.Context()); ok {
+				return ip.String()
+			}
+			return r.RemoteAddr
+		}})
 	if err != nil {
 		return nil, demo{}, nil, err
 	}
@@ -221,7 +235,7 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	return shop, demo{h: mux, members: members}, ten, nil
 }
 
-func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo) error {
+func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, load bool) error {
 	id := tenant.StoreID{ID: ulid.NewGenerator().New()}
 	sctx := tenant.WithStore(ctx, id)
 	err := postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
@@ -274,6 +288,10 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo) 
 			{"type":"reviews","settings":{"items":[{"name":"منى","location":"القاهرة","rating":5,"text":"رائحة رائعة ووصل بسرعة."},{"name":"أحمد","location":"الإسكندرية","rating":4,"text":"جودة ممتازة."}]}},
 			{"type":"faq","settings":{"items":[{"question":"متى يصل الطلب؟","answer":"خلال ٢ إلى ٤ أيام عمل."},{"question":"هل يمكن الاسترجاع؟","answer":"نعم، خلال ١٤ يومًا."}]}}]}`},
 		{http.MethodPut, "/storefront/policies/refund", `{"title":"سياسة الاسترجاع","body":"يمكنك استرجاع المنتج خلال ١٤ يومًا من الاستلام.\n\nيجب أن يكون المنتج بحالته الأصلية.","status":"published"}`},
+	}
+	if load {
+		steps = append(steps, struct{ method, path, body string }{http.MethodPost, "/products",
+			`{"title":"منتج اختبار التحميل","slug":"load-test","status":"active","variants":[{"price_minor":10000,"on_hand":1000000}]}`})
 	}
 	for _, s := range steps {
 		if _, err = call(s.method, s.path, s.body); err != nil {
