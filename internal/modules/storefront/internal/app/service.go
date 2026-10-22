@@ -41,6 +41,7 @@ type Service struct {
 	jobs     jobs.Inserter
 	media    Media
 	variants Variants
+	carts    CartStore
 }
 
 // Deps are the service's dependencies.
@@ -55,6 +56,8 @@ type Deps struct {
 	Media Media
 	// Variants serves the cart (the catalog's sellable variants).
 	Variants Variants
+	// Carts keeps shoppers' carts (store.Carts on Redis).
+	Carts CartStore
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -65,7 +68,7 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections, jobs: d.Jobs, media: d.Media, variants: d.Variants}
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, sections: d.Sections, jobs: d.Jobs, media: d.Media, variants: d.Variants, carts: d.Carts}
 }
 
 // GetTheme returns the saved theme, or the defaults at version 0.

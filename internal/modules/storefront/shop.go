@@ -13,6 +13,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
@@ -155,7 +156,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 	if err != nil {
 		return nil, err
 	}
-	content := app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator(), Variants: d.Catalog})
+	content := app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator(), Variants: d.Catalog, Carts: store.NewCarts(d.Redis)})
 	shop, err := web.New(web.Deps{
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: d.Orders,
 		Limiter: limiter, ClientIP: d.ClientIP,
