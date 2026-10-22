@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
@@ -74,6 +75,7 @@ func (l *log) take() (events, actions []string) {
 type fixture struct {
 	svc  *app.Service
 	log  *log
+	rdb  *redis.Client // set by the cart fixture
 	ctxA context.Context
 	ctxB context.Context
 }

@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
@@ -14,7 +11,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
-	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -45,10 +41,22 @@ type CartView struct {
 	Units    int
 }
 
+// CartStore keeps carts (store.Carts, in Redis; ADR-0022). Carts are
+// found by the hash of the shopper's token, in the store in ctx.
+type CartStore interface {
+	Exists(ctx context.Context, tokenHash []byte) (bool, error)
+	Lines(ctx context.Context, tokenHash []byte) ([]domain.CartLine, error)
+	Qty(ctx context.Context, tokenHash []byte, v ulid.ID) (int, error)
+	Put(ctx context.Context, tokenHash []byte, v ulid.ID, qty int, existingOnly bool) error
+	Remove(ctx context.Context, tokenHash []byte, v ulid.ID) error
+	Units(ctx context.Context, tokenHash []byte) (int, error)
+	Delete(ctx context.Context, tokenHash []byte) error
+}
+
 // AddToCart adds qty of a variant to the cart that token opens, creating
 // a cart (and a new token) when there is none. The variant must be for
-// sale, and the line's new quantity in stock. It returns the token to
-// keep in the shopper's cookie.
+// sale, and the line's new quantity (capped at domain.MaxLineQty) in
+// stock. It returns the token to keep in the shopper's cookie.
 func (s *Service) AddToCart(ctx context.Context, token authtoken.Token, variantID ulid.ID, qty int) (authtoken.Token, error) {
 	if err := domain.ValidateQty(qty, false); err != nil {
 		return "", err
@@ -57,28 +65,29 @@ func (s *Service) AddToCart(ctx context.Context, token authtoken.Token, variantI
 	if err != nil {
 		return "", err
 	}
-	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		cartID, txErr := s.openCart(ctx, tx, &token, true)
-		if txErr != nil {
-			return txErr
+	live := false
+	if token != "" {
+		if live, err = s.carts.Exists(ctx, token.Hash()); err != nil {
+			return "", err
 		}
-		n, txErr := store.AddCartItem(ctx, tx, cartID, variantID, qty)
-		if txErr != nil {
-			return txErr
+	}
+	if !live {
+		if token, err = authtoken.New(); err != nil {
+			return "", err
 		}
-		if !v.Stock.CanSell(n) {
-			return ErrInsufficientStock
-		}
-		lines, txErr := store.CountCartLines(ctx, tx, cartID)
-		if txErr != nil {
-			return txErr
-		}
-		if lines > domain.MaxCartLines {
-			return ErrCartFull
-		}
-		return store.TouchCart(ctx, tx, cartID, time.Now().Add(domain.CartTTL))
-	})
+	}
+	cur, err := s.carts.Qty(ctx, token.Hash(), variantID)
 	if err != nil {
+		return "", err
+	}
+	n := min(cur+qty, domain.MaxLineQty)
+	if !v.Stock.CanSell(n) {
+		return "", ErrInsufficientStock
+	}
+	if err = s.carts.Put(ctx, token.Hash(), variantID, n, false); err != nil {
+		if errors.Is(err, store.ErrCartFull) {
+			return "", ErrCartFull
+		}
 		return "", err
 	}
 	return token, nil
@@ -91,48 +100,38 @@ func (s *Service) UpdateCartLine(ctx context.Context, token authtoken.Token, var
 	if err := domain.ValidateQty(qty, true); err != nil {
 		return err
 	}
-	if qty > 0 {
-		v, err := s.sellable(ctx, variantID)
-		if err != nil {
-			return err
-		}
-		if !v.Stock.CanSell(qty) {
-			return ErrInsufficientStock
-		}
+	if token == "" {
+		return nil
 	}
-	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		cartID, err := s.openCart(ctx, tx, &token, false)
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if err = store.SetCartItem(ctx, tx, cartID, variantID, qty); err != nil && !errors.Is(err, domain.ErrNotFound) {
-			return err
-		}
-		return store.TouchCart(ctx, tx, cartID, time.Now().Add(domain.CartTTL))
-	})
+	if qty == 0 {
+		return s.carts.Remove(ctx, token.Hash(), variantID)
+	}
+	v, err := s.sellable(ctx, variantID)
+	if err != nil {
+		return err
+	}
+	if !v.Stock.CanSell(qty) {
+		return ErrInsufficientStock
+	}
+	if err = s.carts.Put(ctx, token.Hash(), variantID, qty, true); err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 // Cart returns the cart that token opens with current prices, in two
 // steps whatever its size: its lines, then the catalog for all of them.
 // Lines the catalog no longer sells are left out.
 func (s *Service) Cart(ctx context.Context, token authtoken.Token) (CartView, error) {
-	var lines []domain.CartLine
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		cartID, err := s.openCart(ctx, tx, &token, false)
-		if err != nil {
-			return err
-		}
-		lines, err = store.CartLines(ctx, tx, cartID)
-		return err
-	})
-	if errors.Is(err, domain.ErrNotFound) || len(lines) == 0 {
+	if token == "" {
 		return CartView{Lines: []CartLineView{}}, nil
 	}
+	lines, err := s.carts.Lines(ctx, token.Hash())
 	if err != nil {
 		return CartView{}, err
+	}
+	if len(lines) == 0 {
+		return CartView{Lines: []CartLineView{}}, nil
 	}
 	ids := make([]ulid.ID, len(lines))
 	for i, l := range lines {
@@ -176,35 +175,15 @@ func (s *Service) CartUnits(ctx context.Context, token authtoken.Token) (int, er
 	if token == "" {
 		return 0, nil
 	}
-	var n int
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		n, txErr = store.CartQuantity(ctx, tx, token.Hash())
-		return txErr
-	})
-	return n, err
+	return s.carts.Units(ctx, token.Hash())
 }
 
-// openCart finds the cart token opens. With create, a missing cart is
-// made, and token is replaced by the new cart's token.
-func (s *Service) openCart(ctx context.Context, tx pgx.Tx, token *authtoken.Token, create bool) (ulid.ID, error) {
-	if *token != "" {
-		id, err := store.CartByToken(ctx, tx, token.Hash())
-		if err == nil || !errors.Is(err, domain.ErrNotFound) || !create {
-			return id, err
-		}
-	} else if !create {
-		return ulid.ID{}, domain.ErrNotFound
+// ClearCart empties the cart once its order is placed.
+func (s *Service) ClearCart(ctx context.Context, token authtoken.Token) error {
+	if token == "" {
+		return nil
 	}
-	fresh, err := authtoken.New()
-	if err != nil {
-		return ulid.ID{}, err
-	}
-	id := s.ids.New()
-	if err = store.InsertCart(ctx, tx, id, fresh.Hash(), time.Now().Add(domain.CartTTL)); err != nil {
-		return ulid.ID{}, err
-	}
-	*token = fresh
-	return id, nil
+	return s.carts.Delete(ctx, token.Hash())
 }
 
 func (s *Service) sellable(ctx context.Context, id ulid.ID) (catalog.SellableVariant, error) {

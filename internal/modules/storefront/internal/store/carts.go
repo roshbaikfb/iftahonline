@@ -2,141 +2,216 @@ package store
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store/storefrontdb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-// CartByToken returns the live cart whose token hashes to tokenHash, or
-// domain.ErrNotFound.
-func CartByToken(ctx context.Context, tx Tx, tokenHash []byte) (ulid.ID, error) {
-	store, err := current(ctx)
-	if err != nil {
-		return ulid.ID{}, err
-	}
-	id, err := storefrontdb.New(tx).GetCartByToken(ctx, storefrontdb.GetCartByTokenParams{StoreID: store, TokenHash: tokenHash})
-	if err != nil {
-		return ulid.ID{}, notFound(err, "get cart")
-	}
-	return id, nil
+// ErrCartFull means a new line would exceed domain.MaxCartLines.
+var ErrCartFull = errors.New("storefront store: cart full")
+
+// Carts keeps shoppers' carts in Redis (ADR-0022). A cart is one hash per
+// store and token hash, so a token opens nothing in another store and
+// Redis never holds a usable token:
+//
+//	sf:cart:<store>:<hex sha256(token)>
+//	  seq        -> counter, the order lines were added in
+//	  v:<ulid>   -> "<seq>:<qty>"
+//
+// Every change renews the key's TTL (domain.CartTTL), so an untouched
+// cart expires without a cleanup job.
+type Carts struct {
+	rdb redis.Cmdable
+	put *redis.Script
 }
 
-// InsertCart creates an empty cart.
-func InsertCart(ctx context.Context, tx Tx, id ulid.ID, tokenHash []byte, expires time.Time) error {
-	store, err := current(ctx)
-	if err != nil {
-		return err
-	}
-	err = storefrontdb.New(tx).InsertCart(ctx, storefrontdb.InsertCartParams{ID: id, StoreID: store, TokenHash: tokenHash, ExpiresAt: expires})
-	if err != nil {
-		return fmt.Errorf("storefront store: insert cart: %w", err)
-	}
-	return nil
+// NewCarts returns the Redis cart store.
+func NewCarts(rdb redis.Cmdable) *Carts {
+	return &Carts{rdb: rdb, put: redis.NewScript(putLineLua)}
 }
 
-// TouchCart renews a cart's expiry.
-func TouchCart(ctx context.Context, tx Tx, id ulid.ID, expires time.Time) error {
+// putLineLua sets one line's quantity atomically. A new line gets the
+// next sequence number unless the cart is full (-1) or only existing
+// lines may change (0). It renews the TTL.
+//
+// KEYS[1] cart; ARGV: field, qty, max lines, ttl seconds, "1" = existing only.
+const putLineLua = `
+local cur = redis.call('HGET', KEYS[1], ARGV[1])
+local seq
+if cur then
+  seq = string.match(cur, '^(%d+):')
+else
+  if ARGV[5] == '1' then return 0 end
+  local lines = redis.call('HLEN', KEYS[1]) - 1
+  if lines >= tonumber(ARGV[3]) then return -1 end
+  seq = redis.call('HINCRBY', KEYS[1], 'seq', 1)
+end
+redis.call('HSET', KEYS[1], ARGV[1], seq .. ':' .. ARGV[2])
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+return 1
+`
+
+func (c *Carts) key(ctx context.Context, tokenHash []byte) (string, error) {
 	store, err := current(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err = storefrontdb.New(tx).TouchCart(ctx, storefrontdb.TouchCartParams{StoreID: store, ID: id, ExpiresAt: expires}); err != nil {
-		return fmt.Errorf("storefront store: touch cart: %w", err)
-	}
-	return nil
+	return "sf:cart:" + store.String() + ":" + hex.EncodeToString(tokenHash), nil
 }
 
-// CartLines returns a cart's lines, oldest first.
-func CartLines(ctx context.Context, tx Tx, cartID ulid.ID) ([]domain.CartLine, error) {
-	store, err := current(ctx)
+func lineField(v ulid.ID) string { return "v:" + v.String() }
+
+// Exists reports whether the cart is live.
+func (c *Carts) Exists(ctx context.Context, tokenHash []byte) (bool, error) {
+	key, err := c.key(ctx, tokenHash)
+	if err != nil {
+		return false, err
+	}
+	n, err := c.rdb.Exists(ctx, key).Result()
+	if err != nil {
+		return false, fmt.Errorf("storefront store: cart exists: %w", err)
+	}
+	return n == 1, nil
+}
+
+// Lines returns the cart's lines in the order they were added; none for
+// a missing cart.
+func (c *Carts) Lines(ctx context.Context, tokenHash []byte) ([]domain.CartLine, error) {
+	key, err := c.key(ctx, tokenHash)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := storefrontdb.New(tx).ListCartItems(ctx, storefrontdb.ListCartItemsParams{StoreID: store, CartID: cartID})
+	all, err := c.rdb.HGetAll(ctx, key).Result()
 	if err != nil {
-		return nil, fmt.Errorf("storefront store: list cart items: %w", err)
+		return nil, fmt.Errorf("storefront store: cart lines: %w", err)
 	}
-	out := make([]domain.CartLine, len(rows))
-	for i, r := range rows {
-		out[i] = domain.CartLine{VariantID: r.VariantID, Qty: int(r.Qty)}
+	type seqLine struct {
+		seq  int64
+		line domain.CartLine
+	}
+	lines := make([]seqLine, 0, len(all))
+	for field, val := range all {
+		id, ok := strings.CutPrefix(field, "v:")
+		if !ok {
+			continue // the seq counter
+		}
+		v, err := ulid.Parse(id)
+		if err != nil {
+			continue // not ours: skip rather than break the shopper's cart
+		}
+		seq, qty, ok := parseLine(val)
+		if !ok {
+			continue
+		}
+		lines = append(lines, seqLine{seq: seq, line: domain.CartLine{VariantID: v, Qty: qty}})
+	}
+	slices.SortFunc(lines, func(a, b seqLine) int { return int(a.seq - b.seq) })
+	out := make([]domain.CartLine, len(lines))
+	for i, l := range lines {
+		out[i] = l.line
 	}
 	return out, nil
 }
 
-// CountCartLines counts a cart's lines.
-func CountCartLines(ctx context.Context, tx Tx, cartID ulid.ID) (int, error) {
-	store, err := current(ctx)
+// Qty is one line's quantity (0 when absent).
+func (c *Carts) Qty(ctx context.Context, tokenHash []byte, v ulid.ID) (int, error) {
+	key, err := c.key(ctx, tokenHash)
 	if err != nil {
 		return 0, err
 	}
-	n, err := storefrontdb.New(tx).CountCartLines(ctx, storefrontdb.CountCartLinesParams{StoreID: store, CartID: cartID})
-	if err != nil {
-		return 0, fmt.Errorf("storefront store: count cart lines: %w", err)
+	val, err := c.rdb.HGet(ctx, key, lineField(v)).Result()
+	switch {
+	case errors.Is(err, redis.Nil):
+		return 0, nil
+	case err != nil:
+		return 0, fmt.Errorf("storefront store: cart line: %w", err)
 	}
-	return int(n), nil
+	_, qty, _ := parseLine(val)
+	return qty, nil
 }
 
-// AddCartItem adds qty of a variant (to what is there, capped) and
-// returns the line's new quantity.
-func AddCartItem(ctx context.Context, tx Tx, cartID, variantID ulid.ID, qty int) (int, error) {
-	store, err := current(ctx)
-	if err != nil {
-		return 0, err
-	}
-	n, err := storefrontdb.New(tx).AddCartItem(ctx, storefrontdb.AddCartItemParams{
-		StoreID: store, CartID: cartID, VariantID: variantID, Qty: int32(qty), //nolint:gosec // bounded by domain.MaxLineQty
-	})
-	if err != nil {
-		return 0, fmt.Errorf("storefront store: add cart item: %w", err)
-	}
-	return int(n), nil
-}
-
-// SetCartItem sets a line's quantity, or deletes it at zero. A line not
-// in the cart is domain.ErrNotFound.
-func SetCartItem(ctx context.Context, tx Tx, cartID, variantID ulid.ID, qty int) error {
-	store, err := current(ctx)
+// Put sets a line's quantity (1..MaxLineQty), adding the line if it is
+// new and existingOnly is false. A new line in a full cart is
+// ErrCartFull; with existingOnly a missing line is domain.ErrNotFound.
+func (c *Carts) Put(ctx context.Context, tokenHash []byte, v ulid.ID, qty int, existingOnly bool) error {
+	key, err := c.key(ctx, tokenHash)
 	if err != nil {
 		return err
 	}
-	q := storefrontdb.New(tx)
-	if qty == 0 {
-		if err = q.DeleteCartItem(ctx, storefrontdb.DeleteCartItemParams{StoreID: store, CartID: cartID, VariantID: variantID}); err != nil {
-			return fmt.Errorf("storefront store: delete cart item: %w", err)
-		}
-		return nil
+	only := "0"
+	if existingOnly {
+		only = "1"
 	}
-	n, err := q.SetCartItem(ctx, storefrontdb.SetCartItemParams{
-		StoreID: store, CartID: cartID, VariantID: variantID, Qty: int32(qty), //nolint:gosec // bounded by domain.MaxLineQty
-	})
-	if err != nil {
-		return fmt.Errorf("storefront store: set cart item: %w", err)
-	}
-	if n == 0 {
+	res, err := c.put.Run(ctx, c.rdb, []string{key}, lineField(v), qty, domain.MaxCartLines,
+		int(domain.CartTTL/time.Second), only).Int()
+	switch {
+	case err != nil:
+		return fmt.Errorf("storefront store: put cart line: %w", err)
+	case res == -1:
+		return ErrCartFull
+	case res == 0:
 		return domain.ErrNotFound
 	}
 	return nil
 }
 
-// CartQuantity is the number of units in the cart a token opens (0 when
-// there is none).
-func CartQuantity(ctx context.Context, tx Tx, tokenHash []byte) (int, error) {
-	store, err := current(ctx)
+// Remove deletes a line and renews the cart's TTL.
+func (c *Carts) Remove(ctx context.Context, tokenHash []byte, v ulid.ID) error {
+	key, err := c.key(ctx, tokenHash)
+	if err != nil {
+		return err
+	}
+	_, err = c.rdb.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		p.HDel(ctx, key, lineField(v))
+		p.Expire(ctx, key, domain.CartTTL)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("storefront store: remove cart line: %w", err)
+	}
+	return nil
+}
+
+// Units is the number of units in the cart (0 when there is none).
+func (c *Carts) Units(ctx context.Context, tokenHash []byte) (int, error) {
+	lines, err := c.Lines(ctx, tokenHash)
 	if err != nil {
 		return 0, err
 	}
-	n, err := storefrontdb.New(tx).CartQuantity(ctx, storefrontdb.CartQuantityParams{StoreID: store, TokenHash: tokenHash})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
+	n := 0
+	for _, l := range lines {
+		n += l.Qty
 	}
+	return n, nil
+}
+
+// Delete empties the cart (after its order is placed).
+func (c *Carts) Delete(ctx context.Context, tokenHash []byte) error {
+	key, err := c.key(ctx, tokenHash)
 	if err != nil {
-		return 0, fmt.Errorf("storefront store: cart quantity: %w", err)
+		return err
 	}
-	return int(n), nil
+	if err = c.rdb.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("storefront store: delete cart: %w", err)
+	}
+	return nil
+}
+
+func parseLine(val string) (seq int64, qty int, ok bool) {
+	s, q, found := strings.Cut(val, ":")
+	if !found {
+		return 0, 0, false
+	}
+	seq, err1 := strconv.ParseInt(s, 10, 64)
+	qty, err2 := strconv.Atoi(q)
+	return seq, qty, err1 == nil && err2 == nil && qty > 0 && qty <= domain.MaxLineQty
 }

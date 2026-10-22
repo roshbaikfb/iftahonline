@@ -2,19 +2,25 @@ package app_test
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/sections"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -72,9 +78,15 @@ func newCartFixture(t *testing.T) (fixture, *fakeVariants) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	opts, err := redis.ParseURL(infra.RedisURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { _ = rdb.Close() })
 	ids := ulid.NewGenerator()
 	fv := &fakeVariants{vs: map[ulid.ID]catalog.SellableVariant{}}
-	f := fixture{svc: app.NewService(app.Deps{DB: pool, IDs: ids, Sections: reg, Variants: fv}), log: &log{}}
+	f := fixture{svc: app.NewService(app.Deps{DB: pool, IDs: ids, Sections: reg, Variants: fv, Carts: store.NewCarts(rdb)}), log: &log{}, rdb: rdb}
 	f.ctxA = createStore(t, pool, ids)
 	f.ctxB = createStore(t, pool, ids)
 	return f, fv
@@ -221,5 +233,77 @@ func TestCartFull(t *testing.T) {
 	wantConflict(t, err, "cart_full")
 	if n, _ := f.svc.CartUnits(f.ctxA, tok); n != domain.MaxCartLines {
 		t.Fatalf("units %d after a refused add", n)
+	}
+}
+
+// TestCartInRedis: a cart is one Redis hash per store and token hash with
+// a TTL that every change renews (ADR-0022). Redis never holds the
+// token itself; an expired cart is simply gone, and the next add starts
+// a new one; placing the order clears it.
+func TestCartInRedis(t *testing.T) {
+	t.Parallel()
+	f, fv := newCartFixture(t)
+	ctx := f.ctxA
+	tee := sellable(t, "Tee", 100, false, 0)
+	fv.put(tee)
+	tok, err := f.svc.AddToCart(ctx, "", tee.VariantID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := tenant.FromContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := f.rdb.Keys(ctx, "sf:cart:"+store.String()+":*").Result()
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("cart keys %v %v", keys, err)
+	}
+	if strings.Contains(keys[0], string(tok)) || !strings.HasSuffix(keys[0], hex.EncodeToString(tok.Hash())) {
+		t.Fatalf("key %q must name the token's hash, never the token", keys[0])
+	}
+	ttl, err := f.rdb.TTL(ctx, keys[0]).Result()
+	if err != nil || ttl < domain.CartTTL-time.Minute || ttl > domain.CartTTL {
+		t.Fatalf("ttl %v %v", ttl, err)
+	}
+	// Every change renews the TTL.
+	if err = f.rdb.Expire(ctx, keys[0], time.Hour).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.svc.UpdateCartLine(ctx, tok, tee.VariantID, 3); err != nil {
+		t.Fatal(err)
+	}
+	if ttl, _ = f.rdb.TTL(ctx, keys[0]).Result(); ttl < domain.CartTTL-time.Minute {
+		t.Fatalf("ttl not renewed: %v", ttl)
+	}
+	// Expired: nothing is left, and adding starts a new cart and token.
+	if err = f.rdb.Del(ctx, keys[0]).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := f.svc.Cart(ctx, tok); len(v.Lines) != 0 {
+		t.Fatalf("expired cart still shows %+v", v)
+	}
+	tok2, err := f.svc.AddToCart(ctx, tok, tee.VariantID, 1)
+	if err != nil || tok2 == tok {
+		t.Fatalf("add after expiry: %v, same token %v", err, tok2 == tok)
+	}
+	// The order clears it.
+	if err = f.svc.ClearCart(ctx, tok2); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := f.svc.CartUnits(ctx, tok2); n != 0 {
+		t.Fatalf("units after clearing: %d", n)
+	}
+	if err = f.svc.ClearCart(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Removing a line that is not there, or updating one, changes nothing.
+	tok3, _ := f.svc.AddToCart(ctx, "", tee.VariantID, 2)
+	other := sellable(t, "Other", 100, false, 0)
+	fv.put(other)
+	if err = f.svc.UpdateCartLine(ctx, tok3, other.VariantID, 4); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := f.svc.Cart(ctx, tok3); len(v.Lines) != 1 || v.Units != 2 {
+		t.Fatalf("updating a missing line added it: %+v", v)
 	}
 }
