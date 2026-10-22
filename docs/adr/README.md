@@ -28,3 +28,4 @@ supersedes it.
 | [0020](0020-customers-order-stock-and-monthly-partitions.md) | Customers, stock held by orders, and one monthly partition job | Accepted |
 | [0021](0021-orders-state-machine-idempotency-partitions.md) | Orders: state machine, idempotent placement, monthly partitions | Accepted |
 | [0022](0022-redis-carts-one-step-orders-anti-fake.md) | Carts in Redis, one-step orders, and anti-fake checks | Accepted |
+| [0023](0023-merchant-dashboard-shell.md) | The merchant dashboard's shell, and browser tests on the real API | Accepted |

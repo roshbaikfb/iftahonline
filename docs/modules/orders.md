@@ -70,6 +70,12 @@ Roles:
 | Support | read, manage |
 | Shipping | read, fulfil |
 
+## Dashboard
+
+The merchant dashboard's orders screens (list with filters, bulk
+confirm, order page with moves, CSV export) use this API; see
+[ADR-0023](../adr/0023-merchant-dashboard-shell.md).
+
 ## Rules worth knowing
 
 - **A customer's order history** is `listOrders?customer_id=…`.
