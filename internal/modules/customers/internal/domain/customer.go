@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/arabic"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -47,40 +47,15 @@ type Customer struct {
 // Blocked reports whether the store refuses this customer's orders.
 func (c Customer) Blocked() bool { return c.BlockedAt != nil }
 
-// CleanName trims a name, folds runs of spaces and control characters to
-// one space, and bounds its length. An empty name is allowed (a phone
+// CleanName cleans a name (platform/text) and bounds its length. An empty name is allowed (a phone
 // blocked before it ever ordered).
 func CleanName(s string) (string, error) {
-	return cleanText(s, "name", MaxNameLen)
+	return text.Clean(s, "name", 0, MaxNameLen)
 }
 
 // CleanReason is CleanName for a block reason.
 func CleanReason(s string) (string, error) {
-	return cleanText(s, "reason", MaxReasonLen)
-}
-
-func cleanText(s, field string, maxRunes int) (string, error) {
-	if !utf8.ValidString(s) {
-		return "", errs.Validation(errs.FieldError{Field: field, Code: "invalid", Message: field + " must be valid UTF-8"})
-	}
-	var b strings.Builder
-	space := false
-	for _, r := range s {
-		if unicode.IsSpace(r) || unicode.IsControl(r) || r == 0x200B || r == 0xFEFF {
-			space = b.Len() > 0
-			continue
-		}
-		if space {
-			b.WriteByte(' ')
-			space = false
-		}
-		b.WriteRune(r)
-	}
-	out := b.String()
-	if utf8.RuneCountInString(out) > maxRunes {
-		return "", errs.Validation(errs.FieldError{Field: field, Code: "too_long", Message: fmt.Sprintf("%s must be at most %d characters", field, maxRunes)})
-	}
-	return out, nil
+	return text.Clean(s, "reason", 0, MaxReasonLen)
 }
 
 // NameKey is the name's search form, stored next to it.
@@ -115,18 +90,18 @@ func ResolveQuery(q Query, region phone.Region) (Lookup, error) {
 	case l.Limit < 1 || l.Limit > MaxListLimit:
 		return Lookup{}, errs.Validation(errs.FieldError{Field: "limit", Code: "range", Message: fmt.Sprintf("limit must be between 1 and %d", MaxListLimit)})
 	}
-	text := strings.TrimSpace(q.Text)
-	if text == "" {
+	q.Text = strings.TrimSpace(q.Text)
+	if q.Text == "" {
 		return l, nil
 	}
-	if utf8.RuneCountInString(text) > MaxQueryLen || !utf8.ValidString(text) {
+	if utf8.RuneCountInString(q.Text) > MaxQueryLen || !utf8.ValidString(q.Text) {
 		return Lookup{}, errs.Validation(errs.FieldError{Field: "q", Code: "invalid", Message: fmt.Sprintf("q must be at most %d characters", MaxQueryLen)})
 	}
-	if p, err := phone.Parse(text, region); err == nil {
+	if p, err := phone.Parse(q.Text, region); err == nil {
 		l.Phone = &p
 		return l, nil
 	}
-	key := NameKey(text)
+	key := NameKey(q.Text)
 	if utf8.RuneCountInString(key) < minNameSearch {
 		return Lookup{}, errs.Validation(errs.FieldError{Field: "q", Code: "too_short", Message: "search with a phone number or at least 2 letters of a name"})
 	}
