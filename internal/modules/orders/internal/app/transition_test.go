@@ -26,8 +26,8 @@ func TestLifecycleMovesStock(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := p.Order.ID
-	f.audit.take()
-	f.events.take()
+	f.audit.Take()
+	f.events.Take()
 
 	steps := []struct {
 		to               domain.Status
@@ -45,9 +45,9 @@ func TestLifecycleMovesStock(t *testing.T) {
 	var wantAudit, wantEvents []string
 	from := domain.StatusPending
 	for i, s := range steps {
-		o, err := f.svc.Transition(f.asRole(f.shopperA, s.role), id, s.to, "", 0)
-		if err != nil {
-			t.Fatalf("step %d to %s: %v", i, s.to, err)
+		o, moveErr := f.svc.Transition(f.asRole(f.shopperA, s.role), id, s.to, "", 0)
+		if moveErr != nil {
+			t.Fatalf("step %d to %s: %v", i, s.to, moveErr)
 		}
 		if o.Status != s.to || o.Version != i+2 {
 			t.Fatalf("step %d: %+v", i, o)
@@ -59,10 +59,10 @@ func TestLifecycleMovesStock(t *testing.T) {
 		wantEvents = append(wantEvents, "orders.order.status_changed "+id.String()+" "+string(from)+"->"+string(s.to))
 		from = s.to
 	}
-	if got := f.audit.take(); !slices.Equal(got, wantAudit) {
+	if got := f.audit.Take(); !slices.Equal(got, wantAudit) {
 		t.Fatalf("audit %v", got)
 	}
-	if got := f.events.take(); !slices.Equal(got, wantEvents) {
+	if got := f.events.Take(); !slices.Equal(got, wantEvents) {
 		t.Fatalf("events %v", got)
 	}
 	d, err := f.svc.GetDetail(f.ctxA, id)
@@ -129,9 +129,9 @@ func TestTransitionGuards(t *testing.T) {
 	id := p.Order.ID
 	unchanged := func() {
 		t.Helper()
-		o, err := f.svc.Get(f.ctxA, id)
-		if err != nil || o.Status != domain.StatusPending || o.Version != 1 {
-			t.Fatalf("order changed: %+v %v", o, err)
+		o, getErr := f.svc.Get(f.ctxA, id)
+		if getErr != nil || o.Status != domain.StatusPending || o.Version != 1 {
+			t.Fatalf("order changed: %+v %v", o, getErr)
 		}
 		if _, res := f.stock(f.ctxA, t, v); res != 1 {
 			t.Fatalf("stock changed: reserved %d", res)
@@ -164,8 +164,8 @@ func TestTransitionGuards(t *testing.T) {
 
 	// The right role, with the current version, moves it.
 	support := f.asRole(f.shopperA, authz.RoleSupport)
-	if o, err := f.svc.Transition(support, id, domain.StatusConfirmed, "", 1); err != nil || o.Version != 2 {
-		t.Fatalf("support confirms: %+v %v", o, err)
+	if o, moveErr := f.svc.Transition(support, id, domain.StatusConfirmed, "", 1); moveErr != nil || o.Version != 2 {
+		t.Fatalf("support confirms: %+v %v", o, moveErr)
 	}
 	// Support cannot ship.
 	if _, err = f.svc.Transition(support, id, domain.StatusReadyToShip, "", 0); !errs.Is(err, errs.KindForbidden) {

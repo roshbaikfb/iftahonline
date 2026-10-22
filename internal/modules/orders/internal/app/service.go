@@ -149,8 +149,8 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 		return Placement{}, err
 	}
 	if d.IdempotencyKey != "" {
-		if p, done, err := s.replay(ctx, d); done || err != nil {
-			return p, err
+		if p, done, replayErr := s.replay(ctx, d); done || replayErr != nil {
+			return p, replayErr
 		}
 	}
 	blocked, err := s.customers.Blocked(ctx, d.Contact.Phone)
@@ -281,9 +281,9 @@ func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency)
 		if v.Price.Currency() != cur {
 			return domain.Order{}, errCurrencyMismatch
 		}
-		total, err := v.Price.MulInt(int64(l.Qty))
-		if err != nil {
-			return domain.Order{}, err
+		total, mulErr := v.Price.MulInt(int64(l.Qty))
+		if mulErr != nil {
+			return domain.Order{}, mulErr
 		}
 		if o.Subtotal, err = o.Subtotal.Add(total); err != nil {
 			return domain.Order{}, err

@@ -1419,6 +1419,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List orders
+         * @description Permission: orders.read. Newest first, without lines; follow
+         *     `next_cursor`. Filters combine; `customer_id` is a customer's
+         *     order history.
+         */
+        get: operations["listOrders"];
+        put?: never;
+        /**
+         * Enter an order (a phone order)
+         * @description Permission: orders.manage. Prices come from the catalog; the stock
+         *     is held and the customer recorded. Send an `Idempotency-Key` to
+         *     make retries safe: the same key with the same request returns the
+         *     first order (200, `Idempotent-Replayed: true`); with another
+         *     request it is 409 idempotency_key_reused. A blocked customer is
+         *     409 customer_blocked; short stock is 409 insufficient_stock.
+         */
+        post: operations["createOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/orders/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move many orders (bulk confirm)
+         * @description Each order moves in its own transaction, so one that cannot move
+         *     does not hold back the others; `results` follow `order_ids`. The
+         *     permission is checked per order, as for one transition.
+         */
+        post: operations["bulkTransitionOrders"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/orders/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Export orders as CSV
+         * @description Permission: orders.export. The list's filters; newest first, at
+         *     most 100,000 rows (narrow the dates for more). UTF-8 with a BOM,
+         *     times in the store's zone, plain decimal amounts; text that a
+         *     spreadsheet would run as a formula starts with an apostrophe.
+         */
+        get: operations["exportOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get an order with its lines and timeline
+         * @description Permission: orders.read.
+         */
+        get: operations["getOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/orders/{order_id}/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an order to another status
+         * @description The permission depends on the move (see the tag). Send the
+         *     `version` you read to refuse a move if the order changed since
+         *     (409 version_conflict).
+         */
+        post: operations["transitionOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1985,6 +2115,120 @@ export interface components {
             /** @default 0 */
             position: number;
         };
+        /** @enum {string} */
+        OrderStatus: "pending" | "confirmed" | "ready_to_ship" | "shipped" | "delivered" | "cancelled" | "failed_delivery" | "returned";
+        Order: {
+            id: components["schemas"]["ULID"];
+            /**
+             * @description Short reference for people (the ID's last 8 characters).
+             * @example 7P0R1S2T
+             */
+            code: string;
+            status: components["schemas"]["OrderStatus"];
+            version: number;
+            /** @enum {string} */
+            source: "storefront" | "merchant";
+            customer_id: components["schemas"]["ULID"];
+            name: string;
+            /** @example +201012345678 */
+            phone: string;
+            /** @example EG-C */
+            governorate: string;
+            city: string;
+            address: string;
+            notes: string;
+            /** @example EGP */
+            currency: string;
+            /** Format: int64 */
+            subtotal_minor: number;
+            /** Format: int64 */
+            shipping_minor: number;
+            /** Format: int64 */
+            total_minor: number;
+            item_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            status_changed_at: string;
+        };
+        OrderLine: {
+            variant_id: components["schemas"]["ULID"];
+            product_id: components["schemas"]["ULID"];
+            title: string;
+            /** @example M / أحمر */
+            variant_title: string;
+            sku: string;
+            qty: number;
+            /** Format: int64 */
+            unit_price_minor: number;
+            /** Format: int64 */
+            total_minor: number;
+        };
+        OrderEvent: {
+            id: components["schemas"]["ULID"];
+            from?: components["schemas"]["OrderStatus"];
+            to: components["schemas"]["OrderStatus"];
+            actor_user_id?: components["schemas"]["ULID"];
+            note: string;
+            /** Format: date-time */
+            at: string;
+        };
+        OrderDetail: {
+            order: components["schemas"]["Order"];
+            lines: components["schemas"]["OrderLine"][];
+            /** @description The timeline, oldest first. */
+            events: components["schemas"]["OrderEvent"][];
+        };
+        OrderPage: {
+            items: components["schemas"]["Order"][];
+            next_cursor?: string;
+        };
+        OrderInput: {
+            /** @example منى أحمد */
+            name: string;
+            /** @example 010 1234 5678 */
+            phone: string;
+            /** @example EG-ALX */
+            governorate: string;
+            /** @example سموحة */
+            city: string;
+            address: string;
+            /** @default  */
+            notes: string;
+            lines: {
+                variant_id: components["schemas"]["ULID"];
+                qty: number;
+            }[];
+        };
+        TransitionInput: {
+            status: components["schemas"]["OrderStatus"];
+            /** @default  */
+            note: string;
+            /** @description The version you read; omit to move whatever the version. */
+            version?: number;
+        };
+        BulkTransitionInput: {
+            order_ids: components["schemas"]["ULID"][];
+            status: components["schemas"]["OrderStatus"];
+            /** @default  */
+            note: string;
+        };
+        BulkTransitionResult: {
+            results: components["schemas"]["BulkResult"][];
+        };
+        BulkResult: {
+            order_id: components["schemas"]["ULID"];
+            ok: boolean;
+            order?: components["schemas"]["Order"];
+            error?: components["schemas"]["BulkError"];
+        };
+        BulkError: {
+            /** @example invalid_transition */
+            code: string;
+            detail: string;
+        };
         Customer: {
             id: components["schemas"]["ULID"];
             /** @example +201012345678 */
@@ -2209,6 +2453,7 @@ export interface components {
         ImportID: components["schemas"]["ULID"];
         AssetID: components["schemas"]["ULID"];
         PageID: components["schemas"]["ULID"];
+        OrderID: components["schemas"]["ULID"];
         CustomerID: components["schemas"]["ULID"];
         PolicySlug: "shipping" | "refund" | "privacy" | "terms";
     };
@@ -4236,6 +4481,188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Customer"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOrders: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OrderStatus"];
+                /** @description Created at or after (inclusive). */
+                from?: string;
+                /** @description Created before (exclusive). */
+                to?: string;
+                /** @description ISO 3166-2 code, e.g. EG-C. */
+                governorate?: string;
+                phone?: string;
+                customer_id?: components["schemas"]["ULID"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderInput"];
+            };
+        };
+        responses: {
+            /** @description The order a previous request with this key created. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            /** @description The new order. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    bulkTransitionOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkTransitionInput"];
+            };
+        };
+        responses: {
+            /** @description One result per order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTransitionResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportOrders: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OrderStatus"];
+                from?: string;
+                to?: string;
+                governorate?: string;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The CSV file. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    transitionOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionInput"];
+            };
+        };
+        responses: {
+            /** @description The order after the move. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Order"];
                 };
             };
             default: components["responses"]["Problem"];
