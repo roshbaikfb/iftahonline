@@ -174,6 +174,65 @@ type InventoryLevel struct {
 	UpdatedAt time.Time
 }
 
+type Order struct {
+	ID              ulid.ID
+	StoreID         ulid.ID
+	CreatedAt       time.Time
+	Status          string
+	Version         int32
+	Source          string
+	CustomerID      ulid.ID
+	Name            string
+	Phone           string
+	Governorate     string
+	City            string
+	Address         string
+	Notes           string
+	Currency        string
+	SubtotalMinor   int64
+	ShippingMinor   int64
+	TotalMinor      int64
+	ItemCount       int32
+	LinesHash       []byte
+	UpdatedAt       time.Time
+	StatusChangedAt time.Time
+}
+
+type OrderEvent struct {
+	ID             ulid.ID
+	StoreID        ulid.ID
+	OrderCreatedAt time.Time
+	OrderID        ulid.ID
+	OccurredAt     time.Time
+	FromStatus     *string
+	ToStatus       string
+	ActorUserID    pgtype.UUID
+	Note           string
+}
+
+type OrderIdempotency struct {
+	StoreID     ulid.ID
+	Key         string
+	Fingerprint []byte
+	OrderID     ulid.ID
+	CreatedAt   time.Time
+}
+
+type OrderItem struct {
+	StoreID        ulid.ID
+	OrderCreatedAt time.Time
+	OrderID        ulid.ID
+	Line           int16
+	VariantID      ulid.ID
+	ProductID      ulid.ID
+	Title          string
+	VariantTitle   string
+	Sku            string
+	Qty            int32
+	UnitPriceMinor int64
+	TotalMinor     int64
+}
+
 type PlatformAdmin struct {
 	ID           ulid.ID
 	Email        string

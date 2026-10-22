@@ -11,9 +11,11 @@ import (
 //   - owner: everything.
 //   - manager: runs the store day to day, but cannot change who has access.
 //   - support: answers customers; reads, does not configure, but keeps
-//     the block list (they are the ones who spot fake orders).
-//   - shipping: fulfils orders; sees the catalog and keeps stock counts
-//     right (they handle the goods), but does not edit products.
+//     the block list and confirms or cancels orders (they make the
+//     confirmation calls and spot fake orders).
+//   - shipping: fulfils orders (packs, ships, records deliveries and
+//     returns); sees the catalog and keeps stock counts right (they
+//     handle the goods), but does not edit products or confirm orders.
 func Matrix() map[authz.Role][]authz.Permission {
 	return map[authz.Role][]authz.Permission{
 		authz.RoleOwner: authz.Permissions(),
@@ -24,14 +26,17 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermCatalogRead, authz.PermCatalogManage, authz.PermInventoryManage, authz.PermImportsManage,
 			authz.PermStorefrontManage,
 			authz.PermCustomersRead, authz.PermCustomersManage,
+			authz.PermOrdersRead, authz.PermOrdersManage, authz.PermOrdersFulfil, authz.PermOrdersExport,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
 			authz.PermCatalogRead,
 			authz.PermCustomersRead, authz.PermCustomersManage,
+			authz.PermOrdersRead, authz.PermOrdersManage,
 		},
 		authz.RoleShipping: {
 			authz.PermStoreRead, authz.PermCatalogRead, authz.PermInventoryManage,
+			authz.PermOrdersRead, authz.PermOrdersFulfil,
 		},
 	}
 }
