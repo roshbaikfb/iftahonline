@@ -1,44 +1,33 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Smoke test: the real Go API binary (PLATFORM_BIN, built by `make build`)
-// plus the production dashboard build served by `vite preview`.
-// The API needs no live database for /v1/meta/version (pools are lazy).
+// The dashboard against the real API: dashdemo (internal/tools/dashdemo)
+// starts throwaway PostgreSQL and Redis, runs the Go API binary
+// (PLATFORM_BIN, built by `make build`) on them, seeds a merchant with
+// orders through the API, and only then serves it on apiPort. The
+// production dashboard build is served by `vite preview`, which proxies
+// /v1 to it, as the reverse proxy does in production.
+//
+// The browser uses http://localhost: the session cookie is __Host- and
+// Secure, which browsers accept on localhost without TLS.
 const apiPort = 18180;
 const webPort = 4173;
 const platformBin = process.env.PLATFORM_BIN ?? '../../bin/platform';
+const dashdemoBin = process.env.DASHDEMO_BIN ?? '../../bin/dashdemo';
 
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
-  use: { baseURL: `http://127.0.0.1:${String(webPort)}`, trace: 'retain-on-failure' },
+  use: { baseURL: `http://localhost:${String(webPort)}`, trace: 'retain-on-failure', locale: 'ar-EG' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: `${JSON.stringify(platformBin)} api`, // quoted: repo paths may contain spaces
+      // quoted: repo paths may contain spaces
+      command: `${JSON.stringify(dashdemoBin)} -addr 127.0.0.1:${String(apiPort)} -platform ${JSON.stringify(platformBin)}`,
       url: `http://127.0.0.1:${String(apiPort)}/livez`,
       reuseExistingServer: false,
-      timeout: 10_000,
-      env: {
-        APP_ENV: 'test',
-        HTTP_ADDR: `127.0.0.1:${String(apiPort)}`,
-        DATABASE_URL: 'postgres://none:none@127.0.0.1:1/none',
-        REDIS_URL: 'redis://127.0.0.1:1/0',
-        // Public development-only values (see .env.example), not secrets.
-        SECRETBOX_KEYS: '1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=',
-        OTP_PEPPER: 'ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=',
-        S3_ENDPOINT: 'http://127.0.0.1:1',
-        S3_BUCKET: 'iftah-media',
-        S3_ACCESS_KEY: 'local-dev-access',
-        S3_SECRET_KEY: 'local-dev-secret-not-for-prod',
-        IMGPROXY_URL: 'http://127.0.0.1:1',
-        MEILI_URL: 'http://127.0.0.1:1',
-        MEILI_API_KEY: 'local-dev-master-key-0123456789',
-        IMGPROXY_KEY: '6465762d6f6e6c792d696d6770726f78792d6b65792d6e6f742d736563726574',
-        IMGPROXY_SALT: '6465762d6f6e6c792d696d6770726f78792d73616c742d7075626c6963',
-        DRAIN_DELAY: '0s',
-      },
+      timeout: 180_000,
     },
     {
       command: `npm run build && npx vite preview --host 127.0.0.1 --port ${String(webPort)}`,

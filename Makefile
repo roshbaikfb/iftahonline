@@ -145,9 +145,10 @@ systemd-verify: ## Validate systemd units and their hardening score
 ## ---- dashboard ---------------------------------------------------------
 
 .PHONY: dash-ci
-dash-ci: dash-deps build ## Dashboard lint, typecheck, unit tests, Playwright smoke
+dash-ci: dash-deps build ## Dashboard lint, typecheck, unit tests, Playwright (real API on a throwaway database)
 	cd $(DASH) && npm run --silent lint && npm run --silent typecheck && npm run --silent test
-	cd $(DASH) && PLATFORM_BIN="$$PWD/../../$(BIN)/platform" npx playwright test
+	CGO_ENABLED=0 go build -trimpath -o $(BIN)/dashdemo ./internal/tools/dashdemo
+	cd $(DASH) && PLATFORM_BIN="$$PWD/../../$(BIN)/platform" DASHDEMO_BIN="$$PWD/../../$(BIN)/dashdemo" npx playwright test
 
 .PHONY: storefront-e2e
 storefront-e2e: dash-deps ## Storefront on a phone: Playwright journeys + Lighthouse budgets (demo store)
