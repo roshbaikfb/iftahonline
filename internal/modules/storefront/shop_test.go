@@ -333,21 +333,30 @@ func TestPriceEditReachesStorefront(t *testing.T) {
 	p.call(t, s, http.MethodPut, "/products/"+prod["id"].(string),
 		fmt.Sprintf(`{"title":"عسل","slug":"honey","status":"active","variants":[{"id":%q,"price_minor":27500}]}`, variant), http.StatusOK)
 
+	// Both pages must show the new price within the deadline. They are
+	// checked together: an earlier event (the product's creation, late
+	// under load) can drop the product page alone before the edit's event
+	// arrives, so the product page refreshing first proves nothing about
+	// the home page.
 	deadline := edited.Add(15 * time.Second)
+	pages := map[string]bool{"/p/honey": false, "/": false}
 	for {
-		body := p.visit(t, s.host, "/p/honey").Body.String()
-		if strings.Contains(body, "275 ج.م") {
+		fresh := true
+		for path, done := range pages {
+			if !done {
+				pages[path] = strings.Contains(p.visit(t, s.host, path).Body.String(), "275 ج.م")
+			}
+			fresh = fresh && pages[path]
+		}
+		if fresh {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the new price did not reach the cached product page through the event path")
+			t.Fatalf("the new price did not reach the cached pages through the event path: %v", pages)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	took := time.Since(edited)
-	if !strings.Contains(p.visit(t, s.host, "/").Body.String(), "275 ج.م") {
-		t.Fatal("the home page's grid still shows the old price")
-	}
 	t.Logf("price edit visible on the storefront after %v (limit 60s)", took.Round(time.Millisecond))
 }
 
