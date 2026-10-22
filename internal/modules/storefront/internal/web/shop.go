@@ -39,8 +39,13 @@ type Deps struct {
 	// orders module exists: the page is then a 404).
 	Carts  Carts
 	Orders Orders
-	// Limiter rate-limits cart writes per IP and per store; nil disables.
+	// Limiter rate-limits cart writes and orders; nil disables.
 	Limiter Limiter
+	// Captcha verifies the challenge risky order submissions must pass,
+	// shown with CaptchaSiteKey (ADR-0022). Without them, such a
+	// submission is refused as busy.
+	Captcha        CaptchaVerifier
+	CaptchaSiteKey string
 	// ClientIP is the shopper's address as the trusted proxies report it.
 	ClientIP func(*http.Request) string
 	// Now is the clock (tests); nil means time.Now.
@@ -62,6 +67,8 @@ type Shop struct {
 	carts    Carts
 	orders   Orders
 	limiter  Limiter
+	captcha  CaptchaVerifier
+	siteKey  string
 	clientIP func(*http.Request) string
 	now      func() time.Time
 }
@@ -90,7 +97,7 @@ func New(d Deps) (*Shop, error) {
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders,
-		limiter: d.Limiter, clientIP: d.ClientIP, now: d.Now}, nil
+		limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -125,7 +132,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
-	if s.cartRoute(w, r, store, p, rest) {
+	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
 		return
 	}
 	if !isRead(r) {
@@ -338,7 +345,11 @@ func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
 func (s *Shop) writeHeaders(w http.ResponseWriter, c cached) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
+	if c.challenge {
+		h.Set("Content-Security-Policy", csp.StorefrontChallenge(c.styleHash))
+	} else {
+		h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
+	}
 	h.Set("Content-Language", string(c.language))
 }
 

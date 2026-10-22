@@ -60,6 +60,22 @@ function cartBadge() {
   badge.hidden = false;
 }
 
+// orderForms gives each one-step order form an idempotency key, so a
+// double submit or a retry on a weak network places one order
+// (ADR-0022): the page is cached for everyone, so the key cannot come
+// from the server. It also stops a second click while the first is sent.
+function orderForms() {
+  for (const form of document.querySelectorAll("form[data-order]")) {
+    const key = form.querySelector("[data-order-key]");
+    if (key && !key.value && crypto.randomUUID) key.value = crypto.randomUUID();
+    form.addEventListener("submit", () => {
+      const button = form.querySelector("button[type=submit]");
+      if (button) setTimeout(() => { button.disabled = true; }, 0);
+    });
+  }
+}
+
 countdowns();
 variantPickers();
 cartBadge();
+orderForms();

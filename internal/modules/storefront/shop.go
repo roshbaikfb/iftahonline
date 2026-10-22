@@ -12,7 +12,9 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/captcha"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -116,22 +118,13 @@ type ShopDeps struct {
 	// ClientIP is the shopper's address from the trusted proxies, for the
 	// cart's per-IP rate limit.
 	ClientIP func(*http.Request) string
-	// Orders backs the thank-you page; nil until the orders module exists.
-	Orders OrderSummaries
+	// Orders places shoppers' orders (checkout and landing pages' one-step
+	// form) and backs the thank-you page; nil disables them (404).
+	Orders orders.Shop
+	// Captcha is Cloudflare Turnstile, shown to risky order submissions
+	// (ADR-0022); empty keys disable it.
+	Captcha config.Captcha
 }
-
-// OrderSummary is what the thank-you page shows of an order.
-type OrderSummary = web.OrderSummary
-
-// OrderLine is a line of an OrderSummary.
-type OrderLine = web.OrderLine
-
-// OrderSummaries finds a placed order by reference (the orders module
-// implements it); ErrOrderNotFound when there is none.
-type OrderSummaries = web.Orders
-
-// ErrOrderNotFound means no order has that reference.
-var ErrOrderNotFound = web.ErrOrderNotFound
 
 var _ web.Stores = (tenancy.Service)(nil)
 
@@ -157,9 +150,17 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		return nil, err
 	}
 	content := app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator(), Variants: d.Catalog, Carts: store.NewCarts(d.Redis)})
+	var ords web.Orders
+	if d.Orders != nil {
+		ords = shopOrders{shop: d.Orders}
+	}
+	var verifier web.CaptchaVerifier
+	if d.Captcha.Enabled() {
+		verifier = captcha.NewTurnstile(d.Captcha.SecretKey)
+	}
 	shop, err := web.New(web.Deps{
-		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: d.Orders,
-		Limiter: limiter, ClientIP: d.ClientIP,
+		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords,
+		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
 		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL,
 	})

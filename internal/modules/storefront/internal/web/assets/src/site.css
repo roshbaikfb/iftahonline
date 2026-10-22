@@ -2,6 +2,9 @@
    store's theme variables, so it must stay small. Logical properties
    only: the same rules serve RTL (Arabic) and LTR (English). */
 
+/* [hidden] must win over any display rule (e.g. the cart badge's
+   inline-block): an empty badge otherwise shows as a pill. */
+[hidden] { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
@@ -105,12 +108,20 @@ main { display: block; min-block-size: 50vh; }
 .countdown { text-align: center; padding: 1.25rem; border-radius: var(--radius); background: var(--c-accent); color: var(--c-on-accent); }
 .countdown .clock { display: flex; justify-content: center; gap: .75rem; font-size: 1.6rem; font-weight: 700; direction: ltr; font-variant-numeric: tabular-nums; }
 .countdown .clock small { display: block; font-size: .7rem; font-weight: 400; }
-.countdown[hidden] { display: none; }
 .policy { max-inline-size: 48rem; margin-block: 2rem; }
 .policy p { white-space: pre-line; }
 
 /* Cart */
 .cartlink { font-size: .9rem; color: var(--c-text); display: inline-flex; gap: .35rem; align-items: center; }
+.order .fld { display: grid; gap: .3rem; }
+.order textarea, .order input[type=text], .order input[type=tel], .order select {
+  font: inherit; padding: .6rem .7rem; border: 1px solid color-mix(in srgb, var(--c-text) 25%, transparent);
+  border-radius: var(--radius); background: var(--c-bg); color: var(--c-text); width: 100%;
+}
+.order .bad input, .order .bad select, .order .bad textarea { border-color: #b42318; }
+.order .err { color: #b42318; }
+.order .cod { font-size: .9rem; opacity: .85; }
+.hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .alert { padding: .75rem 1rem; border-radius: var(--radius); background: color-mix(in srgb, var(--c-accent) 25%, transparent); }
 .lines { list-style: none; padding: 0; margin: 0 0 1rem; }
 .line { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; align-items: center; padding-block: 1rem;

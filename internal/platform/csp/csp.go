@@ -14,13 +14,33 @@ const API = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-a
 // keeps them cacheable, since the same page always has the same hash
 // (ADR-0018).
 func Storefront(styleHashes ...string) string {
+	return storefront("", styleHashes)
+}
+
+// turnstile is Cloudflare Turnstile's origin.
+const turnstile = "https://challenges.cloudflare.com"
+
+// StorefrontChallenge is Storefront plus Cloudflare Turnstile's script
+// and frame, for the one private response that shows a challenge
+// (ADR-0022). Cached pages never carry it.
+func StorefrontChallenge(styleHashes ...string) string {
+	return storefront(turnstile, styleHashes)
+}
+
+func storefront(extra string, styleHashes []string) string {
 	style := "style-src 'self'"
 	for _, h := range styleHashes {
 		style += " " + h
 	}
-	return strings.Join([]string{
+	script, frame := "script-src 'self'", "frame-ancestors 'none'"
+	directives := []string{}
+	if extra != "" {
+		script += " " + extra
+		directives = append(directives, "frame-src "+extra)
+	}
+	return strings.Join(append([]string{
 		"default-src 'self'",
-		"script-src 'self'",
+		script,
 		style,
 		"img-src 'self' https: data:",
 		"font-src 'self'",
@@ -28,7 +48,7 @@ func Storefront(styleHashes ...string) string {
 		"object-src 'none'",
 		"base-uri 'none'",
 		"form-action 'self'",
-		"frame-ancestors 'none'",
+		frame,
 		"upgrade-insecure-requests",
-	}, "; ")
+	}, directives...), "; ")
 }

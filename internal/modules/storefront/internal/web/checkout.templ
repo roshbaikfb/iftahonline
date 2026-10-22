@@ -1,0 +1,143 @@
+package web
+
+import "strconv"
+
+// orderFields are the one-step order form's contact fields (ADR-0022).
+// They work without JavaScript; the script only fills the idempotency
+// key and stops a second click. "website" is a honeypot: hidden from
+// people, filled by naive bots.
+templ orderFields(p *pageCtx, f *orderForm) {
+	<input type="hidden" name="key" value={ f.value("key") } data-order-key/>
+	<div class="hp" aria-hidden="true">
+		<label for="o-website">Website</label>
+		<input type="text" name="website" id="o-website" tabindex="-1" autocomplete="off"/>
+	</div>
+	@field(p, f, "name", MsgYourName, "text", "name", 120)
+	@field(p, f, "phone", MsgPhone, "tel", "tel", 32)
+	<div class={ "fld", templ.KV("bad", f.bad("governorate")) }>
+		<label for="o-governorate">{ p.l.T(MsgGovernorate) }</label>
+		<select name="governorate" id="o-governorate" required autocomplete="address-level1">
+			<option value="">{ p.l.T(MsgChooseGovernorate) }</option>
+			for _, a := range f.areas {
+				<option value={ a.Code } selected?={ a.Code == f.value("governorate") }>{ a.Name(string(p.l)) }</option>
+			}
+		</select>
+		@fieldError(p, f, "governorate")
+	</div>
+	@field(p, f, "city", MsgCity, "text", "address-level2", 80)
+	<div class={ "fld", templ.KV("bad", f.bad("address")) }>
+		<label for="o-address">{ p.l.T(MsgAddress) }</label>
+		<textarea name="address" id="o-address" rows="2" maxlength="300" required autocomplete="street-address">{ f.value("address") }</textarea>
+		@fieldError(p, f, "address")
+	</div>
+	<div class={ "fld", templ.KV("bad", f.bad("notes")) }>
+		<label for="o-notes">{ p.l.T(MsgNotes) } <small>({ p.l.T(MsgOptional) })</small></label>
+		<textarea name="notes" id="o-notes" rows="2" maxlength="500">{ f.value("notes") }</textarea>
+		@fieldError(p, f, "notes")
+	</div>
+	if f.challenge != "" {
+		<p class="alert" role="alert">{ p.l.T(MsgVerifyHuman) }</p>
+		<div class="cf-turnstile" data-sitekey={ f.challenge } data-language={ string(p.l) }></div>
+	}
+	<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
+	<button class="btn btn-block" type="submit">{ p.l.Or(f.cta, MsgPlaceOrder) }</button>
+}
+
+templ field(p *pageCtx, f *orderForm, name string, label Msg, kind, autocomplete string, maxLen int) {
+	<div class={ "fld", templ.KV("bad", f.bad(name)) }>
+		<label for={ "o-" + name }>{ p.l.T(label) }</label>
+		<input
+			type={ kind }
+			name={ name }
+			id={ "o-" + name }
+			value={ f.value(name) }
+			maxlength={ strconv.Itoa(maxLen) }
+			autocomplete={ autocomplete }
+			if kind == "tel" {
+				inputmode="tel"
+				dir="ltr"
+			}
+			required
+		/>
+		@fieldError(p, f, name)
+	</div>
+}
+
+templ fieldError(p *pageCtx, f *orderForm, name string) {
+	if m, ok := f.errors[name]; ok {
+		<small class="err" role="alert">{ p.l.T(m) }</small>
+	}
+}
+
+// orderPage is the order form on a page of its own: checkout from the
+// cart, or a landing page's form sent back with problems. It is private
+// and never cached.
+templ orderPage(p *pageCtx, f *orderForm) {
+	<section class="sec cart checkout">
+		<h1>{ p.l.T(MsgCheckout) }</h1>
+		if f.problem != "" {
+			<p class="alert" role="alert">{ f.problem }</p>
+		}
+		if f.summary != nil {
+			<h2>{ p.l.T(MsgOrderSummary) }</h2>
+			<ul class="lines">
+				for _, l := range f.summary.lines {
+					<li class="line">
+						<div class="what">
+							{ l.title } × { strconv.Itoa(l.qty) }
+							if l.options != "" {
+								<small>{ l.options }</small>
+							}
+						</div>
+						<strong class="total">{ p.l.Price(l.total) }</strong>
+					</li>
+				}
+			</ul>
+			if f.summary.subtotal != nil {
+				<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(*f.summary.subtotal) }</strong></p>
+			}
+		}
+		<form class="order" method="post" action={ p.URL(f.action) } data-order>
+			if !f.variant.IsZero() {
+				<input type="hidden" name="variant" value={ f.variant.String() }/>
+				<input type="hidden" name="qty" value={ strconv.Itoa(f.qty) }/>
+			}
+			@orderFields(p, f)
+		</form>
+	</section>
+}
+
+// quickOrder is a landing page's one-step form: the variant, the
+// quantity and the contact fields, posted straight to /order. The page is
+// shared by every shopper (edge-cached), so the form carries nothing
+// personal.
+templ quickOrder(p *pageCtx, lv *landingView, cta string) {
+	<form class="buy order" method="post" action={ p.URL("/order") } data-buy data-order>
+		@price(p.priceOf(lv.product.PriceFrom()))
+		if len(lv.product.Variants) > 1 {
+			<label for={ "v-" + lv.product.ID.String() }>{ optionsLabel(p.l, lv.product) }</label>
+			<select name="variant" id={ "v-" + lv.product.ID.String() }>
+				for _, v := range lv.product.Variants {
+					<option
+						value={ v.ID.String() }
+						data-amount={ p.priceOf(v).price }
+						data-compare={ p.priceOf(v).compare }
+						disabled?={ !v.Available }
+						selected?={ v.ID == lv.product.PriceFrom().ID }
+					>
+						{ variantLabel(p.l, lv.product, v) }
+					</option>
+				}
+			</select>
+		} else {
+			<input type="hidden" name="variant" value={ lv.product.Variants[0].ID.String() }/>
+		}
+		<label for={ "q-" + lv.product.ID.String() }>{ p.l.T(MsgQuantity) }</label>
+		<input type="number" name="qty" id={ "q-" + lv.product.ID.String() } min="1" max="20" value="1" inputmode="numeric"/>
+		if lv.product.Available() {
+			@orderFields(p, &orderForm{areas: lv.areas, cta: cta})
+		} else {
+			<button class="btn btn-block" type="button" disabled>{ p.l.Or(cta, MsgSoldOut) }</button>
+		}
+	</form>
+}

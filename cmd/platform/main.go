@@ -260,26 +260,51 @@ func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 }
 
 func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, auth authz.Authorizer) (*orders.Module, error) {
-	stores := ten.Service()
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: cat.Catalog(), Customers: cust.Customers(), Auth: auth,
-		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
-			st, err := stores.GetStore(ctx)
-			if err != nil {
-				return orders.StoreInfo{}, err
-			}
-			country, ok := geo.CountryOf(st.Currency)
-			if !ok {
-				return orders.StoreInfo{}, fmt.Errorf("orders: no country for currency %q", st.Currency)
-			}
-			loc, err := time.LoadLocation(st.Timezone)
-			if err != nil {
-				loc = time.UTC
-			}
-			return orders.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
-		},
+		Catalog: cat.Catalog(), Customers: cust.Customers(), Auth: auth, Stores: orderStores(ten),
 	})
+}
+
+// orderStores adapts tenancy to what orders need: currency, country (from
+// the currency) and time zone.
+func orderStores(ten *tenancy.Module) orders.StoreSource {
+	stores := ten.Service()
+	return func(ctx context.Context) (orders.StoreInfo, error) {
+		st, err := stores.GetStore(ctx)
+		if err != nil {
+			return orders.StoreInfo{}, err
+		}
+		country, ok := geo.CountryOf(st.Currency)
+		if !ok {
+			return orders.StoreInfo{}, fmt.Errorf("orders: no country for currency %q", st.Currency)
+		}
+		loc, err := time.LoadLocation(st.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
+		return orders.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
+	}
+}
+
+// newShopOrders builds what the storefront role needs to take orders:
+// stock and prices (not the whole catalog), customers, and the orders
+// module's shopper side.
+func newShopOrders(c clients, ten *tenancy.Module) (orders.Shop, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	stock, err := catalog.NewStock(catalog.StockDeps{Pool: c.pool, Jobs: inserter, IDs: c.ids, Events: c.events})
+	if err != nil {
+		return nil, err
+	}
+	cust, err := newCustomers(c, ten)
+	if err != nil {
+		return nil, err
+	}
+	return orders.NewShop(orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
+		Catalog: stock, Customers: cust.Customers(), Stores: orderStores(ten)})
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
@@ -394,7 +419,12 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
+	shopOrders, err := newShopOrders(c, ten)
+	if err != nil {
+		return nil, err
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
+		Orders: shopOrders, Captcha: c.cfg.Captcha,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL,

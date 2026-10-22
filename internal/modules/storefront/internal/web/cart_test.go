@@ -79,7 +79,7 @@ func TestCartFlow(t *testing.T) {
 	}
 	cookies := []*http.Cookie{tok}
 	page := f.getWith(t, "/cart", cookies).Body.String()
-	for _, want := range []string{"تيشيرت قطن", "<small>M</small>", `value="2"`, "300 ج.م", "المجموع", `action="/cart/update"`, " disabled>إتمام الطلب"} {
+	for _, want := range []string{"تيشيرت قطن", "<small>M</small>", `value="2"`, "300 ج.م", "المجموع", `action="/cart/update"`, `href="/checkout">إتمام الطلب`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("cart page lacks %q", want)
 		}

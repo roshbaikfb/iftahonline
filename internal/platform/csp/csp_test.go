@@ -26,3 +26,25 @@ func TestStorefront(t *testing.T) {
 		t.Fatalf("API policy %q", csp.API)
 	}
 }
+
+// TestStorefrontChallenge: the challenge page alone may load Turnstile's
+// script and frame; everything else stays as strict as Storefront.
+func TestStorefrontChallenge(t *testing.T) {
+	t.Parallel()
+	got := csp.StorefrontChallenge("'sha256-abc'")
+	for _, want := range []string{
+		"script-src 'self' https://challenges.cloudflare.com",
+		"frame-src https://challenges.cloudflare.com",
+		"style-src 'self' 'sha256-abc'",
+		"frame-ancestors 'none'",
+		"object-src 'none'",
+		"form-action 'self'",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("policy lacks %q: %s", want, got)
+		}
+	}
+	if strings.Contains(csp.Storefront("'sha256-abc'"), "cloudflare") {
+		t.Fatal("the shared policy must not allow Cloudflare")
+	}
+}

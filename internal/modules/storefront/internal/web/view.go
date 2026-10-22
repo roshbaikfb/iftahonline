@@ -13,6 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -22,6 +23,7 @@ type Catalog interface {
 	ProductsByIDs(ctx context.Context, ids []ulid.ID) ([]catalog.StorefrontProduct, error)
 	ListProducts(ctx context.Context, q catalog.StorefrontQuery) (catalog.StorefrontPage, error)
 	Categories(ctx context.Context) ([]catalog.Category, error)
+	SellableVariants(ctx context.Context, ids []ulid.ID) ([]catalog.SellableVariant, error)
 }
 
 // Stores reads the store in ctx (tenancy.Service).
@@ -47,7 +49,8 @@ var _ Content = (*app.Service)(nil)
 // storeView is what every page of a store shares, cached per store.
 type storeView struct {
 	name       string
-	locale     Locale // the store's default language, served without a prefix
+	country    geo.Country // from the store's currency: the order form's governorates
+	locale     Locale      // the store's default language, served without a prefix
 	theme      domain.ThemeSettings
 	css        string
 	styleHash  string
@@ -110,8 +113,9 @@ func (s *Shop) buildView(ctx context.Context) (*storeView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("web: categories: %w", err)
 	}
+	country, _ := geo.CountryOf(st.Currency) // a store has one of the supported currencies
 	v := &storeView{
-		name: st.Name, locale: ParseLocale(string(st.Locale)), theme: content.Theme,
+		name: st.Name, country: country, locale: ParseLocale(string(st.Locale)), theme: content.Theme,
 		categories: cats, policies: content.Policies,
 	}
 	v.css = s.assets.themeCSS(content.Theme)

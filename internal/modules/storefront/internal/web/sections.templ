@@ -209,7 +209,7 @@ templ productLanding(p *pageCtx, lv *landingView, first bool) {
 					}
 				</ul>
 			}
-			@buyForm(p, lv.product, orString(lv.cfg.CTALabel, p.l.T(MsgOrderNow)))
+			@quickOrder(p, lv, orString(lv.cfg.CTALabel, p.l.T(MsgOrderNow)))
 			if lv.cfg.ShowDescription == nil || *lv.cfg.ShowDescription {
 				<div class="desc">
 					for _, para := range paragraphs(lv.product.Description) {
