@@ -1298,7 +1298,7 @@ func productLanding(p *pageCtx, lv *landingView, first bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = buyForm(p, lv.product, orString(lv.cfg.CTALabel, p.l.T(MsgOrderNow))).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = quickOrder(p, lv, orString(lv.cfg.CTALabel, p.l.T(MsgOrderNow))).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

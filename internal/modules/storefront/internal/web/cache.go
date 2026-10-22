@@ -33,6 +33,7 @@ type cached struct {
 	styleHash string
 	tags      string // Cache-Tag header
 	language  Locale
+	challenge bool // the page shows a Turnstile challenge (CSP)
 }
 
 // caches hold rendered pages and store views. Entries are keyed by the

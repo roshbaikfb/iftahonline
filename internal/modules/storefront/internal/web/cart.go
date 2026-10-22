@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/a-h/templ"
@@ -27,14 +28,16 @@ type Carts interface {
 	UpdateCartLine(ctx context.Context, token authtoken.Token, variantID ulid.ID, qty int) error
 	Cart(ctx context.Context, token authtoken.Token) (app.CartView, error)
 	CartUnits(ctx context.Context, token authtoken.Token) (int, error)
+	ClearCart(ctx context.Context, token authtoken.Token) error
 }
 
 var _ Carts = (*app.Service)(nil)
 
 // OrderSummary is what the thank-you page shows of a placed order. The
-// orders module (P4) provides it.
+// orders module provides it.
 type OrderSummary struct {
-	Ref   string
+	Ref   string // the order's ID, in the thank-you URL
+	Code  string // its short code, shown to the shopper
 	Lines []OrderLine
 	Total money.Money
 }
@@ -46,10 +49,47 @@ type OrderLine struct {
 	Total money.Money
 }
 
-// Orders finds a placed order of the store in ctx by its public
-// reference; ErrOrderNotFound when there is none.
+// Orders places shoppers' orders and finds them again for the thank-you
+// page, in the store in ctx. The storefront module adapts the orders
+// module to it.
 type Orders interface {
+	// OrderSummary finds a placed order by its reference;
+	// ErrOrderNotFound when there is none.
 	OrderSummary(ctx context.Context, ref string) (OrderSummary, error)
+	// PlaceOrder places an order and returns its reference (that of the
+	// earlier order for a repeated submit). Errors: *OrderInvalidError,
+	// ErrOrderRefused, ErrOrderOutOfStock, ErrOrderUnavailable.
+	PlaceOrder(ctx context.Context, req OrderRequest) (string, error)
+}
+
+// OrderRequest is the one-step form as submitted.
+type OrderRequest struct {
+	Key                                            string // idempotency key; may be empty
+	Name, Phone, Governorate, City, Address, Notes string
+	Lines                                          []OrderRequestLine
+}
+
+// OrderRequestLine is one variant and quantity.
+type OrderRequestLine struct {
+	VariantID ulid.ID
+	Qty       int
+}
+
+// Order placement errors. Shoppers see what to do, never why an order
+// was refused (a blocked customer only reads ErrOrderRefused's message).
+var (
+	ErrOrderRefused     = errors.New("web: order refused")
+	ErrOrderOutOfStock  = errors.New("web: not enough stock")
+	ErrOrderUnavailable = errors.New("web: an item is no longer for sale")
+)
+
+// OrderInvalidError names the form fields that need fixing.
+type OrderInvalidError struct {
+	Fields []string // name, phone, governorate, city, address, notes, lines
+}
+
+func (e *OrderInvalidError) Error() string {
+	return "web: invalid order: " + strings.Join(e.Fields, ", ")
 }
 
 // ErrOrderNotFound means no order has that reference.
@@ -288,7 +328,7 @@ func (s *Shop) writePrivate(w http.ResponseWriter, r *http.Request, p *pageCtx, 
 		s.unavailable(w, r, err)
 		return
 	}
-	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l}
+	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l, challenge: p.challenge}
 	s.writeHeaders(w, c)
 	w.Header().Set("Cache-Control", noStore)
 	w.Header().Del("Cache-Tag")

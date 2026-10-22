@@ -32,6 +32,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			@p.styleTag()
 			@p.ldScript()
 			<script type="module" src={ p.jsURL }></script>
+			if p.challenge {
+				<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+			}
 		</head>
 		<body>
 			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>

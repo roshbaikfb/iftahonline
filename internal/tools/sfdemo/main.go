@@ -30,14 +30,18 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -180,8 +184,28 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	if err != nil {
 		return nil, demo{}, nil, err
 	}
+	country := func(ctx context.Context) (geo.Country, error) {
+		st, getErr := stores.GetStore(ctx)
+		c, _ := geo.CountryOf(st.Currency)
+		return c, getErr
+	}
+	cust, err := customers.New(customers.Deps{Pool: pool, IDs: ids, Region: func(ctx context.Context) (phone.Region, error) {
+		c, regionErr := country(ctx)
+		return phone.Region(c), regionErr
+	}})
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
+	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
+			c, infoErr := country(ctx)
+			return orders.StoreInfo{Currency: money.EGP, Country: c, Location: time.UTC}, infoErr
+		}})
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig()})
+		Cache: storefront.DefaultCacheConfig(), Orders: shopOrders})
 	if err != nil {
 		return nil, demo{}, nil, err
 	}

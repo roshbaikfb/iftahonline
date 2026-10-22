@@ -49,8 +49,7 @@ templ cartPage(p *pageCtx, v app.CartView, problem string) {
 			if v.Subtotal != nil {
 				<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(*v.Subtotal) }</strong></p>
 			}
-			<button class="btn btn-block" type="button" disabled>{ p.l.T(MsgCheckout) }</button>
-			<p class="empty">{ p.l.T(MsgCheckoutSoon) }</p>
+			<a class="btn btn-block" href={ p.URL("/checkout") }>{ p.l.T(MsgCheckout) }</a>
 		}
 	</section>
 }
@@ -59,7 +58,7 @@ templ thankYouPage(p *pageCtx, o OrderSummary) {
 	<section class="sec cart">
 		<h1>{ p.l.T(MsgThankYou) }</h1>
 		<p>{ p.l.T(MsgThankYouText) }</p>
-		<p>{ p.l.T(MsgOrderRef) }: <strong dir="ltr">{ o.Ref }</strong></p>
+		<p>{ p.l.T(MsgOrderRef) }: <strong dir="ltr">{ o.Code }</strong></p>
 		<ul class="lines">
 			for _, l := range o.Lines {
 				<li class="line">

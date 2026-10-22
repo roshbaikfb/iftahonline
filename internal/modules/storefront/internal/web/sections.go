@@ -8,6 +8,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/sections"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -41,6 +42,7 @@ type gridView struct {
 type landingView struct {
 	cfg     *sections.ProductLanding
 	product catalog.StorefrontProduct
+	areas   []geo.Area // the order form's governorates
 }
 
 type countdownView struct {
@@ -136,7 +138,7 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 				continue // gone or not active: the section disappears
 			}
 			p.tag("p-" + pr.ID.String())
-			sv.landing = &landingView{cfg: c, product: pr}
+			sv.landing = &landingView{cfg: c, product: pr, areas: geo.Areas(p.v.country)}
 		case *sections.Reviews:
 			sv.reviews = c
 		case *sections.FAQ:

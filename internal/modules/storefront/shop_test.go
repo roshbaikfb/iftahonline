@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -21,13 +22,17 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -119,8 +124,29 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	region := func(ctx context.Context) (geo.Country, error) {
+		st, getErr := stores.GetStore(ctx)
+		country, _ := geo.CountryOf(st.Currency)
+		return country, getErr
+	}
+	cust, err := customers.New(customers.Deps{Pool: pool, IDs: ids, Region: func(ctx context.Context) (phone.Region, error) {
+		c, regionErr := region(ctx)
+		return phone.Region(c), regionErr
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
+			st, getErr := stores.GetStore(ctx)
+			c, _ := geo.CountryOf(st.Currency)
+			return orders.StoreInfo{Currency: st.Currency, Country: c, Location: time.UTC}, getErr
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig(), HTTPS: true})
+		Cache: storefront.DefaultCacheConfig(), HTTPS: true, Orders: shopOrders})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,6 +164,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	scope := testkit.FakeStoreScope(resp, members)
 	cat.Mount(apiMux, pol, scope, resp)
 	look.Mount(apiMux, pol, scope, resp)
+	cust.Mount(apiMux, pol, scope, resp)
 	shopMux := http.NewServeMux()
 	server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())(server.Routes{Mux: shopMux, Problems: resp, Log: log})
 	return platform{api: apiMux, shop: shopMux, ten: ten, pool: pool}, members
@@ -322,4 +349,80 @@ func TestPriceEditReachesStorefront(t *testing.T) {
 		t.Fatal("the home page's grid still shows the old price")
 	}
 	t.Logf("price edit visible on the storefront after %v (limit 60s)", took.Round(time.Millisecond))
+}
+
+// TestOrderFromLandingPage: a shopper orders from a landing page's
+// one-step form on the store's host; the real orders, customers and
+// catalog modules place it, the thank-you page shows it, and a repeat of
+// the same submit (the same idempotency key) lands on the same order. A
+// blocked phone reads only a generic refusal.
+func TestOrderFromLandingPage(t *testing.T) {
+	t.Parallel()
+	p, members := newPlatform(t)
+	tag := strings.ToLower(ulid.NewGenerator().New().String()[18:])
+	s := p.createStore(t, members, "cod-"+tag, "متجر الدفع عند الاستلام", "ar", "EGP")
+	prod := p.call(t, s, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":3}]}`, http.StatusCreated)
+	variant := prod["variants"].([]any)[0].(map[string]any)["id"].(string)
+	p.call(t, s, http.MethodPost, "/storefront/pages", `{"title":"عرض الساعة","slug":"watch-offer","status":"published","sections":[{"type":"product_landing","settings":{"product_id":"`+prod["id"].(string)+`"}}]}`, http.StatusCreated)
+
+	page := p.visit(t, s.host, "/pages/watch-offer").Body.String()
+	if !strings.Contains(page, `action="/order"`) || !strings.Contains(page, `<option value="EG-C">القاهرة</option>`) {
+		t.Fatal("the landing page lacks the one-step form")
+	}
+	form := url.Values{"variant": {variant}, "qty": {"2"}, "key": {"landing-submit-1"}, "name": {"منى"}, "phone": {"01012345678"},
+		"governorate": {"EG-C"}, "city": {"مدينة نصر"}, "address": {"12 شارع عباس العقاد"}}
+	shopper := 0
+	order := func(form url.Values) *httptest.ResponseRecorder { // each call is another shopper's phone and network
+		shopper++
+		rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/order", strings.NewReader(form.Encode()))
+		rq.Host = s.host
+		rq.RemoteAddr = fmt.Sprintf("198.51.100.%d:40000", shopper)
+		rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rq.Header.Set("Origin", "https://"+s.host)
+		rec := httptest.NewRecorder()
+		p.shop.ServeHTTP(rec, rq)
+		return rec
+	}
+	rec := order(form)
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/thank-you/") {
+		t.Fatalf("order: %d %s", rec.Code, rec.Body)
+	}
+	thanks := p.visit(t, s.host, loc)
+	if body := thanks.Body.String(); thanks.Code != http.StatusOK || !strings.Contains(body, "ساعة × 2") || !strings.Contains(body, "900 ج.م") ||
+		!strings.Contains(body, strings.TrimPrefix(loc, "/thank-you/")[18:]) {
+		t.Fatalf("thank-you: %d %s", thanks.Code, body)
+	}
+	if again := order(form); again.Header().Get("Location") != loc {
+		t.Fatalf("the repeated submit made another order: %q vs %q", again.Header().Get("Location"), loc)
+	}
+	// Stock is held: only one unit is left for the next shopper.
+	more := url.Values{}
+	for k, v := range form {
+		more[k] = v
+	}
+	more.Set("key", "landing-submit-2")
+	more.Set("phone", "01099999999")
+	if rec = order(more); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "الكمية المطلوبة غير متوفرة.") {
+		t.Fatalf("short stock: %d", rec.Code)
+	}
+
+	p.call(t, s, http.MethodPost, "/customers/blocks", `{"phone":"01055555555"}`, http.StatusOK)
+	blocked := url.Values{}
+	for k, v := range more {
+		blocked[k] = v
+	}
+	blocked.Set("qty", "1")
+	blocked.Set("key", "landing-submit-3")
+	blocked.Set("phone", "01055555555")
+	rec = order(blocked)
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "تعذّر إتمام الطلب. تواصل مع المتجر.") ||
+		strings.Contains(body, "blocked") || strings.Contains(body, "محظور") {
+		t.Fatalf("blocked: %d %s", rec.Code, body)
+	}
+	// Another store's host does not know the order.
+	other := p.createStore(t, members, "other-"+tag, "متجر آخر", "ar", "EGP")
+	if rec = p.visit(t, other.host, loc); rec.Code != http.StatusNotFound {
+		t.Fatalf("thank-you on another store: %d", rec.Code)
+	}
 }

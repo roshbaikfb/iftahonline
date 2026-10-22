@@ -13,20 +13,21 @@ import (
 // pageCtx is one page being rendered: the store, the shopper's language
 // and where the page lives.
 type pageCtx struct {
-	v       *storeView
-	store   string // the store's ID, for cache tags
-	l       Locale
-	base    string // scheme://host
-	path    string // without the language prefix, e.g. /p/shirt
-	jsURL   string
-	font    string // preload
-	title   string
-	desc    string
-	image   string // og:image
-	jsonLD  []byte // already JSON
-	tags    []string
-	eagerN  int  // images still to load eagerly
-	noindex bool // pages for one shopper (cart, thank-you)
+	v         *storeView
+	store     string // the store's ID, for cache tags
+	l         Locale
+	base      string // scheme://host
+	path      string // without the language prefix, e.g. /p/shirt
+	jsURL     string
+	font      string // preload
+	title     string
+	desc      string
+	image     string // og:image
+	jsonLD    []byte // already JSON
+	tags      []string
+	eagerN    int  // images still to load eagerly
+	noindex   bool // pages for one shopper (cart, thank-you)
+	challenge bool // the page shows a Turnstile challenge
 }
 
 // eagerImages is how many of a page's first images load eagerly, at high

@@ -105,6 +105,24 @@ func (c *fakeCatalog) ListProducts(_ context.Context, q catalog.StorefrontQuery)
 	return page, nil
 }
 
+// SellableVariants sells every available variant of the catalog's
+// products.
+func (c *fakeCatalog) SellableVariants(_ context.Context, ids []ulid.ID) ([]catalog.SellableVariant, error) {
+	c.count("SellableVariants")
+	var out []catalog.SellableVariant
+	for _, id := range ids {
+		for _, pr := range c.products {
+			for _, v := range pr.Variants {
+				if v.ID == id && v.Available {
+					out = append(out, catalog.SellableVariant{VariantID: v.ID, ProductID: pr.ID, ProductTitle: pr.Title,
+						ProductSlug: pr.Slug, OptionValues: v.OptionValues, Price: v.Price})
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 func (c *fakeCatalog) Categories(context.Context) ([]catalog.Category, error) {
 	c.count("categories")
 	return c.cats, nil
@@ -221,18 +239,55 @@ func (c *fakeCarts) Cart(_ context.Context, tok authtoken.Token) (app.CartView, 
 	return v, nil
 }
 
+func (c *fakeCarts) ClearCart(_ context.Context, tok authtoken.Token) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.carts, tok)
+	return nil
+}
+
 func (c *fakeCarts) CartUnits(ctx context.Context, tok authtoken.Token) (int, error) {
 	v, err := c.Cart(ctx, tok)
 	return v.Units, err
 }
 
-type fakeOrders struct{}
+// fakeOrders places every order as IFT-1001 unless told to fail, and
+// keeps what was asked (when log is set).
+type fakeOrders struct {
+	log *orderLog
+}
+
+type orderLog struct {
+	mu   sync.Mutex
+	reqs []web.OrderRequest
+	err  error // returned by the next PlaceOrder
+}
+
+func (f fakeOrders) PlaceOrder(_ context.Context, req web.OrderRequest) (string, error) {
+	if f.log == nil {
+		return "IFT-1001", nil
+	}
+	f.log.mu.Lock()
+	defer f.log.mu.Unlock()
+	f.log.reqs = append(f.log.reqs, req)
+	if err := f.log.err; err != nil {
+		f.log.err = nil
+		return "", err
+	}
+	return "IFT-1001", nil
+}
+
+func (f fakeOrders) placed() []web.OrderRequest {
+	f.log.mu.Lock()
+	defer f.log.mu.Unlock()
+	return append([]web.OrderRequest(nil), f.log.reqs...)
+}
 
 func (fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummary, error) {
 	if ref != "IFT-1001" {
 		return web.OrderSummary{}, web.ErrOrderNotFound
 	}
-	return web.OrderSummary{Ref: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}}, Total: egp(30000)}, nil
+	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}}, Total: egp(30000)}, nil
 }
 
 type fakeSigner struct{}
@@ -293,7 +348,7 @@ func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 		}
 	}
 	deps := web.Deps{
-		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar"}}, Content: content, Carts: carts,
+		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar", Currency: "EGP"}}, Content: content, Carts: carts,
 		Signer: fakeSigner{}, Assets: assets, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPS: true,
 		Now: func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
 	}
