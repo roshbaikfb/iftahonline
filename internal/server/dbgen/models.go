@@ -149,6 +149,20 @@ type Category struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type Customer struct {
+	ID          pgtype.UUID
+	StoreID     pgtype.UUID
+	Phone       string
+	Name        string
+	NameKey     string
+	OrdersCount int32
+	LastOrderAt pgtype.Timestamptz
+	BlockedAt   pgtype.Timestamptz
+	BlockReason string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type InventoryLevel struct {
 	VariantID pgtype.UUID
 	StoreID   pgtype.UUID

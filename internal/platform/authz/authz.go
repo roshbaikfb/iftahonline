@@ -62,6 +62,9 @@ const (
 	PermImportsManage   Permission = "imports.manage"
 
 	PermStorefrontManage Permission = "storefront.manage"
+
+	PermCustomersRead   Permission = "customers.read"
+	PermCustomersManage Permission = "customers.manage"
 )
 
 // Permissions lists every permission.
@@ -73,6 +76,7 @@ func Permissions() []Permission {
 		PermAuditRead,
 		PermCatalogRead, PermCatalogManage, PermInventoryManage, PermImportsManage,
 		PermStorefrontManage,
+		PermCustomersRead, PermCustomersManage,
 	}
 }
 

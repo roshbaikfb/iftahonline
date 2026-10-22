@@ -49,6 +49,13 @@ tags:
       Every save sends the `version` it read (0 to create) and fails with
       409 version_conflict if someone saved in between.
       Permission: storefront.manage for every operation.
+  - name: customers
+    description: |
+      A store's customers (ADR-0020): one per phone number, created by
+      their first order. Merchants look them up by phone or name and keep
+      a block list; a blocked phone cannot order (the shopper sees only a
+      generic refusal). Phones are E.164 (+201012345678); numbers typed
+      without a country code are read in the store's country.
 paths:
   /livez:
     get:
@@ -1456,6 +1463,120 @@ paths:
               schema: { $ref: "#/components/schemas/AdminAuditPage" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/customers:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [customers]
+      operationId: listCustomers
+      summary: List or look up customers
+      description: |
+        Permission: customers.read. Newest first; follow `next_cursor`.
+        `q` is a phone number in any common format (exact match) or the
+        start of a word of the name (at least 2 letters; Arabic letter
+        forms match, so "احمد" finds "أحمد").
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: blocked
+          in: query
+          description: Only blocked customers (the block list).
+          schema: { type: boolean, default: false }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/customers/blocks:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [customers]
+      operationId: blockPhone
+      summary: Block a phone number
+      description: |
+        Permission: customers.manage. Blocks the number whether or not it
+        ever ordered (a customer is created for it). Blocking again keeps
+        the first block time and replaces the reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlockPhoneInput" }
+      responses:
+        "200":
+          description: The blocked customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/customers/{customer_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/CustomerID"
+    get:
+      tags: [customers]
+      operationId: getCustomer
+      summary: Get a customer
+      description: "Permission: customers.read."
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/customers/{customer_id}/block:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/CustomerID"
+    post:
+      tags: [customers]
+      operationId: blockCustomer
+      summary: Block a customer
+      description: "Permission: customers.manage. Idempotent; the reason is replaced."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlockInput" }
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/customers/{customer_id}/unblock:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/CustomerID"
+    post:
+      tags: [customers]
+      operationId: unblockCustomer
+      summary: Lift a customer's block
+      description: "Permission: customers.manage. Idempotent."
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     adminSessionCookie:
@@ -1524,6 +1645,11 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     PageID:
       name: page_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    CustomerID:
+      name: customer_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -2161,6 +2287,38 @@ components:
         slug: { type: string, maxLength: 120, description: Derived from the name when empty. }
         parent_id: { $ref: "#/components/schemas/ULID" }
         position: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+    Customer:
+      type: object
+      required: [id, phone, name, orders_count, blocked, block_reason, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        phone: { type: string, example: "+201012345678" }
+        name: { type: string, description: The latest name given with an order. }
+        orders_count: { type: integer }
+        last_order_at: { type: string, format: date-time }
+        blocked: { type: boolean }
+        blocked_at: { type: string, format: date-time }
+        block_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CustomerPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Customer" }
+        next_cursor: { type: string }
+    BlockPhoneInput:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, minLength: 1, maxLength: 64, example: "010 1234 5678" }
+        reason: { type: string, maxLength: 300, default: "" }
+    BlockInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 300, default: "" }
     Category:
       type: object
       required: [id, slug, name, position, created_at, updated_at]
