@@ -1,6 +1,6 @@
 # ADR-0019: Carts, edge purges, and browser budgets for the storefront
 
-- Status: Accepted
+- Status: Accepted; §1 (carts in PostgreSQL) superseded by [ADR-0022](0022-redis-carts-one-step-orders-anti-fake.md)
 - Date: 2026-10-20
 
 ## Context
