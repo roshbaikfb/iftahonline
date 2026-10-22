@@ -37,15 +37,18 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -235,6 +238,24 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	})
 }
 
+func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
+	stores := ten.Service()
+	return customers.New(customers.Deps{
+		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids),
+		Region: func(ctx context.Context) (phone.Region, error) {
+			st, err := stores.GetStore(ctx)
+			if err != nil {
+				return "", err
+			}
+			country, ok := geo.CountryOf(st.Currency)
+			if !ok {
+				return "", fmt.Errorf("customers: no country for currency %q", st.Currency)
+			}
+			return phone.Region(country), nil
+		},
+	})
+}
+
 func newStorefront(c clients) (*storefront.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
@@ -264,6 +285,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	cust, err := newCustomers(c, ten)
+	if err != nil {
+		return nil, err
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -281,6 +306,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cat.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
 			if mountErr != nil {

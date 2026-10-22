@@ -450,6 +450,9 @@ type AssetID = ULID
 // CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CategoryID = ULID
 
+// CustomerID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type CustomerID = ULID
+
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 

@@ -10,7 +10,8 @@ import (
 //
 //   - owner: everything.
 //   - manager: runs the store day to day, but cannot change who has access.
-//   - support: answers customers; reads, does not configure.
+//   - support: answers customers; reads, does not configure, but keeps
+//     the block list (they are the ones who spot fake orders).
 //   - shipping: fulfils orders; sees the catalog and keeps stock counts
 //     right (they handle the goods), but does not edit products.
 func Matrix() map[authz.Role][]authz.Permission {
@@ -22,10 +23,12 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermMembersRead, authz.PermAuditRead,
 			authz.PermCatalogRead, authz.PermCatalogManage, authz.PermInventoryManage, authz.PermImportsManage,
 			authz.PermStorefrontManage,
+			authz.PermCustomersRead, authz.PermCustomersManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
 			authz.PermCatalogRead,
+			authz.PermCustomersRead, authz.PermCustomersManage,
 		},
 		authz.RoleShipping: {
 			authz.PermStoreRead, authz.PermCatalogRead, authz.PermInventoryManage,

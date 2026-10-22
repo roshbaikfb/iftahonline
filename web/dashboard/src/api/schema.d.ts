@@ -1301,6 +1301,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List or look up customers
+         * @description Permission: customers.read. Newest first; follow `next_cursor`.
+         *     `q` is a phone number in any common format (exact match) or the
+         *     start of a word of the name (at least 2 letters; Arabic letter
+         *     forms match, so "احمد" finds "أحمد").
+         */
+        get: operations["listCustomers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/customers/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Block a phone number
+         * @description Permission: customers.manage. Blocks the number whether or not it
+         *     ever ordered (a customer is created for it). Blocking again keeps
+         *     the first block time and replaces the reason.
+         */
+        post: operations["blockPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/customers/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a customer
+         * @description Permission: customers.read.
+         */
+        get: operations["getCustomer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/customers/{customer_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Block a customer
+         * @description Permission: customers.manage. Idempotent; the reason is replaced.
+         */
+        post: operations["blockCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/customers/{customer_id}/unblock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift a customer's block
+         * @description Permission: customers.manage. Idempotent.
+         */
+        post: operations["unblockCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1867,6 +1985,38 @@ export interface components {
             /** @default 0 */
             position: number;
         };
+        Customer: {
+            id: components["schemas"]["ULID"];
+            /** @example +201012345678 */
+            phone: string;
+            /** @description The latest name given with an order. */
+            name: string;
+            orders_count: number;
+            /** Format: date-time */
+            last_order_at?: string;
+            blocked: boolean;
+            /** Format: date-time */
+            blocked_at?: string;
+            block_reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CustomerPage: {
+            items: components["schemas"]["Customer"][];
+            next_cursor?: string;
+        };
+        BlockPhoneInput: {
+            /** @example 010 1234 5678 */
+            phone: string;
+            /** @default  */
+            reason: string;
+        };
+        BlockInput: {
+            /** @default  */
+            reason: string;
+        };
         Category: {
             id: components["schemas"]["ULID"];
             parent_id?: components["schemas"]["ULID"];
@@ -2059,6 +2209,7 @@ export interface components {
         ImportID: components["schemas"]["ULID"];
         AssetID: components["schemas"]["ULID"];
         PageID: components["schemas"]["ULID"];
+        CustomerID: components["schemas"]["ULID"];
         PolicySlug: "shipping" | "refund" | "privacy" | "terms";
     };
     requestBodies: never;
@@ -3953,6 +4104,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCustomers: {
+        parameters: {
+            query?: {
+                q?: string;
+                /** @description Only blocked customers (the block list). */
+                blocked?: boolean;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    blockPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockPhoneInput"];
+            };
+        };
+        responses: {
+            /** @description The blocked customer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The customer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    blockCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockInput"];
+            };
+        };
+        responses: {
+            /** @description The customer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    unblockCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                customer_id: components["parameters"]["CustomerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The customer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
                 };
             };
             default: components["responses"]["Problem"];
