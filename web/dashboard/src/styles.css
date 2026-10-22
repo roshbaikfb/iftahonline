@@ -1,13 +1,170 @@
 :root {
   font-family: system-ui, 'Segoe UI', Tahoma, sans-serif;
   color-scheme: light dark;
+  --line: color-mix(in srgb, currentColor 15%, transparent);
+  --accent: #0f766e;
 }
 body {
   margin: 0;
-  padding: 2rem;
+}
+[hidden] {
+  display: none !important;
 }
 dl {
   display: grid;
   grid-template-columns: max-content auto;
   gap: 0.25rem 1rem;
+}
+button,
+.button {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.link {
+  background: none;
+  border: 0;
+  color: inherit;
+  text-decoration: underline;
+}
+button.danger {
+  background: #b42318;
+  border-color: #b42318;
+}
+.button {
+  background: none;
+  color: var(--accent);
+}
+input,
+select {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+}
+
+.login {
+  max-inline-size: 24rem;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+.login form {
+  display: grid;
+  gap: 1rem;
+}
+.login label {
+  display: grid;
+  gap: 0.3rem;
+}
+.build {
+  margin-block-start: 3rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.shell main {
+  padding: 1rem;
+  max-inline-size: 80rem;
+  margin-inline: auto;
+}
+.bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-block-end: 1px solid var(--line);
+}
+.bar .brand {
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+.bar nav {
+  flex: 1;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-block-end: 1rem;
+}
+.filters label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+.actions {
+  margin-block: 0.5rem;
+}
+table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 0.5rem;
+  border-block-end: 1px solid var(--line);
+  text-align: start;
+  white-space: nowrap;
+}
+.orders {
+  display: block;
+  overflow-x: auto;
+}
+.status {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--line);
+}
+.s-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+.s-confirmed,
+.s-ready_to_ship {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.s-shipped,
+.s-delivered {
+  background: #dcfce7;
+  color: #166534;
+}
+.s-cancelled,
+.s-failed_delivery,
+.s-returned {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.empty {
+  text-align: center;
+  opacity: 0.7;
+  padding: 2rem;
+}
+.order .moves {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-block: 1rem;
+}
+.timeline {
+  padding-inline-start: 1.2rem;
+}
+.timeline q {
+  margin-inline-start: 0.5rem;
+  opacity: 0.8;
 }
