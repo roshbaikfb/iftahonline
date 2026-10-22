@@ -1,21 +1,15 @@
 package app_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"sync"
 	"testing"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
-	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -289,21 +283,6 @@ func TestFit(t *testing.T) {
 	}
 }
 
-// sqlCapture is a pgx tracer that keeps every query's SQL and arguments.
-type sqlCapture struct {
-	mu      sync.Mutex
-	queries []pgx.TraceQueryStartData
-}
-
-func (c *sqlCapture) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.TraceQueryStartData) context.Context {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.queries = append(c.queries, d)
-	return ctx
-}
-
-func (*sqlCapture) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
-
 // TestSlugLookupUsesIndexUnderRLS: under RLS, PostgreSQL only puts
 // LEAKPROOF operators into an index condition. citext's = is not
 // leakproof, so a citext slug was filtered row by row across the whole
@@ -314,63 +293,12 @@ func TestSlugLookupUsesIndexUnderRLS(t *testing.T) {
 	f := newFixture(t)
 	p := mustCreate(f.ctxA, t, f, tee("Indexed", 1))
 
-	cfg, err := pgxpool.ParseConfig(infra.AppURL)
-	if err != nil {
+	pool, capture := testkit.CapturingPool(t, infra.AppURL)
+	if _, err := app.NewStorefront(pool, fakeSigner{}).ProductBySlug(f.ctxA, p.Slug); err != nil {
 		t.Fatal(err)
 	}
-	capture := &sqlCapture{}
-	cfg.ConnConfig.Tracer = capture
-	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	if _, err = app.NewStorefront(pool, fakeSigner{}).ProductBySlug(f.ctxA, p.Slug); err != nil {
-		t.Fatal(err)
-	}
-	var lookup *pgx.TraceQueryStartData
-	for i, q := range capture.queries {
-		if strings.Contains(q.SQL, "p.slug = $") {
-			lookup = &capture.queries[i]
-		}
-	}
-	if lookup == nil {
-		t.Fatal("slug lookup query not seen")
-	}
-
-	var plan strings.Builder
-	err = postgres.InTenantTx(f.ctxA, f.pool, func(tx pgx.Tx) error {
-		for _, set := range []string{"SET LOCAL plan_cache_mode = force_generic_plan", "SET LOCAL enable_seqscan = off"} {
-			if _, setErr := tx.Exec(f.ctxA, set); setErr != nil {
-				return setErr
-			}
-		}
-		rows, qErr := tx.Query(f.ctxA, "EXPLAIN (COSTS OFF) "+lookup.SQL, lookup.Args...)
-		if qErr != nil {
-			return qErr
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var line string
-			if scanErr := rows.Scan(&line); scanErr != nil {
-				return scanErr
-			}
-			plan.WriteString(line + "\n")
-		}
-		return rows.Err()
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	indexed := false
-	for _, line := range strings.Split(plan.String(), "\n") {
-		if strings.Contains(line, "Index Cond:") && strings.Contains(line, "slug") {
-			indexed = true
-		}
-	}
-	if !indexed {
-		t.Fatalf("slug is not an index condition under RLS:\n%s", plan.String())
-	}
+	plan := testkit.GenericPlan(f.ctxA, t, f.pool, capture.Last(t, "p.slug = $"))
+	testkit.AssertIndexCond(t, plan, "slug")
 }
 
 func TestSellableVariants(t *testing.T) {
