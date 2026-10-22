@@ -1,54 +1,48 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
-import { api, type components } from './api/client';
+import { Login } from './pages/Login';
+import { OrderDetail } from './pages/OrderDetail';
+import { Orders } from './pages/Orders';
+import { useSession } from './session';
+import { SessionProvider } from './SessionProvider';
 
-type VersionInfo = components['schemas']['VersionInfo'];
+function Home() {
+  const { state } = useSession();
+  if (state.kind !== 'signed-in') return null;
+  const first = state.me.memberships[0];
+  if (!first) return <p className="empty">لست عضوًا في أي متجر بعد.</p>;
+  return <Navigate to={`/stores/${first.store_id}/orders`} replace />;
+}
 
-type State =
-  | { kind: 'loading' }
-  | { kind: 'ready'; info: VersionInfo }
-  | { kind: 'error'; message: string };
+// Routes is the dashboard once the session is known: the login page for
+// visitors, the store's pages for members.
+function Gate() {
+  const { state } = useSession();
+  switch (state.kind) {
+    case 'loading':
+      return <p role="status">جارٍ التحميل…</p>;
+    case 'error':
+      return <p role="alert">{state.message}</p>;
+    case 'signed-out':
+      return <Login />;
+    case 'signed-in':
+      return (
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/stores/:storeId/orders" element={<Orders />} />
+          <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      );
+  }
+}
 
 export function App() {
-  const [state, setState] = useState<State>({ kind: 'loading' });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .GET('/v1/meta/version', { signal: controller.signal })
-      .then(({ data, error }) => {
-        if (data) {
-          setState({ kind: 'ready', info: data });
-        } else {
-          setState({ kind: 'error', message: error.detail ?? error.title });
-        }
-      })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) {
-          setState({ kind: 'error', message: err instanceof Error ? err.message : 'request failed' });
-        }
-      });
-    return () => {
-      controller.abort();
-    };
-  }, []);
-
   return (
-    <main>
-      <h1>لوحة تحكم التاجر</h1>
-      <p lang="en" dir="ltr">
-        iftahonline merchant dashboard
-      </p>
-      {state.kind === 'loading' && <p role="status">جارٍ التحميل…</p>}
-      {state.kind === 'error' && <p role="alert">{state.message}</p>}
-      {state.kind === 'ready' && (
-        <dl data-testid="build-info" lang="en" dir="ltr">
-          <dt>API version</dt>
-          <dd>{state.info.version}</dd>
-          <dt>Go</dt>
-          <dd>{state.info.go_version}</dd>
-        </dl>
-      )}
-    </main>
+    <SessionProvider>
+      <BrowserRouter>
+        <Gate />
+      </BrowserRouter>
+    </SessionProvider>
   );
 }
