@@ -5,8 +5,11 @@
 package orders
 
 import (
+	"context"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // DTOs.
@@ -24,10 +27,27 @@ type (
 	// OrderStatusChanged is the orders.order.status_changed event.
 	OrderStatusChanged = domain.OrderStatusChanged
 
+	// NewOrder is an order as a shopper or staff member submits it.
+	NewOrder = domain.NewOrder
+	// LineInput is one variant and quantity of a NewOrder.
+	LineInput = domain.LineInput
+	// Source is where an order was placed.
+	Source = domain.Source
+	// Placement is PlaceOrder's outcome: the order, and whether it was a
+	// replay (same Idempotency-Key) or a duplicate (same phone and lines
+	// within the window).
+	Placement = app.Placement
+
 	// StoreInfo is what orders need about the store in ctx.
 	StoreInfo = app.StoreInfo
 	// StoreSource provides it; cmd/platform adapts tenancy.
 	StoreSource = app.StoreSource
+)
+
+// Sources.
+const (
+	SourceStorefront = domain.SourceStorefront
+	SourceMerchant   = domain.SourceMerchant
 )
 
 // Event types.
@@ -47,6 +67,20 @@ const (
 	StatusFailedDelivery = domain.StatusFailedDelivery
 	StatusReturned       = domain.StatusReturned
 )
+
+// Shop is what the storefront uses: shoppers place orders and see the
+// thank-you page. Every method acts on the store in ctx.
+type Shop interface {
+	// PlaceOrder places an order (ADR-0021). Errors to expect: a
+	// validation error (errs.KindValidation, with fields),
+	// customers.ErrCustomerBlocked, catalog.ErrInsufficientStock and
+	// ErrIdempotencyKeyReused.
+	PlaceOrder(ctx context.Context, in NewOrder) (Placement, error)
+	// Get returns an order with its lines, or ErrOrderNotFound.
+	Get(ctx context.Context, id ulid.ID) (Order, error)
+}
+
+var _ Shop = (*app.Service)(nil)
 
 // Errors. Match with errors.Is.
 var (
