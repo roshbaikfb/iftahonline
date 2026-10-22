@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -15,8 +16,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
-	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
-	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -134,9 +133,9 @@ func TestExport(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f.audit.take()
+	f.audit.Take()
 	var buf bytes.Buffer
-	n, err := f.svc.Export(f.ctxA, domain.Query{}, &buf)
+	n, err := export(f.ctxA, f.svc, domain.Query{}, &buf)
 	if err != nil || n != 4 {
 		t.Fatalf("export: %d rows, %v", n, err)
 	}
@@ -164,17 +163,25 @@ func TestExport(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, col[k], w)
 		}
 	}
-	if got := f.audit.take(); len(got) != 1 || !strings.HasPrefix(got[0], "order.exported") {
+	if got := f.audit.Take(); len(got) != 1 || !strings.HasPrefix(got[0], "order.exported") {
 		t.Fatalf("audit %v", got)
 	}
 	// Store B's export is empty (header only).
 	buf.Reset()
-	if n, err = f.svc.Export(f.ctxB, domain.Query{}, &buf); err != nil || n != 0 {
+	if n, err = export(f.ctxB, f.svc, domain.Query{}, &buf); err != nil || n != 0 {
 		t.Fatalf("store B export: %d %v", n, err)
 	}
-	if _, err = f.svc.Export(f.ctxA, domain.Query{Limit: -1}, &buf); !errs.Is(err, errs.KindValidation) {
+	if _, err = f.svc.Export(f.ctxA, domain.Query{Limit: -1}); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("bad query: %v", err)
 	}
+}
+
+func export(ctx context.Context, svc *app.Service, q domain.Query, w io.Writer) (int64, error) {
+	ex, err := svc.Export(ctx, q)
+	if err != nil {
+		return 0, err
+	}
+	return ex.WriteTo(w)
 }
 
 // TestOrderQueriesUseIndexesUnderRLS seeds one large store across two
@@ -214,11 +221,7 @@ FROM generate_series(1, 40000) AS n`, store.ID)
 	}
 
 	pool, capture := testkit.CapturingPool(t, infra.AppURL)
-	cairo, _ := time.LoadLocation("Africa/Cairo")
-	svc := app.NewService(app.Deps{DB: pool, IDs: ulid.NewGenerator(), Catalog: f.catalog, Customers: f.cust, Auth: policy(t),
-		Stores: func(context.Context) (app.StoreInfo, error) {
-			return app.StoreInfo{Currency: money.EGP, Country: geo.EG, Location: cairo}, nil
-		}})
+	svc := f.env.Service(pool)
 	pending := domain.StatusPending
 	cust := placed.Order.CustomerID
 	for _, tt := range []struct {
@@ -230,9 +233,9 @@ FROM generate_series(1, 40000) AS n`, store.ID)
 		{"phone", "phone = $2", "phone", domain.Query{Phone: "01000000007"}},
 		{"customer", "customer_id = $2", "customer_id", domain.Query{CustomerID: &cust}},
 	} {
-		page, err := svc.List(f.ctxA, tt.q)
-		if err != nil {
-			t.Fatal(err)
+		page, listErr := svc.List(f.ctxA, tt.q)
+		if listErr != nil {
+			t.Fatal(listErr)
 		}
 		if page.Next != nil { // the second page: the keyset bound in use
 			q := tt.q

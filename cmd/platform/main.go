@@ -30,6 +30,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -39,8 +40,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
@@ -256,6 +259,29 @@ func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 	})
 }
 
+func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, auth authz.Authorizer) (*orders.Module, error) {
+	stores := ten.Service()
+	return orders.New(orders.Deps{
+		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
+		Catalog: cat.Catalog(), Customers: cust.Customers(), Auth: auth,
+		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
+			st, err := stores.GetStore(ctx)
+			if err != nil {
+				return orders.StoreInfo{}, err
+			}
+			country, ok := geo.CountryOf(st.Currency)
+			if !ok {
+				return orders.StoreInfo{}, fmt.Errorf("orders: no country for currency %q", st.Currency)
+			}
+			loc, err := time.LoadLocation(st.Timezone)
+			if err != nil {
+				loc = time.UTC
+			}
+			return orders.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
+		},
+	})
+}
+
 func newStorefront(c clients) (*storefront.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
@@ -289,6 +315,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	ord, err := newOrders(c, ten, cat, cust, id.Authorizer())
+	if err != nil {
+		return nil, err
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -307,6 +337,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		cat.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
 			if mountErr != nil {

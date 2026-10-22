@@ -33,60 +33,74 @@ func exportHeader() []string {
 		"items", "item_count", "subtotal", "shipping", "total", "currency"}
 }
 
-// Export writes the orders matching q (newest first, at most
-// MaxExportRows) to w as CSV, page by page, each page in one tenant
-// transaction with its lines in one query. Times are in the store's
-// zone; amounts are plain decimals. A UTF-8 BOM leads so spreadsheet
-// apps read the Arabic text. The export itself is audited (it carries
-// customers' phones and addresses).
-func (s *Service) Export(ctx context.Context, q domain.Query, w io.Writer) (rows int, err error) {
+// Exporter writes one export. Export prepares it, so that a bad query
+// or a refused permission is reported before any of the file is sent.
+type Exporter struct {
+	svc  *Service
+	ctx  context.Context
+	f    domain.Filter
+	info StoreInfo
+}
+
+// Export validates q and audits the export (it carries customers' phones
+// and addresses); WriteTo then writes the file.
+func (s *Service) Export(ctx context.Context, q domain.Query) (*Exporter, error) {
 	info, err := s.stores(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	f, err := domain.ResolveQuery(q, info.Country)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	loc := info.Location
-	if loc == nil {
-		loc = time.UTC
+	if info.Location == nil {
+		info.Location = time.UTC
 	}
 	if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "order.exported", TargetType: "order",
 			Metadata: map[string]any{"status": statusOf(f), "from": f.From, "to": f.To}})
 	}); err != nil {
-		return 0, err
+		return nil, err
 	}
-	if _, err = io.WriteString(w, "\ufeff"); err != nil {
+	return &Exporter{svc: s, ctx: ctx, f: f, info: info}, nil
+}
+
+// WriteTo writes the orders (newest first, at most MaxExportRows) to w as
+// CSV, page by page, each page in one tenant transaction with its lines
+// in one query. Times are in the store's zone; amounts are plain
+// decimals. A UTF-8 BOM leads so spreadsheet apps read the Arabic text.
+// It returns the number of orders written.
+func (e *Exporter) WriteTo(w io.Writer) (int64, error) {
+	if _, err := io.WriteString(w, "\ufeff"); err != nil {
 		return 0, err
 	}
 	cw := csv.NewWriter(w)
-	if err = cw.Write(exportHeader()); err != nil {
+	if err := cw.Write(exportHeader()); err != nil {
 		return 0, err
 	}
-	f.Limit = exportPageSize
+	f := e.f
+	rows := 0
 	for rows < MaxExportRows {
 		f.Limit = min(exportPageSize, MaxExportRows-rows)
 		var page []domain.Order
-		if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		if err := postgres.InTenantTx(e.ctx, e.svc.db, func(tx pgx.Tx) error {
 			var txErr error
-			if page, txErr = store.List(ctx, tx, f); txErr != nil {
+			if page, txErr = store.List(e.ctx, tx, f); txErr != nil {
 				return txErr
 			}
-			return store.LinesOf(ctx, tx, page)
+			return store.LinesOf(e.ctx, tx, page)
 		}); err != nil {
-			return rows, err
+			return int64(rows), err
 		}
 		for _, o := range page {
-			if err = cw.Write(exportRow(o, info.Country, loc)); err != nil {
-				return rows, err
+			if err := cw.Write(exportRow(o, e.info.Country, e.info.Location)); err != nil {
+				return int64(rows), err
 			}
 		}
 		rows += len(page)
 		cw.Flush()
-		if err = cw.Error(); err != nil {
-			return rows, err
+		if err := cw.Error(); err != nil {
+			return int64(rows), err
 		}
 		if len(page) < f.Limit {
 			break
@@ -96,7 +110,7 @@ func (s *Service) Export(ctx context.Context, q domain.Query, w io.Writer) (rows
 			f.To = t
 		}
 	}
-	return rows, nil
+	return int64(rows), nil
 }
 
 func statusOf(f domain.Filter) string {

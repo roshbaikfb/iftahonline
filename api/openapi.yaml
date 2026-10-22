@@ -56,6 +56,17 @@ tags:
       a block list; a blocked phone cannot order (the shopper sees only a
       generic refusal). Phones are E.164 (+201012345678); numbers typed
       without a country code are read in the store's country.
+  - name: orders
+    description: |
+      Orders (ADR-0021). An order moves through an explicit state
+      machine: pending → confirmed → ready_to_ship → shipped →
+      delivered, plus cancelled (before shipping), failed_delivery
+      (retried or returned) and returned. Forbidden moves are 409
+      invalid_transition. Confirming and cancelling need orders.manage;
+      packing, shipping, deliveries and returns need orders.fulfil.
+      Stock is held when an order is placed, leaves on_hand when it
+      ships, and comes back when it is cancelled or returned. Amounts
+      are integer minor units in the store's currency; times are UTC.
 paths:
   /livez:
     get:
@@ -1577,6 +1588,191 @@ paths:
               schema: { $ref: "#/components/schemas/Customer" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [orders]
+      operationId: listOrders
+      summary: List orders
+      description: |
+        Permission: orders.read. Newest first, without lines; follow
+        `next_cursor`. Filters combine; `customer_id` is a customer's
+        order history.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OrderStatus" }
+        - name: from
+          in: query
+          description: Created at or after (inclusive).
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Created before (exclusive).
+          schema: { type: string, format: date-time }
+        - name: governorate
+          in: query
+          description: ISO 3166-2 code, e.g. EG-C.
+          schema: { type: string, maxLength: 8 }
+        - name: phone
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: customer_id
+          in: query
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [orders]
+      operationId: createOrder
+      summary: Enter an order (a phone order)
+      description: |
+        Permission: orders.manage. Prices come from the catalog; the stock
+        is held and the customer recorded. Send an `Idempotency-Key` to
+        make retries safe: the same key with the same request returns the
+        first order (200, `Idempotent-Replayed: true`); with another
+        request it is 409 idempotency_key_reused. A blocked customer is
+        409 customer_blocked; short stock is 409 insufficient_stock.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: The new order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDetail" }
+        "200":
+          description: The order a previous request with this key created.
+          headers:
+            Idempotent-Replayed:
+              schema: { type: string, enum: ["true"] }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/transitions:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [orders]
+      operationId: bulkTransitionOrders
+      summary: Move many orders (bulk confirm)
+      description: |
+        Each order moves in its own transaction, so one that cannot move
+        does not hold back the others; `results` follow `order_ids`. The
+        permission is checked per order, as for one transition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkTransitionInput" }
+      responses:
+        "200":
+          description: One result per order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkTransitionResult" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/export:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [orders]
+      operationId: exportOrders
+      summary: Export orders as CSV
+      description: |
+        Permission: orders.export. The list's filters; newest first, at
+        most 100,000 rows (narrow the dates for more). UTF-8 with a BOM,
+        times in the store's zone, plain decimal amounts; text that a
+        spreadsheet would run as a formula starts with an apostrophe.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OrderStatus" }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: governorate
+          in: query
+          schema: { type: string, maxLength: 8 }
+      responses:
+        "200":
+          description: The CSV file.
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: 'attachment; filename="orders-2026-10-22.csv"' }
+          content:
+            text/csv:
+              schema: { type: string }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/{order_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/OrderID"
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: Get an order with its lines and timeline
+      description: "Permission: orders.read."
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/{order_id}/transitions:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/OrderID"
+    post:
+      tags: [orders]
+      operationId: transitionOrder
+      summary: Move an order to another status
+      description: |
+        The permission depends on the move (see the tag). Send the
+        `version` you read to refuse a move if the order changed since
+        (409 version_conflict).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransitionInput" }
+      responses:
+        "200":
+          description: The order after the move.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     adminSessionCookie:
@@ -1645,6 +1841,11 @@ components:
       schema: { $ref: "#/components/schemas/ULID" }
     PageID:
       name: page_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    OrderID:
+      name: order_id
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
@@ -2287,6 +2488,135 @@ components:
         slug: { type: string, maxLength: 120, description: Derived from the name when empty. }
         parent_id: { $ref: "#/components/schemas/ULID" }
         position: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+    OrderStatus:
+      type: string
+      enum: [pending, confirmed, ready_to_ship, shipped, delivered, cancelled, failed_delivery, returned]
+    Order:
+      type: object
+      required: [id, code, status, version, source, customer_id, name, phone, governorate, city, address, notes,
+                 currency, subtotal_minor, shipping_minor, total_minor, item_count, created_at, updated_at, status_changed_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        code: { type: string, description: Short reference for people (the ID's last 8 characters)., example: 7P0R1S2T }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        version: { type: integer }
+        source: { type: string, enum: [storefront, merchant] }
+        customer_id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        phone: { type: string, example: "+201012345678" }
+        governorate: { type: string, example: EG-C }
+        city: { type: string }
+        address: { type: string }
+        notes: { type: string }
+        currency: { type: string, example: EGP }
+        subtotal_minor: { type: integer, format: int64 }
+        shipping_minor: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64 }
+        item_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        status_changed_at: { type: string, format: date-time }
+    OrderLine:
+      type: object
+      required: [variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor]
+      properties:
+        variant_id: { $ref: "#/components/schemas/ULID" }
+        product_id: { $ref: "#/components/schemas/ULID" }
+        title: { type: string }
+        variant_title: { type: string, example: M / أحمر }
+        sku: { type: string }
+        qty: { type: integer }
+        unit_price_minor: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64 }
+    OrderEvent:
+      type: object
+      required: [id, to, note, at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        from: { $ref: "#/components/schemas/OrderStatus" }
+        to: { $ref: "#/components/schemas/OrderStatus" }
+        actor_user_id: { $ref: "#/components/schemas/ULID" }
+        note: { type: string }
+        at: { type: string, format: date-time }
+    OrderDetail:
+      type: object
+      required: [order, lines, events]
+      properties:
+        order: { $ref: "#/components/schemas/Order" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLine" }
+        events:
+          type: array
+          description: The timeline, oldest first.
+          items: { $ref: "#/components/schemas/OrderEvent" }
+    OrderPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Order" }
+        next_cursor: { type: string }
+    OrderInput:
+      type: object
+      required: [name, phone, governorate, city, address, lines]
+      properties:
+        name: { type: string, maxLength: 120, example: منى أحمد }
+        phone: { type: string, maxLength: 64, example: "010 1234 5678" }
+        governorate: { type: string, maxLength: 8, example: EG-ALX }
+        city: { type: string, maxLength: 80, example: سموحة }
+        address: { type: string, maxLength: 300 }
+        notes: { type: string, maxLength: 500, default: "" }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [variant_id, qty]
+            properties:
+              variant_id: { $ref: "#/components/schemas/ULID" }
+              qty: { type: integer, minimum: 1, maximum: 100 }
+    TransitionInput:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        note: { type: string, maxLength: 500, default: "" }
+        version: { type: integer, minimum: 1, description: The version you read; omit to move whatever the version. }
+    BulkTransitionInput:
+      type: object
+      required: [order_ids, status]
+      properties:
+        order_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ULID" }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        note: { type: string, maxLength: 500, default: "" }
+    BulkTransitionResult:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/BulkResult" }
+    BulkResult:
+      type: object
+      required: [order_id, ok]
+      properties:
+        order_id: { $ref: "#/components/schemas/ULID" }
+        ok: { type: boolean }
+        order: { $ref: "#/components/schemas/Order" }
+        error: { $ref: "#/components/schemas/BulkError" }
+    BulkError:
+      type: object
+      required: [code, detail]
+      properties:
+        code: { type: string, example: invalid_transition }
+        detail: { type: string }
     Customer:
       type: object
       required: [id, phone, name, orders_count, blocked, block_reason, created_at, updated_at]

@@ -27,7 +27,7 @@ func TestPlaceOrder(t *testing.T) {
 	f := newFixture(t)
 	tee := f.product(t, f.storeA, "تيشيرت قطن", 15000, 10)
 	mug := f.product(t, f.storeA, "مج سيراميك", 4950, 3)
-	f.audit.take()
+	f.audit.Take()
 
 	p, err := f.svc.PlaceOrder(f.shopperA, newOrder("k-1", domain.LineInput{VariantID: tee, Qty: 2}, domain.LineInput{VariantID: mug, Qty: 1}))
 	if err != nil {
@@ -64,10 +64,10 @@ func TestPlaceOrder(t *testing.T) {
 	if d.Order.CustomerID != o.CustomerID || o.CustomerID.IsZero() {
 		t.Fatalf("customer %s vs %s", d.Order.CustomerID, o.CustomerID)
 	}
-	if got := f.audit.take(); !slices.Equal(got, []string{"order.placed " + o.ID.String()}) {
+	if got := f.audit.Take(); !slices.Equal(got, []string{"order.placed " + o.ID.String()}) {
 		t.Fatalf("audit %v", got)
 	}
-	if got := f.events.take(); !slices.Equal(got, []string{"orders.order.placed " + o.ID.String()}) {
+	if got := f.events.Take(); !slices.Equal(got, []string{"orders.order.placed " + o.ID.String()}) {
 		t.Fatalf("events %v", got)
 	}
 
