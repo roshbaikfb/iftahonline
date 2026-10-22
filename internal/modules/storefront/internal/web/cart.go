@@ -329,13 +329,11 @@ func (s *Shop) writePrivate(w http.ResponseWriter, r *http.Request, p *pageCtx, 
 		return
 	}
 	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l, challenge: p.challenge}
+	if acceptsGzip(r) {
+		c.gz = compress(c.body)
+	}
 	s.writeHeaders(w, c)
 	w.Header().Set("Cache-Control", noStore)
 	w.Header().Del("Cache-Tag")
-	w.WriteHeader(status)
-	if r.Method != http.MethodHead {
-		if _, err := w.Write(c.body); err != nil {
-			s.log.DebugContext(r.Context(), "storefront: client went away", "err", err)
-		}
-	}
+	s.writeBody(w, r, c)
 }

@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -705,5 +707,46 @@ func TestEdgeTTLAndTags(t *testing.T) {
 	}
 	if tags := f.get(t, "/c/tshirts").Header().Get("Cache-Tag"); !strings.Contains(tags, "c-"+f.cat.ID.String()) || !strings.Contains(tags, "l-") {
 		t.Fatalf("category page tags %q", tags)
+	}
+}
+
+// TestCompression: pages go out gzipped to clients that accept it (the
+// same bytes once inflated), plain to the others, with Vary so caches
+// keep the two apart; private pages too.
+func TestCompression(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	get := func(path, enc string) *httptest.ResponseRecorder {
+		rq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
+		rq.Host = "mona.iftahonline.com"
+		if enc != "" {
+			rq.Header.Set("Accept-Encoding", enc)
+		}
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, rq)
+		return rec
+	}
+	for _, path := range []string{"/p/cotton-tee", "/cart"} {
+		plain := get(path, "")
+		zipped := get(path, "br, gzip;q=0.8")
+		if plain.Header().Get("Content-Encoding") != "" || zipped.Header().Get("Content-Encoding") != "gzip" ||
+			!strings.Contains(zipped.Header().Get("Vary"), "Accept-Encoding") || !strings.Contains(plain.Header().Get("Vary"), "Accept-Encoding") {
+			t.Fatalf("%s headers: plain %v, zipped %v", path, plain.Header(), zipped.Header())
+		}
+		size := zipped.Body.Len()
+		zr, err := gzip.NewReader(zipped.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inflated, err := io.ReadAll(zr)
+		if err != nil || string(inflated) != plain.Body.String() {
+			t.Fatalf("%s: inflated body differs (%v)", path, err)
+		}
+		if size >= plain.Body.Len()/2 || zipped.Header().Get("Content-Length") != strconv.Itoa(size) {
+			t.Fatalf("%s: %d bytes gzipped of %d", path, size, plain.Body.Len())
+		}
+	}
+	if rec := get("/p/cotton-tee", "gzip;q=0"); rec.Header().Get("Content-Encoding") != "" {
+		t.Fatal("gzip;q=0 refuses gzip")
 	}
 }
