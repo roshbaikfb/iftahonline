@@ -17,8 +17,8 @@ store's **block list**. Design:
 
 ## Events
 
-None yet. Order history is read from the orders module (filter by
-customer).
+None yet. A customer's order history is the orders module's
+`listOrders?customer_id=…` ([orders](orders.md)).
 
 ## Tables
 
