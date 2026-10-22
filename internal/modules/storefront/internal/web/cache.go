@@ -1,7 +1,12 @@
 package web
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,7 +38,8 @@ type cached struct {
 	styleHash string
 	tags      string // Cache-Tag header
 	language  Locale
-	challenge bool // the page shows a Turnstile challenge (CSP)
+	challenge bool   // the page shows a Turnstile challenge (CSP)
+	gz        []byte // body, gzip-compressed once when the page is cached
 }
 
 // caches hold rendered pages and store views. Entries are keyed by the
@@ -84,4 +90,44 @@ func (c *caches) putPage(prefix, key string, p cached) {
 	if len(p.body) <= c.cfg.MaxPageSize {
 		c.pages.Add(prefix+key, p)
 	}
+}
+
+// gzipWriters are reused: pages are compressed on every cache miss.
+var gzipWriters = sync.Pool{New: func() any { //nolint:gochecknoglobals // a pool of reusable writers, no state
+	w, err := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	if err != nil {
+		return nil // never: BestSpeed is a valid level; compress then sends the page plain
+	}
+	return w
+}}
+
+// compress gzips a page body. Pages are small (tens of KiB) and mostly
+// repeated markup, so BestSpeed already shrinks them severalfold.
+func compress(body []byte) []byte {
+	zw, ok := gzipWriters.Get().(*gzip.Writer)
+	if !ok {
+		return nil
+	}
+	defer gzipWriters.Put(zw)
+	var buf bytes.Buffer
+	buf.Grow(len(body) / 3)
+	zw.Reset(&buf)
+	if _, err := zw.Write(body); err != nil {
+		return nil
+	}
+	if err := zw.Close(); err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+// acceptsGzip reports whether the client takes a gzip body.
+func acceptsGzip(r *http.Request) bool {
+	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+		name, q, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if strings.EqualFold(strings.TrimSpace(name), "gzip") {
+			return strings.TrimSpace(q) != "q=0"
+		}
+	}
+	return false
 }

@@ -316,7 +316,8 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 	if err := layout(p, body).Render(context.Background(), &buf); err != nil {
 		return result{}, fmt.Errorf("web: render: %w", err)
 	}
-	return result{cached: cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l}}, nil
+	html := buf.Bytes()
+	return result{cached: cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l}}, nil
 }
 
 // write sends a rendered page. Pages are the same for every shopper, so
@@ -331,11 +332,26 @@ func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
 	} else {
 		h.Set("Cache-Control", "public, max-age=0, s-maxage=30")
 	}
+	s.writeBody(w, r, c)
+}
+
+// writeBody sends the page, gzipped when the client accepts it (the edge
+// usually does; the origin's own compression saves its egress and serves
+// clients that reach it directly). Vary keeps the two versions apart in
+// every cache.
+func (s *Shop) writeBody(w http.ResponseWriter, r *http.Request, c cached) {
+	body := c.body
+	w.Header().Add("Vary", "Accept-Encoding")
+	if c.gz != nil && acceptsGzip(r) {
+		w.Header().Set("Content-Encoding", "gzip")
+		body = c.gz
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(c.status)
 	if r.Method == http.MethodHead {
 		return
 	}
-	if _, err := w.Write(c.body); err != nil {
+	if _, err := w.Write(body); err != nil {
 		s.log.DebugContext(r.Context(), "storefront: client went away", "err", err)
 	}
 }
