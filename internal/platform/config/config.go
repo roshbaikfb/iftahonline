@@ -64,7 +64,19 @@ type Config struct {
 	Media   Media
 	Search  Search
 	Edge    Edge
+	Captcha Captcha
 }
+
+// Captcha configures Cloudflare Turnstile, which the storefront shows
+// only to risky order submissions (ADR-0022). Both keys empty disables
+// it: a submission that would need it is refused as "busy".
+type Captcha struct {
+	SiteKey   string
+	SecretKey string
+}
+
+// Enabled reports whether risky orders can be verified.
+func (c Captcha) Enabled() bool { return c.SiteKey != "" }
 
 // Edge configures the CDN in front of the storefront (ADR-0019). The
 // worker purges by tag when Cloudflare is configured; the storefront
@@ -304,6 +316,11 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		if c.Edge.CacheTTL > 24*time.Hour {
 			r.errorf("EDGE_CACHE_TTL: at most 24h")
 		}
+		c.Captcha.SiteKey = r.str("TURNSTILE_SITE_KEY", "")
+		c.Captcha.SecretKey = r.secretOptional("TURNSTILE_SECRET_KEY")
+		if (c.Captcha.SiteKey == "") != (c.Captcha.SecretKey == "") {
+			r.errorf("TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY go together")
+		}
 	}
 	if role == RoleWorker {
 		c.Edge.CloudflareZoneID = r.str("CLOUDFLARE_ZONE_ID", "")
@@ -352,6 +369,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("imgproxy", redactURL(c.Media.ImgproxyURL)),
 		slog.Duration("edge_cache_ttl", c.Edge.CacheTTL),
 		slog.Bool("edge_purge", c.Edge.Purges()),
+		slog.Bool("captcha", c.Captcha.Enabled()),
 		slog.String("meili", redactURL(c.Search.URL)),
 	)
 }

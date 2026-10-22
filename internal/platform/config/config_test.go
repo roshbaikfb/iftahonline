@@ -359,3 +359,21 @@ func TestEdge(t *testing.T) {
 		t.Fatalf("the api must not hold the purge token: %v", err)
 	}
 }
+
+func TestCaptcha(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleStorefront, env(base()))
+	if err != nil || c.Captcha.Enabled() {
+		t.Fatalf("default captcha: %v %+v", err, c.Captcha.Enabled())
+	}
+	c, err = config.Load(config.RoleStorefront, env(with("TURNSTILE_SITE_KEY", "site", "TURNSTILE_SECRET_KEY", "ts-secret")))
+	if err != nil || !c.Captcha.Enabled() || c.Captcha.SecretKey != "ts-secret" {
+		t.Fatalf("captcha: %v", err)
+	}
+	if _, err = config.Load(config.RoleStorefront, env(with("TURNSTILE_SITE_KEY", "site"))); err == nil {
+		t.Fatal("a site key without a secret accepted")
+	}
+	if c, err = config.Load(config.RoleAPI, env(with("TURNSTILE_SECRET_KEY", "ts-secret"))); err != nil || c.Captcha.SecretKey != "" {
+		t.Fatalf("only the storefront holds the secret: %v", err)
+	}
+}

@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -47,6 +49,38 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Stores: d.Stores, Auth: d.Auth})}, nil
+}
+
+// Shop is the API shoppers use (through the storefront).
+func (m *Module) Shop() Shop { return m.svc }
+
+// ShopDeps are what the storefront role needs to place orders: no
+// merchant permissions, since shoppers never move orders.
+type ShopDeps struct {
+	Pool      *pgxpool.Pool
+	IDs       *ulid.Generator
+	Audit     audit.Recorder
+	Events    eventbus.Publisher
+	Catalog   catalog.Catalog
+	Customers customers.Customers
+	Stores    StoreSource
+}
+
+// NewShop builds the shopper's side for the storefront role. Merchant
+// actions (transitions) are refused: it holds no authorizer.
+func NewShop(d ShopDeps) (Shop, error) {
+	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Stores == nil {
+		return nil, errors.New("orders: missing shop dependency")
+	}
+	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
+		Catalog: d.Catalog, Customers: d.Customers, Stores: d.Stores, Auth: denyAll{}}), nil
+}
+
+// denyAll refuses every permission.
+type denyAll struct{}
+
+func (denyAll) Authorize(context.Context, authz.Permission) error {
+	return errs.Forbidden("shoppers cannot do this")
 }
 
 // Mount registers the merchant API. scope is identity's membership
