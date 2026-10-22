@@ -9,7 +9,9 @@ schema per section type; merchants never supply HTML or scripts. Design:
 for shoppers, caching and freshness:
 [ADR-0018](../adr/0018-storefront-rendering-and-caching.md). Cart, edge
 purges and browser budgets:
-[ADR-0019](../adr/0019-cart-edge-purge-and-browser-budgets.md).
+[ADR-0019](../adr/0019-cart-edge-purge-and-browser-budgets.md). Carts in
+Redis, the one-step order form and anti-fake checks:
+[ADR-0022](../adr/0022-redis-carts-one-step-orders-anti-fake.md).
 
 ## Public API (`internal/modules/storefront/api.go`)
 
@@ -21,7 +23,7 @@ purges and browser budgets:
 | `NewShop(ShopDeps)`, `Shop.Pages`, `Shop.Assets`, `Shop.Listen` | The storefront role: pages (tenant from host resolution), static files, cache invalidations from Redis |
 | `InvalidatingEvents`, `InvalidateSubscriber`, `InvalidateHandler` | The event subscription every role makes, so the worker tells storefront instances which store changed |
 | `PurgeSubscriber`, `PurgeHandler`, `PurgeTags` | The edge purge on the same events (`platform/cdn`; Cloudflare when configured) |
-| `OrderSummaries`, `OrderSummary`, `OrderLine`, `ErrOrderNotFound` | The port the orders module (P4) implements for the thank-you page |
+| `ShopDeps.Orders` (`orders.Shop`), `ShopDeps.Captcha` | Shoppers' orders through the orders module (adapted inside the module: shoppers only ever read a generic refusal), and Turnstile for risky submissions |
 | `AssetsPrefix`, `CacheConfig`, `DefaultCacheConfig` | Shop wiring |
 
 ## Events
@@ -48,16 +50,31 @@ store's cached pages.
 | `/policies/{slug}` | A published policy |
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
-| `/thank-you/{ref}` | An order's summary (404 until the orders module exists) |
+| `/order` (POST) | A landing page's one-step order form |
+| `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart |
+| `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code) |
 
 The cart:
-- **Cookie and limits.** The cart is opened by the SHA-256 of a token in
-  the `__Host-cart` cookie and lives 30 days from its last change; 20 per
-  line, 50 lines.
+- **Redis and limits.** The cart is a Redis hash found by the SHA-256 of
+  a token in the `__Host-cart` cookie (`sf:cart:<store>:<hash>`). It lives
+  30 days from its last change; 20 per line, 50 lines.
 - **Write protection.** Writes are same-origin forms, rate-limited per IP
   and per store, capped at 4 KiB.
 - **The badge.** The `cart_n` cookie carries the unit count, so cached
   pages never vary by shopper.
+
+Orders (ADR-0022):
+- **The form.** It is the same for every shopper (landing pages stay
+  cached). The page script fills the idempotency key; a hidden `website`
+  field is the honeypot.
+- **Checks, in order.**
+  1. Same-origin and size.
+  2. The honeypot.
+  3. Limits per store, per IP and per phone (soft limits ask for a
+     challenge, hard limits refuse).
+  4. Turnstile when risky; that response's CSP alone allows Cloudflare.
+  5. The orders module (validation, duplicate window, blocked
+     customers, stock).
 
 Languages and responses:
 - The store's locale has no prefix; the other language is under `/en`
@@ -127,7 +144,7 @@ Both are tenant-owned with RLS (`db/migrations/00019_storefront.sql`).
 |---|---|
 | `store_themes` | One row per store (`store_id` PK); `settings` JSON; `version` |
 | `store_assets` | `kind` (logo); `pending` → `processing` → `ready` / `failed`; at most one `ready` per (store, kind) (partial unique index); `upload_key`, master `object_key`, size |
-| `carts`, `cart_items` | A cart per token hash (`expires_at`); lines name catalog variants by ID (1–20 each) |
+| `carts`, `cart_items` | No longer used (carts moved to Redis, ADR-0022); a contract migration drops them |
 | `store_pages` | `kind` home/landing/policy; `slug` (text, lower-case) unique per (store, kind); `sections` JSON; `body` (policies); `status`; `version` |
 
 ## HTTP API (tag `storefront`, permission `storefront.manage`)
@@ -171,9 +188,12 @@ How saves work:
 | `app` (real PostgreSQL) | Versions and conflicts for the theme, home and policies; landing CRUD, slug moves, slug taken, the 50-page limit per store; events and audit entries; isolation between stores; no tenant |
 | `app` logo | Upload, process, replace (old master deleted), rejection, abandon, expiry, delete; foreign keys refused; isolation between stores |
 | `web` (fakes) | Arabic and English pages, hreflang/canonical, prices, structured data, variant picker, pagination, landing sections (one `ProductsByIDs` call), ended countdowns, escaping of merchant text, the CSP hash of the inline style, the cache and `Invalidate`, HEAD/POST, failures, assets; `BenchmarkProductPage` (p95 warm and cold) |
-| `app` cart (real PostgreSQL, fake catalog) | Add (stock, availability, cap, 50 lines), update and remove, current prices in one catalog call, drop-outs, isolation between stores, forged tokens |
+| `app` cart (real Redis, fake catalog) | Add (stock, availability, cap, 50 lines), update and remove, current prices in one catalog call, drop-outs, isolation between stores, forged tokens |
 | `web` cart | Add, update and remove through forms, cookies (`__Host-`, HttpOnly, Secure, Lax), the units cookie, language-aware redirects, CSRF (Origin, Sec-Fetch-Site, Referer), rate limit, oversized forms, error messages, the thank-you page |
 | module purge | Event → tags for every invalidating event; failures retried, broken payloads cancelled |
-| `make storefront-e2e` | Playwright on a Pixel 7 (home → product → landing → cart, English mirror, no console errors) and Lighthouse budgets (LCP ≤ 1.5 s, CLS ≤ 0.1, JS ≤ 30 KiB) against `internal/tools/sfdemo` |
+| `web` checkout | The landing form (cacheable, governorates, honeypot, key), placing an order, field errors kept with the values, refusals, honeypot, cross-site posts, the adaptive challenge (soft, hard, limiter down, no keys, Cloudflare down), the phone key, checkout from the cart |
+| `storefront` (integration) | A landing order through the real orders, customers and catalog modules: thank-you, a repeated submit, held stock, a blocked phone, another store's host |
+| `make loadtest-orders` | k6: 50 orders/s for 60 s against `sfdemo -load` (p95 < 150 ms, no failures) |
+| `make storefront-e2e` | Playwright on a Pixel 7 (home → product → landing → one-step order; product → cart → checkout; English mirror; no console errors) and Lighthouse budgets (LCP ≤ 1.5 s, CLS ≤ 0.1, JS ≤ 30 KiB) against `internal/tools/sfdemo` |
 | module (real PostgreSQL + Redis) | `TestTwoStoresTwoHosts` (one process, two hosts, two themes, no cross-store leaks) and `TestPriceEditReachesStorefront` (edit → event → worker → Redis → fresh page, under 100 ms) |
 | `httpapi` | Happy path, validation, authorization (401/403) and cross-tenant cases for all 17 operations; `TestMain` fails if one has no cross-tenant test |
