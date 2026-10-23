@@ -222,6 +222,7 @@ type OrderEvent struct {
 	ToStatus       string
 	ActorUserID    *ulid.ID
 	Note           string
+	Actor          string
 }
 
 type OrderIdempotency struct {

@@ -7,6 +7,8 @@ package orders
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -90,6 +92,21 @@ type Shop interface {
 }
 
 var _ Shop = (*app.Service)(nil)
+
+// Fulfilment is what a courier integration uses (ADR-0027): read an order
+// to ship it, and move it as its parcel moves. Every method acts on the
+// store in ctx.
+type Fulfilment interface {
+	// Get returns an order with its lines, or ErrOrderNotFound.
+	Get(ctx context.Context, id ulid.ID) (Order, error)
+	// TransitionSystemTx moves an order in the caller's transaction on
+	// behalf of actor ("carrier:bosta"), without a person's permission.
+	// Moving to the current status is a no-op (moved false); a forbidden
+	// move is a *TransitionError.
+	TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to Status, actor, note string) (moved bool, err error)
+}
+
+var _ Fulfilment = (*app.Service)(nil)
 
 // Errors. Match with errors.Is.
 var (

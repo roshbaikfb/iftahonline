@@ -220,6 +220,7 @@ type OrderEvent struct {
 	ToStatus       string
 	ActorUserID    pgtype.UUID
 	Note           string
+	Actor          string
 }
 
 type OrderIdempotency struct {

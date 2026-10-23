@@ -2379,6 +2379,11 @@ export interface components {
             from?: components["schemas"]["OrderStatus"];
             to: components["schemas"]["OrderStatus"];
             actor_user_id?: components["schemas"]["ULID"];
+            /**
+             * @description The system that made the move, e.g. "carrier:bosta" (no user).
+             * @example carrier:bosta
+             */
+            actor?: string;
             note: string;
             /** Format: date-time */
             at: string;

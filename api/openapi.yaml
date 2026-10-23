@@ -2776,6 +2776,7 @@ components:
         from: { $ref: "#/components/schemas/OrderStatus" }
         to: { $ref: "#/components/schemas/OrderStatus" }
         actor_user_id: { $ref: "#/components/schemas/ULID" }
+        actor: { type: string, description: 'The system that made the move, e.g. "carrier:bosta" (no user).', example: "carrier:bosta" }
         note: { type: string }
         at: { type: string, format: date-time }
     OrderDetail:

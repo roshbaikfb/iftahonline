@@ -229,8 +229,8 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 }
 
 const insertOrderEvent = `-- name: InsertOrderEvent :exec
-INSERT INTO order_events (id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, note)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO order_events (id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, actor, note)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type InsertOrderEventParams struct {
@@ -242,6 +242,7 @@ type InsertOrderEventParams struct {
 	FromStatus     *string
 	ToStatus       string
 	ActorUserID    *ulid.ID
+	Actor          string
 	Note           string
 }
 
@@ -255,6 +256,7 @@ func (q *Queries) InsertOrderEvent(ctx context.Context, arg InsertOrderEventPara
 		arg.FromStatus,
 		arg.ToStatus,
 		arg.ActorUserID,
+		arg.Actor,
 		arg.Note,
 	)
 	return err
@@ -352,7 +354,7 @@ func (q *Queries) ListItemsOfOrders(ctx context.Context, arg ListItemsOfOrdersPa
 }
 
 const listOrderEvents = `-- name: ListOrderEvents :many
-SELECT id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, note FROM order_events
+SELECT id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, note, actor FROM order_events
 WHERE store_id = $1 AND order_created_at = $2 AND order_id = $3
 ORDER BY occurred_at, id
 `
@@ -382,6 +384,7 @@ func (q *Queries) ListOrderEvents(ctx context.Context, arg ListOrderEventsParams
 			&i.ToStatus,
 			&i.ActorUserID,
 			&i.Note,
+			&i.Actor,
 		); err != nil {
 			return nil, err
 		}
