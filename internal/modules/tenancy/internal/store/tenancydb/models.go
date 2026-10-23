@@ -225,6 +225,8 @@ type Order struct {
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
 	CodFeeMinor     int64
+	PaymentMethod   string
+	PaymentStatus   string
 }
 
 type OrderEvent struct {

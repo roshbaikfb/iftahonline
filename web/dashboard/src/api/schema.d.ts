@@ -2529,6 +2529,13 @@ export interface components {
              * @description The cash-on-delivery fee quoted when the order was placed.
              */
             cod_fee_minor: number;
+            /** @enum {string} */
+            payment_method: "cod" | "card";
+            /**
+             * @description COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
+             * @enum {string}
+             */
+            payment_status: "unpaid" | "awaiting" | "paid" | "partially_refunded" | "refunded";
             /**
              * Format: int64
              * @description subtotal + shipping + COD fee.

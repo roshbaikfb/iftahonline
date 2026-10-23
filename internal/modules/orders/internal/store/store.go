@@ -45,7 +45,7 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		ID: o.ID, StoreID: store, CreatedAt: o.CreatedAt, Source: string(o.Source), CustomerID: o.CustomerID,
 		Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City, Address: c.Address, Notes: c.Notes,
 		Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(), ShippingMinor: o.Shipping.Amount(),
-		CodFeeMinor: o.CODFee.Amount(), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
+		CodFeeMinor: o.CODFee.Amount(), PaymentMethod: string(o.PaymentMethod), PaymentStatus: string(o.PaymentStatus), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -318,6 +318,24 @@ func PurgeKeys(ctx context.Context, tx Tx, before time.Time) error {
 	return nil
 }
 
+// SetPaymentStatus records a card order's payment status; domain.ErrNotFound
+// when there is no such card order.
+func SetPaymentStatus(ctx context.Context, tx Tx, id ulid.ID, st domain.PaymentStatus) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := ordersdb.New(tx).SetPaymentStatus(ctx, ordersdb.SetPaymentStatusParams{StoreID: store, CreatedAt: domain.CreatedAtOf(id), ID: id,
+		PaymentStatus: string(st)})
+	if err != nil {
+		return fmt.Errorf("orders store: set payment status: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func toOrder(r ordersdb.Order) (domain.Order, error) {
 	cur := money.Currency(r.Currency)
 	sub, err := money.New(r.SubtotalMinor, cur)
@@ -344,6 +362,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 		ID: r.ID, Status: domain.Status(r.Status), Version: int(r.Version), Source: domain.Source(r.Source), CustomerID: r.CustomerID,
 		Contact:  domain.Contact{Name: r.Name, Phone: p, Governorate: r.Governorate, City: r.City, Address: r.Address, Notes: r.Notes},
 		Subtotal: sub, Shipping: ship, CODFee: cod, Total: total, ItemCount: int(r.ItemCount),
+		PaymentMethod: domain.PaymentMethod(r.PaymentMethod), PaymentStatus: domain.PaymentStatus(r.PaymentStatus),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 	}, nil
 }

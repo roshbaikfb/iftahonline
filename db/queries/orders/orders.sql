@@ -3,9 +3,11 @@
 
 -- name: InsertOrder :exec
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
-                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
+                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at,
+                    payment_method, payment_status)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
-        @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @total_minor, @item_count, @lines_hash, @created_at, @created_at);
+        @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @total_minor, @item_count, @lines_hash, @created_at, @created_at,
+        @payment_method, @payment_status);
 
 -- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,
@@ -86,3 +88,8 @@ WHERE d.store_id = @store_id AND d.key IN (
   SELECT k.key FROM order_idempotency k
   WHERE k.store_id = @store_id AND k.created_at < @before
   ORDER BY k.created_at LIMIT 20);
+
+-- name: SetPaymentStatus :execrows
+-- The gateway's word on a card order's money (ADR-0029).
+UPDATE orders SET payment_status = @payment_status, version = version + 1, updated_at = now()
+WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND payment_method = 'card';

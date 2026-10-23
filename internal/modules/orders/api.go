@@ -28,6 +28,12 @@ type (
 	OrderPlaced = domain.OrderPlaced
 	// OrderStatusChanged is the orders.order.status_changed event.
 	OrderStatusChanged = domain.OrderStatusChanged
+	// OrderPaymentChanged is the orders.order.payment_changed event.
+	OrderPaymentChanged = domain.OrderPaymentChanged
+	// PaymentMethod is how an order is paid; PaymentStatus where its
+	// money is.
+	PaymentMethod = domain.PaymentMethod
+	PaymentStatus = domain.PaymentStatus
 
 	// NewOrder is an order as a shopper or staff member submits it.
 	NewOrder = domain.NewOrder
@@ -59,8 +65,20 @@ const (
 
 // Event types.
 const (
-	EventOrderPlaced        = domain.EventOrderPlaced
-	EventOrderStatusChanged = domain.EventOrderStatusChanged
+	EventOrderPlaced         = domain.EventOrderPlaced
+	EventOrderStatusChanged  = domain.EventOrderStatusChanged
+	EventOrderPaymentChanged = domain.EventOrderPaymentChanged
+)
+
+// Payment methods and statuses.
+const (
+	PaymentCOD               = domain.PaymentCOD
+	PaymentCard              = domain.PaymentCard
+	PaymentUnpaid            = domain.PaymentUnpaid
+	PaymentAwaiting          = domain.PaymentAwaiting
+	PaymentPaid              = domain.PaymentPaid
+	PaymentPartiallyRefunded = domain.PaymentPartiallyRefunded
+	PaymentRefunded          = domain.PaymentRefunded
 )
 
 // Statuses.
@@ -107,6 +125,20 @@ type Fulfilment interface {
 }
 
 var _ Fulfilment = (*app.Service)(nil)
+
+// Payments is what a payment integration uses (ADR-0029): read an order,
+// record its payment status on the gateway's word, and move it
+// (confirm a paid order, cancel an unpaid one). Every method acts on the
+// store in ctx.
+type Payments interface {
+	Fulfilment
+	// SetPaymentStatusTx records a card order's payment status in the
+	// caller's transaction; setting the current status (or any status of
+	// a COD order) is a no-op.
+	SetPaymentStatusTx(ctx context.Context, tx pgx.Tx, id ulid.ID, st PaymentStatus, actor string) (changed bool, err error)
+}
+
+var _ Payments = (*app.Service)(nil)
 
 // Errors. Match with errors.Is.
 var (

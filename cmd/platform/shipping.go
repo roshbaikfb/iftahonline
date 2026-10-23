@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -40,9 +41,15 @@ func (a *shippingOrders) Order(ctx context.Context, id ulid.ID) (shipping.OrderI
 		items = append(items, t+" × "+strconv.Itoa(l.Qty))
 	}
 	c := o.Contact
+	cod := o.Total
+	if o.PaymentMethod == orders.PaymentCard { // paid online: the courier collects nothing
+		if cod, err = money.Zero(o.Total.Currency()); err != nil {
+			return shipping.OrderInfo{}, err
+		}
+	}
 	return shipping.OrderInfo{
 		ID: o.ID, Status: string(o.Status), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate,
-		City: c.City, Address: c.Address, Notes: c.Notes, COD: o.Total, Items: o.ItemCount,
+		City: c.City, Address: c.Address, Notes: c.Notes, COD: cod, Items: o.ItemCount,
 		Description: strings.Join(items, "، "),
 	}, nil
 }

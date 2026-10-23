@@ -9,8 +9,9 @@ import (
 // never the customer's contact details: subscribers read what they need
 // through the orders api.go.
 const (
-	EventOrderPlaced        = "orders.order.placed"
-	EventOrderStatusChanged = "orders.order.status_changed"
+	EventOrderPlaced         = "orders.order.placed"
+	EventOrderStatusChanged  = "orders.order.status_changed"
+	EventOrderPaymentChanged = "orders.order.payment_changed"
 )
 
 // OrderPlaced is published when an order is placed.
@@ -26,4 +27,13 @@ type OrderStatusChanged struct {
 	OrderID ulid.ID `json:"order_id"`
 	From    Status  `json:"from"`
 	To      Status  `json:"to"`
+}
+
+// OrderPaymentChanged is published when a card order's payment status
+// changes.
+type OrderPaymentChanged struct {
+	event.Meta
+	OrderID ulid.ID       `json:"order_id"`
+	From    PaymentStatus `json:"from"`
+	To      PaymentStatus `json:"to"`
 }

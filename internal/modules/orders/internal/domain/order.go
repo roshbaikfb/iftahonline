@@ -45,6 +45,37 @@ const (
 	SourceMerchant   Source = "merchant"   // entered by staff (a phone order)
 )
 
+// PaymentMethod is how the shopper pays (ADR-0029).
+type PaymentMethod string
+
+// Payment methods.
+const (
+	PaymentCOD  PaymentMethod = "cod"  // cash on delivery
+	PaymentCard PaymentMethod = "card" // online, on the gateway's hosted page
+)
+
+// PaymentStatus is where the order's money is.
+type PaymentStatus string
+
+// Payment statuses. A COD order is unpaid until delivered (the carrier
+// collects); a card order awaits the gateway until paid.
+const (
+	PaymentUnpaid            PaymentStatus = "unpaid"
+	PaymentAwaiting          PaymentStatus = "awaiting"
+	PaymentPaid              PaymentStatus = "paid"
+	PaymentPartiallyRefunded PaymentStatus = "partially_refunded"
+	PaymentRefunded          PaymentStatus = "refunded"
+)
+
+// Valid reports whether s is a payment status.
+func (s PaymentStatus) Valid() bool {
+	switch s {
+	case PaymentUnpaid, PaymentAwaiting, PaymentPaid, PaymentPartiallyRefunded, PaymentRefunded:
+		return true
+	}
+	return false
+}
+
 // Contact is who receives the order and where. The phone is in full: the
 // merchant calls it and the courier needs it; it is never logged.
 type Contact struct {
@@ -68,19 +99,23 @@ type NewOrder struct {
 	// instead of placing another. Optional.
 	IdempotencyKey string
 	Source         Source
-	Name           string
-	Phone          string // any accepted format; read in the store's country
-	Governorate    string
-	City           string
-	Address        string
-	Notes          string
-	Lines          []LineInput
+	// PaymentMethod is cod (the default) or card; card orders come from
+	// the storefront only.
+	PaymentMethod PaymentMethod
+	Name          string
+	Phone         string // any accepted format; read in the store's country
+	Governorate   string
+	City          string
+	Address       string
+	Notes         string
+	Lines         []LineInput
 }
 
 // Draft is a validated NewOrder.
 type Draft struct {
 	IdempotencyKey string
 	Source         Source
+	PaymentMethod  PaymentMethod
 	Contact        Contact
 	Lines          []LineInput // sorted by variant, no repeats
 	// Fingerprint identifies the request: the same key with another
@@ -100,9 +135,17 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 			fields = append(fields, e.Fields...)
 		}
 	}
-	d := Draft{Source: in.Source}
+	d := Draft{Source: in.Source, PaymentMethod: in.PaymentMethod}
 	if in.Source != SourceStorefront && in.Source != SourceMerchant {
 		fields = append(fields, errs.FieldError{Field: "source", Code: "invalid", Message: "unknown order source"})
+	}
+	switch {
+	case d.PaymentMethod == "":
+		d.PaymentMethod = PaymentCOD
+	case d.PaymentMethod == PaymentCard && in.Source == SourceMerchant:
+		fields = append(fields, errs.FieldError{Field: "payment_method", Code: "invalid", Message: "staff orders are cash on delivery"})
+	case d.PaymentMethod != PaymentCOD && d.PaymentMethod != PaymentCard:
+		fields = append(fields, errs.FieldError{Field: "payment_method", Code: "invalid", Message: "pay cash on delivery or by card"})
 	}
 	key, err := text.Clean(in.IdempotencyKey, "idempotency_key", 0, MaxKeyLen)
 	add(err)
@@ -166,15 +209,22 @@ func validateLines(in []LineInput) ([]LineInput, []errs.FieldError) {
 // QuoteInput asks what an order would cost before it is placed: the
 // storefront shows it while the shopper fills the form.
 type QuoteInput struct {
-	Governorate string
-	City        string // may be empty: then the zone's rate applies
-	Lines       []LineInput
+	Governorate   string
+	City          string // may be empty: then the zone's rate applies
+	Lines         []LineInput
+	PaymentMethod PaymentMethod // cod (default) or card: card pays no COD fee
 }
 
 // ValidateQuote cleans and checks in for a store in country.
 func ValidateQuote(in QuoteInput, country geo.Country) (QuoteInput, error) {
 	var fields []errs.FieldError
-	out := QuoteInput{}
+	out := QuoteInput{PaymentMethod: in.PaymentMethod}
+	if out.PaymentMethod == "" {
+		out.PaymentMethod = PaymentCOD
+	}
+	if out.PaymentMethod != PaymentCOD && out.PaymentMethod != PaymentCard {
+		fields = append(fields, errs.FieldError{Field: "payment_method", Code: "invalid", Message: "pay cash on delivery or by card"})
+	}
 	if a, ok := geo.Lookup(country, in.Governorate); ok {
 		out.Governorate = a.Code
 	} else {
@@ -220,6 +270,9 @@ func fingerprint(d Draft) [32]byte {
 		h.Write([]byte(s))
 	}
 	h.Write(d.LinesHash[:])
+	if d.PaymentMethod != PaymentCOD { // COD fingerprints stay as they were before payment methods
+		h.Write([]byte("payment:" + string(d.PaymentMethod)))
+	}
 	var out [32]byte
 	copy(out[:], h.Sum(nil))
 	return out
@@ -235,8 +288,10 @@ type Order struct {
 	Contact         Contact
 	Subtotal        money.Money
 	Shipping        money.Money // the delivery rate quoted when placed (ADR-0025)
-	CODFee          money.Money // the cash-on-delivery fee quoted when placed
+	CODFee          money.Money // the cash-on-delivery fee quoted when placed (0 for card orders)
 	Total           money.Money // Subtotal + Shipping + CODFee
+	PaymentMethod   PaymentMethod
+	PaymentStatus   PaymentStatus
 	ItemCount       int
 	Lines           []Line // empty in lists
 	CreatedAt       time.Time

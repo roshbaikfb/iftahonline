@@ -64,7 +64,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
 `
 
 type GetOrderParams struct {
@@ -99,12 +99,14 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
 		&i.CodFeeMinor,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
 	)
 	return i, err
 }
 
 const getOrderForUpdate = `-- name: GetOrderForUpdate :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
 `
 
 type GetOrderForUpdateParams struct {
@@ -141,6 +143,8 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
 		&i.CodFeeMinor,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
 	)
 	return i, err
 }
@@ -176,9 +180,11 @@ func (q *Queries) InsertIdempotencyKey(ctx context.Context, arg InsertIdempotenc
 const insertOrder = `-- name: InsertOrder :exec
 
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
-                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
+                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at,
+                    payment_method, payment_status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $3, $3)
+        $12, $13, $14, $15, $16, $17, $18, $3, $3,
+        $19, $20)
 `
 
 type InsertOrderParams struct {
@@ -200,6 +206,8 @@ type InsertOrderParams struct {
 	TotalMinor    int64
 	ItemCount     int32
 	LinesHash     []byte
+	PaymentMethod string
+	PaymentStatus string
 }
 
 // Every lookup of one order names its partition key: created_at is the
@@ -224,6 +232,8 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.TotalMinor,
 		arg.ItemCount,
 		arg.LinesHash,
+		arg.PaymentMethod,
+		arg.PaymentStatus,
 	)
 	return err
 }
@@ -475,7 +485,7 @@ const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders
 SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2
 WHERE store_id = $3 AND created_at = $4 AND id = $5
-RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status
 `
 
 type SetOrderStatusParams struct {
@@ -518,6 +528,34 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
 		&i.CodFeeMinor,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
 	)
 	return i, err
+}
+
+const setPaymentStatus = `-- name: SetPaymentStatus :execrows
+UPDATE orders SET payment_status = $1, version = version + 1, updated_at = now()
+WHERE store_id = $2 AND created_at = $3 AND id = $4 AND payment_method = 'card'
+`
+
+type SetPaymentStatusParams struct {
+	PaymentStatus string
+	StoreID       ulid.ID
+	CreatedAt     time.Time
+	ID            ulid.ID
+}
+
+// The gateway's word on a card order's money (ADR-0029).
+func (q *Queries) SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setPaymentStatus,
+		arg.PaymentStatus,
+		arg.StoreID,
+		arg.CreatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
