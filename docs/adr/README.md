@@ -29,3 +29,4 @@ supersedes it.
 | [0021](0021-orders-state-machine-idempotency-partitions.md) | Orders: state machine, idempotent placement, monthly partitions | Accepted |
 | [0022](0022-redis-carts-one-step-orders-anti-fake.md) | Carts in Redis, one-step orders, and anti-fake checks | Accepted |
 | [0023](0023-merchant-dashboard-shell.md) | The merchant dashboard's shell, and browser tests on the real API | Accepted |
+| [0024](0024-inbound-webhooks-envelope-encryption-card-data.md) | Inbound webhooks, envelope-encrypted credentials, no card data | Accepted |
