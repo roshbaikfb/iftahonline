@@ -30,9 +30,9 @@ type (
 	OrderStatusChanged = domain.OrderStatusChanged
 	// OrderPaymentChanged is the orders.order.payment_changed event.
 	OrderPaymentChanged = domain.OrderPaymentChanged
-	// PaymentMethod is how an order is paid; PaymentStatus where its
-	// money is.
+	// PaymentMethod is how an order is paid.
 	PaymentMethod = domain.PaymentMethod
+	// PaymentStatus is where an order's money is.
 	PaymentStatus = domain.PaymentStatus
 
 	// NewOrder is an order as a shopper or staff member submits it.
