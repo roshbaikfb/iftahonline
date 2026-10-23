@@ -77,8 +77,29 @@ type ShopDeps struct {
 // NewShop builds the shopper's side for the storefront role. Merchant
 // actions (transitions) are refused: it holds no authorizer.
 func NewShop(d ShopDeps) (Shop, error) {
+	svc, err := withoutPermissions(d)
+	if err != nil {
+		return nil, err // never a typed nil in the interface
+	}
+	return svc, nil
+}
+
+// NewFulfilment builds what the worker role's courier jobs need: read
+// orders and move them on a carrier's behalf. It takes the shopper side's
+// dependencies and holds no merchant permissions either.
+func NewFulfilment(d ShopDeps) (Fulfilment, error) {
+	svc, err := withoutPermissions(d)
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
+
+// withoutPermissions builds the service for roles that act for shoppers
+// or systems, never for merchants: every permission is refused.
+func withoutPermissions(d ShopDeps) (*app.Service, error) {
 	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Shipping == nil || d.Stores == nil {
-		return nil, errors.New("orders: missing shop dependency")
+		return nil, errors.New("orders: missing dependency")
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: denyAll{}}), nil

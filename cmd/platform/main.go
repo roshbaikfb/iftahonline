@@ -52,6 +52,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
@@ -250,18 +251,11 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 
 // newShipping builds the shipping module. Every role that quotes keeps
 // its cache fresh with Listen.
-func newShipping(c clients, ten *tenancy.Module) (*shipping.Module, error) {
+func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox webhooks.Inbox) (*shipping.Module, error) {
 	stores := ten.Service()
-	var sealer *envelope.Sealer
-	if c.cfg.Secrets.Keyring != nil { // the api and worker roles: they connect carriers and open their keys
-		var err error
-		if sealer, err = envelope.New(envelope.FromKeyring(c.cfg.Secrets.Keyring)); err != nil {
-			return nil, err
-		}
-	}
-	return shipping.New(shipping.Deps{
+	d := shipping.Deps{
 		Pool: c.pool, IDs: c.ids, Redis: c.rdb, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Cache: shipping.DefaultCacheConfig(), Carriers: c.cfg.Shipping, Sealer: sealer, PublicURL: c.cfg.Mail.DashboardURL,
+		Cache: shipping.DefaultCacheConfig(), Carriers: c.cfg.Shipping, PublicURL: c.cfg.Mail.DashboardURL, Orders: ords, Inbox: inbox,
 		Stores: func(ctx context.Context) (shipping.StoreInfo, error) {
 			st, err := stores.GetStore(ctx)
 			if err != nil {
@@ -273,7 +267,20 @@ func newShipping(c clients, ten *tenancy.Module) (*shipping.Module, error) {
 			}
 			return shipping.StoreInfo{Currency: st.Currency, Country: country}, nil
 		},
-	})
+	}
+	if c.cfg.Secrets.Keyring != nil { // the api and worker roles: they connect carriers, ship and store labels
+		var err error
+		if d.Sealer, err = envelope.New(envelope.FromKeyring(c.cfg.Secrets.Keyring)); err != nil {
+			return nil, err
+		}
+		if d.Objects, err = media.NewS3For(c.cfg.Media); err != nil {
+			return nil, err
+		}
+		if d.Jobs, err = server.NewRiverInserter(c.pool, c.log); err != nil {
+			return nil, err
+		}
+	}
+	return shipping.New(d)
 }
 
 // newWebhooks builds the inbound webhook inbox. Carriers and gateways
@@ -332,24 +339,32 @@ func orderStores(ten *tenancy.Module) orders.StoreSource {
 	}
 }
 
-// newShopOrders builds what the storefront role needs to take orders:
-// stock and prices (not the whole catalog), customers, and the orders
-// module's shopper side.
-func newShopOrders(c clients, ten *tenancy.Module, ship *shipping.Module) (orders.Shop, error) {
+// shopOrderDeps are what orders need outside the merchant API: stock and
+// prices (not the whole catalog), customers, and shipping's quoter.
+func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (orders.ShopDeps, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
-		return nil, err
+		return orders.ShopDeps{}, err
 	}
 	stock, err := catalog.NewStock(catalog.StockDeps{Pool: c.pool, Jobs: inserter, IDs: c.ids, Events: c.events})
 	if err != nil {
-		return nil, err
+		return orders.ShopDeps{}, err
 	}
 	cust, err := newCustomers(c, ten)
 	if err != nil {
+		return orders.ShopDeps{}, err
+	}
+	return orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
+		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Stores: orderStores(ten)}, nil
+}
+
+// newShopOrders builds the orders module's shopper side (storefront role).
+func newShopOrders(c clients, ten *tenancy.Module, ship *shipping.Module) (orders.Shop, error) {
+	d, err := shopOrderDeps(c, ten, ship)
+	if err != nil {
 		return nil, err
 	}
-	return orders.NewShop(orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Stores: orderStores(ten)})
+	return orders.NewShop(d)
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
@@ -385,7 +400,8 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	ship, err := newShipping(c, ten)
+	shipOrders := &shippingOrders{}
+	ship, err := newShipping(c, ten, shipOrders, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -394,9 +410,15 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	shipOrders.f = ord.Fulfilment()
 	hooks, err := newWebhooks(c)
 	if err != nil {
 		return nil, err
+	}
+	for _, p := range ship.WebhookProviders() {
+		if err = hooks.Register(p); err != nil {
+			return nil, err
+		}
 	}
 	var console *admin.Module
 	if c.adminPool != nil {
@@ -475,7 +497,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
-	ship, err := newShipping(c, ten)
+	ship, err := newShipping(c, ten, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -604,6 +626,25 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	if err = shop.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	hooks, err := newWebhooks(c)
+	if err != nil {
+		return err
+	}
+	shipOrders := &shippingOrders{}
+	ship, err := newShipping(c, ten, shipOrders, hooks.Inbox())
+	if err != nil {
+		return err
+	}
+	orderDeps, err := shopOrderDeps(c, ten, ship)
+	if err != nil {
+		return err
+	}
+	if shipOrders.f, err = orders.NewFulfilment(orderDeps); err != nil {
+		return err
+	}
+	if err = ship.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
