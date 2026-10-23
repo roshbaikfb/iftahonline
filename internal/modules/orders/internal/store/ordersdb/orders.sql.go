@@ -64,7 +64,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
 `
 
 type GetOrderParams struct {
@@ -98,12 +98,13 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.LinesHash,
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
+		&i.CodFeeMinor,
 	)
 	return i, err
 }
 
 const getOrderForUpdate = `-- name: GetOrderForUpdate :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
 `
 
 type GetOrderForUpdateParams struct {
@@ -139,6 +140,7 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 		&i.LinesHash,
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
+		&i.CodFeeMinor,
 	)
 	return i, err
 }
@@ -174,9 +176,9 @@ func (q *Queries) InsertIdempotencyKey(ctx context.Context, arg InsertIdempotenc
 const insertOrder = `-- name: InsertOrder :exec
 
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
-                    currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
+                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $3, $3)
+        $12, $13, $14, $15, $16, $17, $18, $3, $3)
 `
 
 type InsertOrderParams struct {
@@ -194,6 +196,7 @@ type InsertOrderParams struct {
 	Currency      string
 	SubtotalMinor int64
 	ShippingMinor int64
+	CodFeeMinor   int64
 	TotalMinor    int64
 	ItemCount     int32
 	LinesHash     []byte
@@ -217,6 +220,7 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.Currency,
 		arg.SubtotalMinor,
 		arg.ShippingMinor,
+		arg.CodFeeMinor,
 		arg.TotalMinor,
 		arg.ItemCount,
 		arg.LinesHash,
@@ -468,7 +472,7 @@ const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders
 SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2
 WHERE store_id = $3 AND created_at = $4 AND id = $5
-RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor
 `
 
 type SetOrderStatusParams struct {
@@ -510,6 +514,7 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.LinesHash,
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
+		&i.CodFeeMinor,
 	)
 	return i, err
 }

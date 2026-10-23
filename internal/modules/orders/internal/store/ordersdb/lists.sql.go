@@ -14,7 +14,7 @@ import (
 
 const listOrders = `-- name: ListOrders :many
 
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders
 WHERE store_id = $1 AND created_at >= $2 AND created_at < $3 AND id < $4
   AND ($5::text IS NULL OR status = $5::text)
   AND ($6::text IS NULL OR governorate = $6::text)
@@ -76,6 +76,7 @@ func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order
 			&i.LinesHash,
 			&i.UpdatedAt,
 			&i.StatusChangedAt,
+			&i.CodFeeMinor,
 		); err != nil {
 			return nil, err
 		}
@@ -88,7 +89,7 @@ func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order
 }
 
 const listOrdersByCustomer = `-- name: ListOrdersByCustomer :many
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders
 WHERE store_id = $1 AND customer_id = $2 AND created_at >= $3 AND created_at < $4 AND id < $5
   AND ($6::text IS NULL OR status = $6::text)
   AND ($7::text IS NULL OR governorate = $7::text)
@@ -147,6 +148,7 @@ func (q *Queries) ListOrdersByCustomer(ctx context.Context, arg ListOrdersByCust
 			&i.LinesHash,
 			&i.UpdatedAt,
 			&i.StatusChangedAt,
+			&i.CodFeeMinor,
 		); err != nil {
 			return nil, err
 		}
@@ -159,7 +161,7 @@ func (q *Queries) ListOrdersByCustomer(ctx context.Context, arg ListOrdersByCust
 }
 
 const listOrdersByPhone = `-- name: ListOrdersByPhone :many
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders
 WHERE store_id = $1 AND phone = $2 AND created_at >= $3 AND created_at < $4 AND id < $5
   AND ($6::text IS NULL OR status = $6::text)
   AND ($7::text IS NULL OR governorate = $7::text)
@@ -218,6 +220,7 @@ func (q *Queries) ListOrdersByPhone(ctx context.Context, arg ListOrdersByPhonePa
 			&i.LinesHash,
 			&i.UpdatedAt,
 			&i.StatusChangedAt,
+			&i.CodFeeMinor,
 		); err != nil {
 			return nil, err
 		}
@@ -230,7 +233,7 @@ func (q *Queries) ListOrdersByPhone(ctx context.Context, arg ListOrdersByPhonePa
 }
 
 const listOrdersByStatus = `-- name: ListOrdersByStatus :many
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at FROM orders
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor FROM orders
 WHERE store_id = $1 AND status = $2 AND created_at >= $3 AND created_at < $4 AND id < $5
   AND ($6::text IS NULL OR governorate = $6::text)
 ORDER BY created_at DESC, id DESC
@@ -286,6 +289,7 @@ func (q *Queries) ListOrdersByStatus(ctx context.Context, arg ListOrdersByStatus
 			&i.LinesHash,
 			&i.UpdatedAt,
 			&i.StatusChangedAt,
+			&i.CodFeeMinor,
 		); err != nil {
 			return nil, err
 		}

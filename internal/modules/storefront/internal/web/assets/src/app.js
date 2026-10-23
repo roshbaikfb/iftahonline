@@ -75,7 +75,44 @@ function orderForms() {
   }
 }
 
+// orderQuotes shows what the order costs delivered (shipping, COD fee,
+// total) once the shopper picks a governorate (ADR-0025). Only the
+// address and the product are sent, never the name or phone; the server
+// answers with the line to show, in the page's language.
+function orderQuotes() {
+  for (const form of document.querySelectorAll("form[data-order]")) {
+    const out = form.querySelector("[data-quote]");
+    if (!out) continue;
+    let seq = 0;
+    const update = async () => {
+      const body = new URLSearchParams();
+      for (const name of ["governorate", "city", "variant", "qty"]) {
+        const el = form.elements.namedItem(name);
+        if (el && el.value) body.set(name, el.value);
+      }
+      if (!body.get("governorate")) { out.hidden = true; return; }
+      const mine = ++seq;
+      try {
+        const res = await fetch(out.dataset.quote, { method: "POST", body, credentials: "same-origin" });
+        if (!res.ok || mine !== seq) return;
+        const q = await res.json();
+        out.textContent = q.text;
+        out.hidden = !q.text;
+        out.classList.toggle("bad", !q.deliverable);
+      } catch {
+        // offline or busy: the order still shows its total after placing
+      }
+    };
+    for (const name of ["governorate", "city", "variant", "qty"]) {
+      const el = form.elements.namedItem(name);
+      if (el) el.addEventListener("change", update);
+    }
+    update();
+  }
+}
+
 countdowns();
 variantPickers();
 cartBadge();
 orderForms();
+orderQuotes();

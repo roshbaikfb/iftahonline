@@ -67,7 +67,14 @@ templ thankYouPage(p *pageCtx, o OrderSummary) {
 				</li>
 			}
 		</ul>
-		<p class="subtotal">{ p.l.T(MsgTotal) }: <strong>{ p.l.Price(o.Total) }</strong></p>
+		<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(o.Subtotal) }</strong></p>
+		if !o.Shipping.IsZero() {
+			<p class="shipping">{ p.l.T(MsgShipping) }: <strong>{ p.l.Price(o.Shipping) }</strong></p>
+		}
+		if !o.CODFee.IsZero() {
+			<p class="cod-fee">{ p.l.T(MsgCODFee) }: <strong>{ p.l.Price(o.CODFee) }</strong></p>
+		}
+		<p class="order-total">{ p.l.T(MsgTotal) }: <strong>{ p.l.Price(o.Total) }</strong></p>
 		<p class="more"><a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a></p>
 	</section>
 }

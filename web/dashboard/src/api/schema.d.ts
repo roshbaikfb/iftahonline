@@ -2283,9 +2283,20 @@ export interface components {
             currency: string;
             /** Format: int64 */
             subtotal_minor: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The delivery rate quoted when the order was placed (ADR-0025).
+             */
             shipping_minor: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The cash-on-delivery fee quoted when the order was placed.
+             */
+            cod_fee_minor: number;
+            /**
+             * Format: int64
+             * @description subtotal + shipping + COD fee.
+             */
             total_minor: number;
             item_count: number;
             /** Format: date-time */

@@ -121,6 +121,8 @@ main { display: block; min-block-size: 50vh; }
 .order .bad input, .order .bad select, .order .bad textarea { border-color: #b42318; }
 .order .err { color: #b42318; }
 .order .cod { font-size: .9rem; opacity: .85; }
+.order .quote { font-weight: 600; margin: .5rem 0; }
+.order .quote.bad { color: #b42318; }
 .hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .alert { padding: .75rem 1rem; border-radius: var(--radius); background: color-mix(in srgb, var(--c-accent) 25%, transparent); }
 .lines { list-style: none; padding: 0; margin: 0 0 1rem; }
@@ -133,6 +135,8 @@ main { display: block; min-block-size: 50vh; }
 .line .qty .btn { padding: .4rem .9rem; }
 .line .total { justify-self: end; }
 .link { background: none; border: 0; padding: 0; font: inherit; color: var(--c-primary); cursor: pointer; text-decoration: underline; }
-.subtotal { font-size: 1.15rem; text-align: end; }
+.subtotal, .shipping, .cod-fee { text-align: end; margin: .25rem 0; }
+.subtotal, .order-total { font-size: 1.15rem; }
+.order-total { text-align: end; font-weight: 600; }
 .review figcaption { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
 .review blockquote { margin: 0; }

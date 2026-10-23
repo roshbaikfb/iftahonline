@@ -41,17 +41,44 @@ func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (strin
 	case errors.Is(err, catalog.ErrVariantNotSellable):
 		return "", web.ErrOrderUnavailable
 	case errors.As(err, &e) && e.Kind == errs.KindValidation:
-		inv := &web.OrderInvalidError{}
-		for _, f := range e.Fields {
-			name := f.Field
-			if len(name) >= 5 && name[:5] == "lines" {
-				name = "lines"
-			}
-			inv.Fields = append(inv.Fields, name)
-		}
-		return "", inv
+		return "", invalidOrder(e)
 	}
 	return "", err
+}
+
+// invalidOrder names the form fields of a validation error.
+func invalidOrder(e *errs.Error) *web.OrderInvalidError {
+	inv := &web.OrderInvalidError{}
+	for _, f := range e.Fields {
+		name := f.Field
+		if len(name) >= 5 && name[:5] == "lines" {
+			name = "lines"
+		}
+		if name == "governorate" && f.Code == "not_delivered" {
+			inv.NotDelivered = true
+		}
+		inv.Fields = append(inv.Fields, name)
+	}
+	return inv
+}
+
+func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteView, error) {
+	in := orders.QuoteInput{Governorate: req.Governorate, City: req.City}
+	for _, l := range req.Lines {
+		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
+	}
+	q, err := o.shop.Quote(ctx, in)
+	var e *errs.Error
+	switch {
+	case err == nil:
+		return web.QuoteView{Deliverable: q.Deliverable, FreeShipping: q.FreeShipping, Subtotal: q.Subtotal, Shipping: q.Shipping,
+			CODFee: q.CODFee, Total: q.Total}, nil
+	case errors.Is(err, catalog.ErrVariantNotSellable):
+		return web.QuoteView{}, web.ErrOrderUnavailable
+	case errors.As(err, &e) && e.Kind == errs.KindValidation:
+		return web.QuoteView{}, invalidOrder(e)
+	}
+	return web.QuoteView{}, err
 }
 
 func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSummary, error) {
@@ -66,7 +93,7 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 	if err != nil {
 		return web.OrderSummary{}, err
 	}
-	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Total: ord.Total}
+	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total}
 	for _, l := range ord.Lines {
 		title := l.Title
 		if l.VariantTitle != "" {

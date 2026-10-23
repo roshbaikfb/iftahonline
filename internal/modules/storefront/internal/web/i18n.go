@@ -122,6 +122,10 @@ const (
 	MsgErrOrderRefused
 	MsgErrCaptcha
 	MsgErrCartChanged
+	MsgShipping
+	MsgShippingFree
+	MsgCODFee
+	MsgErrNotDelivered
 	msgCount
 )
 
@@ -202,6 +206,10 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgErrOrderRefused:   {"تعذّر إتمام الطلب. تواصل مع المتجر.", "We could not place this order. Please contact the store."},
 	MsgErrCaptcha:        {"لم نتمكن من التحقق. حاول مرة أخرى.", "We could not verify you. Please try again."},
 	MsgErrCartChanged:    {"تغيّرت سلتك؛ راجعها قبل إتمام الطلب.", "Your cart changed; please review it before checking out."},
+	MsgShipping:          {"الشحن", "Shipping"},
+	MsgShippingFree:      {"مجاني", "Free"},
+	MsgCODFee:            {"رسوم الدفع عند الاستلام", "Cash-on-delivery fee"},
+	MsgErrNotDelivered:   {"لا نوصّل إلى هذه المحافظة حاليًا.", "We do not deliver to this governorate yet."},
 }
 
 // T returns the message in l.

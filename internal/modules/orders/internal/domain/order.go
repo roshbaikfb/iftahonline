@@ -129,10 +129,25 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 	c.Notes, err = text.Clean(in.Notes, "notes", 0, MaxNotesLen)
 	add(err)
 
-	if len(in.Lines) == 0 || len(in.Lines) > MaxLines {
+	lines, lineErrs := validateLines(in.Lines)
+	fields = append(fields, lineErrs...)
+	if len(fields) > 0 {
+		return Draft{}, errs.Validation(fields...)
+	}
+	d.Lines = lines
+	d.LinesHash = hashLines(lines)
+	d.Fingerprint = fingerprint(d)
+	return d, nil
+}
+
+// validateLines checks an order's lines and returns them sorted by
+// variant.
+func validateLines(in []LineInput) ([]LineInput, []errs.FieldError) {
+	var fields []errs.FieldError
+	if len(in) == 0 || len(in) > MaxLines {
 		fields = append(fields, errs.FieldError{Field: "lines", Code: "count", Message: fmt.Sprintf("an order has 1 to %d lines", MaxLines)})
 	}
-	lines := slices.Clone(in.Lines)
+	lines := slices.Clone(in)
 	slices.SortFunc(lines, func(a, b LineInput) int { return bytes.Compare(a.VariantID[:], b.VariantID[:]) })
 	for i, l := range lines {
 		if l.VariantID.IsZero() {
@@ -145,13 +160,39 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 			fields = append(fields, errs.FieldError{Field: fmt.Sprintf("lines[%d].variant_id", i), Code: "duplicate", Message: "each variant may appear once"})
 		}
 	}
-	if len(fields) > 0 {
-		return Draft{}, errs.Validation(fields...)
+	return lines, fields
+}
+
+// QuoteInput asks what an order would cost before it is placed: the
+// storefront shows it while the shopper fills the form.
+type QuoteInput struct {
+	Governorate string
+	City        string // may be empty: then the zone's rate applies
+	Lines       []LineInput
+}
+
+// ValidateQuote cleans and checks in for a store in country.
+func ValidateQuote(in QuoteInput, country geo.Country) (QuoteInput, error) {
+	var fields []errs.FieldError
+	out := QuoteInput{}
+	if a, ok := geo.Lookup(country, in.Governorate); ok {
+		out.Governorate = a.Code
+	} else {
+		fields = append(fields, errs.FieldError{Field: "governorate", Code: "invalid", Message: "choose a governorate from the list"})
 	}
-	d.Lines = lines
-	d.LinesHash = hashLines(lines)
-	d.Fingerprint = fingerprint(d)
-	return d, nil
+	city, err := text.Clean(in.City, "city", 0, MaxCityLen)
+	var e *errs.Error
+	if errors.As(err, &e) {
+		fields = append(fields, e.Fields...)
+	}
+	out.City = city
+	var lineErrs []errs.FieldError
+	out.Lines, lineErrs = validateLines(in.Lines)
+	fields = append(fields, lineErrs...)
+	if len(fields) > 0 {
+		return QuoteInput{}, errs.Validation(fields...)
+	}
+	return out, nil
 }
 
 func hashLines(lines []LineInput) [32]byte {
@@ -193,8 +234,9 @@ type Order struct {
 	CustomerID      ulid.ID
 	Contact         Contact
 	Subtotal        money.Money
-	Shipping        money.Money // 0 until shipping rates exist (ADR-0021)
-	Total           money.Money
+	Shipping        money.Money // the delivery rate quoted when placed (ADR-0025)
+	CODFee          money.Money // the cash-on-delivery fee quoted when placed
+	Total           money.Money // Subtotal + Shipping + CODFee
 	ItemCount       int
 	Lines           []Line // empty in lists
 	CreatedAt       time.Time

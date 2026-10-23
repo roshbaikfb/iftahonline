@@ -94,6 +94,8 @@ func (s *Shop) orderRoute(w http.ResponseWriter, r *http.Request, store tenant.S
 		s.submitOrder(w, r, store, p, true)
 	case rest == "/order" && r.Method == http.MethodPost:
 		s.submitOrder(w, r, store, p, false)
+	case rest == "/order/quote" && r.Method == http.MethodPost:
+		s.quoteOrder(w, r, p)
 	default:
 		return false
 	}
@@ -213,6 +215,9 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 	switch {
 	case errors.As(err, &invalid):
 		msgs := fieldErrors()
+		if invalid.NotDelivered {
+			msgs["governorate"] = MsgErrNotDelivered
+		}
 		for _, name := range invalid.Fields {
 			if m, ok := msgs[name]; ok {
 				f.errors[name] = m

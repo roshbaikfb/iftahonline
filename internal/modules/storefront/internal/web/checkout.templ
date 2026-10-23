@@ -39,6 +39,7 @@ templ orderFields(p *pageCtx, f *orderForm) {
 		<p class="alert" role="alert">{ p.l.T(MsgVerifyHuman) }</p>
 		<div class="cf-turnstile" data-sitekey={ f.challenge } data-language={ string(p.l) }></div>
 	}
+	<p class="quote" data-quote={ p.URL("/order/quote") } aria-live="polite" hidden></p>
 	<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
 	<button class="btn btn-block" type="submit">{ p.l.Or(f.cta, MsgPlaceOrder) }</button>
 }

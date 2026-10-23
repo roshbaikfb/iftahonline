@@ -11,6 +11,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -31,6 +32,8 @@ type Deps struct {
 	Catalog catalog.Catalog
 	// Customers records who ordered and refuses blocked ones.
 	Customers customers.Customers
+	// Shipping quotes each order's delivery rate and COD fee.
+	Shipping shipping.Quoter
 	// Stores gives the store's currency, country and time zone.
 	Stores StoreSource
 	// Auth checks each transition's own permission.
@@ -44,11 +47,12 @@ type Module struct {
 
 // New wires the module.
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Stores == nil || d.Auth == nil {
+	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Shipping == nil ||
+		d.Stores == nil || d.Auth == nil {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Stores: d.Stores, Auth: d.Auth})}, nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: d.Auth})}, nil
 }
 
 // Shop is the API shoppers use (through the storefront).
@@ -63,17 +67,18 @@ type ShopDeps struct {
 	Events    eventbus.Publisher
 	Catalog   catalog.Catalog
 	Customers customers.Customers
+	Shipping  shipping.Quoter
 	Stores    StoreSource
 }
 
 // NewShop builds the shopper's side for the storefront role. Merchant
 // actions (transitions) are refused: it holds no authorizer.
 func NewShop(d ShopDeps) (Shop, error) {
-	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Stores == nil {
+	if d.Pool == nil || d.IDs == nil || d.Events == nil || d.Catalog == nil || d.Customers == nil || d.Shipping == nil || d.Stores == nil {
 		return nil, errors.New("orders: missing shop dependency")
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Stores: d.Stores, Auth: denyAll{}}), nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: denyAll{}}), nil
 }
 
 // denyAll refuses every permission.
