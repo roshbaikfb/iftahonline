@@ -11,7 +11,9 @@ for shoppers, caching and freshness:
 purges and browser budgets:
 [ADR-0019](../adr/0019-cart-edge-purge-and-browser-budgets.md). Carts in
 Redis, the one-step order form and anti-fake checks:
-[ADR-0022](../adr/0022-redis-carts-one-step-orders-anti-fake.md).
+[ADR-0022](../adr/0022-redis-carts-one-step-orders-anti-fake.md). The
+form's shipping and COD-fee line (`POST /order/quote`):
+[ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md).
 
 ## Public API (`internal/modules/storefront/api.go`)
 
