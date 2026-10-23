@@ -112,6 +112,18 @@ func TestTenancyConfig(t *testing.T) {
 	}
 }
 
+func TestShipping(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || c.Shipping.FakeCarrier || c.Shipping.BostaBaseURL != "" {
+		t.Fatalf("defaults: %+v %v", c.Shipping, err)
+	}
+	c, err = config.Load(config.RoleAPI, env(with("SHIPPING_FAKE_CARRIER", "true", "BOSTA_BASE_URL", "https://stg-app.bosta.co/api/v2")))
+	if err != nil || !c.Shipping.FakeCarrier || c.Shipping.BostaBaseURL != "https://stg-app.bosta.co/api/v2" {
+		t.Fatalf("set: %+v %v", c.Shipping, err)
+	}
+}
+
 func TestSecretsAndMail(t *testing.T) {
 	t.Parallel()
 	for _, role := range []config.Role{config.RoleAPI, config.RoleWorker} {
@@ -125,12 +137,15 @@ func TestSecretsAndMail(t *testing.T) {
 		}
 	}
 	tests := map[string][]string{
-		"missing keyring":        {"SECRETBOX_KEYS", "<unset>"},
-		"bad keyring":            {"SECRETBOX_KEYS", "1:short"},
-		"missing pepper":         {"OTP_PEPPER", "<unset>"},
-		"short pepper":           {"OTP_PEPPER", "c2hvcnQ="},
-		"bad smtp addr":          {"SMTP_ADDR", "no-port"},
-		"prod smtp needs a user": {"APP_ENV", "production", "SMTP_ADDR", "smtp.example.com:587"},
+		"missing keyring":         {"SECRETBOX_KEYS", "<unset>"},
+		"bad keyring":             {"SECRETBOX_KEYS", "1:short"},
+		"missing pepper":          {"OTP_PEPPER", "<unset>"},
+		"short pepper":            {"OTP_PEPPER", "c2hvcnQ="},
+		"bad smtp addr":           {"SMTP_ADDR", "no-port"},
+		"prod smtp needs a user":  {"APP_ENV", "production", "SMTP_ADDR", "smtp.example.com:587"},
+		"no fake carrier in prod": {"APP_ENV", "production", "SHIPPING_FAKE_CARRIER", "true"},
+		"bad fake carrier flag":   {"SHIPPING_FAKE_CARRIER", "yes"},
+		"bad bosta url":           {"BOSTA_BASE_URL", "ftp://bosta"},
 	}
 	for name, kv := range tests {
 		_, err := config.Load(config.RoleAPI, env(with(kv...)))

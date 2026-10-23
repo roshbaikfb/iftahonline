@@ -11,9 +11,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for CarrierConnectionStatus.
+const (
+	Active       CarrierConnectionStatus = "active"
+	Disconnected CarrierConnectionStatus = "disconnected"
+)
+
+// Valid indicates whether the value is a known member of the CarrierConnectionStatus enum.
+func (e CarrierConnectionStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Disconnected:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for PolicySlug.
 const (
@@ -48,6 +67,48 @@ type CODFee struct {
 	// MaxMinor 0 means no maximum.
 	MaxMinor int64 `json:"max_minor"`
 	MinMinor int64 `json:"min_minor"`
+}
+
+// CarrierConnected defines model for CarrierConnected.
+type CarrierConnected struct {
+	Connection CarrierConnection `json:"connection"`
+
+	// WebhookSecret Shown only in this response.
+	WebhookSecret string `json:"webhook_secret"`
+	WebhookUrl    string `json:"webhook_url"`
+}
+
+// CarrierConnection defines model for CarrierConnection.
+type CarrierConnection struct {
+	// Carrier Example: bosta
+	Carrier        string     `json:"carrier"`
+	CreatedAt      time.Time  `json:"created_at"`
+	DisconnectedAt *time.Time `json:"disconnected_at,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id     ULID                    `json:"id"`
+	Status CarrierConnectionStatus `json:"status"`
+
+	// WebhookUrl Where the carrier sends this connection's webhooks (active connections).
+	WebhookUrl *string `json:"webhook_url,omitempty"`
+}
+
+// CarrierConnectionStatus defines model for CarrierConnection.Status.
+type CarrierConnectionStatus string
+
+// CarrierConnections defines model for CarrierConnections.
+type CarrierConnections struct {
+	// Carriers Carriers this platform can connect.
+	Carriers    []string            `json:"carriers"`
+	Connections []CarrierConnection `json:"connections"`
+}
+
+// ConnectCarrierInput defines model for ConnectCarrierInput.
+type ConnectCarrierInput struct {
+	ApiKey string `json:"api_key"`
+
+	// Carrier Example: bosta
+	Carrier string `json:"carrier"`
 }
 
 // FieldError defines model for FieldError.
@@ -194,6 +255,9 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// ConnectCarrierJSONRequestBody defines body for ConnectCarrier for application/json ContentType.
+type ConnectCarrierJSONRequestBody = ConnectCarrierInput
+
 // QuoteShippingJSONRequestBody defines body for QuoteShipping for application/json ContentType.
 type QuoteShippingJSONRequestBody = ShippingQuoteInput
 
@@ -211,6 +275,15 @@ type ServerInterface interface {
 	// GetShipping The store's shipping settings and zones
 	// (GET /v1/stores/{store_id}/shipping)
 	GetShipping(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// ListCarrierConnections The carriers available and the store's connections
+	// (GET /v1/stores/{store_id}/shipping/carriers)
+	ListCarrierConnections(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// ConnectCarrier Connect the store's account at a carrier
+	// (POST /v1/stores/{store_id}/shipping/carriers)
+	ConnectCarrier(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DisconnectCarrier Disconnect a carrier account
+	// (DELETE /v1/stores/{store_id}/shipping/carriers/{connection_id})
+	DisconnectCarrier(w http.ResponseWriter, r *http.Request, storeId StoreID, connectionId ULID)
 	// QuoteShipping What delivering an order would cost
 	// (POST /v1/stores/{store_id}/shipping/quote)
 	QuoteShipping(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -254,6 +327,93 @@ func (siw *ServerInterfaceWrapper) GetShipping(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetShipping(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCarrierConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListCarrierConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCarrierConnections(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectCarrier operation middleware
+func (siw *ServerInterfaceWrapper) ConnectCarrier(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectCarrier(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectCarrier operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectCarrier(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", r.PathValue("connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectCarrier(w, r, storeId, connectionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -537,6 +697,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/zones/{zone_id}", wrapper.DeleteShippingZone)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/zones/{zone_id}", wrapper.UpdateShippingZone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/quote", wrapper.QuoteShipping)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers", wrapper.ListCarrierConnections)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers", wrapper.ConnectCarrier)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers/{connection_id}", wrapper.DisconnectCarrier)
 
 	return m
 }
@@ -571,6 +734,119 @@ type GetShippingdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetShippingdefaultApplicationProblemPlusJSONResponse) VisitGetShippingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCarrierConnectionsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListCarrierConnectionsResponseObject interface {
+	VisitListCarrierConnectionsResponse(w http.ResponseWriter) error
+}
+
+type ListCarrierConnections200JSONResponse CarrierConnections
+
+func (response ListCarrierConnections200JSONResponse) VisitListCarrierConnectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCarrierConnectionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCarrierConnectionsdefaultApplicationProblemPlusJSONResponse) VisitListCarrierConnectionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConnectCarrierRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *ConnectCarrierJSONRequestBody
+}
+
+type ConnectCarrierResponseObject interface {
+	VisitConnectCarrierResponse(w http.ResponseWriter) error
+}
+
+type ConnectCarrier201JSONResponse CarrierConnected
+
+func (response ConnectCarrier201JSONResponse) VisitConnectCarrierResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConnectCarrierdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectCarrierdefaultApplicationProblemPlusJSONResponse) VisitConnectCarrierResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectCarrierRequestObject struct {
+	StoreId      StoreID `json:"store_id"`
+	ConnectionId ULID    `json:"connection_id"`
+}
+
+type DisconnectCarrierResponseObject interface {
+	VisitDisconnectCarrierResponse(w http.ResponseWriter) error
+}
+
+type DisconnectCarrier204Response struct {
+}
+
+func (response DisconnectCarrier204Response) VisitDisconnectCarrierResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisconnectCarrierdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectCarrierdefaultApplicationProblemPlusJSONResponse) VisitDisconnectCarrierResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -782,6 +1058,15 @@ type StrictServerInterface interface {
 	// GetShipping The store's shipping settings and zones
 	// (GET /v1/stores/{store_id}/shipping)
 	GetShipping(ctx context.Context, request GetShippingRequestObject) (GetShippingResponseObject, error)
+	// ListCarrierConnections The carriers available and the store's connections
+	// (GET /v1/stores/{store_id}/shipping/carriers)
+	ListCarrierConnections(ctx context.Context, request ListCarrierConnectionsRequestObject) (ListCarrierConnectionsResponseObject, error)
+	// ConnectCarrier Connect the store's account at a carrier
+	// (POST /v1/stores/{store_id}/shipping/carriers)
+	ConnectCarrier(ctx context.Context, request ConnectCarrierRequestObject) (ConnectCarrierResponseObject, error)
+	// DisconnectCarrier Disconnect a carrier account
+	// (DELETE /v1/stores/{store_id}/shipping/carriers/{connection_id})
+	DisconnectCarrier(ctx context.Context, request DisconnectCarrierRequestObject) (DisconnectCarrierResponseObject, error)
 	// QuoteShipping What delivering an order would cost
 	// (POST /v1/stores/{store_id}/shipping/quote)
 	QuoteShipping(ctx context.Context, request QuoteShippingRequestObject) (QuoteShippingResponseObject, error)
@@ -857,6 +1142,92 @@ func (sh *strictHandler) GetShipping(w http.ResponseWriter, r *http.Request, sto
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetShippingResponseObject); ok {
 		if err := validResponse.VisitGetShippingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCarrierConnections operation middleware
+func (sh *strictHandler) ListCarrierConnections(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListCarrierConnectionsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCarrierConnections(ctx, request.(ListCarrierConnectionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCarrierConnections")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCarrierConnectionsResponseObject); ok {
+		if err := validResponse.VisitListCarrierConnectionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectCarrier operation middleware
+func (sh *strictHandler) ConnectCarrier(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ConnectCarrierRequestObject
+
+	request.StoreId = storeId
+
+	var body ConnectCarrierJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectCarrier(ctx, request.(ConnectCarrierRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectCarrier")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectCarrierResponseObject); ok {
+		if err := validResponse.VisitConnectCarrierResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectCarrier operation middleware
+func (sh *strictHandler) DisconnectCarrier(w http.ResponseWriter, r *http.Request, storeId StoreID, connectionId ULID) {
+	var request DisconnectCarrierRequestObject
+
+	request.StoreId = storeId
+	request.ConnectionId = connectionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectCarrier(ctx, request.(DisconnectCarrierRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectCarrier")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectCarrierResponseObject); ok {
+		if err := validResponse.VisitDisconnectCarrierResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

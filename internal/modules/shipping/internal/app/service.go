@@ -14,6 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
@@ -50,6 +51,10 @@ type Service struct {
 	events eventbus.Publisher
 	stores StoreSource
 	cache  *configs
+
+	carriers  Carriers
+	sealer    *envelope.Sealer
+	publicURL string
 }
 
 // Deps are the service's dependencies.
@@ -60,6 +65,12 @@ type Deps struct {
 	Events eventbus.Publisher
 	Stores StoreSource
 	Cache  CacheConfig
+	// Carriers are the adapters merchants may connect.
+	Carriers Carriers
+	// Sealer seals carrier credentials (platform/envelope).
+	Sealer *envelope.Sealer
+	// PublicURL is the platform's public origin, for webhook URLs.
+	PublicURL string
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -70,7 +81,8 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: newConfigs(d.Cache)}
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: newConfigs(d.Cache),
+		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL}
 }
 
 // Config returns the store's settings and zones as stored now (for the

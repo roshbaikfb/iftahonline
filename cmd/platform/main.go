@@ -48,6 +48,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
@@ -251,9 +252,16 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 // its cache fresh with Listen.
 func newShipping(c clients, ten *tenancy.Module) (*shipping.Module, error) {
 	stores := ten.Service()
+	var sealer *envelope.Sealer
+	if c.cfg.Secrets.Keyring != nil { // the api and worker roles: they connect carriers and open their keys
+		var err error
+		if sealer, err = envelope.New(envelope.FromKeyring(c.cfg.Secrets.Keyring)); err != nil {
+			return nil, err
+		}
+	}
 	return shipping.New(shipping.Deps{
 		Pool: c.pool, IDs: c.ids, Redis: c.rdb, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Cache: shipping.DefaultCacheConfig(),
+		Cache: shipping.DefaultCacheConfig(), Carriers: c.cfg.Shipping, Sealer: sealer, PublicURL: c.cfg.Mail.DashboardURL,
 		Stores: func(ctx context.Context) (shipping.StoreInfo, error) {
 			st, err := stores.GetStore(ctx)
 			if err != nil {

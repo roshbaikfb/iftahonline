@@ -11,6 +11,7 @@ package carrier
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
@@ -55,10 +56,20 @@ func (s Status) Final() bool {
 	return s == StatusDelivered || s == StatusReturned || s == StatusCancelled
 }
 
-// Credentials are the merchant's account at the carrier.
+// Credentials are the merchant's account at the carrier. They print and
+// log as redacted, so a key never reaches a log line by accident.
 type Credentials struct {
 	APIKey string `json:"api_key"`
 }
+
+// String implements fmt.Stringer.
+func (Credentials) String() string { return "carrier.Credentials{redacted}" }
+
+// GoString implements fmt.GoStringer (%#v).
+func (Credentials) GoString() string { return "carrier.Credentials{redacted}" }
+
+// LogValue implements slog.LogValuer.
+func (Credentials) LogValue() slog.Value { return slog.StringValue("redacted") }
 
 // ShipmentRequest asks the carrier to deliver one order.
 type ShipmentRequest struct {

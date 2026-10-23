@@ -2,6 +2,8 @@ package fake_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,5 +80,17 @@ func TestAccountsAreSeparate(t *testing.T) {
 	}
 	if err = c.Advance("nope", carrier.StatusDelivered); !errors.Is(err, carrier.ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+// TestCredentialsNeverPrint: a key formatted or logged by mistake shows
+// as redacted.
+func TestCredentialsNeverPrint(t *testing.T) {
+	t.Parallel()
+	c := carrier.Credentials{APIKey: "very-secret"}
+	for _, s := range []string{fmt.Sprint(c), fmt.Sprintf("%v %+v %#v %s", c, c, c, c), c.LogValue().String()} {
+		if strings.Contains(s, "very-secret") {
+			t.Fatalf("leaked: %s", s)
+		}
 	}
 }

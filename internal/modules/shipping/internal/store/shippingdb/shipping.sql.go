@@ -56,6 +56,60 @@ func (q *Queries) DeleteZoneAreas(ctx context.Context, arg DeleteZoneAreasParams
 	return err
 }
 
+const disconnectConnection = `-- name: DisconnectConnection :one
+UPDATE carrier_connections SET status = 'disconnected', disconnected_at = now(), updated_at = now()
+WHERE store_id = $1 AND id = $2 AND status = 'active'
+RETURNING id, store_id, carrier, credentials, webhook_secret_hash, status, created_at, updated_at, disconnected_at
+`
+
+type DisconnectConnectionParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+func (q *Queries) DisconnectConnection(ctx context.Context, arg DisconnectConnectionParams) (CarrierConnection, error) {
+	row := q.db.QueryRow(ctx, disconnectConnection, arg.StoreID, arg.ID)
+	var i CarrierConnection
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.Carrier,
+		&i.Credentials,
+		&i.WebhookSecretHash,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisconnectedAt,
+	)
+	return i, err
+}
+
+const getConnection = `-- name: GetConnection :one
+SELECT id, store_id, carrier, credentials, webhook_secret_hash, status, created_at, updated_at, disconnected_at FROM carrier_connections WHERE store_id = $1 AND id = $2
+`
+
+type GetConnectionParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+func (q *Queries) GetConnection(ctx context.Context, arg GetConnectionParams) (CarrierConnection, error) {
+	row := q.db.QueryRow(ctx, getConnection, arg.StoreID, arg.ID)
+	var i CarrierConnection
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.Carrier,
+		&i.Credentials,
+		&i.WebhookSecretHash,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisconnectedAt,
+	)
+	return i, err
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT store_id, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, free_over_minor, version, updated_at FROM shipping_settings WHERE store_id = $1
 `
@@ -98,6 +152,43 @@ func (q *Queries) InsertCityRates(ctx context.Context, arg InsertCityRatesParams
 		arg.Rates,
 	)
 	return err
+}
+
+const insertConnection = `-- name: InsertConnection :one
+INSERT INTO carrier_connections (id, store_id, carrier, credentials, webhook_secret_hash)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, store_id, carrier, credentials, webhook_secret_hash, status, created_at, updated_at, disconnected_at
+`
+
+type InsertConnectionParams struct {
+	ID                ulid.ID
+	StoreID           ulid.ID
+	Carrier           string
+	Credentials       []byte
+	WebhookSecretHash []byte
+}
+
+func (q *Queries) InsertConnection(ctx context.Context, arg InsertConnectionParams) (CarrierConnection, error) {
+	row := q.db.QueryRow(ctx, insertConnection,
+		arg.ID,
+		arg.StoreID,
+		arg.Carrier,
+		arg.Credentials,
+		arg.WebhookSecretHash,
+	)
+	var i CarrierConnection
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.Carrier,
+		&i.Credentials,
+		&i.WebhookSecretHash,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisconnectedAt,
+	)
+	return i, err
 }
 
 const insertSettings = `-- name: InsertSettings :one
@@ -235,6 +326,41 @@ func (q *Queries) ListCityRates(ctx context.Context, storeID ulid.ID) ([]ListCit
 			&i.CityKey,
 			&i.CityName,
 			&i.RateMinor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConnections = `-- name: ListConnections :many
+SELECT id, store_id, carrier, credentials, webhook_secret_hash, status, created_at, updated_at, disconnected_at FROM carrier_connections WHERE store_id = $1 ORDER BY created_at DESC LIMIT 100
+`
+
+// A store has a handful (one active per carrier, plus past ones).
+func (q *Queries) ListConnections(ctx context.Context, storeID ulid.ID) ([]CarrierConnection, error) {
+	rows, err := q.db.Query(ctx, listConnections, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CarrierConnection{}
+	for rows.Next() {
+		var i CarrierConnection
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.Carrier,
+			&i.Credentials,
+			&i.WebhookSecretHash,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DisconnectedAt,
 		); err != nil {
 			return nil, err
 		}
