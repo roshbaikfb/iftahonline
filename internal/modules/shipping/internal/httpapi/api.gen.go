@@ -9,7 +9,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -28,6 +30,69 @@ func (e CarrierConnectionStatus) Valid() bool {
 	case Active:
 		return true
 	case Disconnected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ShipmentEventSource.
+const (
+	Api      ShipmentEventSource = "api"
+	Merchant ShipmentEventSource = "merchant"
+	Poll     ShipmentEventSource = "poll"
+	Webhook  ShipmentEventSource = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the ShipmentEventSource enum.
+func (e ShipmentEventSource) Valid() bool {
+	switch e {
+	case Api:
+		return true
+	case Merchant:
+		return true
+	case Poll:
+		return true
+	case Webhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ShipmentStatus.
+const (
+	Cancelled      ShipmentStatus = "cancelled"
+	Created        ShipmentStatus = "created"
+	Delivered      ShipmentStatus = "delivered"
+	Failed         ShipmentStatus = "failed"
+	FailedAttempt  ShipmentStatus = "failed_attempt"
+	InTransit      ShipmentStatus = "in_transit"
+	OutForDelivery ShipmentStatus = "out_for_delivery"
+	Requested      ShipmentStatus = "requested"
+	Returned       ShipmentStatus = "returned"
+)
+
+// Valid indicates whether the value is a known member of the ShipmentStatus enum.
+func (e ShipmentStatus) Valid() bool {
+	switch e {
+	case Cancelled:
+		return true
+	case Created:
+		return true
+	case Delivered:
+		return true
+	case Failed:
+		return true
+	case FailedAttempt:
+		return true
+	case InTransit:
+		return true
+	case OutForDelivery:
+		return true
+	case Requested:
+		return true
+	case Returned:
 		return true
 	default:
 		return false
@@ -56,6 +121,13 @@ func (e PolicySlug) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// BulkError defines model for BulkError.
+type BulkError struct {
+	// Code Example: invalid_transition
+	Code   string `json:"code"`
+	Detail string `json:"detail"`
 }
 
 // CODFee defines model for CODFee.
@@ -111,6 +183,13 @@ type ConnectCarrierInput struct {
 	Carrier string `json:"carrier"`
 }
 
+// CreateShipmentsInput defines model for CreateShipmentsInput.
+type CreateShipmentsInput struct {
+	// ConnectionId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ConnectionId ULID   `json:"connection_id"`
+	OrderIds     []ULID `json:"order_ids"`
+}
+
 // FieldError defines model for FieldError.
 type FieldError struct {
 	Code    string `json:"code"`
@@ -132,6 +211,83 @@ type Problem struct {
 	// Type Example: urn:iftahonline:problem:not-found
 	Type string `json:"type"`
 }
+
+// ShipResult defines model for ShipResult.
+type ShipResult struct {
+	Error *BulkError `json:"error,omitempty"`
+
+	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	OrderId  ULID      `json:"order_id"`
+	Shipment *Shipment `json:"shipment,omitempty"`
+}
+
+// ShipResults defines model for ShipResults.
+type ShipResults struct {
+	Results []ShipResult `json:"results"`
+}
+
+// Shipment defines model for Shipment.
+type Shipment struct {
+	CancelRequestedAt *time.Time `json:"cancel_requested_at,omitempty"`
+
+	// Carrier Example: bosta
+	Carrier string `json:"carrier"`
+
+	// CarrierState The carrier's own last state
+	CarrierState *string `json:"carrier_state,omitempty"`
+
+	// CodMinor What the courier collects.
+	CodMinor int64 `json:"cod_minor"`
+
+	// ConnectionId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ConnectionId ULID      `json:"connection_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Currency     string    `json:"currency"`
+
+	// Failure Why the carrier refused the shipment (status failed).
+	Failure *string `json:"failure,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id         ULID `json:"id"`
+	LabelReady bool `json:"label_ready"`
+
+	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	OrderId        ULID           `json:"order_id"`
+	Status         ShipmentStatus `json:"status"`
+	StatusAt       time.Time      `json:"status_at"`
+	TrackingNumber *string        `json:"tracking_number,omitempty"`
+	Version        int            `json:"version"`
+}
+
+// ShipmentDetail defines model for ShipmentDetail.
+type ShipmentDetail struct {
+	Events   []ShipmentEvent `json:"events"`
+	Shipment Shipment        `json:"shipment"`
+}
+
+// ShipmentEvent defines model for ShipmentEvent.
+type ShipmentEvent struct {
+	At           time.Time `json:"at"`
+	CarrierState *string   `json:"carrier_state,omitempty"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id     ULID                `json:"id"`
+	Note   string              `json:"note"`
+	Source ShipmentEventSource `json:"source"`
+	Status ShipmentStatus      `json:"status"`
+}
+
+// ShipmentEventSource defines model for ShipmentEvent.Source.
+type ShipmentEventSource string
+
+// ShipmentPage defines model for ShipmentPage.
+type ShipmentPage struct {
+	Items      []Shipment `json:"items"`
+	NextCursor *string    `json:"next_cursor,omitempty"`
+}
+
+// ShipmentStatus defines model for ShipmentStatus.
+type ShipmentStatus string
 
 // ShippingCity defines model for ShippingCity.
 type ShippingCity struct {
@@ -255,6 +411,14 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// ListShipmentsParams defines parameters for ListShipments.
+type ListShipmentsParams struct {
+	OrderId *ULID           `form:"order_id,omitempty" json:"order_id,omitempty"`
+	Status  *ShipmentStatus `form:"status,omitempty" json:"status,omitempty"`
+	Cursor  *string         `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *int            `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ConnectCarrierJSONRequestBody defines body for ConnectCarrier for application/json ContentType.
 type ConnectCarrierJSONRequestBody = ConnectCarrierInput
 
@@ -263,6 +427,9 @@ type QuoteShippingJSONRequestBody = ShippingQuoteInput
 
 // SaveShippingSettingsJSONRequestBody defines body for SaveShippingSettings for application/json ContentType.
 type SaveShippingSettingsJSONRequestBody = ShippingSettingsInput
+
+// CreateShipmentsJSONRequestBody defines body for CreateShipments for application/json ContentType.
+type CreateShipmentsJSONRequestBody = CreateShipmentsInput
 
 // CreateShippingZoneJSONRequestBody defines body for CreateShippingZone for application/json ContentType.
 type CreateShippingZoneJSONRequestBody = ShippingZoneInput
@@ -290,6 +457,21 @@ type ServerInterface interface {
 	// SaveShippingSettings Save the store-wide COD fee and free-shipping threshold
 	// (PUT /v1/stores/{store_id}/shipping/settings)
 	SaveShippingSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// ListShipments The store's shipments, newest first
+	// (GET /v1/stores/{store_id}/shipping/shipments)
+	ListShipments(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListShipmentsParams)
+	// CreateShipments Hand orders to a connected carrier
+	// (POST /v1/stores/{store_id}/shipping/shipments)
+	CreateShipments(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetShipment A shipment with its timeline
+	// (GET /v1/stores/{store_id}/shipping/shipments/{shipment_id})
+	GetShipment(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID)
+	// CancelShipment Cancel a shipment
+	// (POST /v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel)
+	CancelShipment(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID)
+	// GetShipmentLabel The shipment's label (airway bill)
+	// (GET /v1/stores/{store_id}/shipping/shipments/{shipment_id}/label)
+	GetShipmentLabel(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID)
 	// CreateShippingZone Add a delivery zone
 	// (POST /v1/stores/{store_id}/shipping/zones)
 	CreateShippingZone(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -466,6 +648,218 @@ func (siw *ServerInterfaceWrapper) SaveShippingSettings(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SaveShippingSettings(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListShipments operation middleware
+func (siw *ServerInterfaceWrapper) ListShipments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListShipmentsParams
+
+	// ------------- Optional query parameter "order_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order_id", r.URL.Query(), &params.OrderId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListShipments(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateShipments operation middleware
+func (siw *ServerInterfaceWrapper) CreateShipments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateShipments(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetShipment operation middleware
+func (siw *ServerInterfaceWrapper) GetShipment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "shipment_id" -------------
+	var shipmentId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shipment_id", r.PathValue("shipment_id"), &shipmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shipment_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetShipment(w, r, storeId, shipmentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelShipment operation middleware
+func (siw *ServerInterfaceWrapper) CancelShipment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "shipment_id" -------------
+	var shipmentId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shipment_id", r.PathValue("shipment_id"), &shipmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shipment_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelShipment(w, r, storeId, shipmentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetShipmentLabel operation middleware
+func (siw *ServerInterfaceWrapper) GetShipmentLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "shipment_id" -------------
+	var shipmentId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shipment_id", r.PathValue("shipment_id"), &shipmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shipment_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetShipmentLabel(w, r, storeId, shipmentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -700,6 +1094,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers", wrapper.ListCarrierConnections)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers", wrapper.ConnectCarrier)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/carriers/{connection_id}", wrapper.DisconnectCarrier)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments", wrapper.ListShipments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments", wrapper.CreateShipments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}", wrapper.GetShipment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel", wrapper.CancelShipment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}/label", wrapper.GetShipmentLabel)
 
 	return m
 }
@@ -938,6 +1337,212 @@ func (response SaveShippingSettingsdefaultApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type ListShipmentsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  ListShipmentsParams
+}
+
+type ListShipmentsResponseObject interface {
+	VisitListShipmentsResponse(w http.ResponseWriter) error
+}
+
+type ListShipments200JSONResponse ShipmentPage
+
+func (response ListShipments200JSONResponse) VisitListShipmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListShipmentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListShipmentsdefaultApplicationProblemPlusJSONResponse) VisitListShipmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShipmentsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *CreateShipmentsJSONRequestBody
+}
+
+type CreateShipmentsResponseObject interface {
+	VisitCreateShipmentsResponse(w http.ResponseWriter) error
+}
+
+type CreateShipments200JSONResponse ShipResults
+
+func (response CreateShipments200JSONResponse) VisitCreateShipmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateShipmentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateShipmentsdefaultApplicationProblemPlusJSONResponse) VisitCreateShipmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShipmentRequestObject struct {
+	StoreId    StoreID `json:"store_id"`
+	ShipmentId ULID    `json:"shipment_id"`
+}
+
+type GetShipmentResponseObject interface {
+	VisitGetShipmentResponse(w http.ResponseWriter) error
+}
+
+type GetShipment200JSONResponse ShipmentDetail
+
+func (response GetShipment200JSONResponse) VisitGetShipmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShipmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetShipmentdefaultApplicationProblemPlusJSONResponse) VisitGetShipmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelShipmentRequestObject struct {
+	StoreId    StoreID `json:"store_id"`
+	ShipmentId ULID    `json:"shipment_id"`
+}
+
+type CancelShipmentResponseObject interface {
+	VisitCancelShipmentResponse(w http.ResponseWriter) error
+}
+
+type CancelShipment200JSONResponse Shipment
+
+func (response CancelShipment200JSONResponse) VisitCancelShipmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelShipmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelShipmentdefaultApplicationProblemPlusJSONResponse) VisitCancelShipmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetShipmentLabelRequestObject struct {
+	StoreId    StoreID `json:"store_id"`
+	ShipmentId ULID    `json:"shipment_id"`
+}
+
+type GetShipmentLabelResponseObject interface {
+	VisitGetShipmentLabelResponse(w http.ResponseWriter) error
+}
+
+type GetShipmentLabel200ApplicationpdfResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetShipmentLabel200ApplicationpdfResponse) VisitGetShipmentLabelResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetShipmentLabeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetShipmentLabeldefaultApplicationProblemPlusJSONResponse) VisitGetShipmentLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateShippingZoneRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *CreateShippingZoneJSONRequestBody
@@ -1073,6 +1678,21 @@ type StrictServerInterface interface {
 	// SaveShippingSettings Save the store-wide COD fee and free-shipping threshold
 	// (PUT /v1/stores/{store_id}/shipping/settings)
 	SaveShippingSettings(ctx context.Context, request SaveShippingSettingsRequestObject) (SaveShippingSettingsResponseObject, error)
+	// ListShipments The store's shipments, newest first
+	// (GET /v1/stores/{store_id}/shipping/shipments)
+	ListShipments(ctx context.Context, request ListShipmentsRequestObject) (ListShipmentsResponseObject, error)
+	// CreateShipments Hand orders to a connected carrier
+	// (POST /v1/stores/{store_id}/shipping/shipments)
+	CreateShipments(ctx context.Context, request CreateShipmentsRequestObject) (CreateShipmentsResponseObject, error)
+	// GetShipment A shipment with its timeline
+	// (GET /v1/stores/{store_id}/shipping/shipments/{shipment_id})
+	GetShipment(ctx context.Context, request GetShipmentRequestObject) (GetShipmentResponseObject, error)
+	// CancelShipment Cancel a shipment
+	// (POST /v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel)
+	CancelShipment(ctx context.Context, request CancelShipmentRequestObject) (CancelShipmentResponseObject, error)
+	// GetShipmentLabel The shipment's label (airway bill)
+	// (GET /v1/stores/{store_id}/shipping/shipments/{shipment_id}/label)
+	GetShipmentLabel(ctx context.Context, request GetShipmentLabelRequestObject) (GetShipmentLabelResponseObject, error)
 	// CreateShippingZone Add a delivery zone
 	// (POST /v1/stores/{store_id}/shipping/zones)
 	CreateShippingZone(ctx context.Context, request CreateShippingZoneRequestObject) (CreateShippingZoneResponseObject, error)
@@ -1294,6 +1914,147 @@ func (sh *strictHandler) SaveShippingSettings(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SaveShippingSettingsResponseObject); ok {
 		if err := validResponse.VisitSaveShippingSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListShipments operation middleware
+func (sh *strictHandler) ListShipments(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListShipmentsParams) {
+	var request ListShipmentsRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListShipments(ctx, request.(ListShipmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListShipments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListShipmentsResponseObject); ok {
+		if err := validResponse.VisitListShipmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateShipments operation middleware
+func (sh *strictHandler) CreateShipments(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateShipmentsRequestObject
+
+	request.StoreId = storeId
+
+	var body CreateShipmentsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateShipments(ctx, request.(CreateShipmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateShipments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateShipmentsResponseObject); ok {
+		if err := validResponse.VisitCreateShipmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetShipment operation middleware
+func (sh *strictHandler) GetShipment(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID) {
+	var request GetShipmentRequestObject
+
+	request.StoreId = storeId
+	request.ShipmentId = shipmentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetShipment(ctx, request.(GetShipmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetShipment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetShipmentResponseObject); ok {
+		if err := validResponse.VisitGetShipmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelShipment operation middleware
+func (sh *strictHandler) CancelShipment(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID) {
+	var request CancelShipmentRequestObject
+
+	request.StoreId = storeId
+	request.ShipmentId = shipmentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelShipment(ctx, request.(CancelShipmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelShipment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelShipmentResponseObject); ok {
+		if err := validResponse.VisitCancelShipmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetShipmentLabel operation middleware
+func (sh *strictHandler) GetShipmentLabel(w http.ResponseWriter, r *http.Request, storeId StoreID, shipmentId ULID) {
+	var request GetShipmentLabelRequestObject
+
+	request.StoreId = storeId
+	request.ShipmentId = shipmentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetShipmentLabel(ctx, request.(GetShipmentLabelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetShipmentLabel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetShipmentLabelResponseObject); ok {
+		if err := validResponse.VisitGetShipmentLabelResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

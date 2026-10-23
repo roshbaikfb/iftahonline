@@ -1721,6 +1721,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/shipping/shipments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's shipments, newest first
+         * @description Permission: orders.read.
+         */
+        get: operations["listShipments"];
+        put?: never;
+        /**
+         * Hand orders to a connected carrier
+         * @description Permission: orders.fulfil. Each order must be ready_to_ship and
+         *     have no live shipment. Shipments are created at the carrier in the
+         *     background (status `requested`, then `created` with a tracking
+         *     number, or `failed` with the carrier's reason); the order moves to
+         *     shipped, delivered, failed_delivery or returned as the carrier
+         *     reports the parcel moving. One result per order.
+         */
+        post: operations["createShipments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/shipments/{shipment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A shipment with its timeline
+         * @description Permission: orders.read.
+         */
+        get: operations["getShipment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a shipment
+         * @description Permission: orders.fulfil. A shipment the carrier has not created
+         *     yet is cancelled at once; otherwise the carrier is asked in the
+         *     background (`cancel_requested_at` is set) and refuses once the
+         *     parcel is picked up. A final shipment is 409 shipment_not_cancellable.
+         */
+        post: operations["cancelShipment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/shipments/{shipment_id}/label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The shipment's label (airway bill)
+         * @description Permission: orders.read. 409 label_not_ready until the carrier issues it.
+         */
+        get: operations["getShipmentLabel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -2741,6 +2844,65 @@ export interface components {
             webhook_url: string;
             /** @description Shown only in this response. */
             webhook_secret: string;
+        };
+        /** @enum {string} */
+        ShipmentStatus: "requested" | "created" | "in_transit" | "out_for_delivery" | "delivered" | "failed_attempt" | "returned" | "cancelled" | "failed";
+        Shipment: {
+            id: components["schemas"]["ULID"];
+            order_id: components["schemas"]["ULID"];
+            connection_id: components["schemas"]["ULID"];
+            /** @example bosta */
+            carrier: string;
+            status: components["schemas"]["ShipmentStatus"];
+            tracking_number?: string;
+            /**
+             * Format: int64
+             * @description What the courier collects.
+             */
+            cod_minor: number;
+            currency: string;
+            label_ready: boolean;
+            /** @description The carrier's own last state */
+            carrier_state?: string;
+            /** @description Why the carrier refused the shipment (status failed). */
+            failure?: string;
+            /** Format: date-time */
+            cancel_requested_at?: string;
+            /** Format: date-time */
+            status_at: string;
+            /** Format: date-time */
+            created_at: string;
+            version: number;
+        };
+        ShipmentEvent: {
+            id: components["schemas"]["ULID"];
+            status: components["schemas"]["ShipmentStatus"];
+            carrier_state?: string;
+            /** @enum {string} */
+            source: "api" | "webhook" | "poll" | "merchant";
+            note: string;
+            /** Format: date-time */
+            at: string;
+        };
+        ShipmentDetail: {
+            shipment: components["schemas"]["Shipment"];
+            events: components["schemas"]["ShipmentEvent"][];
+        };
+        ShipmentPage: {
+            items: components["schemas"]["Shipment"][];
+            next_cursor?: string;
+        };
+        CreateShipmentsInput: {
+            connection_id: components["schemas"]["ULID"];
+            order_ids: components["schemas"]["ULID"][];
+        };
+        ShipResult: {
+            order_id: components["schemas"]["ULID"];
+            shipment?: components["schemas"]["Shipment"];
+            error?: components["schemas"]["BulkError"];
+        };
+        ShipResults: {
+            results: components["schemas"]["ShipResult"][];
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -5222,6 +5384,133 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listShipments: {
+        parameters: {
+            query?: {
+                order_id?: components["schemas"]["ULID"];
+                status?: components["schemas"]["ShipmentStatus"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createShipments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShipmentsInput"];
+            };
+        };
+        responses: {
+            /** @description One result per order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipResults"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getShipment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The shipment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    cancelShipment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The shipment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shipment"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getShipmentLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                shipment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The label. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
             };
             default: components["responses"]["Problem"];
         };

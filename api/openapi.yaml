@@ -1976,6 +1976,106 @@ paths:
           description: Disconnected.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/shipments:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [shipping]
+      operationId: listShipments
+      summary: The store's shipments, newest first
+      description: "Permission: orders.read."
+      parameters:
+        - { name: order_id, in: query, schema: { $ref: "#/components/schemas/ULID" } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ShipmentStatus" } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [shipping]
+      operationId: createShipments
+      summary: Hand orders to a connected carrier
+      description: |
+        Permission: orders.fulfil. Each order must be ready_to_ship and
+        have no live shipment. Shipments are created at the carrier in the
+        background (status `requested`, then `created` with a tracking
+        number, or `failed` with the carrier's reason); the order moves to
+        shipped, delivered, failed_delivery or returned as the carrier
+        reports the parcel moving. One result per order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateShipmentsInput" }
+      responses:
+        "200":
+          description: One result per order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipResults" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/shipments/{shipment_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: shipment_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    get:
+      tags: [shipping]
+      operationId: getShipment
+      summary: A shipment with its timeline
+      description: "Permission: orders.read."
+      responses:
+        "200":
+          description: The shipment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: shipment_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [shipping]
+      operationId: cancelShipment
+      summary: Cancel a shipment
+      description: |
+        Permission: orders.fulfil. A shipment the carrier has not created
+        yet is cancelled at once; otherwise the carrier is asked in the
+        background (`cancel_requested_at` is set) and refuses once the
+        parcel is picked up. A final shipment is 409 shipment_not_cancellable.
+      responses:
+        "200":
+          description: The shipment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shipment" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/shipments/{shipment_id}/label:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: shipment_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    get:
+      tags: [shipping]
+      operationId: getShipmentLabel
+      summary: The shipment's label (airway bill)
+      description: "Permission: orders.read. 409 label_not_ready until the carrier issues it."
+      responses:
+        "200":
+          description: The label.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -3205,6 +3305,78 @@ components:
         connection: { $ref: "#/components/schemas/CarrierConnection" }
         webhook_url: { type: string }
         webhook_secret: { type: string, description: Shown only in this response. }
+    ShipmentStatus:
+      type: string
+      enum: [requested, created, in_transit, out_for_delivery, delivered, failed_attempt, returned, cancelled, failed]
+    Shipment:
+      type: object
+      required: [id, order_id, connection_id, carrier, status, cod_minor, currency, label_ready, status_at, created_at, version]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        order_id: { $ref: "#/components/schemas/ULID" }
+        connection_id: { $ref: "#/components/schemas/ULID" }
+        carrier: { type: string, example: bosta }
+        status: { $ref: "#/components/schemas/ShipmentStatus" }
+        tracking_number: { type: string }
+        cod_minor: { type: integer, format: int64, description: What the courier collects. }
+        currency: { type: string }
+        label_ready: { type: boolean }
+        carrier_state: { type: string, description: The carrier's own last state, for support. }
+        failure: { type: string, description: Why the carrier refused the shipment (status failed). }
+        cancel_requested_at: { type: string, format: date-time }
+        status_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+    ShipmentEvent:
+      type: object
+      required: [id, status, source, note, at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        status: { $ref: "#/components/schemas/ShipmentStatus" }
+        carrier_state: { type: string }
+        source: { type: string, enum: [api, webhook, poll, merchant] }
+        note: { type: string }
+        at: { type: string, format: date-time }
+    ShipmentDetail:
+      type: object
+      required: [shipment, events]
+      properties:
+        shipment: { $ref: "#/components/schemas/Shipment" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/ShipmentEvent" }
+    ShipmentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Shipment" }
+        next_cursor: { type: string }
+    CreateShipmentsInput:
+      type: object
+      required: [connection_id, order_ids]
+      properties:
+        connection_id: { $ref: "#/components/schemas/ULID" }
+        order_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ULID" }
+    ShipResult:
+      type: object
+      required: [order_id]
+      properties:
+        order_id: { $ref: "#/components/schemas/ULID" }
+        shipment: { $ref: "#/components/schemas/Shipment" }
+        error: { $ref: "#/components/schemas/BulkError" }
+    ShipResults:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/ShipResult" }
     WebhookReceipt:
       type: object
       required: [status]

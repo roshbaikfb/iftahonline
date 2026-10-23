@@ -22,6 +22,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/shiptest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
@@ -82,9 +83,11 @@ type fixture struct {
 	h              http.Handler
 	svc            *app.Service
 	storeA, storeB tenant.StoreID
-	ctxB           context.Context
+	ctxA, ctxB     context.Context
 	zoneB          domain.Zone
 	connB          domain.Connection
+	shipB          domain.Shipment
+	orders         *shiptest.Orders
 }
 
 func newFixture(t *testing.T) fixture {
@@ -104,8 +107,10 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	orders := shiptest.NewOrders()
 	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Cache: app.DefaultCacheConfig(),
 		Carriers: app.Carriers{fake.Name: fake.New()}, Sealer: sealer, PublicURL: "https://app.example.com",
+		Orders: orders, Jobs: shiptest.NewJobs(), Objects: shiptest.NewObjects(), Inbox: shiptest.NewInbox(),
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
 		}})
@@ -127,6 +132,20 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	shipped, err := svc.Ship(ctxB, []ulid.ID{orders.Add(t, "ready_to_ship")}, connB.Connection.ID)
+	if err != nil || shipped[0].Err != nil {
+		t.Fatalf("B's shipment: %+v %v", shipped, err)
+	}
+	if err = svc.CreateShipment(ctxB, shipped[0].Shipment.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.FetchLabel(ctxB, shipped[0].Shipment.ID); err != nil {
+		t.Fatal(err)
+	}
+	shipB, _, err := svc.Shipment(ctxB, shipped[0].Shipment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	zoneB, err := svc.CreateZone(ctxB, domain.ZoneInput{Name: zoneNameOfB, Areas: []string{"EG-ALX"}, RateMinor: 7777,
 		Cities: []domain.CityInput{{Name: cityNameOfB, RateMinor: 6666}}})
 	if err != nil {
@@ -135,7 +154,7 @@ func newFixture(t *testing.T) fixture {
 
 	pol, err := authz.NewPolicy(map[authz.Role][]authz.Permission{
 		authz.RoleOwner:    authz.Permissions(),
-		authz.RoleSupport:  {authz.PermShippingRead},
+		authz.RoleSupport:  {authz.PermShippingRead, authz.PermOrdersRead},
 		authz.RoleShipping: {authz.PermCatalogRead},
 	})
 	if err != nil {
@@ -150,7 +169,8 @@ func newFixture(t *testing.T) fixture {
 	}
 	mux := http.NewServeMux()
 	httpapi.Mount(mux, svc, pol, testkit.FakeStoreScope(resp, members), resp)
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, zoneB: zoneB, connB: connB.Connection}
+	return fixture{h: mux, svc: svc, orders: orders, storeA: a, storeB: b, ctxA: tenant.WithStore(ctx, a), ctxB: ctxB, zoneB: zoneB,
+		connB: connB.Connection, shipB: shipB}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -316,6 +336,18 @@ func TestCrossTenant(t *testing.T) {
 		}
 	}
 	update := `{"version":1,"name":"stolen","areas":["EG-ALX"],"rate_minor":1}`
+	sid := f.shipB.ID.String()
+	shipUnchanged := func(t testing.TB) {
+		t.Helper()
+		got, _, err := f.svc.Shipment(f.ctxB, f.shipB.ID)
+		if err != nil || got.Status != domain.ShipmentCreated || got.CancelRequestedAt != nil || got.Version != f.shipB.Version {
+			t.Fatalf("store B's shipment changed: %+v %v", got, err)
+		}
+		p, err := f.svc.Shipments(f.ctxB, domain.ShipmentQuery{})
+		if err != nil || len(p.Items) != 1 {
+			t.Fatalf("store B's shipments: %+v %v", p.Items, err)
+		}
+	}
 	connUnchanged := func(t testing.TB) {
 		t.Helper()
 		unchanged(t)
@@ -341,6 +373,15 @@ func TestCrossTenant(t *testing.T) {
 			Leaks: leaks, Unchanged: connUnchanged},
 		{OperationID: "disconnectCarrier", Request: req(t, http.MethodDelete, path(a, "/carriers/"+f.connB.ID.String()), tokOwnerA, ""),
 			Leaks: leaks, Unchanged: connUnchanged},
+		{OperationID: "listShipments", Request: req(t, http.MethodGet, path(b, "/shipments"), tokOwnerA, ""), Leaks: append(leaks, sid)},
+		{OperationID: "createShipments", Request: req(t, http.MethodPost, path(b, "/shipments"), tokOwnerA,
+			`{"connection_id":"`+f.connB.ID.String()+`","order_ids":["`+f.shipB.OrderID.String()+`"]}`), Leaks: leaks, Unchanged: shipUnchanged},
+		{OperationID: "getShipment", Request: req(t, http.MethodGet, path(b, "/shipments/"+sid), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "getShipment", Request: req(t, http.MethodGet, path(a, "/shipments/"+sid), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "cancelShipment", Request: req(t, http.MethodPost, path(b, "/shipments/"+sid+"/cancel"), tokOwnerA, ""), Leaks: leaks, Unchanged: shipUnchanged},
+		{OperationID: "cancelShipment", Request: req(t, http.MethodPost, path(a, "/shipments/"+sid+"/cancel"), tokOwnerA, ""), Leaks: leaks, Unchanged: shipUnchanged},
+		{OperationID: "getShipmentLabel", Request: req(t, http.MethodGet, path(b, "/shipments/"+sid+"/label"), tokOwnerA, ""), Leaks: append(leaks, "%PDF")},
+		{OperationID: "getShipmentLabel", Request: req(t, http.MethodGet, path(a, "/shipments/"+sid+"/label"), tokOwnerA, ""), Leaks: append(leaks, "%PDF")},
 		// A's store in the path, B's zone ID.
 		{OperationID: "updateShippingZone", Request: req(t, http.MethodPut, path(a, "/zones/"+zid), tokOwnerA, update), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "deleteShippingZone", Request: req(t, http.MethodDelete, path(a, "/zones/"+zid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
@@ -397,5 +438,86 @@ func TestCarrierConnections(t *testing.T) {
 	c0 := list["connections"].([]any)[0].(map[string]any)
 	if code != http.StatusOK || c0["status"] != "disconnected" || c0["webhook_url"] != nil || c0["disconnected_at"] == nil {
 		t.Fatalf("after disconnect = %d %v", code, list)
+	}
+}
+
+func TestShipmentsAPI(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	code, body := f.do(t, req(t, http.MethodPost, path(a, "/carriers"), tokOwnerA, `{"carrier":"fake","api_key":"a-key"}`))
+	if code != http.StatusCreated {
+		t.Fatal(code, body)
+	}
+	conn := body["connection"].(map[string]any)["id"].(string)
+	ready, pending := f.orders.Add(t, "ready_to_ship"), f.orders.Add(t, "pending")
+	code, body = f.do(t, req(t, http.MethodPost, path(a, "/shipments"), tokOwnerA,
+		`{"connection_id":"`+conn+`","order_ids":["`+ready.String()+`","`+pending.String()+`","nope"]}`))
+	results, _ := body["results"].([]any)
+	if code != http.StatusOK || len(results) != 3 {
+		t.Fatalf("createShipments = %d %v", code, body)
+	}
+	first := results[0].(map[string]any)
+	sh := first["shipment"].(map[string]any)
+	if sh["status"] != "requested" || sh["cod_minor"] != float64(52000) || sh["label_ready"] != false {
+		t.Fatalf("shipment %v", sh)
+	}
+	for i, wantCode := range []string{"order_not_ready", "order_not_found"} {
+		if e := results[i+1].(map[string]any)["error"].(map[string]any); e["code"] != wantCode {
+			t.Errorf("result %d: %v, want %s", i+1, e, wantCode)
+		}
+	}
+	id := sh["id"].(string)
+	sid, err := ulid.Parse(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, body = f.do(t, req(t, http.MethodGet, path(a, "/shipments/"+id+"/label"), tokOwnerA, "")); code != http.StatusConflict || body["code"] != "label_not_ready" {
+		t.Fatalf("label before the carrier = %d %v", code, body)
+	}
+	if err = f.svc.CreateShipment(f.ctxA, sid); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.svc.FetchLabel(f.ctxA, sid); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req(t, http.MethodGet, path(a, "/shipments/"+id+"/label"), tokSupportA, ""))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" || !strings.HasPrefix(rec.Body.String(), "%PDF") {
+		t.Fatalf("label = %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	code, detail := f.do(t, req(t, http.MethodGet, path(a, "/shipments/"+id), tokSupportA, ""))
+	got := detail["shipment"].(map[string]any)
+	if code != http.StatusOK || got["status"] != "created" || got["tracking_number"] == nil || got["label_ready"] != true || len(detail["events"].([]any)) != 2 {
+		t.Fatalf("getShipment = %d %v", code, detail)
+	}
+	code, page := f.do(t, req(t, http.MethodGet, path(a, "/shipments?order_id="+ready.String()+"&status=created&limit=1"), tokSupportA, ""))
+	if code != http.StatusOK || len(page["items"].([]any)) != 1 || page["next_cursor"] != nil {
+		t.Fatalf("listShipments = %d %v", code, page)
+	}
+	code, cancelled := f.do(t, req(t, http.MethodPost, path(a, "/shipments/"+id+"/cancel"), tokOwnerA, ""))
+	if code != http.StatusOK || cancelled["cancel_requested_at"] == nil {
+		t.Fatalf("cancelShipment = %d %v", code, cancelled)
+	}
+
+	for _, tt := range []struct {
+		name, method, path, token, body string
+		want                            int
+	}{
+		{"no orders", http.MethodPost, "/shipments", tokOwnerA, `{"connection_id":"` + conn + `","order_ids":[]}`, http.StatusUnprocessableEntity},
+		{"unknown connection", http.MethodPost, "/shipments", tokOwnerA, `{"connection_id":"` + f.connB.ID.String() + `","order_ids":["` + ready.String() + `"]}`,
+			http.StatusUnprocessableEntity},
+		{"bad connection id", http.MethodPost, "/shipments", tokOwnerA, `{"connection_id":"x","order_ids":["` + ready.String() + `"]}`, http.StatusUnprocessableEntity},
+		{"bad cursor", http.MethodGet, "/shipments?cursor=zzz", tokOwnerA, ``, http.StatusUnprocessableEntity},
+		{"bad shipment id", http.MethodGet, "/shipments/nope", tokOwnerA, ``, http.StatusNotFound},
+		{"unknown shipment", http.MethodPost, "/shipments/" + ulid.NewGenerator().New().String() + "/cancel", tokOwnerA, ``, http.StatusNotFound},
+		{"support cannot ship", http.MethodPost, "/shipments", tokSupportA, `{"connection_id":"` + conn + `","order_ids":["` + ready.String() + `"]}`, http.StatusForbidden},
+		{"support cannot cancel", http.MethodPost, "/shipments/" + id + "/cancel", tokSupportA, ``, http.StatusForbidden},
+		{"no orders.read", http.MethodGet, "/shipments", tokCatalogA, ``, http.StatusForbidden},
+		{"no orders.read for labels", http.MethodGet, "/shipments/" + id + "/label", tokCatalogA, ``, http.StatusForbidden},
+	} {
+		if got, out := f.do(t, req(t, tt.method, path(a, tt.path), tt.token, tt.body)); got != tt.want {
+			t.Errorf("%s: %d %v, want %d", tt.name, got, out, tt.want)
+		}
 	}
 }
