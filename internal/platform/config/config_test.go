@@ -124,6 +124,18 @@ func TestShipping(t *testing.T) {
 	}
 }
 
+func TestPayments(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "" {
+		t.Fatalf("defaults: %+v %v", c.Payments, err)
+	}
+	c, err = config.Load(config.RoleAPI, env(with("PAYMENTS_FAKE_GATEWAY", "true", "PAYMOB_BASE_URL", "https://accept.paymob.com")))
+	if err != nil || !c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "https://accept.paymob.com" {
+		t.Fatalf("set: %+v %v", c.Payments, err)
+	}
+}
+
 func TestSecretsAndMail(t *testing.T) {
 	t.Parallel()
 	for _, role := range []config.Role{config.RoleAPI, config.RoleWorker} {
@@ -146,6 +158,9 @@ func TestSecretsAndMail(t *testing.T) {
 		"no fake carrier in prod": {"APP_ENV", "production", "SHIPPING_FAKE_CARRIER", "true"},
 		"bad fake carrier flag":   {"SHIPPING_FAKE_CARRIER", "yes"},
 		"bad bosta url":           {"BOSTA_BASE_URL", "ftp://bosta"},
+		"no fake gateway in prod": {"APP_ENV", "production", "PAYMENTS_FAKE_GATEWAY", "true"},
+		"bad fake gateway flag":   {"PAYMENTS_FAKE_GATEWAY", "yes"},
+		"bad paymob url":          {"PAYMOB_BASE_URL", "ftp://paymob"},
 	}
 	for name, kv := range tests {
 		_, err := config.Load(config.RoleAPI, env(with(kv...)))
