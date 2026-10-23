@@ -41,8 +41,8 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
-	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -296,10 +296,10 @@ func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 	})
 }
 
-func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, auth authz.Authorizer) (*orders.Module, error) {
+func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, ship *shipping.Module, auth authz.Authorizer) (*orders.Module, error) {
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: cat.Catalog(), Customers: cust.Customers(), Auth: auth, Stores: orderStores(ten),
+		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Auth: auth, Stores: orderStores(ten),
 	})
 }
 
@@ -327,7 +327,7 @@ func orderStores(ten *tenancy.Module) orders.StoreSource {
 // newShopOrders builds what the storefront role needs to take orders:
 // stock and prices (not the whole catalog), customers, and the orders
 // module's shopper side.
-func newShopOrders(c clients, ten *tenancy.Module) (orders.Shop, error) {
+func newShopOrders(c clients, ten *tenancy.Module, ship *shipping.Module) (orders.Shop, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
 		return nil, err
@@ -341,7 +341,7 @@ func newShopOrders(c clients, ten *tenancy.Module) (orders.Shop, error) {
 		return nil, err
 	}
 	return orders.NewShop(orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: stock, Customers: cust.Customers(), Stores: orderStores(ten)})
+		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Stores: orderStores(ten)})
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
@@ -356,7 +356,7 @@ func newStorefront(c clients) (*storefront.Module, error) {
 
 // mountAPI wires the merchant API: identity's routes, and every store
 // module's routes behind identity's membership middleware and policy.
-func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
+func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	ten, err := newTenancy(c)
 	if err != nil {
 		return nil, err
@@ -377,15 +377,16 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	ord, err := newOrders(c, ten, cat, cust, id.Authorizer())
+	ship, err := newShipping(c, ten)
+	if err != nil {
+		return nil, err
+	}
+	go ship.Listen(ctx)
+	ord, err := newOrders(c, ten, cat, cust, ship, id.Authorizer())
 	if err != nil {
 		return nil, err
 	}
 	hooks, err := newWebhooks(c)
-	if err != nil {
-		return nil, err
-	}
-	ship, err := newShipping(c, ten)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +467,12 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
-	shopOrders, err := newShopOrders(c, ten)
+	ship, err := newShipping(c, ten)
+	if err != nil {
+		return nil, err
+	}
+	go ship.Listen(ctx)
+	shopOrders, err := newShopOrders(c, ten, ship)
 	if err != nil {
 		return nil, err
 	}

@@ -27,10 +27,11 @@ const (
 )
 
 // exportHeader is the CSV's first row. Column names stay English (they
-// are keys for spreadsheets and couriers' import tools).
+// are keys for spreadsheets and couriers' import tools). New columns go
+// at the end, so imports keyed by position keep working.
 func exportHeader() []string {
 	return []string{"order", "created_at", "status", "name", "phone", "governorate", "city", "address", "notes",
-		"items", "item_count", "subtotal", "shipping", "total", "currency"}
+		"items", "item_count", "subtotal", "shipping", "total", "currency", "cod_fee"}
 }
 
 // Exporter writes one export. Export prepares it, so that a bad query
@@ -136,7 +137,7 @@ func exportRow(o domain.Order, country geo.Country, loc *time.Location) []string
 	}
 	row := []string{o.Code(), o.CreatedAt.In(loc).Format(exportTimeStamp), string(o.Status), c.Name, c.Phone.Unmasked(), gov,
 		c.City, c.Address, c.Notes, strings.Join(items, "; "), strconv.Itoa(o.ItemCount),
-		decimal(o.Subtotal), decimal(o.Shipping), decimal(o.Total), string(o.Total.Currency())}
+		decimal(o.Subtotal), decimal(o.Shipping), decimal(o.Total), string(o.Total.Currency()), decimal(o.CODFee)}
 	for i := range row {
 		row[i] = cell(row[i])
 	}

@@ -57,12 +57,19 @@ test('home → product → landing page → one-step order, on a phone, in Arabi
   await form.getByLabel('الاسم').fill('منى أحمد');
   await form.getByLabel('رقم الموبايل').fill('010 1234 5678');
   await form.getByLabel('المحافظة').selectOption({ label: 'الإسكندرية' });
+  // Choosing the governorate shows what delivery adds (our script asks
+  // the store; the demo charges 60 outside Cairo and a 10 COD fee).
+  const quote = form.locator('[data-quote]');
+  await expect(quote).toHaveText('الشحن: 60 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 520 ج.م');
   await form.getByLabel('المدينة / المنطقة').fill('سموحة');
   await form.getByLabel('العنوان بالتفصيل').fill('14 شارع فوزي معاذ، الدور الثالث');
   await page.getByRole('button', { name: 'اطلب الآن' }).click();
   await expect(page).toHaveURL(/\/thank-you\/[0-9A-Z]{26}$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('شكرًا لطلبك!');
   await expect(page.locator('.subtotal')).toContainText('450 ج.م');
+  await expect(page.locator('.shipping')).toContainText('60 ج.م');
+  await expect(page.locator('.cod-fee')).toContainText('10 ج.م');
+  await expect(page.locator('.order-total')).toContainText('520 ج.م');
 
   expect(errors, 'no console errors (CSP violations, script errors)').toEqual([]);
 });
@@ -81,10 +88,12 @@ test('product → cart → checkout, on a phone, in Arabic', async ({ page }) =>
   await page.getByLabel('الاسم').fill('سارة علي');
   await page.getByLabel('رقم الموبايل').fill('01122223333');
   await page.getByLabel('المحافظة').selectOption({ label: 'القاهرة' });
+  await expect(page.locator('[data-quote]')).toHaveText('الشحن: 40 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 500 ج.م');
   await page.getByLabel('المدينة / المنطقة').fill('مدينة نصر');
   await page.getByLabel('العنوان بالتفصيل').fill('12 شارع عباس العقاد');
   await page.getByRole('button', { name: 'تأكيد الطلب' }).click();
   await expect(page).toHaveURL(/\/thank-you\/[0-9A-Z]{26}$/);
+  await expect(page.locator('.order-total')).toContainText('500 ج.م');
   await expect(page.locator('[data-cart-count]')).toBeHidden(); // the cart was emptied
 
   expect(errors, 'no console errors (CSP violations, script errors)').toEqual([]);

@@ -38,6 +38,11 @@ type (
 	// within the window).
 	Placement = app.Placement
 
+	// QuoteInput asks what an order would cost before it is placed.
+	QuoteInput = domain.QuoteInput
+	// Quote is what it would cost: subtotal, shipping, COD fee, total.
+	Quote = app.Quote
+
 	// StoreInfo is what orders need about the store in ctx.
 	StoreInfo = app.StoreInfo
 	// StoreSource provides it; cmd/platform adapts tenancy.
@@ -78,6 +83,10 @@ type Shop interface {
 	PlaceOrder(ctx context.Context, in NewOrder) (Placement, error)
 	// Get returns an order with its lines, or ErrOrderNotFound.
 	Get(ctx context.Context, id ulid.ID) (Order, error)
+	// Quote prices an order the way PlaceOrder will, for showing the
+	// shopper the shipping and COD fee before they submit. Errors: a
+	// validation error, as PlaceOrder's.
+	Quote(ctx context.Context, in QuoteInput) (Quote, error)
 }
 
 var _ Shop = (*app.Service)(nil)

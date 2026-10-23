@@ -289,7 +289,31 @@ func (fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummary,
 	if ref != "IFT-1001" {
 		return web.OrderSummary{}, web.ErrOrderNotFound
 	}
-	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}}, Total: egp(30000)}, nil
+	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}},
+		Subtotal: egp(30000), Shipping: egp(5000), CODFee: egp(1000), Total: egp(36000)}, nil
+}
+
+// Quote delivers to Cairo for 50, free from 1,000, with a 10 COD fee,
+// and not to Aswan; "EG-XX" is invalid and "EG-LX" fails.
+func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView, error) {
+	sub := int64(0)
+	for _, l := range req.Lines {
+		sub += 15000 * int64(l.Qty)
+	}
+	switch req.Governorate {
+	case "EG-XX":
+		return web.QuoteView{}, &web.OrderInvalidError{Fields: []string{"governorate"}}
+	case "EG-LX":
+		return web.QuoteView{}, errors.New("database down")
+	case "EG-ASN":
+		return web.QuoteView{Subtotal: egp(sub), Total: egp(sub)}, nil
+	}
+	ship := int64(5000)
+	if sub >= 100000 {
+		ship = 0
+	}
+	return web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(1000),
+		Total: egp(sub + ship + 1000)}, nil
 }
 
 type fakeSigner struct{}

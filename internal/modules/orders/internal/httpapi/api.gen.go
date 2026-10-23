@@ -137,6 +137,9 @@ type Order struct {
 	Address string `json:"address"`
 	City    string `json:"city"`
 
+	// CodFeeMinor The cash-on-delivery fee quoted when the order was placed.
+	CodFeeMinor int64 `json:"cod_fee_minor"`
+
 	// Code Short reference for people (the ID's last 8 characters).
 	//
 	// Example: 7P0R1S2T
@@ -159,15 +162,19 @@ type Order struct {
 	Notes     string `json:"notes"`
 
 	// Phone Example: +201012345678
-	Phone           string      `json:"phone"`
+	Phone string `json:"phone"`
+
+	// ShippingMinor The delivery rate quoted when the order was placed (ADR-0025).
 	ShippingMinor   int64       `json:"shipping_minor"`
 	Source          OrderSource `json:"source"`
 	Status          OrderStatus `json:"status"`
 	StatusChangedAt time.Time   `json:"status_changed_at"`
 	SubtotalMinor   int64       `json:"subtotal_minor"`
-	TotalMinor      int64       `json:"total_minor"`
-	UpdatedAt       time.Time   `json:"updated_at"`
-	Version         int         `json:"version"`
+
+	// TotalMinor subtotal + shipping + COD fee.
+	TotalMinor int64     `json:"total_minor"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Version    int       `json:"version"`
 }
 
 // OrderSource defines model for Order.Source.

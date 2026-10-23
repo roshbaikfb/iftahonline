@@ -2675,7 +2675,7 @@ components:
     Order:
       type: object
       required: [id, code, status, version, source, customer_id, name, phone, governorate, city, address, notes,
-                 currency, subtotal_minor, shipping_minor, total_minor, item_count, created_at, updated_at, status_changed_at]
+                 currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, created_at, updated_at, status_changed_at]
       properties:
         id: { $ref: "#/components/schemas/ULID" }
         code: { type: string, description: Short reference for people (the ID's last 8 characters)., example: 7P0R1S2T }
@@ -2691,8 +2691,9 @@ components:
         notes: { type: string }
         currency: { type: string, example: EGP }
         subtotal_minor: { type: integer, format: int64 }
-        shipping_minor: { type: integer, format: int64 }
-        total_minor: { type: integer, format: int64 }
+        shipping_minor: { type: integer, format: int64, description: The delivery rate quoted when the order was placed (ADR-0025). }
+        cod_fee_minor: { type: integer, format: int64, description: The cash-on-delivery fee quoted when the order was placed. }
+        total_minor: { type: integer, format: int64, description: subtotal + shipping + COD fee. }
         item_count: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

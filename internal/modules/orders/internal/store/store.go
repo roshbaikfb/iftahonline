@@ -45,7 +45,7 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		ID: o.ID, StoreID: store, CreatedAt: o.CreatedAt, Source: string(o.Source), CustomerID: o.CustomerID,
 		Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City, Address: c.Address, Notes: c.Notes,
 		Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(), ShippingMinor: o.Shipping.Amount(),
-		TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
+		CodFeeMinor: o.CODFee.Amount(), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -328,6 +328,10 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: %w", err)
 	}
+	cod, err := money.New(r.CodFeeMinor, cur)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("orders store: %w", err)
+	}
 	total, err := money.New(r.TotalMinor, cur)
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: %w", err)
@@ -339,7 +343,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	return domain.Order{
 		ID: r.ID, Status: domain.Status(r.Status), Version: int(r.Version), Source: domain.Source(r.Source), CustomerID: r.CustomerID,
 		Contact:  domain.Contact{Name: r.Name, Phone: p, Governorate: r.Governorate, City: r.City, Address: r.Address, Notes: r.Notes},
-		Subtotal: sub, Shipping: ship, Total: total, ItemCount: int(r.ItemCount),
+		Subtotal: sub, Shipping: ship, CODFee: cod, Total: total, ItemCount: int(r.ItemCount),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 	}, nil
 }

@@ -36,10 +36,13 @@ var _ Carts = (*app.Service)(nil)
 // OrderSummary is what the thank-you page shows of a placed order. The
 // orders module provides it.
 type OrderSummary struct {
-	Ref   string // the order's ID, in the thank-you URL
-	Code  string // its short code, shown to the shopper
-	Lines []OrderLine
-	Total money.Money
+	Ref      string // the order's ID, in the thank-you URL
+	Code     string // its short code, shown to the shopper
+	Lines    []OrderLine
+	Subtotal money.Money
+	Shipping money.Money
+	CODFee   money.Money
+	Total    money.Money
 }
 
 // OrderLine is one line of an OrderSummary.
@@ -60,6 +63,25 @@ type Orders interface {
 	// earlier order for a repeated submit). Errors: *OrderInvalidError,
 	// ErrOrderRefused, ErrOrderOutOfStock, ErrOrderUnavailable.
 	PlaceOrder(ctx context.Context, req OrderRequest) (string, error)
+	// Quote prices an order before it is placed: shipping and COD fee to
+	// an address. Errors: *OrderInvalidError, ErrOrderUnavailable.
+	Quote(ctx context.Context, req QuoteRequest) (QuoteView, error)
+}
+
+// QuoteRequest is the part of the order form a quote needs.
+type QuoteRequest struct {
+	Governorate, City string
+	Lines             []OrderRequestLine
+}
+
+// QuoteView is what an order would cost.
+type QuoteView struct {
+	Deliverable  bool
+	FreeShipping bool
+	Subtotal     money.Money
+	Shipping     money.Money
+	CODFee       money.Money
+	Total        money.Money
 }
 
 // OrderRequest is the one-step form as submitted.
@@ -86,6 +108,8 @@ var (
 // OrderInvalidError names the form fields that need fixing.
 type OrderInvalidError struct {
 	Fields []string // name, phone, governorate, city, address, notes, lines
+	// NotDelivered: the store does not deliver to the governorate.
+	NotDelivered bool
 }
 
 func (e *OrderInvalidError) Error() string {

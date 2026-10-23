@@ -3,9 +3,9 @@
 
 -- name: InsertOrder :exec
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
-                    currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
+                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
-        @currency, @subtotal_minor, @shipping_minor, @total_minor, @item_count, @lines_hash, @created_at, @created_at);
+        @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @total_minor, @item_count, @lines_hash, @created_at, @created_at);
 
 -- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,

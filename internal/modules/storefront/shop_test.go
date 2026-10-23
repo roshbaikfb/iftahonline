@@ -24,6 +24,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -85,6 +86,9 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 			t.Fatal(err)
 		}
 	}
+	if err = bus.Subscribe(shipping.EventRatesChanged, shipping.InvalidateSubscriber, shipping.InvalidateHandler(rdb)); err != nil {
+		t.Fatal(err)
+	}
 	startWorker(t, pool, bus, log)
 
 	ten, err := tenancy.New(tenancy.Deps{
@@ -136,7 +140,17 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ship, err := shipping.New(shipping.Deps{Pool: pool, IDs: ids, Redis: rdb, Log: log, Events: bus,
+		Stores: func(ctx context.Context) (shipping.StoreInfo, error) {
+			st, getErr := stores.GetStore(ctx)
+			c, _ := geo.CountryOf(st.Currency)
+			return shipping.StoreInfo{Currency: st.Currency, Country: c}, getErr
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+		Shipping: ship.Quoter(),
 		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
 			st, getErr := stores.GetStore(ctx)
 			c, _ := geo.CountryOf(st.Currency)
@@ -153,6 +167,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	listenCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
 	t.Cleanup(stop)
 	go shop.Listen(listenCtx)
+	go ship.Listen(listenCtx)
 
 	resp := problem.NewResponder(log)
 	members := map[string]testkit.FakeMember{}
@@ -165,6 +180,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	cat.Mount(apiMux, pol, scope, resp)
 	look.Mount(apiMux, pol, scope, resp)
 	cust.Mount(apiMux, pol, scope, resp)
+	ship.Mount(apiMux, pol, scope, resp)
 	shopMux := http.NewServeMux()
 	server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())(server.Routes{Mux: shopMux, Problems: resp, Log: log})
 	return platform{api: apiMux, shop: shopMux, ten: ten, pool: pool}, members
@@ -433,5 +449,79 @@ func TestOrderFromLandingPage(t *testing.T) {
 	other := p.createStore(t, members, "other-"+tag, "متجر آخر", "ar", "EGP")
 	if rec = p.visit(t, other.host, loc); rec.Code != http.StatusNotFound {
 		t.Fatalf("thank-you on another store: %d", rec.Code)
+	}
+}
+
+// TestOrderWithShipping: the store's zones price the order. The form's
+// quote shows shipping, the COD fee and the total before submitting; a
+// governorate outside the zones is refused with a clear message; the
+// order and its thank-you page carry the same amounts.
+func TestOrderWithShipping(t *testing.T) {
+	t.Parallel()
+	p, members := newPlatform(t)
+	tag := strings.ToLower(ulid.NewGenerator().New().String()[18:])
+	s := p.createStore(t, members, "ship-"+tag, "متجر الشحن", "ar", "EGP")
+	prod := p.call(t, s, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
+	variant := prod["variants"].([]any)[0].(map[string]any)["id"].(string)
+	p.call(t, s, http.MethodPost, "/shipping/zones", `{"name":"القاهرة","areas":["EG-C"],"rate_minor":5000,"cities":[{"name":"مدينة نصر","rate_minor":4000}]}`, http.StatusCreated)
+	p.call(t, s, http.MethodPut, "/shipping/settings", `{"version":0,"cod_fee":{"fixed_minor":1000,"bp":0,"min_minor":0,"max_minor":0}}`, http.StatusOK)
+
+	post := func(path string, form url.Values, n int) *httptest.ResponseRecorder {
+		rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, strings.NewReader(form.Encode()))
+		rq.Host = s.host
+		rq.RemoteAddr = fmt.Sprintf("203.0.113.%d:40000", n)
+		rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rq.Header.Set("Origin", "https://"+s.host)
+		rec := httptest.NewRecorder()
+		p.shop.ServeHTTP(rec, rq)
+		return rec
+	}
+	quote := func(gov, city string) map[string]any {
+		rec := post("/order/quote", url.Values{"variant": {variant}, "qty": {"2"}, "governorate": {gov}, "city": {city}}, 1)
+		var q map[string]any
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Cache-Control"), "no-store") || json.Unmarshal(rec.Body.Bytes(), &q) != nil {
+			t.Fatalf("quote %s/%s: %d %q %s", gov, city, rec.Code, rec.Header().Get("Cache-Control"), rec.Body)
+		}
+		return q
+	}
+	if q := quote("EG-C", "مدينة نصر"); q["deliverable"] != true || q["text"] != "الشحن: 40 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 950 ج.م" {
+		t.Fatalf("quote with a city rate: %v", q)
+	}
+	if q := quote("EG-C", "الزمالك"); q["text"] != "الشحن: 50 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 960 ج.م" {
+		t.Fatalf("quote with the zone rate: %v", q)
+	}
+	if q := quote("EG-ALX", ""); q["deliverable"] != false || q["text"] != "لا نوصّل إلى هذه المحافظة حاليًا." {
+		t.Fatalf("quote outside the zones: %v", q)
+	}
+	if q := quote("", ""); q["text"] != "" {
+		t.Fatalf("quote without a governorate: %v", q)
+	}
+
+	form := url.Values{"variant": {variant}, "qty": {"2"}, "key": {"ship-1"}, "name": {"منى"}, "phone": {"01012345678"},
+		"governorate": {"EG-ALX"}, "city": {"سموحة"}, "address": {"14 شارع فوزي معاذ"}}
+	if rec := post("/order", form, 2); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "لا نوصّل إلى هذه المحافظة حاليًا.") {
+		t.Fatalf("order outside the zones: %d", rec.Code)
+	}
+	form.Set("governorate", "EG-C")
+	form.Set("city", "مدينة نصر")
+	form.Set("key", "ship-2")
+	rec := post("/order", form, 3)
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/thank-you/") {
+		t.Fatalf("order: %d %s", rec.Code, rec.Body)
+	}
+	body := p.visit(t, s.host, loc).Body.String()
+	for _, want := range []string{"المجموع: <strong>900 ج.م", "الشحن: <strong>40 ج.م", "رسوم الدفع عند الاستلام: <strong>10 ج.م", "الإجمالي: <strong>950 ج.م"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("thank-you lacks %q", want)
+		}
+	}
+
+	// The merchant changes the rate: the next quote follows at once.
+	cfg := p.call(t, s, http.MethodGet, "/shipping", "", http.StatusOK)
+	zone := cfg["zones"].([]any)[0].(map[string]any)
+	p.call(t, s, http.MethodPut, "/shipping/zones/"+zone["id"].(string), `{"version":1,"name":"القاهرة","areas":["EG-C"],"rate_minor":3000}`, http.StatusOK)
+	if q := quote("EG-C", "مدينة نصر"); q["text"] != "الشحن: 30 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 940 ج.م" {
+		t.Fatalf("quote after the rate change: %v", q)
 	}
 }

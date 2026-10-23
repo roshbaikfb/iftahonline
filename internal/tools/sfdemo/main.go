@@ -20,6 +20,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -204,7 +206,16 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	if err != nil {
 		return nil, demo{}, nil, err
 	}
+	ship, err := shipping.New(shipping.Deps{Pool: pool, IDs: ids, Redis: rdb, Log: log, Events: bus,
+		Stores: func(ctx context.Context) (shipping.StoreInfo, error) {
+			c, infoErr := country(ctx)
+			return shipping.StoreInfo{Currency: money.EGP, Country: c}, infoErr
+		}})
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
 	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+		Shipping: ship.Quoter(),
 		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
 			c, infoErr := country(ctx)
 			return orders.StoreInfo{Currency: money.EGP, Country: c, Location: time.UTC}, infoErr
@@ -232,6 +243,7 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	mux := http.NewServeMux()
 	cat.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
 	look.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
+	ship.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
 	return shop, demo{h: mux, members: members}, ten, nil
 }
 
@@ -283,10 +295,15 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, 
 			{"type":"product_grid","settings":{"source":"newest","limit":8}},
 			{"type":"trust_badges","settings":{"items":[{"icon":"cod"},{"icon":"shipping"},{"icon":"returns"}]}}]}`},
 		{http.MethodPost, "/storefront/pages", `{"title":"عرض الصيف","slug":"summer","status":"published","sections":[
-			{"type":"product_landing","settings":{"product_id":"` + productID + `","headline":"عطر العود الملكي بخصم ٢٥٪","highlights":["ثبات أكثر من ١٢ ساعة","توصيل مجاني","الدفع عند الاستلام"]}},
+			{"type":"product_landing","settings":{"product_id":"` + productID + `","headline":"عطر العود الملكي بخصم ٢٥٪","highlights":["ثبات أكثر من ١٢ ساعة","شحن مجاني فوق ١٠٠٠ ج.م","الدفع عند الاستلام"]}},
 			{"type":"countdown","settings":{"ends_at":"` + ends + `"}},
 			{"type":"reviews","settings":{"items":[{"name":"منى","location":"القاهرة","rating":5,"text":"رائحة رائعة ووصل بسرعة."},{"name":"أحمد","location":"الإسكندرية","rating":4,"text":"جودة ممتازة."}]}},
 			{"type":"faq","settings":{"items":[{"question":"متى يصل الطلب؟","answer":"خلال ٢ إلى ٤ أيام عمل."},{"question":"هل يمكن الاسترجاع؟","answer":"نعم، خلال ١٤ يومًا."}]}}]}`},
+		// Shipping (ADR-0025): Cairo and Giza 40, elsewhere 60, free from
+		// 1,000, and a 10 cash-on-delivery fee.
+		{http.MethodPost, "/shipping/zones", `{"name":"القاهرة والجيزة","areas":["EG-C","EG-GZ"],"rate_minor":4000}`},
+		{http.MethodPost, "/shipping/zones", `{"name":"باقي المحافظات","areas":` + otherAreas("EG-C", "EG-GZ") + `,"rate_minor":6000}`},
+		{http.MethodPut, "/shipping/settings", `{"version":0,"cod_fee":{"fixed_minor":1000,"bp":0,"min_minor":0,"max_minor":0},"free_over_minor":100000}`},
 		{http.MethodPut, "/storefront/policies/refund", `{"title":"سياسة الاسترجاع","body":"يمكنك استرجاع المنتج خلال ١٤ يومًا من الاستلام.\n\nيجب أن يكون المنتج بحالته الأصلية.","status":"published"}`},
 	}
 	if load {
@@ -299,4 +316,16 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, 
 		}
 	}
 	return nil
+}
+
+// otherAreas is a JSON array of Egypt's governorates except skip. Codes
+// are ISO 3166-2 (letters, digits, a dash): nothing to escape.
+func otherAreas(skip ...string) string {
+	var codes []string
+	for _, a := range geo.Areas(geo.EG) {
+		if !slices.Contains(skip, a.Code) {
+			codes = append(codes, `"`+a.Code+`"`)
+		}
+	}
+	return "[" + strings.Join(codes, ",") + "]"
 }

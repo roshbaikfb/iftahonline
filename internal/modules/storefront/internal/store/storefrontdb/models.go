@@ -197,6 +197,7 @@ type Order struct {
 	LinesHash       []byte
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
+	CodFeeMinor     int64
 }
 
 type OrderEvent struct {

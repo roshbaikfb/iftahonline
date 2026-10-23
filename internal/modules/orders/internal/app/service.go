@@ -18,6 +18,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -36,6 +37,8 @@ var (
 	ErrIdempotencyKeyReused = errs.Conflict("idempotency_key_reused", "this Idempotency-Key was already used for a different order")
 	ErrVersionConflict      = errs.Conflict("version_conflict", "the order changed since it was read; reload it and try again")
 	errCurrencyMismatch     = errors.New("orders: a variant is priced in another currency than the store's")
+	errNotDelivered         = errs.Validation(errs.FieldError{Field: "governorate", Code: "not_delivered",
+		Message: "the store does not deliver to this governorate"})
 )
 
 // KeyRetention is how long an Idempotency-Key is remembered.
@@ -54,6 +57,11 @@ type Catalog interface {
 type Customers interface {
 	Blocked(ctx context.Context, p phone.E164) (bool, error)
 	RecordOrderTx(ctx context.Context, tx pgx.Tx, p phone.E164, name string) (customers.Customer, error)
+}
+
+// Shipping is what orders use of the shipping module's api.go.
+type Shipping interface {
+	Quote(ctx context.Context, req shipping.QuoteRequest) (shipping.Quote, error)
 }
 
 // StoreInfo is what orders need to know about the store in ctx.
@@ -75,6 +83,7 @@ type Service struct {
 	events    eventbus.Publisher
 	catalog   Catalog
 	customers Customers
+	shipping  Shipping
 	stores    StoreSource
 	auth      authz.Authorizer
 	now       func() time.Time
@@ -88,7 +97,10 @@ type Deps struct {
 	Events    eventbus.Publisher
 	Catalog   Catalog
 	Customers Customers
-	Stores    StoreSource
+	// Shipping quotes the delivery rate and COD fee; nil charges nothing
+	// (tests that are not about money).
+	Shipping Shipping
+	Stores   StoreSource
 	// Auth checks each transition's own permission (domain.Step).
 	Auth authz.Authorizer
 }
@@ -102,7 +114,7 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
-		stores: d.Stores, auth: d.Auth, now: time.Now}
+		shipping: d.Shipping, stores: d.Stores, auth: d.Auth, now: time.Now}
 }
 
 // SetClock replaces the clock (tests of the duplicate window).
@@ -248,30 +260,48 @@ func (s *Service) mustReplay(ctx context.Context, d domain.Draft) (Placement, er
 	return p, err
 }
 
-// price builds the order from the catalog's current prices: every line
-// must still be for sale, in the store's currency.
+// price builds the order from the catalog's current prices (every line
+// must still be for sale, in the store's currency) and the delivery
+// quote for its address.
 func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency) (domain.Order, error) {
-	ids := make([]ulid.ID, len(d.Lines))
-	for i, l := range d.Lines {
+	id := s.ids.New()
+	o := domain.Order{ID: id, Status: domain.StatusPending, Version: 1, Source: d.Source, Contact: d.Contact, CreatedAt: domain.CreatedAtOf(id)}
+	o.UpdatedAt, o.StatusChangedAt = o.CreatedAt, o.CreatedAt
+	var err error
+	if o.Lines, o.Subtotal, o.ItemCount, err = s.priceLines(ctx, d.Lines, cur); err != nil {
+		return domain.Order{}, err
+	}
+	q, err := s.charges(ctx, d.Contact.Governorate, d.Contact.City, o.Subtotal)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if !q.Deliverable {
+		return domain.Order{}, errNotDelivered
+	}
+	o.Shipping, o.CODFee, o.Total = q.Shipping, q.CODFee, q.Total
+	return o, nil
+}
+
+// priceLines prices lines from the catalog's current prices.
+func (s *Service) priceLines(ctx context.Context, in []domain.LineInput, cur money.Currency) (lines []domain.Line, subtotal money.Money, items int, err error) {
+	ids := make([]ulid.ID, len(in))
+	for i, l := range in {
 		ids[i] = l.VariantID
 	}
 	vs, err := s.catalog.SellableVariants(ctx, ids)
 	if err != nil {
-		return domain.Order{}, err
+		return nil, money.Money{}, 0, err
 	}
 	byID := make(map[ulid.ID]catalog.SellableVariant, len(vs))
 	for _, v := range vs {
 		byID[v.VariantID] = v
 	}
-	id := s.ids.New()
-	o := domain.Order{ID: id, Status: domain.StatusPending, Version: 1, Source: d.Source, Contact: d.Contact,
-		CreatedAt: domain.CreatedAtOf(id), Lines: make([]domain.Line, len(d.Lines))}
-	o.UpdatedAt, o.StatusChangedAt = o.CreatedAt, o.CreatedAt
-	if o.Subtotal, err = money.Zero(cur); err != nil {
-		return domain.Order{}, err
+	if subtotal, err = money.Zero(cur); err != nil {
+		return nil, money.Money{}, 0, err
 	}
+	lines = make([]domain.Line, len(in))
 	var unavailable []errs.FieldError
-	for i, l := range d.Lines {
+	for i, l := range in {
 		v, ok := byID[l.VariantID]
 		if !ok {
 			unavailable = append(unavailable, errs.FieldError{Field: fmt.Sprintf("lines[%d].variant_id", i), Code: "unavailable",
@@ -279,27 +309,81 @@ func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency)
 			continue
 		}
 		if v.Price.Currency() != cur {
-			return domain.Order{}, errCurrencyMismatch
+			return nil, money.Money{}, 0, errCurrencyMismatch
 		}
 		total, mulErr := v.Price.MulInt(int64(l.Qty))
 		if mulErr != nil {
-			return domain.Order{}, mulErr
+			return nil, money.Money{}, 0, mulErr
 		}
-		if o.Subtotal, err = o.Subtotal.Add(total); err != nil {
-			return domain.Order{}, err
+		if subtotal, err = subtotal.Add(total); err != nil {
+			return nil, money.Money{}, 0, err
 		}
-		o.Lines[i] = domain.Line{VariantID: v.VariantID, ProductID: v.ProductID, Title: v.ProductTitle,
+		lines[i] = domain.Line{VariantID: v.VariantID, ProductID: v.ProductID, Title: v.ProductTitle,
 			VariantTitle: strings.Join(v.OptionValues, " / "), SKU: v.SKU, Qty: l.Qty, UnitPrice: v.Price, Total: total}
-		o.ItemCount += l.Qty
+		items += l.Qty
 	}
 	if len(unavailable) > 0 {
-		return domain.Order{}, errs.Validation(unavailable...)
+		return nil, money.Money{}, 0, errs.Validation(unavailable...)
 	}
-	if o.Shipping, err = money.Zero(cur); err != nil { // shipping rates come later (ADR-0021)
-		return domain.Order{}, err
+	return lines, subtotal, items, nil
+}
+
+// Quote is what an order would cost: its lines at today's prices and
+// its delivery to an address.
+type Quote struct {
+	Subtotal     money.Money
+	Shipping     money.Money
+	CODFee       money.Money
+	Total        money.Money
+	Deliverable  bool // false: the store does not deliver there (amounts are the subtotal only)
+	FreeShipping bool
+}
+
+// charges quotes delivering subtotal's order to governorate and city.
+func (s *Service) charges(ctx context.Context, governorate, city string, subtotal money.Money) (Quote, error) {
+	q := Quote{Subtotal: subtotal, Total: subtotal, Deliverable: true}
+	var err error
+	if q.Shipping, err = money.Zero(subtotal.Currency()); err != nil {
+		return Quote{}, err
 	}
-	o.Total = o.Subtotal
-	return o, nil
+	q.CODFee = q.Shipping
+	if s.shipping == nil {
+		return q, nil
+	}
+	sq, err := s.shipping.Quote(ctx, shipping.QuoteRequest{Governorate: governorate, City: city, Subtotal: subtotal})
+	if err != nil {
+		return Quote{}, err
+	}
+	if !sq.Deliverable {
+		q.Deliverable = false
+		return q, nil
+	}
+	q.Shipping, q.CODFee, q.FreeShipping = sq.Shipping, sq.CODFee, sq.FreeShipping
+	if q.Total, err = q.Total.Add(q.Shipping); err != nil {
+		return Quote{}, err
+	}
+	if q.Total, err = q.Total.Add(q.CODFee); err != nil {
+		return Quote{}, err
+	}
+	return q, nil
+}
+
+// Quote prices an order before it is placed, the same way PlaceOrder
+// will: lines from the catalog, delivery from shipping.
+func (s *Service) Quote(ctx context.Context, in domain.QuoteInput) (Quote, error) {
+	info, err := s.stores(ctx)
+	if err != nil {
+		return Quote{}, err
+	}
+	q, err := domain.ValidateQuote(in, info.Country)
+	if err != nil {
+		return Quote{}, err
+	}
+	_, subtotal, _, err := s.priceLines(ctx, q.Lines, info.Currency)
+	if err != nil {
+		return Quote{}, err
+	}
+	return s.charges(ctx, q.Governorate, q.City, subtotal)
 }
 
 // Transition moves an order to status to, if the state machine allows it
