@@ -16,8 +16,8 @@ SELECT @store_id, @order_created_at, @order_id, n, (@variant_ids::uuid[])[n], (@
 FROM generate_subscripts(@variant_ids::uuid[], 1) AS n;
 
 -- name: InsertOrderEvent :exec
-INSERT INTO order_events (id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, note)
-VALUES (@id, @store_id, @order_created_at, @order_id, @occurred_at, sqlc.narg(from_status), @to_status, sqlc.narg(actor_user_id), @note);
+INSERT INTO order_events (id, store_id, order_created_at, order_id, occurred_at, from_status, to_status, actor_user_id, actor, note)
+VALUES (@id, @store_id, @order_created_at, @order_id, @occurred_at, sqlc.narg(from_status), @to_status, sqlc.narg(actor_user_id), @actor, @note);
 
 -- name: GetOrder :one
 SELECT * FROM orders WHERE store_id = @store_id AND created_at = @created_at AND id = @id;

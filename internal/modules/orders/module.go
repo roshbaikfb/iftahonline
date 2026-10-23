@@ -55,6 +55,9 @@ func New(d Deps) (*Module, error) {
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: d.Auth})}, nil
 }
 
+// Fulfilment is the API courier integrations use.
+func (m *Module) Fulfilment() Fulfilment { return m.svc }
+
 // Shop is the API shoppers use (through the storefront).
 func (m *Module) Shop() Shop { return m.svc }
 

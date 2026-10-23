@@ -292,6 +292,10 @@ func toEvents(es []domain.Event) []OrderEvent {
 			a := e.ActorUserID.String()
 			out[i].ActorUserId = &a
 		}
+		if e.Actor != "" {
+			a := e.Actor
+			out[i].Actor = &a
+		}
 	}
 	return out
 }

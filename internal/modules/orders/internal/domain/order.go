@@ -277,6 +277,7 @@ type Event struct {
 	From        Status // empty when placed
 	To          Status
 	ActorUserID *ulid.ID // nil for the shopper or the system
+	Actor       string   // the system actor, e.g. "carrier:bosta"; empty for people
 	Note        string
 	At          time.Time
 }

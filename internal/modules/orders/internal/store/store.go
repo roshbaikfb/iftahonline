@@ -79,7 +79,7 @@ func InsertEvent(ctx context.Context, tx Tx, orderID ulid.ID, e domain.Event) er
 	}
 	if err = ordersdb.New(tx).InsertOrderEvent(ctx, ordersdb.InsertOrderEventParams{
 		ID: e.ID, StoreID: store, OrderCreatedAt: domain.CreatedAtOf(orderID), OrderID: orderID, OccurredAt: e.At,
-		FromStatus: from, ToStatus: string(e.To), ActorUserID: e.ActorUserID, Note: e.Note,
+		FromStatus: from, ToStatus: string(e.To), ActorUserID: e.ActorUserID, Actor: e.Actor, Note: e.Note,
 	}); err != nil {
 		return fmt.Errorf("orders store: insert event: %w", err)
 	}
@@ -179,7 +179,7 @@ func Events(ctx context.Context, tx Tx, id ulid.ID) ([]domain.Event, error) {
 	}
 	out := make([]domain.Event, len(rows))
 	for i, r := range rows {
-		out[i] = domain.Event{ID: r.ID, To: domain.Status(r.ToStatus), ActorUserID: r.ActorUserID, Note: r.Note, At: r.OccurredAt}
+		out[i] = domain.Event{ID: r.ID, To: domain.Status(r.ToStatus), ActorUserID: r.ActorUserID, Actor: r.Actor, Note: r.Note, At: r.OccurredAt}
 		if r.FromStatus != nil {
 			out[i].From = domain.Status(*r.FromStatus)
 		}

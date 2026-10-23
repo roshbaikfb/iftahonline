@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -228,7 +229,7 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 	if err = store.Insert(ctx, tx, *o, d.LinesHash); err != nil {
 		return err
 	}
-	return s.recordTx(ctx, tx, *o, "", domain.StatusPending, "", "order.placed", domain.EventOrderPlaced,
+	return s.recordTx(ctx, tx, *o, "", domain.StatusPending, "", "", "order.placed", domain.EventOrderPlaced,
 		func(m event.Meta) event.Event { return domain.OrderPlaced{Meta: m, OrderID: o.ID, Source: o.Source} })
 }
 
@@ -396,26 +397,53 @@ func (s *Service) Transition(ctx context.Context, id ulid.ID, to domain.Status, 
 	}
 	var o domain.Order
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		o, txErr = s.transitionTx(ctx, tx, id, to, note, version)
+		o, _, txErr = s.transitionTx(ctx, tx, id, to, note, version, "")
 		return txErr
 	})
 	return o, notFound(err)
 }
 
-func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, note string, version int) (domain.Order, error) {
+var actorRE = regexp.MustCompile(`^[a-z]+:[a-z0-9_]{1,32}$`)
+
+// TransitionSystemTx moves an order on behalf of a system (a carrier's
+// tracking, ADR-0027) in the caller's transaction: the state machine's
+// edges and stock effects, without a person's permission. actor names
+// the system ("carrier:bosta") on the timeline and in the audit log.
+// Moving an order to the status it has is a no-op (moved is false), so
+// a repeated tracking update changes nothing.
+func (s *Service) TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, actor, note string) (moved bool, err error) {
+	if !actorRE.MatchString(actor) {
+		return false, fmt.Errorf("orders: invalid system actor %q", actor)
+	}
+	if note, err = cleanNote(note); err != nil {
+		return false, err
+	}
+	_, moved, err = s.transitionTx(ctx, tx, id, to, note, 0, actor)
+	return moved, notFound(err)
+}
+
+// transitionTx makes one move. A person's move (actor empty) needs the
+// step's permission; a system's skips it and treats the current status
+// as already reached.
+func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, note string, version int, actor string) (domain.Order, bool, error) {
 	o, err := store.Get(ctx, tx, id, true)
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, false, err
 	}
 	if version != 0 && version != o.Version {
-		return domain.Order{}, ErrVersionConflict
+		return domain.Order{}, false, ErrVersionConflict
+	}
+	if actor != "" && o.Status == to {
+		return o, false, nil
 	}
 	step, err := domain.Transition(o.Status, to)
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, false, err
 	}
-	if err = s.auth.Authorize(ctx, step.Permission); err != nil {
-		return domain.Order{}, err
+	if actor == "" {
+		if err = s.auth.Authorize(ctx, step.Permission); err != nil {
+			return domain.Order{}, false, err
+		}
 	}
 	ref := stockRef(o.ID)
 	switch step.Stock {
@@ -428,13 +456,13 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to do
 	case domain.StockNone:
 	}
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, false, err
 	}
 	moved, err := store.SetStatus(ctx, tx, o.ID, to, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, false, err
 	}
-	return moved, s.recordTx(ctx, tx, moved, o.Status, to, note, "order."+string(to), domain.EventOrderStatusChanged,
+	return moved, true, s.recordTx(ctx, tx, moved, o.Status, to, note, actor, "order."+string(to), domain.EventOrderStatusChanged,
 		func(m event.Meta) event.Event {
 			return domain.OrderStatusChanged{Meta: m, OrderID: o.ID, From: o.Status, To: to}
 		})
@@ -443,9 +471,9 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to do
 // recordTx writes what every state change leaves behind: the timeline
 // row, the audit entry (IDs and statuses only, no contact details) and
 // the domain event of type typ.
-func (s *Service) recordTx(ctx context.Context, tx pgx.Tx, o domain.Order, from, to domain.Status, note, action, typ string,
+func (s *Service) recordTx(ctx context.Context, tx pgx.Tx, o domain.Order, from, to domain.Status, note, actor, action, typ string,
 	build func(event.Meta) event.Event) error {
-	e := domain.Event{ID: s.ids.New(), From: from, To: to, Note: note, At: o.StatusChangedAt}
+	e := domain.Event{ID: s.ids.New(), From: from, To: to, Actor: actor, Note: note, At: o.StatusChangedAt}
 	if p, ok := authz.PrincipalFrom(ctx); ok {
 		e.ActorUserID = &p.UserID
 	}
@@ -455,6 +483,9 @@ func (s *Service) recordTx(ctx context.Context, tx pgx.Tx, o domain.Order, from,
 	meta := map[string]any{"to": string(to)}
 	if from != "" {
 		meta["from"] = string(from)
+	}
+	if actor != "" {
+		meta["actor"] = actor
 	}
 	if err := s.audit.RecordTx(ctx, tx, audit.Entry{Action: action, TargetType: "order", TargetID: o.ID.String(), Metadata: meta}); err != nil {
 		return err

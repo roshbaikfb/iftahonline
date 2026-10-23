@@ -190,6 +190,11 @@ type OrderDetail struct {
 
 // OrderEvent defines model for OrderEvent.
 type OrderEvent struct {
+	// Actor The system that made the move, e.g. "carrier:bosta" (no user).
+	//
+	// Example: carrier:bosta
+	Actor *string `json:"actor,omitempty"`
+
 	// ActorUserId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	ActorUserId *ULID        `json:"actor_user_id,omitempty"`
 	At          time.Time    `json:"at"`
