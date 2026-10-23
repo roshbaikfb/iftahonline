@@ -331,6 +331,47 @@ type RiverQueue struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type ShippingCityRate struct {
+	StoreID   pgtype.UUID
+	ZoneID    pgtype.UUID
+	CityKey   string
+	CityName  string
+	RateMinor int64
+}
+
+type ShippingSetting struct {
+	StoreID       pgtype.UUID
+	CodFixedMinor int64
+	CodBp         int32
+	CodMinMinor   int64
+	CodMaxMinor   int64
+	FreeOverMinor pgtype.Int8
+	Version       int32
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type ShippingZone struct {
+	ID            pgtype.UUID
+	StoreID       pgtype.UUID
+	Name          string
+	RateMinor     int64
+	FreeOverMinor pgtype.Int8
+	CodFixedMinor pgtype.Int8
+	CodBp         pgtype.Int4
+	CodMinMinor   pgtype.Int8
+	CodMaxMinor   pgtype.Int8
+	Position      int32
+	Version       int32
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type ShippingZoneArea struct {
+	StoreID pgtype.UUID
+	ZoneID  pgtype.UUID
+	Area    string
+}
+
 type StockReservation struct {
 	ID          pgtype.UUID
 	StoreID     pgtype.UUID

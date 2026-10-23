@@ -42,6 +42,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -197,6 +198,9 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 			return clients{}, err
 		}
 	}
+	if err = bus.Subscribe(shipping.EventRatesChanged, shipping.InvalidateSubscriber, shipping.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus}, nil
 }
 
@@ -240,6 +244,27 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 			st, err := stores.GetStore(ctx)
 			return st.Currency, err
 		}),
+	})
+}
+
+// newShipping builds the shipping module. Every role that quotes keeps
+// its cache fresh with Listen.
+func newShipping(c clients, ten *tenancy.Module) (*shipping.Module, error) {
+	stores := ten.Service()
+	return shipping.New(shipping.Deps{
+		Pool: c.pool, IDs: c.ids, Redis: c.rdb, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
+		Cache: shipping.DefaultCacheConfig(),
+		Stores: func(ctx context.Context) (shipping.StoreInfo, error) {
+			st, err := stores.GetStore(ctx)
+			if err != nil {
+				return shipping.StoreInfo{}, err
+			}
+			country, ok := geo.CountryOf(st.Currency)
+			if !ok {
+				return shipping.StoreInfo{}, fmt.Errorf("shipping: no country for currency %q", st.Currency)
+			}
+			return shipping.StoreInfo{Currency: st.Currency, Country: country}, nil
+		},
 	})
 }
 
@@ -360,6 +385,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	ship, err := newShipping(c, ten)
+	if err != nil {
+		return nil, err
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -379,6 +408,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		ship.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		hooks.Mount(rt.Mux, rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)

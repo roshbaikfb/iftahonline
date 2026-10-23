@@ -1549,6 +1549,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/shipping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's shipping settings and zones
+         * @description Permission: shipping.read. Zones in display order.
+         */
+        get: operations["getShipping"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the store-wide COD fee and free-shipping threshold
+         * @description Permission: shipping.manage. Send version 0 the first time.
+         */
+        put: operations["saveShippingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a delivery zone
+         * @description Permission: shipping.manage. A governorate already in another zone
+         *     is a validation error on `areas` (code `taken`).
+         */
+        post: operations["createShippingZone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/zones/{zone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                zone_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a zone (name, rates, governorates, cities)
+         * @description Permission: shipping.manage. `version` is required.
+         */
+        put: operations["updateShippingZone"];
+        post?: never;
+        /**
+         * Delete a zone
+         * @description Permission: shipping.manage. Its governorates are no longer
+         *     delivered to, unless it was the last zone.
+         */
+        delete: operations["deleteShippingZone"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What delivering an order would cost
+         * @description Permission: shipping.read. For checking a setup; orders are quoted the same way.
+         */
+        post: operations["quoteShipping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -2438,6 +2555,91 @@ export interface components {
             go_version: string;
             /** @enum {string} */
             role: "api" | "storefront" | "worker";
+        };
+        CODFee: {
+            /** Format: int64 */
+            fixed_minor: number;
+            /** @description Basis points of subtotal + shipping (150 = 1.5%). */
+            bp: number;
+            /** Format: int64 */
+            min_minor: number;
+            /**
+             * Format: int64
+             * @description 0 means no maximum.
+             */
+            max_minor: number;
+        };
+        ShippingSettings: {
+            cod_fee: components["schemas"]["CODFee"];
+            /**
+             * Format: int64
+             * @description Orders whose subtotal reaches it ship free; absent for none.
+             */
+            free_over_minor?: number;
+            /** @description 0 when never saved. */
+            version: number;
+        };
+        ShippingSettingsInput: {
+            cod_fee: components["schemas"]["CODFee"];
+            /** Format: int64 */
+            free_over_minor?: number;
+            version: number;
+        };
+        ShippingCity: {
+            name: string;
+            /** Format: int64 */
+            rate_minor: number;
+        };
+        ShippingZone: {
+            id: components["schemas"]["ULID"];
+            name: string;
+            areas: string[];
+            /** Format: int64 */
+            rate_minor: number;
+            /**
+             * Format: int64
+             * @description Overrides the store's threshold.
+             */
+            free_over_minor?: number;
+            cod_fee?: components["schemas"]["CODFee"];
+            cities: components["schemas"]["ShippingCity"][];
+            position: number;
+            version: number;
+        };
+        ShippingZoneInput: {
+            name: string;
+            areas: string[];
+            /** Format: int64 */
+            rate_minor: number;
+            /** Format: int64 */
+            free_over_minor?: number;
+            cod_fee?: components["schemas"]["CODFee"];
+            cities?: components["schemas"]["ShippingCity"][];
+            /** @description Required when updating. */
+            version?: number;
+        };
+        ShippingConfig: {
+            /** @example EGP */
+            currency: string;
+            settings: components["schemas"]["ShippingSettings"];
+            zones: components["schemas"]["ShippingZone"][];
+        };
+        ShippingQuoteInput: {
+            /** @example EG-C */
+            governorate: string;
+            city?: string;
+            /** Format: int64 */
+            subtotal_minor: number;
+        };
+        ShippingQuote: {
+            deliverable: boolean;
+            zone_id?: components["schemas"]["ULID"];
+            /** Format: int64 */
+            shipping_minor: number;
+            free_shipping: boolean;
+            /** Format: int64 */
+            cod_fee_minor: number;
+            currency: string;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -4692,6 +4894,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Order"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getShipping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings (version 0 when never saved) and zones. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShippingConfig"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveShippingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippingSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The saved settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShippingSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createShippingZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippingZoneInput"];
+            };
+        };
+        responses: {
+            /** @description The zone, last in display order. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShippingZone"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateShippingZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                zone_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippingZoneInput"];
+            };
+        };
+        responses: {
+            /** @description The zone. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShippingZone"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteShippingZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                zone_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    quoteShipping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippingQuoteInput"];
+            };
+        };
+        responses: {
+            /** @description The quote. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShippingQuote"];
                 };
             };
             default: components["responses"]["Problem"];

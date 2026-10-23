@@ -67,6 +67,22 @@ tags:
       Stock is held when an order is placed, leaves on_hand when it
       ships, and comes back when it is cancelled or returned. Amounts
       are integer minor units in the store's currency; times are UTC.
+  - name: shipping
+    description: |
+      Delivery zones, rates and fees (ADR-0025). A zone is a set of
+      governorates (ISO 3166-2 codes of the store's country, each in one
+      zone only) with a flat rate; cities in it may have their own rate
+      (matched however the shopper spells them, e.g. المعادي/المعادى).
+      Orders whose subtotal reaches the free-shipping threshold (the
+      zone's, else the store's) ship free. The cash-on-delivery fee (the
+      zone's, else the store's) is a fixed amount plus basis points of
+      the subtotal and shipping, kept between a minimum and a maximum.
+      A store without zones delivers everywhere with free shipping;
+      once it has zones, governorates outside them are not delivered.
+      Amounts are integer minor units of the store's currency. Reading
+      needs shipping.read, changing needs shipping.manage; saves send the
+      `version` read and fail with 409 version_conflict if someone saved
+      in between.
   - name: webhooks
     description: |
       Inbound webhooks from carriers and payment gateways (ADR-0024).
@@ -1784,6 +1800,124 @@ paths:
               schema: { $ref: "#/components/schemas/Order" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [shipping]
+      operationId: getShipping
+      summary: The store's shipping settings and zones
+      description: "Permission: shipping.read. Zones in display order."
+      responses:
+        "200":
+          description: Settings (version 0 when never saved) and zones.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingConfig" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [shipping]
+      operationId: saveShippingSettings
+      summary: Save the store-wide COD fee and free-shipping threshold
+      description: "Permission: shipping.manage. Send version 0 the first time."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingSettingsInput" }
+      responses:
+        "200":
+          description: The saved settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/zones:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [shipping]
+      operationId: createShippingZone
+      summary: Add a delivery zone
+      description: |
+        Permission: shipping.manage. A governorate already in another zone
+        is a validation error on `areas` (code `taken`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingZoneInput" }
+      responses:
+        "201":
+          description: The zone, last in display order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingZone" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/zones/{zone_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - name: zone_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    put:
+      tags: [shipping]
+      operationId: updateShippingZone
+      summary: Replace a zone (name, rates, governorates, cities)
+      description: "Permission: shipping.manage. `version` is required."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingZoneInput" }
+      responses:
+        "200":
+          description: The zone.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingZone" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [shipping]
+      operationId: deleteShippingZone
+      summary: Delete a zone
+      description: |
+        Permission: shipping.manage. Its governorates are no longer
+        delivered to, unless it was the last zone.
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/quote:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [shipping]
+      operationId: quoteShipping
+      summary: What delivering an order would cost
+      description: "Permission: shipping.read. For checking a setup; orders are quoted the same way."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingQuoteInput" }
+      responses:
+        "200":
+          description: The quote.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingQuote" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -2885,6 +3019,98 @@ components:
         commit: { type: string, example: 4b40e6d }
         go_version: { type: string, example: go1.27.2 }
         role: { type: string, enum: [api, storefront, worker] }
+    CODFee:
+      type: object
+      required: [fixed_minor, bp, min_minor, max_minor]
+      properties:
+        fixed_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        bp: { type: integer, minimum: 0, maximum: 1000, description: "Basis points of subtotal + shipping (150 = 1.5%)." }
+        min_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        max_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000, description: 0 means no maximum. }
+    ShippingSettings:
+      type: object
+      required: [cod_fee, version]
+      properties:
+        cod_fee: { $ref: "#/components/schemas/CODFee" }
+        free_over_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Orders whose subtotal reaches it ship free; absent for none.
+        version: { type: integer, description: 0 when never saved. }
+    ShippingSettingsInput:
+      type: object
+      required: [cod_fee, version]
+      properties:
+        cod_fee: { $ref: "#/components/schemas/CODFee" }
+        free_over_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        version: { type: integer, minimum: 0 }
+    ShippingCity:
+      type: object
+      required: [name, rate_minor]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        rate_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+    ShippingZone:
+      type: object
+      required: [id, name, areas, rate_minor, cities, position, version]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        areas:
+          type: array
+          items: { type: string, example: EG-C }
+        rate_minor: { type: integer, format: int64 }
+        free_over_minor: { type: integer, format: int64, description: "Overrides the store's threshold." }
+        cod_fee: { $ref: "#/components/schemas/CODFee" }
+        cities:
+          type: array
+          items: { $ref: "#/components/schemas/ShippingCity" }
+        position: { type: integer }
+        version: { type: integer }
+    ShippingZoneInput:
+      type: object
+      required: [name, areas, rate_minor]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        areas:
+          type: array
+          minItems: 1
+          items: { type: string, example: EG-C }
+        rate_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        free_over_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        cod_fee: { $ref: "#/components/schemas/CODFee" }
+        cities:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/ShippingCity" }
+        version: { type: integer, minimum: 1, description: Required when updating. }
+    ShippingConfig:
+      type: object
+      required: [currency, settings, zones]
+      properties:
+        currency: { type: string, example: EGP }
+        settings: { $ref: "#/components/schemas/ShippingSettings" }
+        zones:
+          type: array
+          items: { $ref: "#/components/schemas/ShippingZone" }
+    ShippingQuoteInput:
+      type: object
+      required: [governorate, subtotal_minor]
+      properties:
+        governorate: { type: string, example: EG-C }
+        city: { type: string, maxLength: 80 }
+        subtotal_minor: { type: integer, format: int64, minimum: 0, maximum: 100000000000 }
+    ShippingQuote:
+      type: object
+      required: [deliverable, shipping_minor, free_shipping, cod_fee_minor, currency]
+      properties:
+        deliverable: { type: boolean }
+        zone_id: { $ref: "#/components/schemas/ULID" }
+        shipping_minor: { type: integer, format: int64 }
+        free_shipping: { type: boolean }
+        cod_fee_minor: { type: integer, format: int64 }
+        currency: { type: string }
     WebhookReceipt:
       type: object
       required: [status]
