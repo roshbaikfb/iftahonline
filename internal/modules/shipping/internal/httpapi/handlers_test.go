@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/shiptest"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
@@ -114,7 +115,7 @@ func newFixture(t *testing.T) fixture {
 	courier := fake.New()
 	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Cache: app.DefaultCacheConfig(),
 		Carriers: app.Carriers{fake.Name: courier}, Sealer: sealer, PublicURL: "https://app.example.com",
-		Orders: orders, Jobs: shiptest.NewJobs(), Objects: shiptest.NewObjects(), Inbox: shiptest.NewInbox(),
+		Orders: orders, Jobs: testkit.NewJobs(), Objects: shiptest.NewObjects(), Inbox: webhookstest.NewInbox(),
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
 		}})

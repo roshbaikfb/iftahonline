@@ -17,8 +17,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/shiptest"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -27,16 +29,16 @@ type shipFixture struct {
 	svc     *app.Service
 	carrier *fake.Carrier
 	orders  *shiptest.Orders
-	jobs    *shiptest.Jobs
+	jobs    *testkit.Jobs
 	objects *shiptest.Objects
-	inbox   *shiptest.Inbox
+	inbox   *webhookstest.Inbox
 	conn    app.Connected
 }
 
 func newShipFixture(t *testing.T) shipFixture {
 	t.Helper()
-	f := shipFixture{fixture: newFixture(t), carrier: fake.New(), orders: shiptest.NewOrders(), jobs: shiptest.NewJobs(),
-		objects: shiptest.NewObjects(), inbox: shiptest.NewInbox()}
+	f := shipFixture{fixture: newFixture(t), carrier: fake.New(), orders: shiptest.NewOrders(), jobs: testkit.NewJobs(),
+		objects: shiptest.NewObjects(), inbox: webhookstest.NewInbox()}
 	f.svc = f.newService(f.carrier)
 	var err error
 	if f.conn, err = f.svc.Connect(f.ctxA, fake.Name, "merchant-key"); err != nil {
