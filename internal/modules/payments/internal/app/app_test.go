@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -19,12 +18,12 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/paytest"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
-	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -37,89 +36,6 @@ var infra testinfra.Infra
 
 func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 
-// fakeOrders keeps card orders in memory and records what payments do to
-// them.
-type fakeOrders struct {
-	mu     sync.Mutex
-	orders map[ulid.ID]*orders.Order
-	log    []string
-}
-
-func (o *fakeOrders) add(t *testing.T, method orders.PaymentMethod, age time.Duration) ulid.ID {
-	t.Helper()
-	total, err := money.New(52000, money.EGP)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, err := phone.Parse("01012345678", phone.EG)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := ulid.NewGenerator().New()
-	st := orders.PaymentAwaiting
-	if method == orders.PaymentCOD {
-		st = orders.PaymentUnpaid
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.orders[id] = &orders.Order{ID: id, Status: orders.StatusPending, PaymentMethod: method, PaymentStatus: st, Total: total,
-		CreatedAt: time.Now().Add(-age).UTC()}
-	o.orders[id].Contact.Name, o.orders[id].Contact.Phone = "منى أحمد", p
-	return id
-}
-
-func (o *fakeOrders) Get(_ context.Context, id ulid.ID) (orders.Order, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	got, ok := o.orders[id]
-	if !ok {
-		return orders.Order{}, orders.ErrOrderNotFound
-	}
-	return *got, nil
-}
-
-func (o *fakeOrders) TransitionSystemTx(_ context.Context, _ pgx.Tx, id ulid.ID, to orders.Status, actor, _ string) (bool, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	got := o.orders[id]
-	if got.Status == to {
-		return false, nil
-	}
-	got.Status = to
-	o.log = append(o.log, string(to)+" by "+actor)
-	return true, nil
-}
-
-func (o *fakeOrders) SetPaymentStatusTx(_ context.Context, _ pgx.Tx, id ulid.ID, st orders.PaymentStatus, actor string) (bool, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	got := o.orders[id]
-	if got.PaymentStatus == st {
-		return false, nil
-	}
-	got.PaymentStatus = st
-	o.log = append(o.log, "payment "+string(st)+" by "+actor)
-	return true, nil
-}
-
-func (o *fakeOrders) get(id ulid.ID) orders.Order {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return *o.orders[id]
-}
-
-func (o *fakeOrders) setStatus(id ulid.ID, st orders.Status) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.orders[id].Status = st
-}
-
-func (o *fakeOrders) history() []string {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return append([]string(nil), o.log...)
-}
-
 const (
 	apiKey     = "merchant-api-key"
 	hookSecret = "merchant-hook-secret"
@@ -130,7 +46,7 @@ type fixture struct {
 	pool       *pgxpool.Pool
 	ids        *ulid.Generator
 	gw         *fake.Gateway
-	orders     *fakeOrders
+	orders     *paytest.Orders
 	jobs       *testkit.Jobs
 	inbox      *webhookstest.Inbox
 	svc        *app.Service
@@ -145,7 +61,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	f := fixture{t: t, pool: pool, ids: ulid.NewGenerator(), gw: fake.New(), orders: &fakeOrders{orders: map[ulid.ID]*orders.Order{}},
+	f := fixture{t: t, pool: pool, ids: ulid.NewGenerator(), gw: fake.New(), orders: paytest.NewOrders(),
 		jobs: testkit.NewJobs(), inbox: webhookstest.NewInbox()}
 	f.svc = f.service(f.gw)
 	f.ctxA, f.ctxB = f.mkStore(t), f.mkStore(t)
@@ -217,15 +133,6 @@ func (f fixture) deliver(t *testing.T, p domain.Payment) ulid.ID {
 	return r
 }
 
-func egp(t testing.TB, minor int64) money.Money {
-	t.Helper()
-	m, err := money.New(minor, money.EGP)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
-}
-
 func isField(err error, field, code string) bool {
 	var e *errs.Error
 	if !errors.As(err, &e) || e.Kind != errs.KindValidation {
@@ -285,7 +192,7 @@ func TestConnect(t *testing.T) {
 func TestCheckout(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	c, err := f.svc.StartCheckout(f.ctxA, order, "https://shop.example.com/thank-you/x")
 	if err != nil || !strings.HasPrefix(c.URL, "https://pay.fake.test/checkout/") {
 		t.Fatalf("checkout %+v %v", c, err)
@@ -295,7 +202,7 @@ func TestCheckout(t *testing.T) {
 		t.Fatalf("payment %+v %v", p, err)
 	}
 	if kinds := f.jobs.Kinds(); len(kinds) != 1 || kinds[0] != "payments.expire_payment" ||
-		f.jobs.Opts[0].ScheduledAt.Sub(f.orders.get(order).CreatedAt) < app.ExpireAfter-time.Second {
+		f.jobs.Opts[0].ScheduledAt.Sub(f.orders.Order(order).CreatedAt) < app.ExpireAfter-time.Second {
 		t.Fatalf("expiry job %v %+v", kinds, f.jobs.Opts)
 	}
 	again, err := f.svc.StartCheckout(f.ctxA, order, "https://shop.example.com/thank-you/x")
@@ -303,14 +210,14 @@ func TestCheckout(t *testing.T) {
 		t.Fatalf("coming back: %+v %v, want the same payment", again, err)
 	}
 
-	cod := f.orders.add(t, orders.PaymentCOD, 0)
+	cod := f.orders.Add(t, orders.PaymentCOD, 0)
 	if _, err = f.svc.StartCheckout(f.ctxA, cod, ""); !errors.Is(err, app.ErrNotPayable) {
 		t.Errorf("COD order: %v", err)
 	}
 	if _, err = f.svc.StartCheckout(f.ctxA, ulid.NewGenerator().New(), ""); !errors.Is(err, app.ErrNotPayable) {
 		t.Errorf("unknown order: %v", err)
 	}
-	if _, err = f.svc.StartCheckout(f.ctxB, f.orders.add(t, orders.PaymentCard, 0), ""); !errors.Is(err, app.ErrCardUnavailable) {
+	if _, err = f.svc.StartCheckout(f.ctxB, f.orders.Add(t, orders.PaymentCard, 0), ""); !errors.Is(err, app.ErrCardUnavailable) {
 		t.Errorf("a store without a gateway: %v", err)
 	}
 }
@@ -326,7 +233,7 @@ func TestCheckoutGatewayDown(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	svc := f.service(downGateway{f.gw})
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	if _, err := svc.StartCheckout(f.ctxA, order, ""); errs.KindOf(err) != errs.KindUnavailable {
 		t.Fatalf("gateway down: %v", err)
 	}
@@ -342,7 +249,7 @@ func TestCheckoutGatewayDown(t *testing.T) {
 func TestPaidByWebhook(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	p := f.checkout(t, order)
 	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
 		t.Fatal(err)
@@ -352,18 +259,18 @@ func TestPaidByWebhook(t *testing.T) {
 	if err != nil || got.Status != domain.StatusPaid || got.TransactionID == "" || f.inbox.Outcome(r) != "updated" {
 		t.Fatalf("after the webhook: %+v %v %q", got, err, f.inbox.Outcome(r))
 	}
-	o := f.orders.get(order)
+	o := f.orders.Order(order)
 	if o.PaymentStatus != orders.PaymentPaid || o.Status != orders.StatusConfirmed ||
-		strings.Join(f.orders.history(), "; ") != "payment paid by gateway:fake; confirmed by gateway:fake" {
-		t.Fatalf("order %+v, history %v", o, f.orders.history())
+		strings.Join(f.orders.History(), "; ") != "payment paid by gateway:fake; confirmed by gateway:fake" {
+		t.Fatalf("order %+v, history %v", o, f.orders.History())
 	}
 	for range 4 {
 		if r2 := f.deliver(t, p); f.inbox.Outcome(r2) != "unchanged" {
 			t.Fatalf("replay outcome %q", f.inbox.Outcome(r2))
 		}
 	}
-	if len(f.orders.history()) != 2 {
-		t.Fatalf("replays moved the order: %v", f.orders.history())
+	if len(f.orders.History()) != 2 {
+		t.Fatalf("replays moved the order: %v", f.orders.History())
 	}
 
 	prov := f.svc.WebhookProviders()[0]
@@ -402,7 +309,7 @@ func TestPaidByWebhook(t *testing.T) {
 func TestMoneyTakenTwice(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	first := f.checkout(t, order)
 	// The shopper opens the page again later (a new payment) and pays both.
 	f.svc.SetClock(func() time.Time { return time.Now().Add(app.ReuseCheckoutFor + time.Minute) })
@@ -422,9 +329,9 @@ func TestMoneyTakenTwice(t *testing.T) {
 		t.Fatalf("the second payment's refund: %+v %v", refunds, err)
 	}
 
-	cancelled := f.orders.add(t, orders.PaymentCard, 0)
+	cancelled := f.orders.Add(t, orders.PaymentCard, 0)
 	late := f.checkout(t, cancelled)
-	f.orders.setStatus(cancelled, orders.StatusCancelled)
+	f.orders.SetStatus(cancelled, orders.StatusCancelled)
 	if _, err = f.gw.Pay(apiKey, late.ID.String()); err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +339,7 @@ func TestMoneyTakenTwice(t *testing.T) {
 	if _, refunds, err = f.svc.Payment(f.ctxA, late.ID); err != nil || len(refunds) != 1 || !strings.Contains(refunds[0].Reason, "cancelled") {
 		t.Fatalf("a cancelled order's payment: %+v %v", refunds, err)
 	}
-	if f.orders.get(cancelled).PaymentStatus == orders.PaymentPaid {
+	if f.orders.Order(cancelled).PaymentStatus == orders.PaymentPaid {
 		t.Fatal("a cancelled order was marked paid")
 	}
 }
@@ -443,18 +350,18 @@ func TestMoneyTakenTwice(t *testing.T) {
 func TestExpiry(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	unpaid := f.orders.add(t, orders.PaymentCard, 2*time.Hour)
+	unpaid := f.orders.Add(t, orders.PaymentCard, 2*time.Hour)
 	p := f.checkout(t, unpaid)
 	if err := f.svc.ExpirePayment(f.ctxA, p.ID); err != nil {
 		t.Fatal(err)
 	}
 	got, _, err := f.svc.Payment(f.ctxA, p.ID)
-	if err != nil || got.Status != domain.StatusExpired || f.orders.get(unpaid).Status != orders.StatusCancelled ||
-		!strings.Contains(strings.Join(f.orders.history(), ";"), "cancelled by system:payment_expiry") {
-		t.Fatalf("expired: %+v %v, order %+v", got, err, f.orders.get(unpaid))
+	if err != nil || got.Status != domain.StatusExpired || f.orders.Order(unpaid).Status != orders.StatusCancelled ||
+		!strings.Contains(strings.Join(f.orders.History(), ";"), "cancelled by system:payment_expiry") {
+		t.Fatalf("expired: %+v %v, order %+v", got, err, f.orders.Order(unpaid))
 	}
 
-	lastMinute := f.orders.add(t, orders.PaymentCard, 2*time.Hour)
+	lastMinute := f.orders.Add(t, orders.PaymentCard, 2*time.Hour)
 	q := f.checkout(t, lastMinute)
 	if _, err = f.gw.Pay(apiKey, q.ID.String()); err != nil {
 		t.Fatal(err)
@@ -462,11 +369,11 @@ func TestExpiry(t *testing.T) {
 	if err = f.svc.ExpirePayment(f.ctxA, q.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, _, err = f.svc.Payment(f.ctxA, q.ID); err != nil || got.Status != domain.StatusPaid || f.orders.get(lastMinute).Status != orders.StatusConfirmed {
+	if got, _, err = f.svc.Payment(f.ctxA, q.ID); err != nil || got.Status != domain.StatusPaid || f.orders.Order(lastMinute).Status != orders.StatusConfirmed {
 		t.Fatalf("paid at the last minute: %+v %v", got, err)
 	}
 
-	retried := f.orders.add(t, orders.PaymentCard, 2*time.Hour)
+	retried := f.orders.Add(t, orders.PaymentCard, 2*time.Hour)
 	old := f.checkout(t, retried)
 	f.svc.SetClock(func() time.Time { return time.Now().Add(app.ReuseCheckoutFor + time.Minute) })
 	f.checkout(t, retried) // a newer, still open attempt
@@ -474,8 +381,8 @@ func TestExpiry(t *testing.T) {
 	if err = f.svc.ExpirePayment(f.ctxA, old.ID); err != nil {
 		t.Fatal(err)
 	}
-	if f.orders.get(retried).Status != orders.StatusPending {
-		t.Fatalf("an order with an open attempt was cancelled: %+v", f.orders.get(retried))
+	if f.orders.Order(retried).Status != orders.StatusPending {
+		t.Fatalf("an order with an open attempt was cancelled: %+v", f.orders.Order(retried))
 	}
 	if err = f.svc.ExpirePayment(f.ctxA, ulid.NewGenerator().New()); err != nil {
 		t.Fatalf("a missing payment: %v", err)
@@ -488,9 +395,9 @@ func TestExpiry(t *testing.T) {
 func TestRefunds(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	p := f.checkout(t, order)
-	if _, err := f.svc.Refund(f.ctxA, p.ID, egp(t, 100), ""); !errors.Is(err, app.ErrNotRefundable) {
+	if _, err := f.svc.Refund(f.ctxA, p.ID, 100, ""); !errors.Is(err, app.ErrNotRefundable) {
 		t.Fatalf("refund before paying: %v", err)
 	}
 	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
@@ -498,11 +405,11 @@ func TestRefunds(t *testing.T) {
 	}
 	f.deliver(t, p)
 
-	r, err := f.svc.Refund(f.ctxA, p.ID, egp(t, 20000), "  the parcel came back damaged ")
+	r, err := f.svc.Refund(f.ctxA, p.ID, 20000, "  the parcel came back damaged ")
 	if err != nil || r.Status != domain.RefundRequested || r.Reason != "the parcel came back damaged" {
 		t.Fatalf("refund %+v %v", r, err)
 	}
-	if _, err = f.svc.Refund(f.ctxA, p.ID, egp(t, 32001), ""); !isField(err, "amount_minor", "range") {
+	if _, err = f.svc.Refund(f.ctxA, p.ID, 32001, ""); !isField(err, "amount_minor", "range") {
 		t.Fatalf("over what is left with one refund requested: %v", err)
 	}
 	for range 2 { // the second run finds the refund made
@@ -520,11 +427,11 @@ func TestRefunds(t *testing.T) {
 	if st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP); stErr != nil || st.Refunded.Amount() != 20000 {
 		t.Fatalf("the gateway refunded %v (%v), want once", st.Refunded, stErr)
 	}
-	if f.orders.get(order).PaymentStatus != orders.PaymentPartiallyRefunded {
-		t.Fatalf("order %+v", f.orders.get(order))
+	if f.orders.Order(order).PaymentStatus != orders.PaymentPartiallyRefunded {
+		t.Fatalf("order %+v", f.orders.Order(order))
 	}
 
-	rest, err := f.svc.Refund(f.ctxA, p.ID, egp(t, 32000), "")
+	rest, err := f.svc.Refund(f.ctxA, p.ID, 32000, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,10 +441,10 @@ func TestRefunds(t *testing.T) {
 	if err = f.svc.SyncPayment(f.ctxA, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, _, err = f.svc.Payment(f.ctxA, p.ID); err != nil || got.Status != domain.StatusRefunded || f.orders.get(order).PaymentStatus != orders.PaymentRefunded {
+	if got, _, err = f.svc.Payment(f.ctxA, p.ID); err != nil || got.Status != domain.StatusRefunded || f.orders.Order(order).PaymentStatus != orders.PaymentRefunded {
 		t.Fatalf("fully refunded: %+v %v", got, err)
 	}
-	if _, err = f.svc.Refund(f.ctxB, p.ID, egp(t, 1), ""); !errors.Is(err, app.ErrPaymentNotFound) {
+	if _, err = f.svc.Refund(f.ctxB, p.ID, 1, ""); !errors.Is(err, app.ErrPaymentNotFound) {
 		t.Fatalf("B refunds A's payment: %v", err)
 	}
 }
@@ -547,7 +454,7 @@ func TestPaymentsList(t *testing.T) {
 	f := newFixture(t)
 	var ids []ulid.ID
 	for range 3 {
-		ids = append(ids, f.checkout(t, f.orders.add(t, orders.PaymentCard, 0)).ID)
+		ids = append(ids, f.checkout(t, f.orders.Add(t, orders.PaymentCard, 0)).ID)
 	}
 	p, err := f.svc.Payments(f.ctxA, nil, 2)
 	if err != nil || len(p.Items) != 2 || p.Next == nil || p.Items[0].ID != ids[2] {
@@ -583,7 +490,7 @@ func TestWorkers(t *testing.T) {
 	if prov.Name() != fake.Name {
 		t.Fatalf("provider %q", prov.Name())
 	}
-	order := f.orders.add(t, orders.PaymentCard, 0)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
 	p := f.checkout(t, order)
 	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
 		t.Fatal(err)
@@ -598,7 +505,7 @@ func TestWorkers(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.svc.Refund(f.ctxA, p.ID, egp(t, 52000), ""); !errors.Is(err, app.ErrNotRefundable) {
+	if _, err = f.svc.Refund(f.ctxA, p.ID, 52000, ""); !errors.Is(err, app.ErrNotRefundable) {
 		t.Fatalf("refund before the webhook ran: %v", err)
 	}
 	// Run every job enqueued so far, then the ones those enqueue, but
@@ -614,23 +521,23 @@ func TestWorkers(t *testing.T) {
 		}
 	}
 	drain()
-	if f.inbox.Outcome(receipt) != "updated" || f.orders.get(order).Status != orders.StatusConfirmed {
-		t.Fatalf("webhook job: %q, order %+v", f.inbox.Outcome(receipt), f.orders.get(order))
+	if f.inbox.Outcome(receipt) != "updated" || f.orders.Order(order).Status != orders.StatusConfirmed {
+		t.Fatalf("webhook job: %q, order %+v", f.inbox.Outcome(receipt), f.orders.Order(order))
 	}
-	if _, err = f.svc.Refund(f.ctxA, p.ID, egp(t, 52000), "changed my mind"); err != nil {
+	if _, err = f.svc.Refund(f.ctxA, p.ID, 52000, "changed my mind"); err != nil {
 		t.Fatal(err)
 	}
 	drain()
 	got, refunds, err := f.svc.Payment(f.ctxA, p.ID)
 	if err != nil || got.Status != domain.StatusRefunded || len(refunds) != 1 || refunds[0].Status != domain.RefundSucceeded ||
-		f.orders.get(order).PaymentStatus != orders.PaymentRefunded {
+		f.orders.Order(order).PaymentStatus != orders.PaymentRefunded {
 		t.Fatalf("refund and sync jobs: %+v %+v %v", got, refunds, err)
 	}
 	// The expiry of a paid (now refunded) payment keeps the order.
 	if err = f.svc.RunJob(f.ctxA, f.jobs.Args[0]); err != nil {
 		t.Fatal(err)
 	}
-	if f.orders.get(order).Status != orders.StatusConfirmed {
-		t.Fatalf("expiry cancelled a paid order: %+v", f.orders.get(order))
+	if f.orders.Order(order).Status != orders.StatusConfirmed {
+		t.Fatalf("expiry cancelled a paid order: %+v", f.orders.Order(order))
 	}
 }

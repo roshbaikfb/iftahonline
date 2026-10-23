@@ -1902,6 +1902,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/payments/gateways": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The gateways available and the store's connections
+         * @description Permission: payments.manage. Keys are never returned.
+         */
+        get: operations["listPaymentConnections"];
+        put?: never;
+        /**
+         * Connect the store's gateway account
+         * @description Permission: payments.manage. Paste the keys from the gateway's
+         *     dashboard (Paymob: secret key, public key, API key, HMAC secret
+         *     and the card integration IDs). They are checked with the gateway
+         *     first (refused keys are a validation error on `secret_key`), then
+         *     stored encrypted. One active gateway per store (409
+         *     gateway_already_connected). Card checkout is offered to shoppers
+         *     from then on.
+         */
+        post: operations["connectPaymentGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/payments/gateways/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop taking card payments
+         * @description Permission: payments.manage. New card checkouts stop; payments
+         *     already made are still followed and can still be refunded.
+         */
+        delete: operations["disconnectPaymentGateway"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's card payments, newest first
+         * @description Permission: orders.read. With `order_id`, that order's payments (no paging).
+         */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A payment with its refunds
+         * @description Permission: orders.read.
+         */
+        get: operations["getPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/payments/{payment_id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund a card payment, in part or in full
+         * @description Permission: payments.refund. The amount is reserved at once (two
+         *     refunds can never exceed what was paid; more is a validation
+         *     error on `amount_minor`) and asked from the gateway in the
+         *     background: the refund is `requested`, then `succeeded` or
+         *     `failed` with the gateway's reason. Only a paid or partly
+         *     refunded payment can be refunded (409 payment_not_refundable).
+         */
+        post: operations["refundPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -2968,6 +3097,90 @@ export interface components {
             note: string;
             /** Format: date-time */
             at: string;
+        };
+        PaymentConnections: {
+            /** @description Gateways this platform can connect. */
+            gateways: string[];
+            connections: components["schemas"]["PaymentConnection"][];
+        };
+        PaymentConnection: {
+            id: components["schemas"]["ULID"];
+            /** @example paymob */
+            gateway: string;
+            /** @enum {string} */
+            status: "active" | "disconnected";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            disconnected_at?: string;
+            /** @description Where the gateway notifies this connection's payments (sent with every payment; active connections). */
+            webhook_url?: string;
+        };
+        ConnectPaymentGatewayInput: {
+            /** @example paymob */
+            gateway: string;
+            /** Format: password */
+            secret_key?: string;
+            public_key?: string;
+            /** Format: password */
+            api_key: string;
+            /**
+             * Format: password
+             * @description The gateway's webhook signing secret (Paymob: HMAC).
+             */
+            webhook_secret: string;
+            /** @description The gateway's card integration IDs (Paymob). */
+            integration_ids?: number[];
+        };
+        /** @enum {string} */
+        PaymentStatus: "pending" | "paid" | "failed" | "expired" | "partially_refunded" | "refunded";
+        Payment: {
+            id: components["schemas"]["ULID"];
+            order_id: components["schemas"]["ULID"];
+            connection_id: components["schemas"]["ULID"];
+            /** @example paymob */
+            gateway: string;
+            status: components["schemas"]["PaymentStatus"];
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: int64 */
+            refunded_minor: number;
+            /** @example EGP */
+            currency: string;
+            /** @description The gateway's transaction, for support. */
+            transaction_id?: string;
+            /** @description Why the payment failed. */
+            failure?: string;
+            /** Format: date-time */
+            status_at: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PaymentRefund: {
+            id: components["schemas"]["ULID"];
+            payment_id: components["schemas"]["ULID"];
+            /** Format: int64 */
+            amount_minor: number;
+            currency: string;
+            /** @enum {string} */
+            status: "requested" | "succeeded" | "failed";
+            reason: string;
+            failure?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PaymentPage: {
+            items: components["schemas"]["Payment"][];
+            next_cursor?: string;
+        };
+        PaymentDetail: {
+            payment: components["schemas"]["Payment"];
+            refunds: components["schemas"]["PaymentRefund"][];
+        };
+        RefundPaymentInput: {
+            /** Format: int64 */
+            amount_minor: number;
+            reason?: string;
         };
         ShipmentDetail: {
             shipment: components["schemas"]["Shipment"];
@@ -5743,6 +5956,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CODStatementImport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPaymentConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available gateways and connections, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentConnections"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    connectPaymentGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectPaymentGatewayInput"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentConnection"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disconnectPaymentGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPayments: {
+        parameters: {
+            query?: {
+                order_id?: components["schemas"]["ULID"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The payment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    refundPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundPaymentInput"];
+            };
+        };
+        responses: {
+            /** @description Requested. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRefund"];
                 };
             };
             default: components["responses"]["Problem"];

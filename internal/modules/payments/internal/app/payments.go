@@ -130,7 +130,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	c, err := g.CreatePayment(cctx, creds, gateway.PaymentRequest{
 		Reference: p.ID.String(), Amount: p.Amount, Description: "Order " + o.Code(),
 		Customer:        gateway.Customer{FirstName: first, LastName: last, Phone: o.Contact.Phone.Unmasked()},
-		NotificationURL: s.webhookURL(storeID, conn.Connection), RedirectURL: redirectURL,
+		NotificationURL: s.WebhookURL(storeID, conn.Connection), RedirectURL: redirectURL,
 	})
 	if err != nil {
 		if failErr := s.fail(ctx, p.ID, clip(err.Error())); failErr != nil {
@@ -280,9 +280,10 @@ func (s *Service) autoRefundTx(ctx context.Context, tx pgx.Tx, p domain.Payment,
 	return err
 }
 
-// Refund asks the gateway to give back amount of a captured payment.
+// Refund asks the gateway to give back amountMinor (in the payment's
+// currency) of a captured payment.
 // What is asked is reserved at once; the gateway answers in a job.
-func (s *Service) Refund(ctx context.Context, paymentID ulid.ID, amount money.Money, reason string) (domain.Refund, error) {
+func (s *Service) Refund(ctx context.Context, paymentID ulid.ID, amountMinor int64, reason string) (domain.Refund, error) {
 	reason, err := domain.CleanReason(reason)
 	if err != nil {
 		return domain.Refund{}, err
@@ -296,8 +297,12 @@ func (s *Service) Refund(ctx context.Context, paymentID ulid.ID, amount money.Mo
 		if !p.Status.Captured() {
 			return ErrNotRefundable
 		}
-		if amount.Currency() != p.Amount.Currency() || amount.Amount() <= 0 {
+		if amountMinor <= 0 {
 			return errRefundTooMuch
+		}
+		amount, txErr := money.New(amountMinor, p.Amount.Currency())
+		if txErr != nil {
+			return txErr
 		}
 		requested, txErr := store.RequestedRefunds(ctx, tx, p.ID, p.Amount.Currency())
 		if txErr != nil {
