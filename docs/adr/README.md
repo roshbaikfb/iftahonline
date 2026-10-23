@@ -26,7 +26,8 @@ supersedes it.
 | [0018](0018-storefront-rendering-and-caching.md) | Storefront rendering, caching and freshness | Accepted |
 | [0019](0019-cart-edge-purge-and-browser-budgets.md) | Carts, edge purges, and browser budgets for the storefront | Accepted; §1 superseded by 0022 |
 | [0020](0020-customers-order-stock-and-monthly-partitions.md) | Customers, stock held by orders, and one monthly partition job | Accepted |
-| [0021](0021-orders-state-machine-idempotency-partitions.md) | Orders: state machine, idempotent placement, monthly partitions | Accepted |
+| [0021](0021-orders-state-machine-idempotency-partitions.md) | Orders: state machine, idempotent placement, monthly partitions | Accepted; §8 superseded by 0025 |
 | [0022](0022-redis-carts-one-step-orders-anti-fake.md) | Carts in Redis, one-step orders, and anti-fake checks | Accepted |
 | [0023](0023-merchant-dashboard-shell.md) | The merchant dashboard's shell, and browser tests on the real API | Accepted |
 | [0024](0024-inbound-webhooks-envelope-encryption-card-data.md) | Inbound webhooks, envelope-encrypted credentials, no card data | Accepted |
+| [0025](0025-shipping-zones-rates-cod-fee.md) | Shipping zones, rates, free shipping and the COD fee | Accepted |

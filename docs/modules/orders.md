@@ -16,9 +16,14 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `OrderPlaced`, `OrderStatusChanged`, `EventOrderPlaced`, `EventOrderStatusChanged` | Events the module publishes |
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
 
-The module uses `catalog.Catalog` (prices; hold, release, commit and
-restock stock) and `customers.Customers` (record the customer; refuse
-blocked ones), both through their `api.go`.
+The module uses these other modules, each through its `api.go`:
+
+- `catalog.Catalog`: prices; holding, releasing, committing and
+  restocking stock;
+- `customers.Customers`: recording the customer and refusing blocked
+  ones;
+- `shipping.Quoter`: the delivery rate and the COD fee for the order's
+  address ([ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md)).
 
 ## State machine
 
@@ -46,7 +51,7 @@ month on the order's creation time, which its ULID encodes.
 
 | Table | Notes |
 |---|---|
-| `orders` | Contact, totals in minor units, `lines_hash` for the duplicate window. Indexes per list driver: status, phone, customer. |
+| `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal + shipping + cod_fee`, all fixed at placement. Indexes per list driver: status, phone, customer. |
 | `order_items` | Copied titles and prices. Primary key on the order's partition key. |
 | `order_events` | The timeline; append-only. |
 | `order_idempotency` | `(store_id, key)` → fingerprint and order. Kept a week, purged per store by keyed orders. |
@@ -77,6 +82,12 @@ confirm, order page with moves, CSV export) use this API; see
 [ADR-0023](../adr/0023-merchant-dashboard-shell.md).
 
 ## Rules worth knowing
+
+- **Charges.** Every order (storefront or staff) is charged the shipping
+  quote for its governorate, city and subtotal. A governorate outside
+  the store's zones is a validation error on `governorate`, code
+  `not_delivered`. `Shop.Quote` prices an order the same way without
+  placing it, for the storefront form.
 
 - **A customer's order history** is `listOrders?customer_id=…`.
 - **Shoppers** (P4c, the storefront) will place orders through the same
