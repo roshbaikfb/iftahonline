@@ -46,6 +46,9 @@ func TestMatrix(t *testing.T) {
 		authz.PermOrdersManage: {O, M, S},
 		authz.PermOrdersFulfil: {O, M, H},
 		authz.PermOrdersExport: {O, M},
+
+		authz.PermShippingRead:   {O, M, S, H},
+		authz.PermShippingManage: {O, M},
 	}
 	pol, err := domain.NewPolicy()
 	if err != nil {

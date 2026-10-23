@@ -290,6 +290,29 @@ sql:
               type: time.Time
               pointer: true
 
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/shipping
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: shippingdb
+        out: internal/modules/shipping/internal/store/shippingdb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: timestamptz
+            go_type: time.Time
+
 rules:
   - name: no-unbounded-delete
     message: "DELETE and UPDATE need a WHERE clause"

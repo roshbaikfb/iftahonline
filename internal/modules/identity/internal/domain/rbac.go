@@ -13,6 +13,9 @@ import (
 //   - support: answers customers; reads, does not configure, but keeps
 //     the block list and confirms or cancels orders (they make the
 //     confirmation calls and spot fake orders).
+//   - everyone reads shipping zones and rates (support quotes them to
+//     callers, shipping staff plan deliveries); only the owner and
+//     manager change them.
 //   - shipping: fulfils orders (packs, ships, records deliveries and
 //     returns); sees the catalog and keeps stock counts right (they
 //     handle the goods), but does not edit products or confirm orders.
@@ -27,16 +30,19 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermStorefrontManage,
 			authz.PermCustomersRead, authz.PermCustomersManage,
 			authz.PermOrdersRead, authz.PermOrdersManage, authz.PermOrdersFulfil, authz.PermOrdersExport,
+			authz.PermShippingRead, authz.PermShippingManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
 			authz.PermCatalogRead,
 			authz.PermCustomersRead, authz.PermCustomersManage,
 			authz.PermOrdersRead, authz.PermOrdersManage,
+			authz.PermShippingRead,
 		},
 		authz.RoleShipping: {
 			authz.PermStoreRead, authz.PermCatalogRead, authz.PermInventoryManage,
 			authz.PermOrdersRead, authz.PermOrdersFulfil,
+			authz.PermShippingRead,
 		},
 	}
 }

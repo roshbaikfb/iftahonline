@@ -70,6 +70,9 @@ const (
 	PermOrdersManage Permission = "orders.manage" // create, confirm, cancel
 	PermOrdersFulfil Permission = "orders.fulfil" // pack, ship, deliver, return
 	PermOrdersExport Permission = "orders.export"
+
+	PermShippingRead   Permission = "shipping.read"   // zones, rates and fees
+	PermShippingManage Permission = "shipping.manage" // change them
 )
 
 // Permissions lists every permission.
@@ -83,6 +86,7 @@ func Permissions() []Permission {
 		PermStorefrontManage,
 		PermCustomersRead, PermCustomersManage,
 		PermOrdersRead, PermOrdersManage, PermOrdersFulfil, PermOrdersExport,
+		PermShippingRead, PermShippingManage,
 	}
 }
 
