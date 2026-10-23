@@ -33,3 +33,4 @@ supersedes it.
 | [0025](0025-shipping-zones-rates-cod-fee.md) | Shipping zones, rates, free shipping and the COD fee | Accepted |
 | [0026](0026-carriers-bosta-connections.md) | Carriers: one contract, a fake, Bosta, and sealed connections | Accepted |
 | [0027](0027-shipments-tracking-order-moves.md) | Shipments: created by jobs, tracked by webhooks and polls, moving their orders | Accepted |
+| [0028](0028-cod-reconciliation.md) | Cash-on-delivery reconciliation | Accepted |
