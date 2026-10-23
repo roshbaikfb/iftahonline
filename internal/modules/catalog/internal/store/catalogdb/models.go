@@ -85,9 +85,10 @@ type AdminSession struct {
 }
 
 type AppMonthlyPartitioned struct {
-	Parent     string
-	KeyColumn  string
-	AppendOnly bool
+	Parent       string
+	KeyColumn    string
+	AppendOnly   bool
+	RetainMonths *int32
 }
 
 type AuditLog struct {

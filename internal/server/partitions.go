@@ -12,9 +12,10 @@ import (
 )
 
 // PartitionsArgs keeps every monthly partitioned table (audit_log,
-// orders, order items, order events) partitioned ahead of time. The
-// tables register themselves in app.monthly_partitioned (migration
-// 00022), so a module adding one needs no new job.
+// orders, order items, order events) partitioned ahead of time, and
+// drops the partitions of tables with a retention once they expire. The
+// tables register themselves in app.monthly_partitioned (migrations
+// 00022 and 00026), so a module adding one needs no new job.
 type PartitionsArgs struct {
 	jobs.GlobalArgs
 }
@@ -34,8 +35,12 @@ type PartitionsWorker struct {
 
 // Work implements river.Worker.
 func (w *PartitionsWorker) Work(ctx context.Context, _ *river.Job[PartitionsArgs]) error {
-	if _, err := dbgen.New(w.DB).EnsureMonthlyPartitions(ctx, PartitionsMonthsAhead); err != nil {
+	q := dbgen.New(w.DB)
+	if _, err := q.EnsureMonthlyPartitions(ctx, PartitionsMonthsAhead); err != nil {
 		return fmt.Errorf("partitions: %w", err)
+	}
+	if _, err := q.DropExpiredPartitions(ctx); err != nil {
+		return fmt.Errorf("partitions: retention: %w", err)
 	}
 	return nil
 }
