@@ -89,7 +89,8 @@ func TestShip(t *testing.T) {
 			t.Errorf("result %d: %v, want %s", i, res[i].Err, code)
 		}
 	}
-	if got := f.jobs.Kinds(); len(got) != 1 || got[0] != "shipping.create_shipment" {
+	// The connection's settlement pull comes first, from Connect.
+	if got := f.jobs.Kinds(); len(got) != 2 || got[0] != "shipping.pull_settlements" || got[1] != "shipping.create_shipment" {
 		t.Fatalf("jobs %v", got)
 	}
 	again, err := f.svc.Ship(f.ctxA, []ulid.ID{ready}, f.conn.Connection.ID)
@@ -126,8 +127,8 @@ func TestCreateShipment(t *testing.T) {
 		t.Fatalf("carrier request %+v", req)
 	}
 	kinds := f.jobs.Kinds()
-	if len(kinds) != 3 || kinds[1] != "shipping.fetch_label" || kinds[2] != "shipping.track_shipment" ||
-		f.jobs.Opts[2] == nil || time.Until(f.jobs.Opts[2].ScheduledAt) < app.PollEvery-time.Minute {
+	if len(kinds) != 4 || kinds[2] != "shipping.fetch_label" || kinds[3] != "shipping.track_shipment" ||
+		f.jobs.Opts[3] == nil || time.Until(f.jobs.Opts[3].ScheduledAt) < app.PollEvery-time.Minute {
 		t.Fatalf("jobs %v %+v", kinds, f.jobs.Opts)
 	}
 	if err := f.svc.CreateShipment(f.ctxA, sh.ID); err != nil || f.carrier.Calls("create") != 1 {

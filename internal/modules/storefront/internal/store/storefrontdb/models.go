@@ -164,6 +164,21 @@ type Category struct {
 	UpdatedAt time.Time
 }
 
+type CodSettlement struct {
+	ID             ulid.ID
+	StoreID        ulid.ID
+	ConnectionID   ulid.ID
+	Carrier        string
+	TrackingNumber string
+	ShipmentID     pgtype.UUID
+	Currency       string
+	AmountMinor    int64
+	SettledAt      time.Time
+	Reference      string
+	Source         string
+	CreatedAt      time.Time
+}
+
 type Customer struct {
 	ID          ulid.ID
 	StoreID     ulid.ID

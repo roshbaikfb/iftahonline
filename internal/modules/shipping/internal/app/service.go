@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -40,6 +41,7 @@ var (
 type StoreInfo struct {
 	Currency money.Currency
 	Country  geo.Country
+	Location *time.Location // the store's time zone (statements' dates); nil is UTC
 }
 
 // StoreSource returns the StoreInfo of the store in ctx; cmd/platform

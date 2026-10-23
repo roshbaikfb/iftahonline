@@ -13,12 +13,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
@@ -88,6 +90,7 @@ type fixture struct {
 	connB          domain.Connection
 	shipB          domain.Shipment
 	orders         *shiptest.Orders
+	courier        *fake.Carrier
 }
 
 func newFixture(t *testing.T) fixture {
@@ -108,8 +111,9 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	orders := shiptest.NewOrders()
+	courier := fake.New()
 	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Cache: app.DefaultCacheConfig(),
-		Carriers: app.Carriers{fake.Name: fake.New()}, Sealer: sealer, PublicURL: "https://app.example.com",
+		Carriers: app.Carriers{fake.Name: courier}, Sealer: sealer, PublicURL: "https://app.example.com",
 		Orders: orders, Jobs: shiptest.NewJobs(), Objects: shiptest.NewObjects(), Inbox: shiptest.NewInbox(),
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
@@ -154,7 +158,7 @@ func newFixture(t *testing.T) fixture {
 
 	pol, err := authz.NewPolicy(map[authz.Role][]authz.Permission{
 		authz.RoleOwner:    authz.Permissions(),
-		authz.RoleSupport:  {authz.PermShippingRead, authz.PermOrdersRead},
+		authz.RoleSupport:  {authz.PermShippingRead, authz.PermOrdersRead, authz.PermFinanceRead},
 		authz.RoleShipping: {authz.PermCatalogRead},
 	})
 	if err != nil {
@@ -170,7 +174,7 @@ func newFixture(t *testing.T) fixture {
 	mux := http.NewServeMux()
 	httpapi.Mount(mux, svc, pol, testkit.FakeStoreScope(resp, members), resp)
 	return fixture{h: mux, svc: svc, orders: orders, storeA: a, storeB: b, ctxA: tenant.WithStore(ctx, a), ctxB: ctxB, zoneB: zoneB,
-		connB: connB.Connection, shipB: shipB}
+		connB: connB.Connection, shipB: shipB, courier: courier}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -186,6 +190,14 @@ func req(t *testing.T, method, path, token, body string) *http.Request {
 	if body != "" {
 		rq.Header.Set("Content-Type", "application/json")
 	}
+	return rq
+}
+
+func csvReq(t *testing.T, path, token, body string) *http.Request {
+	t.Helper()
+	rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, strings.NewReader(body))
+	rq.Header.Set("Authorization", "Bearer "+token)
+	rq.Header.Set("Content-Type", "text/csv")
 	return rq
 }
 
@@ -348,6 +360,13 @@ func TestCrossTenant(t *testing.T) {
 			t.Fatalf("store B's shipments: %+v %v", p.Items, err)
 		}
 	}
+	codUnchanged := func(t testing.TB) {
+		t.Helper()
+		r, err := f.svc.Report(f.ctxB, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+		if err != nil || r.UnmatchedLines != 0 {
+			t.Fatalf("store B's settlements changed: %+v %v", r, err)
+		}
+	}
 	connUnchanged := func(t testing.TB) {
 		t.Helper()
 		unchanged(t)
@@ -382,6 +401,12 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "cancelShipment", Request: req(t, http.MethodPost, path(a, "/shipments/"+sid+"/cancel"), tokOwnerA, ""), Leaks: leaks, Unchanged: shipUnchanged},
 		{OperationID: "getShipmentLabel", Request: req(t, http.MethodGet, path(b, "/shipments/"+sid+"/label"), tokOwnerA, ""), Leaks: append(leaks, "%PDF")},
 		{OperationID: "getShipmentLabel", Request: req(t, http.MethodGet, path(a, "/shipments/"+sid+"/label"), tokOwnerA, ""), Leaks: append(leaks, "%PDF")},
+		{OperationID: "getCODReport", Request: req(t, http.MethodGet, path(b, "/cod"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "listHeldCOD", Request: req(t, http.MethodGet, path(b, "/cod/held"), tokOwnerA, ""), Leaks: append(leaks, sid)},
+		{OperationID: "importCODStatement", Request: csvReq(t, path(b, "/cod/statements?connection_id="+f.connB.ID.String()), tokOwnerA,
+			"tracking,amount\n"+f.shipB.TrackingNumber+",1\n"), Leaks: leaks, Unchanged: codUnchanged},
+		{OperationID: "importCODStatement", Request: csvReq(t, path(a, "/cod/statements?connection_id="+f.connB.ID.String()), tokOwnerA,
+			"tracking,amount\n"+f.shipB.TrackingNumber+",1\n"), Leaks: leaks, Unchanged: codUnchanged},
 		// A's store in the path, B's zone ID.
 		{OperationID: "updateShippingZone", Request: req(t, http.MethodPut, path(a, "/zones/"+zid), tokOwnerA, update), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "deleteShippingZone", Request: req(t, http.MethodDelete, path(a, "/zones/"+zid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
@@ -517,6 +542,78 @@ func TestShipmentsAPI(t *testing.T) {
 		{"no orders.read for labels", http.MethodGet, "/shipments/" + id + "/label", tokCatalogA, ``, http.StatusForbidden},
 	} {
 		if got, out := f.do(t, req(t, tt.method, path(a, tt.path), tt.token, tt.body)); got != tt.want {
+			t.Errorf("%s: %d %v, want %d", tt.name, got, out, tt.want)
+		}
+	}
+}
+
+func TestCODAPI(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	code, body := f.do(t, req(t, http.MethodPost, path(a, "/carriers"), tokOwnerA, `{"carrier":"fake","api_key":"a-key"}`))
+	if code != http.StatusCreated {
+		t.Fatal(code, body)
+	}
+	conn := body["connection"].(map[string]any)["id"].(string)
+	connID, err := ulid.Parse(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.svc.Ship(f.ctxA, []ulid.ID{f.orders.Add(t, "ready_to_ship")}, connID)
+	if err != nil || res[0].Err != nil {
+		t.Fatalf("ship: %+v %v", res, err)
+	}
+	id := res[0].Shipment.ID
+	if err = f.svc.CreateShipment(f.ctxA, id); err != nil {
+		t.Fatal(err)
+	}
+	sh, _, err := f.svc.Shipment(f.ctxA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.courier.Advance(sh.TrackingNumber, carrier.StatusDelivered); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.TrackShipment(f.ctxA, id); err != nil {
+		t.Fatal(err)
+	}
+
+	code, imp := f.do(t, csvReq(t, path(a, "/cod/statements?connection_id="+conn), tokOwnerA,
+		"tracking_number,amount,reference\n"+sh.TrackingNumber+",300,CO-1\n9999,10,CO-1\nbroken,,\n"))
+	if code != http.StatusOK || imp["imported"] != float64(2) || imp["matched"] != float64(1) || len(imp["errors"].([]any)) != 1 {
+		t.Fatalf("importCODStatement = %d %v", code, imp)
+	}
+	code, rep := f.do(t, req(t, http.MethodGet, path(a, "/cod"), tokSupportA, ""))
+	carriers, _ := rep["carriers"].([]any)
+	if code != http.StatusOK || len(carriers) != 1 || rep["unmatched_lines"] != float64(1) {
+		t.Fatalf("getCODReport = %d %v", code, rep)
+	}
+	c := carriers[0].(map[string]any)
+	if c["expected_minor"] != float64(52000) || c["settled_minor"] != float64(30000) || c["held_minor"] != float64(22000) || c["held_0_7_minor"] != float64(22000) {
+		t.Fatalf("carrier line %v", c)
+	}
+	code, held := f.do(t, req(t, http.MethodGet, path(a, "/cod/held?limit=10"), tokSupportA, ""))
+	items, _ := held["items"].([]any)
+	if code != http.StatusOK || len(items) != 1 || items[0].(map[string]any)["held_minor"] != float64(22000) || held["next_cursor"] != nil {
+		t.Fatalf("listHeldCOD = %d %v", code, held)
+	}
+
+	for _, tt := range []struct {
+		name string
+		rq   *http.Request
+		want int
+	}{
+		{"unreadable statement", csvReq(t, path(a, "/cod/statements?connection_id="+conn), tokOwnerA, "a,b\n1,2\n"), http.StatusUnprocessableEntity},
+		{"no connection", csvReq(t, path(a, "/cod/statements"), tokOwnerA, "tracking,amount\n1,1\n"), http.StatusBadRequest},
+		{"unknown connection", csvReq(t, path(a, "/cod/statements?connection_id="+ulid.NewGenerator().New().String()), tokOwnerA, "tracking,amount\n1,1\n"), http.StatusNotFound},
+		{"backwards period", req(t, http.MethodGet, path(a, "/cod?from=2026-10-20T00:00:00Z&to=2026-10-01T00:00:00Z"), tokOwnerA, ""), http.StatusUnprocessableEntity},
+		{"bad held cursor", req(t, http.MethodGet, path(a, "/cod/held?cursor=x"), tokOwnerA, ""), http.StatusUnprocessableEntity},
+		{"support cannot import", csvReq(t, path(a, "/cod/statements?connection_id="+conn), tokSupportA, "tracking,amount\n1,1\n"), http.StatusForbidden},
+		{"no finance.read", req(t, http.MethodGet, path(a, "/cod"), tokCatalogA, ""), http.StatusForbidden},
+		{"no finance.read for the held list", req(t, http.MethodGet, path(a, "/cod/held"), tokCatalogA, ""), http.StatusForbidden},
+	} {
+		if got, out := f.do(t, tt.rq); got != tt.want {
 			t.Errorf("%s: %d %v, want %d", tt.name, got, out, tt.want)
 		}
 	}

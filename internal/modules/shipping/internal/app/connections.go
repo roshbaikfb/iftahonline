@@ -108,6 +108,9 @@ func (s *Service) Connect(ctx context.Context, carrierName, apiKey string) (Conn
 		if txErr != nil {
 			return txErr
 		}
+		if txErr = s.schedulePullTx(ctx, tx, id); txErr != nil {
+			return txErr
+		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "carrier_connection.created", TargetType: "carrier_connection",
 			TargetID: id.String(), Metadata: map[string]any{"carrier": carrierName}})
 	})

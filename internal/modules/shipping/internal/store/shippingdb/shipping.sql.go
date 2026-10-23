@@ -12,6 +12,93 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const cODSummary = `-- name: CODSummary :many
+SELECT h.connection_id, h.carrier, h.currency,
+  count(*)::int AS delivered,
+  sum(h.cod_minor)::bigint AS expected_minor,
+  sum(h.settled)::bigint AS settled_minor,
+  sum(h.held)::bigint AS held_minor,
+  sum(CASE WHEN h.age_days < 8 THEN h.held ELSE 0 END)::bigint AS held_0_7,
+  sum(CASE WHEN h.age_days >= 8 AND h.age_days < 15 THEN h.held ELSE 0 END)::bigint AS held_8_14,
+  sum(CASE WHEN h.age_days >= 15 THEN h.held ELSE 0 END)::bigint AS held_15_plus,
+  sum(CASE WHEN h.settled > h.cod_minor THEN 1 ELSE 0 END)::int AS over_settled
+FROM (
+  SELECT s.connection_id, s.carrier, s.currency, s.cod_minor,
+    coalesce(st.settled, 0) AS settled,
+    greatest(s.cod_minor - coalesce(st.settled, 0), 0) AS held,
+    extract(day FROM ($1::timestamptz - s.status_at)) AS age_days
+  FROM shipments s
+  LEFT JOIN LATERAL (SELECT sum(c.amount_minor) AS settled FROM cod_settlements c
+                     WHERE c.store_id = s.store_id AND c.shipment_id = s.id) st ON true
+  WHERE s.store_id = $2 AND s.status = 'delivered' AND s.cod_minor > 0
+    AND s.status_at >= $3::timestamptz AND s.status_at < $4::timestamptz
+) h
+GROUP BY h.connection_id, h.carrier, h.currency
+ORDER BY h.carrier, h.connection_id
+LIMIT 100
+`
+
+type CODSummaryParams struct {
+	AsOf    time.Time
+	StoreID ulid.ID
+	FromAt  time.Time
+	ToAt    time.Time
+}
+
+type CODSummaryRow struct {
+	ConnectionID  ulid.ID
+	Carrier       string
+	Currency      string
+	Delivered     int32
+	ExpectedMinor int64
+	SettledMinor  int64
+	HeldMinor     int64
+	Held07        int64
+	Held814       int64
+	Held15Plus    int64
+	OverSettled   int32
+}
+
+// Delivered COD parcels per connection delivered in [from, to):
+// expected, settled, and the part still held, aged by delivery time as
+// of @as_of (0-7, 8-14 and 15+ days).
+func (q *Queries) CODSummary(ctx context.Context, arg CODSummaryParams) ([]CODSummaryRow, error) {
+	rows, err := q.db.Query(ctx, cODSummary,
+		arg.AsOf,
+		arg.StoreID,
+		arg.FromAt,
+		arg.ToAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CODSummaryRow{}
+	for rows.Next() {
+		var i CODSummaryRow
+		if err := rows.Scan(
+			&i.ConnectionID,
+			&i.Carrier,
+			&i.Currency,
+			&i.Delivered,
+			&i.ExpectedMinor,
+			&i.SettledMinor,
+			&i.HeldMinor,
+			&i.Held07,
+			&i.Held814,
+			&i.Held15Plus,
+			&i.OverSettled,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteCityRates = `-- name: DeleteCityRates :exec
 DELETE FROM shipping_city_rates WHERE store_id = $1 AND zone_id = $2
 `
@@ -200,6 +287,71 @@ func (q *Queries) GetShipmentForUpdate(ctx context.Context, arg GetShipmentForUp
 		&i.Version,
 	)
 	return i, err
+}
+
+const heldShipments = `-- name: HeldShipments :many
+SELECT s.id, s.order_id, s.carrier, s.tracking_number, s.currency, s.cod_minor, s.status_at,
+  coalesce(st.settled, 0)::bigint AS settled_minor
+FROM shipments s
+LEFT JOIN LATERAL (SELECT sum(c.amount_minor) AS settled FROM cod_settlements c WHERE c.store_id = s.store_id AND c.shipment_id = s.id) st ON true
+WHERE s.store_id = $1 AND s.status = 'delivered' AND s.cod_minor > coalesce(st.settled, 0)
+  AND (s.status_at, s.id) > ($2::timestamptz, $3::uuid)
+ORDER BY s.status_at, s.id
+LIMIT $4
+`
+
+type HeldShipmentsParams struct {
+	StoreID ulid.ID
+	AfterAt time.Time
+	AfterID ulid.ID
+	Lim     int32
+}
+
+type HeldShipmentsRow struct {
+	ID             ulid.ID
+	OrderID        ulid.ID
+	Carrier        string
+	TrackingNumber *string
+	Currency       string
+	CodMinor       int64
+	StatusAt       time.Time
+	SettledMinor   int64
+}
+
+// Delivered COD parcels not (fully) settled, oldest first: the money
+// still at the carrier, parcel by parcel.
+func (q *Queries) HeldShipments(ctx context.Context, arg HeldShipmentsParams) ([]HeldShipmentsRow, error) {
+	rows, err := q.db.Query(ctx, heldShipments,
+		arg.StoreID,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HeldShipmentsRow{}
+	for rows.Next() {
+		var i HeldShipmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderID,
+			&i.Carrier,
+			&i.TrackingNumber,
+			&i.Currency,
+			&i.CodMinor,
+			&i.StatusAt,
+			&i.SettledMinor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertCityRates = `-- name: InsertCityRates :exec
@@ -917,6 +1069,23 @@ type TouchShipmentParams struct {
 func (q *Queries) TouchShipment(ctx context.Context, arg TouchShipmentParams) error {
 	_, err := q.db.Exec(ctx, touchShipment, arg.RawState, arg.StoreID, arg.ID)
 	return err
+}
+
+const unmatchedSettlements = `-- name: UnmatchedSettlements :one
+SELECT count(*)::int AS lines, coalesce(sum(amount_minor), 0)::bigint AS amount_minor
+FROM cod_settlements WHERE store_id = $1 AND shipment_id IS NULL
+`
+
+type UnmatchedSettlementsRow struct {
+	Lines       int32
+	AmountMinor int64
+}
+
+func (q *Queries) UnmatchedSettlements(ctx context.Context, storeID ulid.ID) (UnmatchedSettlementsRow, error) {
+	row := q.db.QueryRow(ctx, unmatchedSettlements, storeID)
+	var i UnmatchedSettlementsRow
+	err := row.Scan(&i.Lines, &i.AmountMinor)
+	return i, err
 }
 
 const updateSettings = `-- name: UpdateSettings :one

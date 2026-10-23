@@ -162,6 +162,21 @@ type Category struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type CodSettlement struct {
+	ID             pgtype.UUID
+	StoreID        pgtype.UUID
+	ConnectionID   pgtype.UUID
+	Carrier        string
+	TrackingNumber string
+	ShipmentID     pgtype.UUID
+	Currency       string
+	AmountMinor    int64
+	SettledAt      pgtype.Timestamptz
+	Reference      string
+	Source         string
+	CreatedAt      pgtype.Timestamptz
+}
+
 type Customer struct {
 	ID          pgtype.UUID
 	StoreID     pgtype.UUID

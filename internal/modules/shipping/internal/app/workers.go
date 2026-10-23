@@ -15,6 +15,7 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		river.AddWorkerSafely(w, &cancelWorker{svc: s}),
 		river.AddWorkerSafely(w, &trackWorker{svc: s}),
 		river.AddWorkerSafely(w, &webhookWorker{svc: s}),
+		river.AddWorkerSafely(w, &pullWorker{svc: s}),
 	)
 }
 
@@ -71,4 +72,23 @@ type webhookWorker struct {
 
 func (w *webhookWorker) Work(ctx context.Context, job *river.Job[ProcessWebhookArgs]) error {
 	return w.svc.ProcessWebhook(ctx, job.Args.ReceiptID)
+}
+
+// pullWorker pulls a connection's settlements, then snoozes PullEvery;
+// it ends for carriers without a settlements API and for disconnected
+// connections.
+type pullWorker struct {
+	river.WorkerDefaults[PullSettlementsArgs]
+	svc *Service
+}
+
+func (w *pullWorker) Work(ctx context.Context, job *river.Job[PullSettlementsArgs]) error {
+	again, err := w.svc.PullSettlements(ctx, job.Args.ConnectionID)
+	if err != nil {
+		return err
+	}
+	if again {
+		return river.JobSnooze(PullEvery)
+	}
+	return nil
 }

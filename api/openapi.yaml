@@ -2076,6 +2076,81 @@ paths:
               schema: { type: string, format: binary }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/cod:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [shipping]
+      operationId: getCODReport
+      summary: Cash-on-delivery reconciliation
+      description: |
+        Permission: finance.read. For parcels delivered in [from, to)
+        (default: the last 30 days), per carrier account: what they should
+        bring in, what the carrier paid out (statement lines and API
+        payouts), and what it still holds, aged by delivery date (0-7,
+        8-14, 15+ days); plus paid-out lines that match no parcel.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CODReport" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/cod/held:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [shipping]
+      operationId: listHeldCOD
+      summary: Delivered parcels whose cash the carrier still holds
+      description: "Permission: finance.read. Oldest delivery first."
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HeldCODPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/cod/statements:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [shipping]
+      operationId: importCODStatement
+      summary: Import a carrier's settlement statement (CSV)
+      description: |
+        Permission: finance.manage. The statement a carrier's dashboard
+        exports (Bosta has no settlements API), as CSV in UTF-8, comma or
+        semicolon separated, at most 1 MiB and 20,000 lines. Columns are
+        found by name: `tracking_number` and `amount` are required,
+        `settled_at` and `reference` optional (common Arabic and English
+        names are understood). Lines are matched to parcels by tracking
+        number; importing a statement again adds nothing (a line is unique
+        per account, tracking number and reference). Bad lines are skipped
+        and listed (at most 100).
+      parameters:
+        - { name: connection_id, in: query, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: What the import did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CODStatementImport" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -3377,6 +3452,69 @@ components:
         results:
           type: array
           items: { $ref: "#/components/schemas/ShipResult" }
+    CODCarrier:
+      type: object
+      required: [connection_id, carrier, currency, delivered, expected_minor, settled_minor, held_minor, held_0_7_minor, held_8_14_minor, held_15_plus_minor, over_settled]
+      properties:
+        connection_id: { $ref: "#/components/schemas/ULID" }
+        carrier: { type: string }
+        currency: { type: string }
+        delivered: { type: integer, description: Delivered COD parcels. }
+        expected_minor: { type: integer, format: int64 }
+        settled_minor: { type: integer, format: int64 }
+        held_minor: { type: integer, format: int64, description: Still at the carrier. }
+        held_0_7_minor: { type: integer, format: int64 }
+        held_8_14_minor: { type: integer, format: int64 }
+        held_15_plus_minor: { type: integer, format: int64 }
+        over_settled: { type: integer, description: Parcels paid out more than their COD. }
+    CODReport:
+      type: object
+      required: [from, to, carriers, unmatched_lines, unmatched_minor]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        carriers:
+          type: array
+          items: { $ref: "#/components/schemas/CODCarrier" }
+        unmatched_lines: { type: integer, description: Paid-out lines that match no parcel. }
+        unmatched_minor: { type: integer, format: int64 }
+    HeldCOD:
+      type: object
+      required: [shipment_id, order_id, carrier, tracking_number, currency, expected_minor, settled_minor, held_minor, delivered_at]
+      properties:
+        shipment_id: { $ref: "#/components/schemas/ULID" }
+        order_id: { $ref: "#/components/schemas/ULID" }
+        carrier: { type: string }
+        tracking_number: { type: string }
+        currency: { type: string }
+        expected_minor: { type: integer, format: int64 }
+        settled_minor: { type: integer, format: int64 }
+        held_minor: { type: integer, format: int64 }
+        delivered_at: { type: string, format: date-time }
+    HeldCODPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HeldCOD" }
+        next_cursor: { type: string }
+    CODStatementImport:
+      type: object
+      required: [lines, imported, duplicates, matched, errors]
+      properties:
+        lines: { type: integer, description: Lines read (excluding the header and blank lines). }
+        imported: { type: integer }
+        duplicates: { type: integer, description: Lines already imported. }
+        matched: { type: integer, description: New lines matched to a parcel. }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [line, message]
+            properties:
+              line: { type: integer }
+              message: { type: string }
     WebhookReceipt:
       type: object
       required: [status]
