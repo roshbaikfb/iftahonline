@@ -103,6 +103,9 @@ func TestPartitionsRetention(t *testing.T) {
 		`CREATE POLICY tenant_isolation ON logs USING (store_id = app.current_store_id()) WITH CHECK (store_id = app.current_store_id())`,
 		`INSERT INTO app.monthly_partitioned (parent, key_column, append_only, retain_months) VALUES ('logs', 'at', true, 3)`,
 		`CREATE TABLE logs_keepme (LIKE logs)`, // not a monthly partition name: never touched
+		`ALTER TABLE logs_keepme ENABLE ROW LEVEL SECURITY`,
+		`ALTER TABLE logs_keepme FORCE ROW LEVEL SECURITY`,
+		`CREATE POLICY tenant_isolation ON logs_keepme USING (store_id = app.current_store_id()) WITH CHECK (store_id = app.current_store_id())`,
 		`ALTER TABLE logs ATTACH PARTITION logs_keepme FOR VALUES FROM ('2000-01-01') TO ('2000-02-01')`,
 	} {
 		if _, err = owner.Exec(ctx, q); err != nil {
@@ -114,7 +117,12 @@ func TestPartitionsRetention(t *testing.T) {
 		if _, err = owner.Exec(ctx, `DO $$ DECLARE m date := (date_trunc('month', now()) - make_interval(months => `+
 			strconv.Itoa(back)+`))::date; BEGIN
 			EXECUTE format('CREATE TABLE logs_%s PARTITION OF logs FOR VALUES FROM (%L) TO (%L)',
-			  to_char(m, 'YYYY_MM'), m, (m + interval '1 month')::date); END $$`); err != nil {
+			  to_char(m, 'YYYY_MM'), m, (m + interval '1 month')::date);
+			-- Like ensure_monthly_partitions: every partition has its own RLS.
+			EXECUTE format('ALTER TABLE logs_%s ENABLE ROW LEVEL SECURITY', to_char(m, 'YYYY_MM'));
+			EXECUTE format('ALTER TABLE logs_%s FORCE ROW LEVEL SECURITY', to_char(m, 'YYYY_MM'));
+			EXECUTE format('CREATE POLICY tenant_isolation ON logs_%s USING (store_id = app.current_store_id()) WITH CHECK (store_id = app.current_store_id())',
+			  to_char(m, 'YYYY_MM')); END $$`); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -137,6 +145,7 @@ func TestPartitionsRetention(t *testing.T) {
 	if oldest != want || !kept {
 		t.Fatalf("oldest partition = %s (want %s: 3 whole months kept), keepme kept = %v", oldest, want, kept)
 	}
+	testkit.AssertTenantTablesUseRLS(t, owner, "store_memberships.member_self_read")
 	var auditOld int
 	if err = owner.QueryRow(ctx, `SELECT count(*) FROM pg_inherits WHERE inhparent = 'audit_log'::regclass`).Scan(&auditOld); err != nil || auditOld == 0 {
 		t.Fatalf("audit_log partitions = %d, %v", auditOld, err)
