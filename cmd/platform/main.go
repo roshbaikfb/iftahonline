@@ -419,7 +419,11 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range ship.WebhookProviders() {
+	pay, err := newPayments(c, ord.Payments(), nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range append(ship.WebhookProviders(), pay.WebhookProviders()...) {
 		if err = hooks.Register(p); err != nil {
 			return nil, err
 		}
@@ -444,6 +448,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ship.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		pay.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		hooks.Mount(rt.Mux, rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
@@ -645,10 +650,19 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err != nil {
 		return err
 	}
-	if shipOrders.f, err = orders.NewFulfilment(orderDeps); err != nil {
+	ords, err := orders.NewFulfilment(orderDeps)
+	if err != nil {
 		return err
 	}
+	shipOrders.f = ords
 	if err = ship.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	pay, err := newPayments(c, ords, hooks.Inbox())
+	if err != nil {
+		return err
+	}
+	if err = pay.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{

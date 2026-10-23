@@ -273,8 +273,8 @@ func (s *Service) connection(ctx context.Context, id ulid.ID) (store.SealedConne
 	return c, err
 }
 
-// webhookURL is where the gateway notifies a connection's payments.
-func (s *Service) webhookURL(storeID tenant.StoreID, c domain.Connection) string {
+// WebhookURL is where the gateway notifies a connection's payments.
+func (s *Service) WebhookURL(storeID tenant.StoreID, c domain.Connection) string {
 	return strings.TrimRight(s.publicURL, "/") + "/v1/webhooks/" + c.Gateway + "/" + storeID.String() + "/" + c.ID.String()
 }
 

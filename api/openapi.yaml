@@ -83,6 +83,17 @@ tags:
       needs shipping.read, changing needs shipping.manage; saves send the
       `version` read and fail with 409 version_conflict if someone saved
       in between.
+  - name: payments
+    description: |
+      Card payments through the store's own gateway account (ADR-0029).
+      Card data never reaches the platform: shoppers pay on the gateway's
+      hosted page. A payment changes only on the gateway's word, asked
+      again after every webhook; a paid payment marks its order paid and
+      confirms it, and a card order unpaid an hour after it was placed is
+      cancelled. Refunds, partial or full, are asked from the gateway in
+      the background. Connecting a gateway needs payments.manage (the
+      owner), refunding payments.refund, reading orders.read. Amounts are
+      integer minor units of the payment's currency.
   - name: webhooks
     description: |
       Inbound webhooks from carriers and payment gateways (ADR-0024).
@@ -2151,6 +2162,128 @@ paths:
               schema: { $ref: "#/components/schemas/CODStatementImport" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments/gateways:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [payments]
+      operationId: listPaymentConnections
+      summary: The gateways available and the store's connections
+      description: "Permission: payments.manage. Keys are never returned."
+      responses:
+        "200":
+          description: Available gateways and connections, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentConnections" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [payments]
+      operationId: connectPaymentGateway
+      summary: Connect the store's gateway account
+      description: |
+        Permission: payments.manage. Paste the keys from the gateway's
+        dashboard (Paymob: secret key, public key, API key, HMAC secret
+        and the card integration IDs). They are checked with the gateway
+        first (refused keys are a validation error on `secret_key`), then
+        stored encrypted. One active gateway per store (409
+        gateway_already_connected). Card checkout is offered to shoppers
+        from then on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectPaymentGatewayInput" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentConnection" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments/gateways/{connection_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: connection_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    delete:
+      tags: [payments]
+      operationId: disconnectPaymentGateway
+      summary: Stop taking card payments
+      description: |
+        Permission: payments.manage. New card checkouts stop; payments
+        already made are still followed and can still be refunded.
+      responses:
+        "204":
+          description: Disconnected.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [payments]
+      operationId: listPayments
+      summary: The store's card payments, newest first
+      description: "Permission: orders.read. With `order_id`, that order's payments (no paging)."
+      parameters:
+        - { name: order_id, in: query, schema: { $ref: "#/components/schemas/ULID" } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments/{payment_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: payment_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    get:
+      tags: [payments]
+      operationId: getPayment
+      summary: A payment with its refunds
+      description: "Permission: orders.read."
+      responses:
+        "200":
+          description: The payment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments/{payment_id}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: payment_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [payments]
+      operationId: refundPayment
+      summary: Refund a card payment, in part or in full
+      description: |
+        Permission: payments.refund. The amount is reserved at once (two
+        refunds can never exceed what was paid; more is a validation
+        error on `amount_minor`) and asked from the gateway in the
+        background: the refund is `requested`, then `succeeded` or
+        `failed` with the gateway's reason. Only a paid or partly
+        refunded payment can be refunded (409 payment_not_refundable).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefundPaymentInput" }
+      responses:
+        "202":
+          description: Requested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentRefund" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -3418,6 +3551,96 @@ components:
         source: { type: string, enum: [api, webhook, poll, merchant] }
         note: { type: string }
         at: { type: string, format: date-time }
+    PaymentConnections:
+      type: object
+      required: [gateways, connections]
+      properties:
+        gateways:
+          type: array
+          description: Gateways this platform can connect.
+          items: { type: string }
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentConnection" }
+    PaymentConnection:
+      type: object
+      required: [id, gateway, status, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        gateway: { type: string, example: paymob }
+        status: { type: string, enum: [active, disconnected] }
+        created_at: { type: string, format: date-time }
+        disconnected_at: { type: string, format: date-time }
+        webhook_url:
+          type: string
+          description: Where the gateway notifies this connection's payments (sent with every payment; active connections).
+    ConnectPaymentGatewayInput:
+      type: object
+      required: [gateway, api_key, webhook_secret]
+      properties:
+        gateway: { type: string, example: paymob }
+        secret_key: { type: string, maxLength: 512, format: password }
+        public_key: { type: string, maxLength: 512 }
+        api_key: { type: string, maxLength: 1024, format: password }
+        webhook_secret: { type: string, maxLength: 512, format: password, description: "The gateway's webhook signing secret (Paymob: HMAC)." }
+        integration_ids:
+          type: array
+          maxItems: 10
+          description: The gateway's card integration IDs (Paymob).
+          items: { type: integer, minimum: 1 }
+    PaymentStatus:
+      type: string
+      enum: [pending, paid, failed, expired, partially_refunded, refunded]
+    Payment:
+      type: object
+      required: [id, order_id, connection_id, gateway, status, amount_minor, refunded_minor, currency, status_at, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        order_id: { $ref: "#/components/schemas/ULID" }
+        connection_id: { $ref: "#/components/schemas/ULID" }
+        gateway: { type: string, example: paymob }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        amount_minor: { type: integer, format: int64 }
+        refunded_minor: { type: integer, format: int64 }
+        currency: { type: string, example: EGP }
+        transaction_id: { type: string, description: "The gateway's transaction, for support." }
+        failure: { type: string, description: Why the payment failed. }
+        status_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    PaymentRefund:
+      type: object
+      required: [id, payment_id, amount_minor, currency, status, reason, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        payment_id: { $ref: "#/components/schemas/ULID" }
+        amount_minor: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [requested, succeeded, failed] }
+        reason: { type: string }
+        failure: { type: string }
+        created_at: { type: string, format: date-time }
+    PaymentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Payment" }
+        next_cursor: { type: string }
+    PaymentDetail:
+      type: object
+      required: [payment, refunds]
+      properties:
+        payment: { $ref: "#/components/schemas/Payment" }
+        refunds:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentRefund" }
+    RefundPaymentInput:
+      type: object
+      required: [amount_minor]
+      properties:
+        amount_minor: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string, maxLength: 300 }
     ShipmentDetail:
       type: object
       required: [shipment, events]
