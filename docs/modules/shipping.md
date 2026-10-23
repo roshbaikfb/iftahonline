@@ -6,7 +6,8 @@ costs, and connects stores to **carriers**. Design:
 [ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md) (rates),
 [ADR-0026](../adr/0026-carriers-bosta-connections.md) (carriers),
 [ADR-0027](../adr/0027-shipments-tracking-order-moves.md) (shipments and
-tracking). COD reconciliation joins it in P5d.
+tracking), [ADR-0028](../adr/0028-cod-reconciliation.md) (COD
+reconciliation).
 
 ## Public API (`internal/modules/shipping/api.go`)
 
@@ -69,6 +70,22 @@ tracking). COD reconciliation joins it in P5d.
   - Webhook providers come from `Module.WebhookProviders()`.
   - The worker role needs `Inbox`, `Jobs` and `Objects`.
 
+## COD reconciliation
+
+- **Settlement lines** come from two sources:
+  - a statement CSV the merchant uploads (`importCODStatement`);
+  - a daily pull for carriers with a settlements API (Bosta has none).
+- **Matching.** Lines are matched to shipments by tracking number.
+  Re-importing adds nothing.
+- **The report** (`getCODReport`) gives per carrier account: expected,
+  settled, and held (aged 0–7, 8–14, 15+ days), the over-settled count,
+  and the unmatched lines. `listHeldCOD` lists parcel by parcel.
+- **The statement template:**
+  - columns `tracking_number`, `amount`, then optionally `settled_at`
+    (YYYY-MM-DD) and `reference`;
+  - UTF-8, comma or semicolon, ≤ 1 MiB, ≤ 20,000 lines;
+  - common Arabic and English column names are understood too.
+
 ## Events
 
 | Event | Published when |
@@ -89,6 +106,7 @@ All are tenant tables under RLS.
 | `carrier_connections` | Sealed credentials, the webhook secret's hash, `active`/`disconnected`; one active per carrier |
 | `shipments` | One live per order; tracking number unique per store and carrier; COD to collect, label key, carrier's raw state |
 | `shipment_events` | The timeline with its source; append-only, partitioned by month |
+| `cod_settlements` | Payout lines; unique per connection, tracking number and reference; matched shipment or null |
 
 ## HTTP API (tag `shipping`)
 
@@ -108,6 +126,9 @@ All are tenant tables under RLS.
 | `getShipment` (with its timeline) | orders.read |
 | `cancelShipment` | orders.fulfil |
 | `getShipmentLabel` (PDF) | orders.read |
+| `getCODReport` (from, to) | finance.read |
+| `listHeldCOD` | finance.read |
+| `importCODStatement` (text/csv, `connection_id`) | finance.manage |
 
 Roles: every role reads; the owner and manager change.
 
@@ -127,4 +148,5 @@ Roles: every role reads; the owner and manager change.
 - **Acceptance.** `TestWebhookReplayedFiveTimesChangesStateOnce` runs
   the real modules and River.
 - **Benchmark:** `BenchmarkQuote`, about 0.6 µs/op.
-- **Fuzzing.** `domain`: `FuzzQuote`; `carrier/bosta`: `FuzzParseWebhook`.
+- **Fuzzing.** `domain`: `FuzzQuote`, `FuzzParseStatement`;
+  `carrier/bosta`: `FuzzParseWebhook`.
