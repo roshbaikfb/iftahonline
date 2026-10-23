@@ -4,8 +4,9 @@ The shipping module owns **delivery zones and rates**, **free shipping**
 and the **cash-on-delivery fee**, and quotes what delivering an order
 costs, and connects stores to **carriers**. Design:
 [ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md) (rates),
-[ADR-0026](../adr/0026-carriers-bosta-connections.md) (carriers).
-Shipments and tracking join it in P5c-2, COD reconciliation in P5d.
+[ADR-0026](../adr/0026-carriers-bosta-connections.md) (carriers),
+[ADR-0027](../adr/0027-shipments-tracking-order-moves.md) (shipments and
+tracking). COD reconciliation joins it in P5d.
 
 ## Public API (`internal/modules/shipping/api.go`)
 
@@ -49,11 +50,31 @@ Shipments and tracking join it in P5c-2, COD reconciliation in P5d.
   secret is shown once and kept as a SHA-256. One active connection per
   carrier.
 
+## Shipments
+
+- **The lifecycle.** `requested` → `created` (tracking number, label) →
+  `in_transit` → `out_for_delivery` → `delivered` | `failed_attempt` |
+  `returned`; also `cancelled`, and `failed` when the carrier refuses
+  the shipment. One live shipment per order.
+- **Jobs:**
+  - `shipping.create_shipment` and `shipping.fetch_label`;
+  - `shipping.cancel_shipment`;
+  - `shipping.track_shipment`: polls every 6 h until final, snoozing;
+  - `shipping.process_webhook`: re-queries the carrier.
+- **Tracking.** Every change lands in `applyTracking`, which moves the
+  order too: shipped, delivered, failed_delivery, returned, as
+  `carrier:<name>`.
+- **Ports.**
+  - `Orders` is adapted from `orders.Fulfilment` in cmd/platform.
+  - Webhook providers come from `Module.WebhookProviders()`.
+  - The worker role needs `Inbox`, `Jobs` and `Objects`.
+
 ## Events
 
 | Event | Published when |
 |---|---|
 | `shipping.rates.changed` | The settings or a zone is saved or deleted |
+| `shipping.shipment.status_changed` (`shipment_id`, `order_id`, `status`) | A carrier moves a shipment |
 
 ## Tables
 
@@ -66,6 +87,8 @@ All are tenant tables under RLS.
 | `shipping_zone_areas` | Primary key `(store_id, area)`: one zone per governorate |
 | `shipping_city_rates` | `(store_id, zone_id, city_key)`; the name as typed is kept for display |
 | `carrier_connections` | Sealed credentials, the webhook secret's hash, `active`/`disconnected`; one active per carrier |
+| `shipments` | One live per order; tracking number unique per store and carrier; COD to collect, label key, carrier's raw state |
+| `shipment_events` | The timeline with its source; append-only, partitioned by month |
 
 ## HTTP API (tag `shipping`)
 
@@ -80,6 +103,11 @@ All are tenant tables under RLS.
 | `listCarrierConnections` (available carriers too; never credentials) | shipping.read |
 | `connectCarrier` (checks the key; returns the webhook URL and secret once) | shipping.manage |
 | `disconnectCarrier` | shipping.manage |
+| `createShipments` (≤ 100 orders, one result each) | orders.fulfil |
+| `listShipments` (order, status, cursor) | orders.read |
+| `getShipment` (with its timeline) | orders.read |
+| `cancelShipment` | orders.fulfil |
+| `getShipmentLabel` (PDF) | orders.read |
 
 Roles: every role reads; the owner and manager change.
 
@@ -96,5 +124,7 @@ Roles: every role reads; the owner and manager change.
   - `TestConfigQueriesUseIndexesUnderRLS` checks every read uses its
     store_id index as app_user under generic plans.
   - Concurrent zones cannot share a governorate.
+- **Acceptance.** `TestWebhookReplayedFiveTimesChangesStateOnce` runs
+  the real modules and River.
 - **Benchmark:** `BenchmarkQuote`, about 0.6 µs/op.
 - **Fuzzing.** `domain`: `FuzzQuote`; `carrier/bosta`: `FuzzParseWebhook`.
