@@ -31,3 +31,4 @@ supersedes it.
 | [0023](0023-merchant-dashboard-shell.md) | The merchant dashboard's shell, and browser tests on the real API | Accepted |
 | [0024](0024-inbound-webhooks-envelope-encryption-card-data.md) | Inbound webhooks, envelope-encrypted credentials, no card data | Accepted |
 | [0025](0025-shipping-zones-rates-cod-fee.md) | Shipping zones, rates, free shipping and the COD fee | Accepted |
+| [0026](0026-carriers-bosta-connections.md) | Carriers: one contract, a fake, Bosta, and sealed connections | Accepted |

@@ -2,8 +2,10 @@
 
 The shipping module owns **delivery zones and rates**, **free shipping**
 and the **cash-on-delivery fee**, and quotes what delivering an order
-costs. Design: [ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md).
-Carriers and COD reconciliation join it in P5c and P5d.
+costs, and connects stores to **carriers**. Design:
+[ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md) (rates),
+[ADR-0026](../adr/0026-carriers-bosta-connections.md) (carriers).
+Shipments and tracking join it in P5c-2, COD reconciliation in P5d.
 
 ## Public API (`internal/modules/shipping/api.go`)
 
@@ -33,6 +35,20 @@ Carriers and COD reconciliation join it in P5c and P5d.
     plus shipping, clamped to its minimum and maximum (0 = none);
   - a governorate outside every zone is not deliverable.
 
+## Carriers
+
+- **Adapters** (`internal/carrier`) meet one contract, the suite in
+  `internal/carrier/carriertest`:
+  - `fake`: in memory; for tests, and for development when
+    `SHIPPING_FAKE_CARRIER=true`;
+  - `bosta`: Egypt. It follows Bosta's SDKs and is unverified until the
+    sandbox run (`BOSTA_SANDBOX_API_KEY=… go test ./internal/modules/shipping/internal/carrier/bosta/`).
+- **Settlements.** Bosta has no settlements API: `CODSettlements` is
+  `ErrUnsupported`.
+- **Connections** keep the merchant's key envelope-sealed. The webhook
+  secret is shown once and kept as a SHA-256. One active connection per
+  carrier.
+
 ## Events
 
 | Event | Published when |
@@ -49,6 +65,7 @@ All are tenant tables under RLS.
 | `shipping_zones` | Name, rate, optional threshold and COD fee (all four fee columns or none), position, version |
 | `shipping_zone_areas` | Primary key `(store_id, area)`: one zone per governorate |
 | `shipping_city_rates` | `(store_id, zone_id, city_key)`; the name as typed is kept for display |
+| `carrier_connections` | Sealed credentials, the webhook secret's hash, `active`/`disconnected`; one active per carrier |
 
 ## HTTP API (tag `shipping`)
 
@@ -60,6 +77,9 @@ All are tenant tables under RLS.
 | `updateShippingZone` (`version` required) | shipping.manage |
 | `deleteShippingZone` | shipping.manage |
 | `quoteShipping` (governorate, city, subtotal) | shipping.read |
+| `listCarrierConnections` (available carriers too; never credentials) | shipping.read |
+| `connectCarrier` (checks the key; returns the webhook URL and secret once) | shipping.manage |
+| `disconnectCarrier` | shipping.manage |
 
 Roles: every role reads; the owner and manager change.
 
@@ -77,4 +97,4 @@ Roles: every role reads; the owner and manager change.
     store_id index as app_user under generic plans.
   - Concurrent zones cannot share a governorate.
 - **Benchmark:** `BenchmarkQuote`, about 0.6 µs/op.
-- **Fuzzing.** `domain`: `FuzzQuote`.
+- **Fuzzing.** `domain`: `FuzzQuote`; `carrier/bosta`: `FuzzParseWebhook`.
