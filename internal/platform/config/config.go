@@ -67,6 +67,9 @@ type Config struct {
 	Captcha Captcha
 	// Shipping configures the carriers merchants connect (api, worker).
 	Shipping Shipping
+	// Payments configures the card gateways merchants connect (api,
+	// worker).
+	Payments Payments
 }
 
 // Captcha configures Cloudflare Turnstile, which the storefront shows
@@ -88,6 +91,16 @@ type Shipping struct {
 	// FakeCarrier offers the in-memory carrier, for development and
 	// demos. Refused in production.
 	FakeCarrier bool
+}
+
+// Payments configures card gateway adapters (ADR-0029).
+type Payments struct {
+	// PaymobBaseURL overrides Paymob's API, which is otherwise chosen by
+	// the payment's currency (Egypt, Saudi Arabia, the UAE).
+	PaymobBaseURL string
+	// FakeGateway offers the in-memory gateway, for development and
+	// demos. Refused in production.
+	FakeGateway bool
 }
 
 // Edge configures the CDN in front of the storefront (ADR-0019). The
@@ -319,6 +332,13 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		if c.Env == EnvProduction && c.Shipping.FakeCarrier {
 			r.errorf("SHIPPING_FAKE_CARRIER: the fake carrier is not for production")
 		}
+		c.Payments = Payments{
+			PaymobBaseURL: r.url("PAYMOB_BASE_URL", false, "https", "http"),
+			FakeGateway:   r.oneOf("PAYMENTS_FAKE_GATEWAY", "false", "true", "false") == "true",
+		}
+		if c.Env == EnvProduction && c.Payments.FakeGateway {
+			r.errorf("PAYMENTS_FAKE_GATEWAY: the fake gateway is not for production")
+		}
 	}
 	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
@@ -390,6 +410,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("edge_purge", c.Edge.Purges()),
 		slog.Bool("captcha", c.Captcha.Enabled()),
 		slog.Bool("fake_carrier", c.Shipping.FakeCarrier),
+		slog.Bool("fake_gateway", c.Payments.FakeGateway),
 		slog.String("meili", redactURL(c.Search.URL)),
 	)
 }
