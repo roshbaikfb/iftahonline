@@ -95,8 +95,13 @@ func (*Gateway) VerifyWebhook(creds gateway.Credentials, req gateway.WebhookRequ
 	if err != nil || creds.WebhookSecret == "" || !hmac.Equal(got, sign(creds.WebhookSecret, req.Body)) {
 		return gateway.WebhookEvent{}, gateway.ErrForged
 	}
+	return (*Gateway)(nil).ParseWebhook(req.Body)
+}
+
+// ParseWebhook implements gateway.Gateway.
+func (*Gateway) ParseWebhook(body []byte) (gateway.WebhookEvent, error) {
 	var w webhook
-	if err = json.Unmarshal(req.Body, &w); err != nil || w.EventID == "" || w.Reference == "" {
+	if err := json.Unmarshal(body, &w); err != nil || w.EventID == "" || w.Reference == "" {
 		return gateway.WebhookEvent{}, gateway.ErrBadWebhook
 	}
 	return gateway.WebhookEvent{EventID: w.EventID, Reference: w.Reference}, nil

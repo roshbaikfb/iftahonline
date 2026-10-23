@@ -265,6 +265,51 @@ type OrderItem struct {
 	TotalMinor     int64
 }
 
+type Payment struct {
+	ID            ulid.ID
+	StoreID       ulid.ID
+	OrderID       ulid.ID
+	ConnectionID  ulid.ID
+	Gateway       string
+	Currency      string
+	AmountMinor   int64
+	Status        string
+	RefundedMinor int64
+	CheckoutUrl   string
+	ProviderRef   string
+	TransactionID string
+	Failure       string
+	StatusAt      time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	Version       int32
+}
+
+type PaymentConnection struct {
+	ID             ulid.ID
+	StoreID        ulid.ID
+	Gateway        string
+	Credentials    []byte
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DisconnectedAt *time.Time
+}
+
+type PaymentRefund struct {
+	ID               ulid.ID
+	StoreID          ulid.ID
+	PaymentID        ulid.ID
+	Currency         string
+	AmountMinor      int64
+	Status           string
+	Reason           string
+	ProviderRefundID string
+	Failure          string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type PlatformAdmin struct {
 	ID           ulid.ID
 	Email        string

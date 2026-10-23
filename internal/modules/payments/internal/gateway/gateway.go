@@ -123,6 +123,9 @@ type Gateway interface {
 	// VerifyWebhook checks a delivery's signature with creds and reads
 	// it: ErrForged or ErrBadWebhook.
 	VerifyWebhook(creds Credentials, req WebhookRequest) (WebhookEvent, error)
+	// ParseWebhook reads an already verified body (a stored receipt's):
+	// ErrBadWebhook when it is not the gateway's.
+	ParseWebhook(body []byte) (WebhookEvent, error)
 	// FetchStatus returns a payment's state by our reference; a payment
 	// the gateway has no transaction for yet is pending.
 	FetchStatus(ctx context.Context, creds Credentials, reference string, cur money.Currency) (Status, error)

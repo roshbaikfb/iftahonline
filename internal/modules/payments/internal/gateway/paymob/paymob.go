@@ -334,14 +334,18 @@ func (*Gateway) VerifyWebhook(creds gateway.Credentials, req gateway.WebhookRequ
 	if !hmac.Equal(got, m.Sum(nil)) {
 		return gateway.WebhookEvent{}, gateway.ErrForged
 	}
-	var t transaction
-	raw, err := json.Marshal(cb.Obj)
-	if err != nil {
+	return (*Gateway)(nil).ParseWebhook(req.Body)
+}
+
+// ParseWebhook implements gateway.Gateway for transaction callbacks.
+func (*Gateway) ParseWebhook(body []byte) (gateway.WebhookEvent, error) {
+	var cb struct {
+		Obj transaction `json:"obj"`
+	}
+	if err := json.Unmarshal(body, &cb); err != nil || cb.Obj.ID == "" || cb.Obj.Order.MerchantOrderID == "" {
 		return gateway.WebhookEvent{}, gateway.ErrBadWebhook
 	}
-	if err = json.Unmarshal(raw, &t); err != nil || t.ID == "" || t.Order.MerchantOrderID == "" {
-		return gateway.WebhookEvent{}, gateway.ErrBadWebhook
-	}
+	t := cb.Obj
 	// One change of one transaction: its id and the flags that change.
 	id := fmt.Sprintf("txn:%s:%t:%t:%t:%t:%d", t.ID, t.Success, t.Pending, t.IsRefunded, t.IsVoided, t.RefundedAmountCents)
 	return gateway.WebhookEvent{EventID: id, Reference: t.Order.MerchantOrderID}, nil
