@@ -67,6 +67,17 @@ tags:
       Stock is held when an order is placed, leaves on_hand when it
       ships, and comes back when it is cancelled or returned. Amounts
       are integer minor units in the store's currency; times are UTC.
+  - name: webhooks
+    description: |
+      Inbound webhooks from carriers and payment gateways (ADR-0024).
+      Each store connection has its own URL, which the merchant (or the
+      platform, through the provider's API) registers with the provider.
+      A delivery is accepted only when its signature verifies against
+      that connection; a forged one is 401 and logged. Accepted
+      deliveries are stored as received and processed once per provider
+      event id (a replay is 200 `duplicate`); processing re-queries the
+      provider before any order or payment changes. Rate-limited per
+      client IP and per connection.
 paths:
   /livez:
     get:
@@ -1773,6 +1784,42 @@ paths:
               schema: { $ref: "#/components/schemas/Order" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/webhooks/{provider}/{store_id}/{connection_id}:
+    post:
+      tags: [webhooks]
+      operationId: receiveWebhook
+      summary: Receive a provider's webhook
+      description: |
+        The body is read as raw bytes (at most 64 KiB) and verified by the
+        provider's own scheme (an HMAC, or a secret header) before
+        anything is stored. The response says whether the delivery is new
+        (`accepted`) or a replay (`duplicate`); both are 200 so the
+        provider stops retrying. Unknown providers, stores and
+        connections are 404.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+        - $ref: "#/components/parameters/StoreID"
+        - name: connection_id
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/ULID" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Accepted, or recognised as a replay.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookReceipt" }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     adminSessionCookie:
@@ -2838,6 +2885,11 @@ components:
         commit: { type: string, example: 4b40e6d }
         go_version: { type: string, example: go1.27.2 }
         role: { type: string, enum: [api, storefront, worker] }
+    WebhookReceipt:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [accepted, duplicate] }
     Problem:
       type: object
       required: [type, title, status]

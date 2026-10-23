@@ -1549,6 +1549,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a provider's webhook
+         * @description The body is read as raw bytes (at most 64 KiB) and verified by the
+         *     provider's own scheme (an HMAC, or a secret header) before
+         *     anything is stored. The response says whether the delivery is new
+         *     (`accepted`) or a replay (`duplicate`); both are 200 so the
+         *     provider stops retrying. Unknown providers, stores and
+         *     connections are 404.
+         */
+        post: operations["receiveWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2413,6 +2438,10 @@ export interface components {
             go_version: string;
             /** @enum {string} */
             role: "api" | "storefront" | "worker";
+        };
+        WebhookReceipt: {
+            /** @enum {string} */
+            status: "accepted" | "duplicate";
         };
         Problem: {
             /** @example urn:iftahonline:problem:not-found */
@@ -4663,6 +4692,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Order"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    receiveWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted, or recognised as a replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceipt"];
                 };
             };
             default: components["responses"]["Problem"];
