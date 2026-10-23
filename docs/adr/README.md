@@ -34,3 +34,4 @@ supersedes it.
 | [0026](0026-carriers-bosta-connections.md) | Carriers: one contract, a fake, Bosta, and sealed connections | Accepted |
 | [0027](0027-shipments-tracking-order-moves.md) | Shipments: created by jobs, tracked by webhooks and polls, moving their orders | Accepted |
 | [0028](0028-cod-reconciliation.md) | Cash-on-delivery reconciliation | Accepted |
+| [0029](0029-card-payments-paymob.md) | Card payments: one gateway contract, a fake, Paymob, and the gateway's word | Accepted |
