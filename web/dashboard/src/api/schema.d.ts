@@ -1824,6 +1824,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/shipping/cod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cash-on-delivery reconciliation
+         * @description Permission: finance.read. For parcels delivered in [from, to)
+         *     (default: the last 30 days), per carrier account: what they should
+         *     bring in, what the carrier paid out (statement lines and API
+         *     payouts), and what it still holds, aged by delivery date (0-7,
+         *     8-14, 15+ days); plus paid-out lines that match no parcel.
+         */
+        get: operations["getCODReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/cod/held": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Delivered parcels whose cash the carrier still holds
+         * @description Permission: finance.read. Oldest delivery first.
+         */
+        get: operations["listHeldCOD"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/cod/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a carrier's settlement statement (CSV)
+         * @description Permission: finance.manage. The statement a carrier's dashboard
+         *     exports (Bosta has no settlements API), as CSV in UTF-8, comma or
+         *     semicolon separated, at most 1 MiB and 20,000 lines. Columns are
+         *     found by name: `tracking_number` and `amount` are required,
+         *     `settled_at` and `reference` optional (common Arabic and English
+         *     names are understood). Lines are matched to parcels by tracking
+         *     number; importing a statement again adds nothing (a line is unique
+         *     per account, tracking number and reference). Bad lines are skipped
+         *     and listed (at most 100).
+         */
+        post: operations["importCODStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -2903,6 +2981,73 @@ export interface components {
         };
         ShipResults: {
             results: components["schemas"]["ShipResult"][];
+        };
+        CODCarrier: {
+            connection_id: components["schemas"]["ULID"];
+            carrier: string;
+            currency: string;
+            /** @description Delivered COD parcels. */
+            delivered: number;
+            /** Format: int64 */
+            expected_minor: number;
+            /** Format: int64 */
+            settled_minor: number;
+            /**
+             * Format: int64
+             * @description Still at the carrier.
+             */
+            held_minor: number;
+            /** Format: int64 */
+            held_0_7_minor: number;
+            /** Format: int64 */
+            held_8_14_minor: number;
+            /** Format: int64 */
+            held_15_plus_minor: number;
+            /** @description Parcels paid out more than their COD. */
+            over_settled: number;
+        };
+        CODReport: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            carriers: components["schemas"]["CODCarrier"][];
+            /** @description Paid-out lines that match no parcel. */
+            unmatched_lines: number;
+            /** Format: int64 */
+            unmatched_minor: number;
+        };
+        HeldCOD: {
+            shipment_id: components["schemas"]["ULID"];
+            order_id: components["schemas"]["ULID"];
+            carrier: string;
+            tracking_number: string;
+            currency: string;
+            /** Format: int64 */
+            expected_minor: number;
+            /** Format: int64 */
+            settled_minor: number;
+            /** Format: int64 */
+            held_minor: number;
+            /** Format: date-time */
+            delivered_at: string;
+        };
+        HeldCODPage: {
+            items: components["schemas"]["HeldCOD"][];
+            next_cursor?: string;
+        };
+        CODStatementImport: {
+            /** @description Lines read (excluding the header and blank lines). */
+            lines: number;
+            imported: number;
+            /** @description Lines already imported. */
+            duplicates: number;
+            /** @description New lines matched to a parcel. */
+            matched: number;
+            errors: {
+                line: number;
+                message: string;
+            }[];
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -5510,6 +5655,87 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCODReport: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CODReport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listHeldCOD: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldCODPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    importCODStatement: {
+        parameters: {
+            query: {
+                connection_id: components["schemas"]["ULID"];
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description What the import did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CODStatementImport"];
                 };
             };
             default: components["responses"]["Problem"];

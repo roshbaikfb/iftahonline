@@ -73,6 +73,9 @@ const (
 
 	PermShippingRead   Permission = "shipping.read"   // zones, rates and fees
 	PermShippingManage Permission = "shipping.manage" // change them
+
+	PermFinanceRead   Permission = "finance.read"   // cash-on-delivery reconciliation
+	PermFinanceManage Permission = "finance.manage" // import carriers' statements
 )
 
 // Permissions lists every permission.
@@ -87,6 +90,7 @@ func Permissions() []Permission {
 		PermCustomersRead, PermCustomersManage,
 		PermOrdersRead, PermOrdersManage, PermOrdersFulfil, PermOrdersExport,
 		PermShippingRead, PermShippingManage,
+		PermFinanceRead, PermFinanceManage,
 	}
 }
 

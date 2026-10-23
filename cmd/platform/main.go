@@ -265,7 +265,11 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 			if !ok {
 				return shipping.StoreInfo{}, fmt.Errorf("shipping: no country for currency %q", st.Currency)
 			}
-			return shipping.StoreInfo{Currency: st.Currency, Country: country}, nil
+			loc, err := time.LoadLocation(st.Timezone)
+			if err != nil {
+				loc = time.UTC
+			}
+			return shipping.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
 		},
 	}
 	if c.cfg.Secrets.Keyring != nil { // the api and worker roles: they connect carriers, ship and store labels

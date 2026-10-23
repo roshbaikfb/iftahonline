@@ -16,6 +16,8 @@ import (
 //   - everyone reads shipping zones and rates (support quotes them to
 //     callers, shipping staff plan deliveries); only the owner and
 //     manager change them.
+//   - money (cash-on-delivery reconciliation) is the owner's and the
+//     manager's.
 //   - shipping: fulfils orders (packs, ships, records deliveries and
 //     returns); sees the catalog and keeps stock counts right (they
 //     handle the goods), but does not edit products or confirm orders.
@@ -31,6 +33,7 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermCustomersRead, authz.PermCustomersManage,
 			authz.PermOrdersRead, authz.PermOrdersManage, authz.PermOrdersFulfil, authz.PermOrdersExport,
 			authz.PermShippingRead, authz.PermShippingManage,
+			authz.PermFinanceRead, authz.PermFinanceManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,

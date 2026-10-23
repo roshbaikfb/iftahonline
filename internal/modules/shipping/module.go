@@ -55,7 +55,7 @@ type Deps struct {
 	Audit audit.Recorder
 	// Events receives shipping.rates.changed.
 	Events eventbus.Publisher
-	// Stores gives the store's currency and country.
+	// Stores gives the store's currency, country and time zone.
 	Stores StoreSource
 	Cache  CacheConfig
 	// Carriers configures the adapters merchants may connect (api and

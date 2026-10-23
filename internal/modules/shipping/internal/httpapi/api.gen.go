@@ -130,6 +130,29 @@ type BulkError struct {
 	Detail string `json:"detail"`
 }
 
+// CODCarrier defines model for CODCarrier.
+type CODCarrier struct {
+	Carrier string `json:"carrier"`
+
+	// ConnectionId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ConnectionId ULID   `json:"connection_id"`
+	Currency     string `json:"currency"`
+
+	// Delivered Delivered COD parcels.
+	Delivered       int   `json:"delivered"`
+	ExpectedMinor   int64 `json:"expected_minor"`
+	Held07Minor     int64 `json:"held_0_7_minor"`
+	Held15PlusMinor int64 `json:"held_15_plus_minor"`
+	Held814Minor    int64 `json:"held_8_14_minor"`
+
+	// HeldMinor Still at the carrier.
+	HeldMinor int64 `json:"held_minor"`
+
+	// OverSettled Parcels paid out more than their COD.
+	OverSettled  int   `json:"over_settled"`
+	SettledMinor int64 `json:"settled_minor"`
+}
+
 // CODFee defines model for CODFee.
 type CODFee struct {
 	// Bp Basis points of subtotal + shipping (150 = 1.5%).
@@ -139,6 +162,34 @@ type CODFee struct {
 	// MaxMinor 0 means no maximum.
 	MaxMinor int64 `json:"max_minor"`
 	MinMinor int64 `json:"min_minor"`
+}
+
+// CODReport defines model for CODReport.
+type CODReport struct {
+	Carriers []CODCarrier `json:"carriers"`
+	From     time.Time    `json:"from"`
+	To       time.Time    `json:"to"`
+
+	// UnmatchedLines Paid-out lines that match no parcel.
+	UnmatchedLines int   `json:"unmatched_lines"`
+	UnmatchedMinor int64 `json:"unmatched_minor"`
+}
+
+// CODStatementImport defines model for CODStatementImport.
+type CODStatementImport struct {
+	// Duplicates Lines already imported.
+	Duplicates int `json:"duplicates"`
+	Errors     []struct {
+		Line    int    `json:"line"`
+		Message string `json:"message"`
+	} `json:"errors"`
+	Imported int `json:"imported"`
+
+	// Lines Lines read (excluding the header and blank lines).
+	Lines int `json:"lines"`
+
+	// Matched New lines matched to a parcel.
+	Matched int `json:"matched"`
 }
 
 // CarrierConnected defines model for CarrierConnected.
@@ -195,6 +246,29 @@ type FieldError struct {
 	Code    string `json:"code"`
 	Field   string `json:"field"`
 	Message string `json:"message"`
+}
+
+// HeldCOD defines model for HeldCOD.
+type HeldCOD struct {
+	Carrier       string    `json:"carrier"`
+	Currency      string    `json:"currency"`
+	DeliveredAt   time.Time `json:"delivered_at"`
+	ExpectedMinor int64     `json:"expected_minor"`
+	HeldMinor     int64     `json:"held_minor"`
+
+	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	OrderId      ULID  `json:"order_id"`
+	SettledMinor int64 `json:"settled_minor"`
+
+	// ShipmentId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	ShipmentId     ULID   `json:"shipment_id"`
+	TrackingNumber string `json:"tracking_number"`
+}
+
+// HeldCODPage defines model for HeldCODPage.
+type HeldCODPage struct {
+	Items      []HeldCOD `json:"items"`
+	NextCursor *string   `json:"next_cursor,omitempty"`
 }
 
 // Problem defines model for Problem.
@@ -411,6 +485,23 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// GetCODReportParams defines parameters for GetCODReport.
+type GetCODReportParams struct {
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+	To   *time.Time `form:"to,omitempty" json:"to,omitempty"`
+}
+
+// ListHeldCODParams defines parameters for ListHeldCOD.
+type ListHeldCODParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ImportCODStatementParams defines parameters for ImportCODStatement.
+type ImportCODStatementParams struct {
+	ConnectionId ULID `form:"connection_id" json:"connection_id"`
+}
+
 // ListShipmentsParams defines parameters for ListShipments.
 type ListShipmentsParams struct {
 	OrderId *ULID           `form:"order_id,omitempty" json:"order_id,omitempty"`
@@ -451,6 +542,15 @@ type ServerInterface interface {
 	// DisconnectCarrier Disconnect a carrier account
 	// (DELETE /v1/stores/{store_id}/shipping/carriers/{connection_id})
 	DisconnectCarrier(w http.ResponseWriter, r *http.Request, storeId StoreID, connectionId ULID)
+	// GetCODReport Cash-on-delivery reconciliation
+	// (GET /v1/stores/{store_id}/shipping/cod)
+	GetCODReport(w http.ResponseWriter, r *http.Request, storeId StoreID, params GetCODReportParams)
+	// ListHeldCOD Delivered parcels whose cash the carrier still holds
+	// (GET /v1/stores/{store_id}/shipping/cod/held)
+	ListHeldCOD(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListHeldCODParams)
+	// ImportCODStatement Import a carrier's settlement statement (CSV)
+	// (POST /v1/stores/{store_id}/shipping/cod/statements)
+	ImportCODStatement(w http.ResponseWriter, r *http.Request, storeId StoreID, params ImportCODStatementParams)
 	// QuoteShipping What delivering an order would cost
 	// (POST /v1/stores/{store_id}/shipping/quote)
 	QuoteShipping(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -596,6 +696,158 @@ func (siw *ServerInterfaceWrapper) DisconnectCarrier(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DisconnectCarrier(w, r, storeId, connectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCODReport operation middleware
+func (siw *ServerInterfaceWrapper) GetCODReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCODReportParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCODReport(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHeldCOD operation middleware
+func (siw *ServerInterfaceWrapper) ListHeldCOD(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListHeldCODParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHeldCOD(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportCODStatement operation middleware
+func (siw *ServerInterfaceWrapper) ImportCODStatement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportCODStatementParams
+
+	// ------------- Required query parameter "connection_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "connection_id", r.URL.Query(), &params.ConnectionId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connection_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportCODStatement(w, r, storeId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1099,6 +1351,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}", wrapper.GetShipment)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}/cancel", wrapper.CancelShipment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/shipments/{shipment_id}/label", wrapper.GetShipmentLabel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/cod", wrapper.GetCODReport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/cod/held", wrapper.ListHeldCOD)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/shipping/cod/statements", wrapper.ImportCODStatement)
 
 	return m
 }
@@ -1246,6 +1501,127 @@ type DisconnectCarrierdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DisconnectCarrierdefaultApplicationProblemPlusJSONResponse) VisitDisconnectCarrierResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCODReportRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  GetCODReportParams
+}
+
+type GetCODReportResponseObject interface {
+	VisitGetCODReportResponse(w http.ResponseWriter) error
+}
+
+type GetCODReport200JSONResponse CODReport
+
+func (response GetCODReport200JSONResponse) VisitGetCODReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCODReportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCODReportdefaultApplicationProblemPlusJSONResponse) VisitGetCODReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHeldCODRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  ListHeldCODParams
+}
+
+type ListHeldCODResponseObject interface {
+	VisitListHeldCODResponse(w http.ResponseWriter) error
+}
+
+type ListHeldCOD200JSONResponse HeldCODPage
+
+func (response ListHeldCOD200JSONResponse) VisitListHeldCODResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHeldCODdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListHeldCODdefaultApplicationProblemPlusJSONResponse) VisitListHeldCODResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCODStatementRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  ImportCODStatementParams
+	Body    io.Reader
+}
+
+type ImportCODStatementResponseObject interface {
+	VisitImportCODStatementResponse(w http.ResponseWriter) error
+}
+
+type ImportCODStatement200JSONResponse CODStatementImport
+
+func (response ImportCODStatement200JSONResponse) VisitImportCODStatementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCODStatementdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ImportCODStatementdefaultApplicationProblemPlusJSONResponse) VisitImportCODStatementResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1672,6 +2048,15 @@ type StrictServerInterface interface {
 	// DisconnectCarrier Disconnect a carrier account
 	// (DELETE /v1/stores/{store_id}/shipping/carriers/{connection_id})
 	DisconnectCarrier(ctx context.Context, request DisconnectCarrierRequestObject) (DisconnectCarrierResponseObject, error)
+	// GetCODReport Cash-on-delivery reconciliation
+	// (GET /v1/stores/{store_id}/shipping/cod)
+	GetCODReport(ctx context.Context, request GetCODReportRequestObject) (GetCODReportResponseObject, error)
+	// ListHeldCOD Delivered parcels whose cash the carrier still holds
+	// (GET /v1/stores/{store_id}/shipping/cod/held)
+	ListHeldCOD(ctx context.Context, request ListHeldCODRequestObject) (ListHeldCODResponseObject, error)
+	// ImportCODStatement Import a carrier's settlement statement (CSV)
+	// (POST /v1/stores/{store_id}/shipping/cod/statements)
+	ImportCODStatement(ctx context.Context, request ImportCODStatementRequestObject) (ImportCODStatementResponseObject, error)
 	// QuoteShipping What delivering an order would cost
 	// (POST /v1/stores/{store_id}/shipping/quote)
 	QuoteShipping(ctx context.Context, request QuoteShippingRequestObject) (QuoteShippingResponseObject, error)
@@ -1848,6 +2233,89 @@ func (sh *strictHandler) DisconnectCarrier(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DisconnectCarrierResponseObject); ok {
 		if err := validResponse.VisitDisconnectCarrierResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCODReport operation middleware
+func (sh *strictHandler) GetCODReport(w http.ResponseWriter, r *http.Request, storeId StoreID, params GetCODReportParams) {
+	var request GetCODReportRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCODReport(ctx, request.(GetCODReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCODReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCODReportResponseObject); ok {
+		if err := validResponse.VisitGetCODReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListHeldCOD operation middleware
+func (sh *strictHandler) ListHeldCOD(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListHeldCODParams) {
+	var request ListHeldCODRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListHeldCOD(ctx, request.(ListHeldCODRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListHeldCOD")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListHeldCODResponseObject); ok {
+		if err := validResponse.VisitListHeldCODResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportCODStatement operation middleware
+func (sh *strictHandler) ImportCODStatement(w http.ResponseWriter, r *http.Request, storeId StoreID, params ImportCODStatementParams) {
+	var request ImportCODStatementRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportCODStatement(ctx, request.(ImportCODStatementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportCODStatement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportCODStatementResponseObject); ok {
+		if err := validResponse.VisitImportCODStatementResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
