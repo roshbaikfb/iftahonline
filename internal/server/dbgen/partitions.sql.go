@@ -9,6 +9,19 @@ import (
 	"context"
 )
 
+const dropExpiredPartitions = `-- name: DropExpiredPartitions :one
+SELECT app.drop_expired_partitions()::int AS dropped
+`
+
+// Drops the partitions older than their table's retain_months
+// (migration 00026).
+func (q *Queries) DropExpiredPartitions(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, dropExpiredPartitions)
+	var dropped int32
+	err := row.Scan(&dropped)
+	return dropped, err
+}
+
 const ensureMonthlyPartitions = `-- name: EnsureMonthlyPartitions :one
 SELECT app.ensure_monthly_partitions($1::int)::int AS created
 `

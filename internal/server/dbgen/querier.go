@@ -9,6 +9,9 @@ import (
 )
 
 type Querier interface {
+	// Drops the partitions older than their table's retain_months
+	// (migration 00026).
+	DropExpiredPartitions(ctx context.Context) (int32, error)
 	// Keeps every table registered in app.monthly_partitioned partitioned
 	// months_ahead months ahead (migration 00022).
 	EnsureMonthlyPartitions(ctx context.Context, monthsAhead int32) (int32, error)
