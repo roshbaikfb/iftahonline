@@ -18,7 +18,7 @@ function order(id: string, status: Order['status'], extra: Partial<Order> = {}):
   return {
     id, code: id.slice(-8), status, version: 1, source: 'storefront', customer_id: '01M5CUST000000000000000000',
     name: 'منى أحمد', phone: '+201012345678', governorate: 'EG-ALX', city: 'سموحة', address: '14 شارع فوزي معاذ', notes: '',
-    currency: 'EGP', subtotal_minor: 34950, shipping_minor: 0, total_minor: 34950, item_count: 2,
+    currency: 'EGP', subtotal_minor: 34950, shipping_minor: 0, cod_fee_minor: 0, total_minor: 34950, item_count: 2,
     created_at: '2026-10-22T10:00:00Z', updated_at: '2026-10-22T10:00:00Z', status_changed_at: '2026-10-22T10:00:00Z', ...extra,
   };
 }
@@ -156,5 +156,24 @@ describe('OrderDetail', () => {
     await user.click(screen.getByRole('button', { name: 'تأكيد' }));
     expect(await screen.findByRole('button', { name: 'جاهز للشحن' })).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ status: 'confirmed', note: '', version: 3 });
+  });
+
+  it('shows what delivery adds to the total', async () => {
+    const o = order('01M5ORDER0000000000000000C', 'pending', { subtotal_minor: 30000, shipping_minor: 6000, cod_fee_minor: 1500, total_minor: 37500 });
+    mockAPI({
+      ...storeRoute,
+      [`GET /v1/stores/${store}/orders/${o.id}`]: () => ({
+        status: 200,
+        body: {
+          order: o,
+          lines: [{ variant_id: 'v', product_id: 'p', title: 'تيشيرت', variant_title: '', sku: '', qty: 2, unit_price_minor: 15000, total_minor: 30000 }],
+          events: [],
+        },
+      }),
+    });
+    renderAt(`/stores/${store}/orders/${o.id}`);
+    expect(await screen.findByText('الشحن')).toBeInTheDocument();
+    expect(screen.getByText('رسوم الدفع عند الاستلام')).toBeInTheDocument();
+    expect(screen.getByText('الإجمالي').closest('tr')).toHaveTextContent('375');
   });
 });
