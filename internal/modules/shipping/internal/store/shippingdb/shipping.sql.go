@@ -7,6 +7,7 @@ package shippingdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -130,6 +131,77 @@ func (q *Queries) GetSettings(ctx context.Context, storeID ulid.ID) (ShippingSet
 	return i, err
 }
 
+const getShipment = `-- name: GetShipment :one
+SELECT id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version FROM shipments WHERE store_id = $1 AND id = $2
+`
+
+type GetShipmentParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+func (q *Queries) GetShipment(ctx context.Context, arg GetShipmentParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, getShipment, arg.StoreID, arg.ID)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const getShipmentForUpdate = `-- name: GetShipmentForUpdate :one
+SELECT id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version FROM shipments WHERE store_id = $1 AND id = $2 FOR UPDATE
+`
+
+type GetShipmentForUpdateParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+// Serializes a shipment's updates (a webhook and a poll at once).
+func (q *Queries) GetShipmentForUpdate(ctx context.Context, arg GetShipmentForUpdateParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, getShipmentForUpdate, arg.StoreID, arg.ID)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
 const insertCityRates = `-- name: InsertCityRates :exec
 INSERT INTO shipping_city_rates (store_id, zone_id, city_key, city_name, rate_minor)
 SELECT $1, $2, unnest($3::text[]), unnest($4::text[]), unnest($5::bigint[])
@@ -229,6 +301,86 @@ func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const insertShipment = `-- name: InsertShipment :one
+INSERT INTO shipments (id, store_id, order_id, connection_id, carrier, currency, cod_minor)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version
+`
+
+type InsertShipmentParams struct {
+	ID           ulid.ID
+	StoreID      ulid.ID
+	OrderID      ulid.ID
+	ConnectionID ulid.ID
+	Carrier      string
+	Currency     string
+	CodMinor     int64
+}
+
+func (q *Queries) InsertShipment(ctx context.Context, arg InsertShipmentParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, insertShipment,
+		arg.ID,
+		arg.StoreID,
+		arg.OrderID,
+		arg.ConnectionID,
+		arg.Carrier,
+		arg.Currency,
+		arg.CodMinor,
+	)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const insertShipmentEvent = `-- name: InsertShipmentEvent :exec
+INSERT INTO shipment_events (id, store_id, shipment_id, occurred_at, status, raw_state, source, note)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertShipmentEventParams struct {
+	ID         ulid.ID
+	StoreID    ulid.ID
+	ShipmentID ulid.ID
+	OccurredAt time.Time
+	Status     string
+	RawState   string
+	Source     string
+	Note       string
+}
+
+func (q *Queries) InsertShipmentEvent(ctx context.Context, arg InsertShipmentEventParams) error {
+	_, err := q.db.Exec(ctx, insertShipmentEvent,
+		arg.ID,
+		arg.StoreID,
+		arg.ShipmentID,
+		arg.OccurredAt,
+		arg.Status,
+		arg.RawState,
+		arg.Source,
+		arg.Note,
+	)
+	return err
 }
 
 const insertZone = `-- name: InsertZone :one
@@ -372,6 +524,111 @@ func (q *Queries) ListConnections(ctx context.Context, storeID ulid.ID) ([]Carri
 	return items, nil
 }
 
+const listShipmentEvents = `-- name: ListShipmentEvents :many
+SELECT id, store_id, shipment_id, occurred_at, status, raw_state, source, note FROM shipment_events WHERE store_id = $1 AND shipment_id = $2 ORDER BY occurred_at, id LIMIT 500
+`
+
+type ListShipmentEventsParams struct {
+	StoreID    ulid.ID
+	ShipmentID ulid.ID
+}
+
+// A shipment's timeline (dozens of rows at most).
+func (q *Queries) ListShipmentEvents(ctx context.Context, arg ListShipmentEventsParams) ([]ShipmentEvent, error) {
+	rows, err := q.db.Query(ctx, listShipmentEvents, arg.StoreID, arg.ShipmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShipmentEvent{}
+	for rows.Next() {
+		var i ShipmentEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.ShipmentID,
+			&i.OccurredAt,
+			&i.Status,
+			&i.RawState,
+			&i.Source,
+			&i.Note,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShipments = `-- name: ListShipments :many
+SELECT id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version FROM shipments
+WHERE store_id = $1
+  AND (created_at, id) < ($2::timestamptz, $3::uuid)
+  AND ($4::uuid IS NULL OR order_id = $4::uuid)
+  AND ($5::text IS NULL OR status = $5::text)
+ORDER BY created_at DESC, id DESC
+LIMIT $6
+`
+
+type ListShipmentsParams struct {
+	StoreID  ulid.ID
+	BeforeAt time.Time
+	BeforeID ulid.ID
+	OrderID  *ulid.ID
+	Status   *string
+	Lim      int32
+}
+
+// Newest first, keyset on (created_at, id); optional order and status.
+func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([]Shipment, error) {
+	rows, err := q.db.Query(ctx, listShipments,
+		arg.StoreID,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.OrderID,
+		arg.Status,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Shipment{}
+	for rows.Next() {
+		var i Shipment
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.OrderID,
+			&i.ConnectionID,
+			&i.Carrier,
+			&i.Status,
+			&i.TrackingNumber,
+			&i.ProviderID,
+			&i.Currency,
+			&i.CodMinor,
+			&i.LabelKey,
+			&i.RawState,
+			&i.Failure,
+			&i.CancelRequestedAt,
+			&i.StatusAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listZoneAreas = `-- name: ListZoneAreas :many
 SELECT zone_id, area FROM shipping_zone_areas WHERE store_id = $1 ORDER BY zone_id, area
 `
@@ -462,6 +719,204 @@ func (q *Queries) NextZonePosition(ctx context.Context, storeID ulid.ID) (int32,
 	var next_position int32
 	err := row.Scan(&next_position)
 	return next_position, err
+}
+
+const requestShipmentCancel = `-- name: RequestShipmentCancel :one
+UPDATE shipments SET cancel_requested_at = coalesce(cancel_requested_at, now()), updated_at = now(), version = version + 1
+WHERE store_id = $1 AND id = $2
+RETURNING id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version
+`
+
+type RequestShipmentCancelParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+func (q *Queries) RequestShipmentCancel(ctx context.Context, arg RequestShipmentCancelParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, requestShipmentCancel, arg.StoreID, arg.ID)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const setShipmentCreated = `-- name: SetShipmentCreated :one
+UPDATE shipments SET status = 'created', tracking_number = $1, provider_id = $2,
+  raw_state = '', status_at = now(), updated_at = now(), version = version + 1
+WHERE store_id = $3 AND id = $4
+RETURNING id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version
+`
+
+type SetShipmentCreatedParams struct {
+	TrackingNumber *string
+	ProviderID     string
+	StoreID        ulid.ID
+	ID             ulid.ID
+}
+
+func (q *Queries) SetShipmentCreated(ctx context.Context, arg SetShipmentCreatedParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, setShipmentCreated,
+		arg.TrackingNumber,
+		arg.ProviderID,
+		arg.StoreID,
+		arg.ID,
+	)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const setShipmentLabel = `-- name: SetShipmentLabel :exec
+UPDATE shipments SET label_key = $1, updated_at = now() WHERE store_id = $2 AND id = $3
+`
+
+type SetShipmentLabelParams struct {
+	LabelKey string
+	StoreID  ulid.ID
+	ID       ulid.ID
+}
+
+func (q *Queries) SetShipmentLabel(ctx context.Context, arg SetShipmentLabelParams) error {
+	_, err := q.db.Exec(ctx, setShipmentLabel, arg.LabelKey, arg.StoreID, arg.ID)
+	return err
+}
+
+const setShipmentStatus = `-- name: SetShipmentStatus :one
+UPDATE shipments SET status = $1, raw_state = $2, failure = $3, status_at = $4,
+  updated_at = now(), version = version + 1
+WHERE store_id = $5 AND id = $6
+RETURNING id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version
+`
+
+type SetShipmentStatusParams struct {
+	Status   string
+	RawState string
+	Failure  string
+	StatusAt time.Time
+	StoreID  ulid.ID
+	ID       ulid.ID
+}
+
+func (q *Queries) SetShipmentStatus(ctx context.Context, arg SetShipmentStatusParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, setShipmentStatus,
+		arg.Status,
+		arg.RawState,
+		arg.Failure,
+		arg.StatusAt,
+		arg.StoreID,
+		arg.ID,
+	)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const shipmentByTracking = `-- name: ShipmentByTracking :one
+SELECT id, store_id, order_id, connection_id, carrier, status, tracking_number, provider_id, currency, cod_minor, label_key, raw_state, failure, cancel_requested_at, status_at, created_at, updated_at, version FROM shipments WHERE store_id = $1 AND carrier = $2 AND tracking_number = $3
+`
+
+type ShipmentByTrackingParams struct {
+	StoreID        ulid.ID
+	Carrier        string
+	TrackingNumber *string
+}
+
+func (q *Queries) ShipmentByTracking(ctx context.Context, arg ShipmentByTrackingParams) (Shipment, error) {
+	row := q.db.QueryRow(ctx, shipmentByTracking, arg.StoreID, arg.Carrier, arg.TrackingNumber)
+	var i Shipment
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OrderID,
+		&i.ConnectionID,
+		&i.Carrier,
+		&i.Status,
+		&i.TrackingNumber,
+		&i.ProviderID,
+		&i.Currency,
+		&i.CodMinor,
+		&i.LabelKey,
+		&i.RawState,
+		&i.Failure,
+		&i.CancelRequestedAt,
+		&i.StatusAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const touchShipment = `-- name: TouchShipment :exec
+UPDATE shipments SET raw_state = $1, updated_at = now() WHERE store_id = $2 AND id = $3
+`
+
+type TouchShipmentParams struct {
+	RawState string
+	StoreID  ulid.ID
+	ID       ulid.ID
+}
+
+// A tracking update that changed nothing still records the raw state.
+func (q *Queries) TouchShipment(ctx context.Context, arg TouchShipmentParams) error {
+	_, err := q.db.Exec(ctx, touchShipment, arg.RawState, arg.StoreID, arg.ID)
+	return err
 }
 
 const updateSettings = `-- name: UpdateSettings :one

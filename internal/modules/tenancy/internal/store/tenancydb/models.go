@@ -347,6 +347,38 @@ type RiverQueue struct {
 	UpdatedAt time.Time
 }
 
+type Shipment struct {
+	ID                ulid.ID
+	StoreID           ulid.ID
+	OrderID           ulid.ID
+	ConnectionID      ulid.ID
+	Carrier           string
+	Status            string
+	TrackingNumber    pgtype.Text
+	ProviderID        string
+	Currency          string
+	CodMinor          int64
+	LabelKey          string
+	RawState          string
+	Failure           string
+	CancelRequestedAt *time.Time
+	StatusAt          time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Version           int32
+}
+
+type ShipmentEvent struct {
+	ID         ulid.ID
+	StoreID    ulid.ID
+	ShipmentID ulid.ID
+	OccurredAt time.Time
+	Status     string
+	RawState   string
+	Source     string
+	Note       string
+}
+
 type ShippingCityRate struct {
 	StoreID   ulid.ID
 	ZoneID    ulid.ID
