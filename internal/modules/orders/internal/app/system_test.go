@@ -36,11 +36,11 @@ func TestTransitionSystemTx(t *testing.T) {
 	// The worker's context: the store, no principal.
 	move := func(to domain.Status, actor string) (bool, error) {
 		var moved bool
-		err := postgres.InTenantTx(f.shopperA, f.pool, func(tx pgx.Tx) (txErr error) {
-			moved, txErr = f.svc.TransitionSystemTx(f.shopperA, tx, id, to, actor, "tracking 7000001")
-			return txErr
+		txErr := postgres.InTenantTx(f.shopperA, f.pool, func(tx pgx.Tx) (moveErr error) {
+			moved, moveErr = f.svc.TransitionSystemTx(f.shopperA, tx, id, to, actor, "tracking 7000001")
+			return moveErr
 		})
-		return moved, err
+		return moved, txErr
 	}
 	if moved, moveErr := move(domain.StatusShipped, "carrier:bosta"); moveErr != nil || !moved {
 		t.Fatalf("shipped by the carrier: %v %v", moved, moveErr)
