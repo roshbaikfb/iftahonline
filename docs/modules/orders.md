@@ -15,6 +15,7 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `TransitionError`, `ErrInvalidTransition`, `ErrOrderNotFound`, `ErrIdempotencyKeyReused`, `ErrVersionConflict` | Errors |
 | `OrderPlaced`, `OrderStatusChanged`, `EventOrderPlaced`, `EventOrderStatusChanged` | Events the module publishes |
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
+| `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)) |
 
 The module uses these other modules, each through its `api.go`:
 
@@ -53,7 +54,7 @@ month on the order's creation time, which its ULID encodes.
 |---|---|
 | `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal + shipping + cod_fee`, all fixed at placement. Indexes per list driver: status, phone, customer. |
 | `order_items` | Copied titles and prices. Primary key on the order's partition key. |
-| `order_events` | The timeline; append-only. |
+| `order_events` | The timeline; append-only. `actor` names a system that made a move (`carrier:bosta`). |
 | `order_idempotency` | `(store_id, key)` → fingerprint and order. Kept a week, purged per store by keyed orders. |
 
 ## HTTP API (tag `orders`)
