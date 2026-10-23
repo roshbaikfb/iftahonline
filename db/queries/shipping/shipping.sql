@@ -91,3 +91,60 @@ SELECT * FROM carrier_connections WHERE store_id = @store_id AND id = @id;
 UPDATE carrier_connections SET status = 'disconnected', disconnected_at = now(), updated_at = now()
 WHERE store_id = @store_id AND id = @id AND status = 'active'
 RETURNING *;
+
+-- name: InsertShipment :one
+INSERT INTO shipments (id, store_id, order_id, connection_id, carrier, currency, cod_minor)
+VALUES (@id, @store_id, @order_id, @connection_id, @carrier, @currency, @cod_minor)
+RETURNING *;
+
+-- name: GetShipment :one
+SELECT * FROM shipments WHERE store_id = @store_id AND id = @id;
+
+-- name: GetShipmentForUpdate :one
+-- Serializes a shipment's updates (a webhook and a poll at once).
+SELECT * FROM shipments WHERE store_id = @store_id AND id = @id FOR UPDATE;
+
+-- name: ShipmentByTracking :one
+SELECT * FROM shipments WHERE store_id = @store_id AND carrier = @carrier AND tracking_number = @tracking_number;
+
+-- name: ListShipments :many
+-- Newest first, keyset on (created_at, id); optional order and status.
+SELECT * FROM shipments
+WHERE store_id = @store_id
+  AND (created_at, id) < (@before_at::timestamptz, @before_id::uuid)
+  AND (sqlc.narg(order_id)::uuid IS NULL OR order_id = sqlc.narg(order_id)::uuid)
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+ORDER BY created_at DESC, id DESC
+LIMIT @lim;
+
+-- name: SetShipmentCreated :one
+UPDATE shipments SET status = 'created', tracking_number = @tracking_number, provider_id = @provider_id,
+  raw_state = '', status_at = now(), updated_at = now(), version = version + 1
+WHERE store_id = @store_id AND id = @id
+RETURNING *;
+
+-- name: SetShipmentStatus :one
+UPDATE shipments SET status = @status, raw_state = @raw_state, failure = @failure, status_at = @status_at,
+  updated_at = now(), version = version + 1
+WHERE store_id = @store_id AND id = @id
+RETURNING *;
+
+-- name: TouchShipment :exec
+-- A tracking update that changed nothing still records the raw state.
+UPDATE shipments SET raw_state = @raw_state, updated_at = now() WHERE store_id = @store_id AND id = @id;
+
+-- name: SetShipmentLabel :exec
+UPDATE shipments SET label_key = @label_key, updated_at = now() WHERE store_id = @store_id AND id = @id;
+
+-- name: RequestShipmentCancel :one
+UPDATE shipments SET cancel_requested_at = coalesce(cancel_requested_at, now()), updated_at = now(), version = version + 1
+WHERE store_id = @store_id AND id = @id
+RETURNING *;
+
+-- name: InsertShipmentEvent :exec
+INSERT INTO shipment_events (id, store_id, shipment_id, occurred_at, status, raw_state, source, note)
+VALUES (@id, @store_id, @shipment_id, @occurred_at, @status, @raw_state, @source, @note);
+
+-- name: ListShipmentEvents :many
+-- A shipment's timeline (dozens of rows at most).
+SELECT * FROM shipment_events WHERE store_id = @store_id AND shipment_id = @shipment_id ORDER BY occurred_at, id LIMIT 500;

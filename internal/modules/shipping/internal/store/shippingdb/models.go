@@ -64,7 +64,7 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt time.Time
-	AdminID    pgtype.UUID
+	AdminID    *ulid.ID
 	Action     string
 	TargetType string
 	TargetID   string
@@ -95,7 +95,7 @@ type AuditLog struct {
 	ID          ulid.ID
 	StoreID     ulid.ID
 	OccurredAt  time.Time
-	ActorUserID pgtype.UUID
+	ActorUserID *ulid.ID
 	Action      string
 	TargetType  string
 	TargetID    string
@@ -156,7 +156,7 @@ type CatalogImport struct {
 type Category struct {
 	ID        ulid.ID
 	StoreID   ulid.ID
-	ParentID  pgtype.UUID
+	ParentID  *ulid.ID
 	Slug      string
 	Name      string
 	Position  int32
@@ -220,7 +220,7 @@ type OrderEvent struct {
 	OccurredAt     time.Time
 	FromStatus     *string
 	ToStatus       string
-	ActorUserID    pgtype.UUID
+	ActorUserID    *ulid.ID
 	Note           string
 	Actor          string
 }
@@ -345,6 +345,38 @@ type RiverQueue struct {
 	Metadata  []byte
 	PausedAt  *time.Time
 	UpdatedAt time.Time
+}
+
+type Shipment struct {
+	ID                ulid.ID
+	StoreID           ulid.ID
+	OrderID           ulid.ID
+	ConnectionID      ulid.ID
+	Carrier           string
+	Status            string
+	TrackingNumber    *string
+	ProviderID        string
+	Currency          string
+	CodMinor          int64
+	LabelKey          string
+	RawState          string
+	Failure           string
+	CancelRequestedAt *time.Time
+	StatusAt          time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Version           int32
+}
+
+type ShipmentEvent struct {
+	ID         ulid.ID
+	StoreID    ulid.ID
+	ShipmentID ulid.ID
+	OccurredAt time.Time
+	Status     string
+	RawState   string
+	Source     string
+	Note       string
 }
 
 type ShippingCityRate struct {

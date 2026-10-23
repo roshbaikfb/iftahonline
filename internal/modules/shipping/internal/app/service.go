@@ -13,12 +13,15 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -55,6 +58,10 @@ type Service struct {
 	carriers  Carriers
 	sealer    *envelope.Sealer
 	publicURL string
+	orders    Orders
+	jobs      jobs.Inserter
+	objects   media.Objects
+	inbox     webhooks.Inbox
 }
 
 // Deps are the service's dependencies.
@@ -71,6 +78,14 @@ type Deps struct {
 	Sealer *envelope.Sealer
 	// PublicURL is the platform's public origin, for webhook URLs.
 	PublicURL string
+	// Orders reads and moves the orders shipments carry.
+	Orders Orders
+	// Jobs enqueues shipment jobs in the caller's transaction.
+	Jobs jobs.Inserter
+	// Objects stores shipping labels.
+	Objects media.Objects
+	// Inbox gives webhook jobs their receipts (the worker role).
+	Inbox webhooks.Inbox
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -82,7 +97,7 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: newConfigs(d.Cache),
-		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL}
+		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, objects: d.Objects, inbox: d.Inbox}
 }
 
 // Config returns the store's settings and zones as stored now (for the
