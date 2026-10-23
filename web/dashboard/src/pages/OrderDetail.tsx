@@ -124,6 +124,18 @@ function OrderView({ detail, busy, onMove }: { detail: Detail; busy: boolean; on
             ))}
           </tbody>
           <tfoot>
+            {o.shipping_minor > 0 && (
+              <tr>
+                <td colSpan={2}>الشحن</td>
+                <td>{money(o.shipping_minor, o.currency)}</td>
+              </tr>
+            )}
+            {o.cod_fee_minor > 0 && (
+              <tr>
+                <td colSpan={2}>رسوم الدفع عند الاستلام</td>
+                <td>{money(o.cod_fee_minor, o.currency)}</td>
+              </tr>
+            )}
             <tr>
               <th colSpan={2}>الإجمالي</th>
               <th>{money(o.total_minor, o.currency)}</th>
