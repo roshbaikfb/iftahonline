@@ -118,7 +118,7 @@ fuzz: ## Run every fuzz target for FUZZTIME (default 10s)
 
 .PHONY: bench
 bench: ## Benchmarks for storefront-path code
-	go test -run='^$$' -bench=. -benchmem ./internal/platform/money/ ./internal/modules/storefront/internal/web/
+	go test -run='^$$' -bench=. -benchmem ./internal/platform/money/ ./internal/modules/storefront/internal/web/ ./internal/modules/shipping/internal/domain/
 
 .PHONY: vuln
 vuln: ## govulncheck

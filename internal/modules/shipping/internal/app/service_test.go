@@ -375,3 +375,59 @@ func TestDefaultCache(t *testing.T) {
 		t.Fatalf("cache %+v", c)
 	}
 }
+
+// TestConfigQueriesUseIndexesUnderRLS: loading a store's config reads
+// each table by an index on store_id, as app_user under generic plans,
+// among many other stores' zones.
+func TestConfigQueriesUseIndexesUnderRLS(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	owner, err := pgxpool.New(t.Context(), infra.OwnerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(owner.Close)
+	// 300 other stores with 5 zones, 10 areas and 20 cities each. FORCE
+	// RLS binds the owner too, so each store is seeded in its own tenant
+	// transaction.
+	for n := range 300 {
+		ctx := f.mkStore(t)
+		store, _ := tenant.FromContext(ctx)
+		if err = postgres.InTenantTx(ctx, owner, func(tx pgx.Tx) error {
+			_, execErr := tx.Exec(ctx, `
+WITH z AS (
+  INSERT INTO shipping_zones (id, store_id, name, rate_minor, position)
+  SELECT gen_random_uuid(), $1, 'z', 1000, p FROM generate_series(0, 4) AS p RETURNING id, store_id, position),
+a AS (
+  INSERT INTO shipping_zone_areas (store_id, zone_id, area)
+  SELECT z.store_id, z.id, 'EG-' || chr(65 + z.position) || chr(65 + k) FROM z, generate_series(0, 1) AS k RETURNING 1)
+INSERT INTO shipping_city_rates (store_id, zone_id, city_key, city_name, rate_minor)
+SELECT z.store_id, z.id, 'city ' || c, 'city ' || c, 500 FROM z, generate_series(1, 4) AS c`, store.ID)
+			return execErr
+		}); err != nil {
+			t.Fatalf("store %d: %v", n, err)
+		}
+	}
+	for _, tbl := range []string{"shipping_zones", "shipping_zone_areas", "shipping_city_rates", "shipping_settings"} {
+		if _, err = owner.Exec(t.Context(), "ANALYZE "+tbl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := f.service()
+	if _, err = svc.CreateZone(f.ctxA, domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, RateMinor: 1,
+		Cities: []domain.CityInput{{Name: "المعادي", RateMinor: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	pool, capture := testkit.CapturingPool(t, infra.AppURL)
+	captured := app.NewService(app.Deps{DB: pool, IDs: f.ids, Cache: app.DefaultCacheConfig(),
+		Stores: func(context.Context) (app.StoreInfo, error) {
+			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
+		}})
+	if _, err = captured.Config(f.ctxA); err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{"FROM shipping_settings", "FROM shipping_zones", "FROM shipping_zone_areas", "FROM shipping_city_rates"} {
+		plan := testkit.GenericPlan(f.ctxA, t, f.pool, capture.Last(t, marker))
+		testkit.AssertIndexCond(t, plan, "store_id")
+	}
+}
