@@ -1,0 +1,9 @@
+# Server stubs for the `webhooks` tag (see docs/modules/TEMPLATE.md).
+# Not strict: handlers need the raw body to verify signatures.
+package: httpapi
+output: internal/modules/webhooks/internal/httpapi/api.gen.go
+generate:
+  std-http-server: true
+  models: true
+output-options:
+  include-tags: [webhooks]

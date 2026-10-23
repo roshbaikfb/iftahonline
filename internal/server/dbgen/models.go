@@ -491,3 +491,22 @@ type Variant struct {
 	UpdatedAt      pgtype.Timestamptz
 	DeletedAt      pgtype.Timestamptz
 }
+
+type WebhookBody struct {
+	StoreID     pgtype.UUID
+	ReceivedAt  pgtype.Timestamptz
+	ReceiptID   pgtype.UUID
+	ContentType string
+	Body        []byte
+}
+
+type WebhookReceipt struct {
+	ID           pgtype.UUID
+	StoreID      pgtype.UUID
+	Provider     string
+	ConnectionID pgtype.UUID
+	EventID      string
+	ReceivedAt   pgtype.Timestamptz
+	ProcessedAt  pgtype.Timestamptz
+	Outcome      string
+}

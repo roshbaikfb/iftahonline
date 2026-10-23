@@ -43,6 +43,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cdn"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -53,6 +54,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 	"github.com/roshbaikfb/iftahonline/internal/server"
@@ -241,6 +243,16 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	})
 }
 
+// newWebhooks builds the inbound webhook inbox. Carriers and gateways
+// register their providers on it (P5).
+func newWebhooks(c clients) (*webhooks.Module, error) {
+	limiter, err := ratelimit.New(c.rdb, "webhooks")
+	if err != nil {
+		return nil, err
+	}
+	return webhooks.New(webhooks.Deps{Pool: c.pool, IDs: c.ids, Limiter: limiter, Log: c.log, ClientIP: middleware.ClientIP})
+}
+
 func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 	stores := ten.Service()
 	return customers.New(customers.Deps{
@@ -344,6 +356,10 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	hooks, err := newWebhooks(c)
+	if err != nil {
+		return nil, err
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -363,6 +379,7 @@ func mountAPI(_ context.Context, c clients) (func(server.Routes), error) {
 		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		hooks.Mount(rt.Mux, rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
 			if mountErr != nil {
