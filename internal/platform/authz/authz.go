@@ -76,6 +76,9 @@ const (
 
 	PermFinanceRead   Permission = "finance.read"   // cash-on-delivery reconciliation
 	PermFinanceManage Permission = "finance.manage" // import carriers' statements
+
+	PermPaymentsManage Permission = "payments.manage" // connect a card gateway
+	PermPaymentsRefund Permission = "payments.refund" // refund card payments
 )
 
 // Permissions lists every permission.
@@ -91,6 +94,7 @@ func Permissions() []Permission {
 		PermOrdersRead, PermOrdersManage, PermOrdersFulfil, PermOrdersExport,
 		PermShippingRead, PermShippingManage,
 		PermFinanceRead, PermFinanceManage,
+		PermPaymentsManage, PermPaymentsRefund,
 	}
 }
 
