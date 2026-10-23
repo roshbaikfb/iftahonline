@@ -15,7 +15,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
-	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/shiptest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -85,7 +84,7 @@ func (f fixture) service() *app.Service { return f.serviceWith(app.Carriers{fake
 
 func (f fixture) serviceWith(carriers app.Carriers) *app.Service {
 	return app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Audit: f.rec, Events: f.rec, Cache: app.DefaultCacheConfig(),
-		Carriers: carriers, Sealer: sealer(f.t), PublicURL: "https://app.example.com/", Jobs: shiptest.NewJobs(),
+		Carriers: carriers, Sealer: sealer(f.t), PublicURL: "https://app.example.com/", Jobs: testkit.NewJobs(),
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
 		}})
