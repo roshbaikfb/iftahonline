@@ -8,16 +8,21 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/bosta"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -61,20 +66,40 @@ type Deps struct {
 	Sealer *envelope.Sealer
 	// PublicURL is the platform's public origin, for webhook URLs.
 	PublicURL string
+	// Orders reads and moves the orders shipments carry (api, worker).
+	Orders Orders
+	// Jobs enqueues shipment jobs in the caller's transaction (api, worker).
+	Jobs jobs.Inserter
+	// Objects stores shipping labels (api, worker).
+	Objects media.Objects
+	// Inbox gives webhook jobs their receipts (worker).
+	Inbox webhooks.Inbox
 }
 
-// carriers builds the adapters c offers.
-func carriers(c config.Shipping) app.Carriers {
+// carriers builds the adapters c offers, and the fake one's courier.
+func carriers(c config.Shipping) (app.Carriers, *fake.Carrier) {
 	out := app.Carriers{bosta.Name: bosta.New(bosta.Options{BaseURL: c.BostaBaseURL})}
-	if c.FakeCarrier {
-		out[fake.Name] = fake.New()
+	if !c.FakeCarrier {
+		return out, nil
 	}
-	return out
+	f := fake.New()
+	out[fake.Name] = f
+	return out, f
 }
+
+// courier adapts the fake carrier to FakeCourier.
+type courier struct{ f *fake.Carrier }
+
+func (c courier) Advance(tracking, status string) error {
+	return c.f.Advance(tracking, carrier.Status(status))
+}
+
+func (c courier) Webhook(tracking string) ([]byte, error) { return c.f.Webhook(tracking) }
 
 // Module is the wired shipping module.
 type Module struct {
 	svc   *app.Service
+	fake  *fake.Carrier
 	redis *redis.Client
 	log   *slog.Logger
 }
@@ -87,13 +112,31 @@ func New(d Deps) (*Module, error) {
 	if d.Cache.Stores == 0 {
 		d.Cache = app.DefaultCacheConfig()
 	}
+	cs, f := carriers(d.Carriers)
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events, Stores: d.Stores, Cache: d.Cache,
-		Carriers: carriers(d.Carriers), Sealer: d.Sealer, PublicURL: d.PublicURL}),
-		redis: d.Redis, log: d.Log}, nil
+		Carriers: cs, Sealer: d.Sealer, PublicURL: d.PublicURL,
+		Orders: d.Orders, Jobs: d.Jobs, Objects: d.Objects, Inbox: d.Inbox}),
+		fake: f, redis: d.Redis, log: d.Log}, nil
+}
+
+// FakeCourier moves the fake carrier's parcels; nil unless the fake
+// carrier is enabled (never in production).
+func (m *Module) FakeCourier() FakeCourier {
+	if m.fake == nil {
+		return nil
+	}
+	return courier{f: m.fake}
 }
 
 // Quoter is what orders use to price deliveries.
 func (m *Module) Quoter() Quoter { return m.svc }
+
+// RegisterWorkers adds the shipment jobs' workers (worker role).
+func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorkers(w) }
+
+// WebhookProviders are the carriers' sides of the webhooks inbox, one per
+// carrier; register them on the webhooks module.
+func (m *Module) WebhookProviders() []webhooks.Provider { return m.svc.WebhookProviders() }
 
 // Mount registers the merchant API. scope is identity's membership
 // middleware.

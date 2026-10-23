@@ -63,10 +63,7 @@ func New(d Deps) (*Module, error) {
 		d.Audit = audit.Nop{}
 	}
 	mc := d.Media
-	objects, err := media.NewS3(media.S3Config{
-		Endpoint: mc.S3Endpoint, PublicEndpoint: mc.S3PublicEndpoint, Region: mc.S3Region, Bucket: mc.S3Bucket,
-		AccessKey: mc.S3AccessKey, SecretKey: mc.S3SecretKey,
-	})
+	objects, err := media.NewS3For(mc)
 	if err != nil {
 		return nil, err
 	}

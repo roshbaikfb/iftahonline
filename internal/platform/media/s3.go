@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -73,6 +75,15 @@ func NewS3(c S3Config) (*S3, error) {
 		return nil, err
 	}
 	return &S3{cfg: c, client: client, public: public}, nil
+}
+
+// NewS3For returns the object store described by c, the media settings
+// every role that stores objects reads from the environment.
+func NewS3For(c config.Media) (*S3, error) {
+	return NewS3(S3Config{
+		Endpoint: c.S3Endpoint, PublicEndpoint: c.S3PublicEndpoint, Region: c.S3Region, Bucket: c.S3Bucket,
+		AccessKey: c.S3AccessKey, SecretKey: c.S3SecretKey,
+	})
 }
 
 // Bucket returns the bucket name.
