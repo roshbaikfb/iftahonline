@@ -1918,6 +1918,64 @@ paths:
               schema: { $ref: "#/components/schemas/ShippingQuote" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/carriers:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [shipping]
+      operationId: listCarrierConnections
+      summary: The carriers available and the store's connections
+      description: "Permission: shipping.read. Credentials are never returned."
+      responses:
+        "200":
+          description: Available carriers and connections, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CarrierConnections" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [shipping]
+      operationId: connectCarrier
+      summary: Connect the store's account at a carrier
+      description: |
+        Permission: shipping.manage. The API key is checked with the
+        carrier first (a refused key is a validation error on `api_key`),
+        then stored encrypted. The response carries the webhook URL and a
+        secret, shown only here: set them in the carrier's dashboard,
+        sending the secret as the `X-Webhook-Secret` header (or, when the
+        carrier allows no headers, as a `secret` query parameter). One
+        active connection per carrier (409 carrier_already_connected).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectCarrierInput" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CarrierConnected" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/shipping/carriers/{connection_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - name: connection_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    delete:
+      tags: [shipping]
+      operationId: disconnectCarrier
+      summary: Disconnect a carrier account
+      description: "Permission: shipping.manage. Its key is never used again; its webhooks are refused."
+      responses:
+        "204":
+          description: Disconnected.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -3112,6 +3170,40 @@ components:
         free_shipping: { type: boolean }
         cod_fee_minor: { type: integer, format: int64 }
         currency: { type: string }
+    CarrierConnection:
+      type: object
+      required: [id, carrier, status, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        carrier: { type: string, example: bosta }
+        status: { type: string, enum: [active, disconnected] }
+        created_at: { type: string, format: date-time }
+        disconnected_at: { type: string, format: date-time }
+        webhook_url: { type: string, description: Where the carrier sends this connection's webhooks (active connections). }
+    CarrierConnections:
+      type: object
+      required: [carriers, connections]
+      properties:
+        carriers:
+          type: array
+          description: Carriers this platform can connect.
+          items: { type: string }
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/CarrierConnection" }
+    ConnectCarrierInput:
+      type: object
+      required: [carrier, api_key]
+      properties:
+        carrier: { type: string, example: bosta }
+        api_key: { type: string, maxLength: 512, format: password }
+    CarrierConnected:
+      type: object
+      required: [connection, webhook_url, webhook_secret]
+      properties:
+        connection: { $ref: "#/components/schemas/CarrierConnection" }
+        webhook_url: { type: string }
+        webhook_secret: { type: string, description: Shown only in this response. }
     WebhookReceipt:
       type: object
       required: [status]

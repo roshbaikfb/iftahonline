@@ -10,9 +10,13 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/bosta"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
@@ -49,6 +53,23 @@ type Deps struct {
 	// Stores gives the store's currency and country.
 	Stores StoreSource
 	Cache  CacheConfig
+	// Carriers configures the adapters merchants may connect (api and
+	// worker roles); the storefront role leaves it empty.
+	Carriers config.Shipping
+	// Sealer seals carrier credentials; nil in roles that never connect
+	// a carrier (the storefront).
+	Sealer *envelope.Sealer
+	// PublicURL is the platform's public origin, for webhook URLs.
+	PublicURL string
+}
+
+// carriers builds the adapters c offers.
+func carriers(c config.Shipping) app.Carriers {
+	out := app.Carriers{bosta.Name: bosta.New(bosta.Options{BaseURL: c.BostaBaseURL})}
+	if c.FakeCarrier {
+		out[fake.Name] = fake.New()
+	}
+	return out
 }
 
 // Module is the wired shipping module.
@@ -66,7 +87,8 @@ func New(d Deps) (*Module, error) {
 	if d.Cache.Stores == 0 {
 		d.Cache = app.DefaultCacheConfig()
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events, Stores: d.Stores, Cache: d.Cache}),
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events, Stores: d.Stores, Cache: d.Cache,
+		Carriers: carriers(d.Carriers), Sealer: d.Sealer, PublicURL: d.PublicURL}),
 		redis: d.Redis, log: d.Log}, nil
 }
 

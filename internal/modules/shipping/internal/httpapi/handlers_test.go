@@ -19,13 +19,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -81,6 +84,7 @@ type fixture struct {
 	storeA, storeB tenant.StoreID
 	ctxB           context.Context
 	zoneB          domain.Zone
+	connB          domain.Connection
 }
 
 func newFixture(t *testing.T) fixture {
@@ -92,7 +96,16 @@ func newFixture(t *testing.T) fixture {
 	}
 	t.Cleanup(pool.Close)
 	ids := ulid.NewGenerator()
+	k, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=") // public dev key
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealer, err := envelope.New(envelope.FromKeyring(k))
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := app.NewService(app.Deps{DB: pool, IDs: ids, Cache: app.DefaultCacheConfig(),
+		Carriers: app.Carriers{fake.Name: fake.New()}, Sealer: sealer, PublicURL: "https://app.example.com",
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
 		}})
@@ -110,6 +123,10 @@ func newFixture(t *testing.T) fixture {
 	}
 	_, a := mk()
 	ctxB, b := mk()
+	connB, err := svc.Connect(ctxB, fake.Name, "b-carrier-key")
+	if err != nil {
+		t.Fatal(err)
+	}
 	zoneB, err := svc.CreateZone(ctxB, domain.ZoneInput{Name: zoneNameOfB, Areas: []string{"EG-ALX"}, RateMinor: 7777,
 		Cities: []domain.CityInput{{Name: cityNameOfB, RateMinor: 6666}}})
 	if err != nil {
@@ -133,7 +150,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	mux := http.NewServeMux()
 	httpapi.Mount(mux, svc, pol, testkit.FakeStoreScope(resp, members), resp)
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, zoneB: zoneB}
+	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, zoneB: zoneB, connB: connB.Connection}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -299,6 +316,14 @@ func TestCrossTenant(t *testing.T) {
 		}
 	}
 	update := `{"version":1,"name":"stolen","areas":["EG-ALX"],"rate_minor":1}`
+	connUnchanged := func(t testing.TB) {
+		t.Helper()
+		unchanged(t)
+		list, err := f.svc.Connections(f.ctxB)
+		if err != nil || len(list) != 1 || list[0].Status != "active" {
+			t.Fatalf("store B's carrier connections changed: %+v %v", list, err)
+		}
+	}
 	cases := []testkit.CrossTenantCase{
 		// B's store in the path.
 		{OperationID: "getShipping", Request: req(t, http.MethodGet, path(b, ""), tokOwnerA, ""), Leaks: leaks},
@@ -309,6 +334,13 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "deleteShippingZone", Request: req(t, http.MethodDelete, path(b, "/zones/"+zid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "quoteShipping", Request: req(t, http.MethodPost, path(b, "/quote"), tokOwnerA, `{"governorate":"EG-ALX","subtotal_minor":1}`),
 			Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "listCarrierConnections", Request: req(t, http.MethodGet, path(b, "/carriers"), tokOwnerA, ""), Leaks: append(leaks, f.connB.ID.String())},
+		{OperationID: "connectCarrier", Request: req(t, http.MethodPost, path(b, "/carriers"), tokOwnerA, `{"carrier":"fake","api_key":"k"}`),
+			Leaks: leaks, Unchanged: connUnchanged},
+		{OperationID: "disconnectCarrier", Request: req(t, http.MethodDelete, path(b, "/carriers/"+f.connB.ID.String()), tokOwnerA, ""),
+			Leaks: leaks, Unchanged: connUnchanged},
+		{OperationID: "disconnectCarrier", Request: req(t, http.MethodDelete, path(a, "/carriers/"+f.connB.ID.String()), tokOwnerA, ""),
+			Leaks: leaks, Unchanged: connUnchanged},
 		// A's store in the path, B's zone ID.
 		{OperationID: "updateShippingZone", Request: req(t, http.MethodPut, path(a, "/zones/"+zid), tokOwnerA, update), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "deleteShippingZone", Request: req(t, http.MethodDelete, path(a, "/zones/"+zid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
@@ -322,5 +354,48 @@ func TestCrossTenant(t *testing.T) {
 	code, q := f.do(t, req(t, http.MethodPost, path(a, "/quote"), tokOwnerA, `{"governorate":"EG-ALX","city":"`+cityNameOfB+`","subtotal_minor":1}`))
 	if code != http.StatusOK || q["shipping_minor"] != float64(0) || q["zone_id"] != nil {
 		t.Fatalf("A's quote = %d %v", code, q)
+	}
+}
+
+func TestCarrierConnections(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	code, body := f.do(t, req(t, http.MethodPost, path(a, "/carriers"), tokOwnerA, `{"carrier":"fake","api_key":"a-secret-key"}`))
+	conn, _ := body["connection"].(map[string]any)
+	if code != http.StatusCreated || conn["carrier"] != "fake" || conn["status"] != "active" || body["webhook_secret"] == "" ||
+		!strings.HasPrefix(body["webhook_url"].(string), "https://app.example.com/v1/webhooks/fake/"+a.String()+"/") {
+		t.Fatalf("connectCarrier = %d %v", code, body)
+	}
+	id := conn["id"].(string)
+	code, list := f.do(t, req(t, http.MethodGet, path(a, "/carriers"), tokSupportA, ""))
+	if code != http.StatusOK || fmt.Sprint(list["carriers"]) != "[fake]" || len(list["connections"].([]any)) != 1 ||
+		strings.Contains(fmt.Sprint(list), "a-secret-key") || strings.Contains(fmt.Sprint(list), body["webhook_secret"].(string)) {
+		t.Fatalf("listCarrierConnections = %d %v", code, list)
+	}
+	for _, tt := range []struct {
+		name, method, path, token, body string
+		want                            int
+	}{
+		{"refused key", http.MethodPost, "/carriers", tokOwnerA, `{"carrier":"fake","api_key":"` + fake.InvalidKey + `"}`, http.StatusUnprocessableEntity},
+		{"unknown carrier", http.MethodPost, "/carriers", tokOwnerA, `{"carrier":"dhl","api_key":"k"}`, http.StatusUnprocessableEntity},
+		{"already connected", http.MethodPost, "/carriers", tokOwnerA, `{"carrier":"fake","api_key":"k2"}`, http.StatusConflict},
+		{"no body", http.MethodPost, "/carriers", tokOwnerA, ``, http.StatusBadRequest},
+		{"bad id", http.MethodDelete, "/carriers/nope", tokOwnerA, ``, http.StatusNotFound},
+		{"support cannot connect", http.MethodPost, "/carriers", tokSupportA, `{"carrier":"fake","api_key":"k"}`, http.StatusForbidden},
+		{"support cannot disconnect", http.MethodDelete, "/carriers/" + id, tokSupportA, ``, http.StatusForbidden},
+		{"no shipping.read", http.MethodGet, "/carriers", tokCatalogA, ``, http.StatusForbidden},
+	} {
+		if got, out := f.do(t, req(t, tt.method, path(a, tt.path), tt.token, tt.body)); got != tt.want {
+			t.Errorf("%s: %d %v, want %d", tt.name, got, out, tt.want)
+		}
+	}
+	if code, _ = f.do(t, req(t, http.MethodDelete, path(a, "/carriers/"+id), tokOwnerA, "")); code != http.StatusNoContent {
+		t.Fatalf("disconnectCarrier = %d", code)
+	}
+	code, list = f.do(t, req(t, http.MethodGet, path(a, "/carriers"), tokOwnerA, ""))
+	c0 := list["connections"].([]any)[0].(map[string]any)
+	if code != http.StatusOK || c0["status"] != "disconnected" || c0["webhook_url"] != nil || c0["disconnected_at"] == nil {
+		t.Fatalf("after disconnect = %d %v", code, list)
 	}
 }

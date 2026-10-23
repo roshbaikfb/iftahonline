@@ -1666,6 +1666,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/shipping/carriers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The carriers available and the store's connections
+         * @description Permission: shipping.read. Credentials are never returned.
+         */
+        get: operations["listCarrierConnections"];
+        put?: never;
+        /**
+         * Connect the store's account at a carrier
+         * @description Permission: shipping.manage. The API key is checked with the
+         *     carrier first (a refused key is a validation error on `api_key`),
+         *     then stored encrypted. The response carries the webhook URL and a
+         *     secret, shown only here: set them in the carrier's dashboard,
+         *     sending the secret as the `X-Webhook-Secret` header (or, when the
+         *     carrier allows no headers, as a `secret` query parameter). One
+         *     active connection per carrier (409 carrier_already_connected).
+         */
+        post: operations["connectCarrier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/shipping/carriers/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a carrier account
+         * @description Permission: shipping.manage. Its key is never used again; its webhooks are refused.
+         */
+        delete: operations["disconnectCarrier"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -2651,6 +2706,36 @@ export interface components {
             /** Format: int64 */
             cod_fee_minor: number;
             currency: string;
+        };
+        CarrierConnection: {
+            id: components["schemas"]["ULID"];
+            /** @example bosta */
+            carrier: string;
+            /** @enum {string} */
+            status: "active" | "disconnected";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            disconnected_at?: string;
+            /** @description Where the carrier sends this connection's webhooks (active connections). */
+            webhook_url?: string;
+        };
+        CarrierConnections: {
+            /** @description Carriers this platform can connect. */
+            carriers: string[];
+            connections: components["schemas"]["CarrierConnection"][];
+        };
+        ConnectCarrierInput: {
+            /** @example bosta */
+            carrier: string;
+            /** Format: password */
+            api_key: string;
+        };
+        CarrierConnected: {
+            connection: components["schemas"]["CarrierConnection"];
+            webhook_url: string;
+            /** @description Shown only in this response. */
+            webhook_secret: string;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -5060,6 +5145,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ShippingQuote"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCarrierConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available carriers and connections, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarrierConnections"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    connectCarrier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectCarrierInput"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarrierConnected"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disconnectCarrier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

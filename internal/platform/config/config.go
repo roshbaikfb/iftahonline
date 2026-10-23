@@ -65,6 +65,8 @@ type Config struct {
 	Search  Search
 	Edge    Edge
 	Captcha Captcha
+	// Shipping configures the carriers merchants connect (api, worker).
+	Shipping Shipping
 }
 
 // Captcha configures Cloudflare Turnstile, which the storefront shows
@@ -77,6 +79,16 @@ type Captcha struct {
 
 // Enabled reports whether risky orders can be verified.
 func (c Captcha) Enabled() bool { return c.SiteKey != "" }
+
+// Shipping configures carrier adapters (ADR-0026).
+type Shipping struct {
+	// BostaBaseURL is Bosta's API; its production API by default (the
+	// staging API is https://stg-app.bosta.co/api/v2).
+	BostaBaseURL string
+	// FakeCarrier offers the in-memory carrier, for development and
+	// demos. Refused in production.
+	FakeCarrier bool
+}
 
 // Edge configures the CDN in front of the storefront (ADR-0019). The
 // worker purges by tag when Cloudflare is configured; the storefront
@@ -300,6 +312,13 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		if c.Env == EnvProduction && c.Mail.SMTPAddr != "" && c.Mail.SMTPUsername == "" {
 			r.errorf("SMTP_USERNAME is required with SMTP_ADDR in production")
 		}
+		c.Shipping = Shipping{
+			BostaBaseURL: r.url("BOSTA_BASE_URL", false, "https", "http"),
+			FakeCarrier:  r.oneOf("SHIPPING_FAKE_CARRIER", "false", "true", "false") == "true",
+		}
+		if c.Env == EnvProduction && c.Shipping.FakeCarrier {
+			r.errorf("SHIPPING_FAKE_CARRIER: the fake carrier is not for production")
+		}
 	}
 	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
@@ -370,6 +389,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Duration("edge_cache_ttl", c.Edge.CacheTTL),
 		slog.Bool("edge_purge", c.Edge.Purges()),
 		slog.Bool("captcha", c.Captcha.Enabled()),
+		slog.Bool("fake_carrier", c.Shipping.FakeCarrier),
 		slog.String("meili", redactURL(c.Search.URL)),
 	)
 }

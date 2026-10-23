@@ -81,7 +81,7 @@ type AdminSession struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
-	RevokedAt  pgtype.Timestamptz
+	RevokedAt  *time.Time
 }
 
 type AppMonthlyPartitioned struct {
@@ -101,6 +101,18 @@ type AuditLog struct {
 	TargetID    string
 	IpPrefix    string
 	Metadata    []byte
+}
+
+type CarrierConnection struct {
+	ID                ulid.ID
+	StoreID           ulid.ID
+	Carrier           string
+	Credentials       []byte
+	WebhookSecretHash []byte
+	Status            string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DisconnectedAt    *time.Time
 }
 
 type Cart struct {
@@ -137,8 +149,8 @@ type CatalogImport struct {
 	FailureReason  string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	StartedAt      pgtype.Timestamptz
-	FinishedAt     pgtype.Timestamptz
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
 }
 
 type Category struct {
@@ -159,8 +171,8 @@ type Customer struct {
 	Name        string
 	NameKey     string
 	OrdersCount int32
-	LastOrderAt pgtype.Timestamptz
-	BlockedAt   pgtype.Timestamptz
+	LastOrderAt *time.Time
+	BlockedAt   *time.Time
 	BlockReason string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -245,7 +257,7 @@ type PlatformAdmin struct {
 	Status       string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
-	LastLoginAt  pgtype.Timestamptz
+	LastLoginAt  *time.Time
 }
 
 type Product struct {
@@ -258,7 +270,7 @@ type Product struct {
 	Options     []byte
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	DeletedAt   pgtype.Timestamptz
+	DeletedAt   *time.Time
 }
 
 type ProductCategory struct {
@@ -290,9 +302,9 @@ type RiverJob struct {
 	State        RiverJobState
 	Attempt      int16
 	MaxAttempts  int16
-	AttemptedAt  pgtype.Timestamptz
+	AttemptedAt  *time.Time
 	CreatedAt    time.Time
-	FinalizedAt  pgtype.Timestamptz
+	FinalizedAt  *time.Time
 	ScheduledAt  time.Time
 	Priority     int16
 	Args         []byte
@@ -330,7 +342,7 @@ type RiverQueue struct {
 	Name      string
 	CreatedAt time.Time
 	Metadata  []byte
-	PausedAt  pgtype.Timestamptz
+	PausedAt  *time.Time
 	UpdatedAt time.Time
 }
 
@@ -383,11 +395,11 @@ type StockReservation struct {
 	Qty         int32
 	Counted     bool
 	Status      string
-	ExpiresAt   pgtype.Timestamptz
+	ExpiresAt   *time.Time
 	CreatedAt   time.Time
-	ReleasedAt  pgtype.Timestamptz
-	CommittedAt pgtype.Timestamptz
-	ReturnedAt  pgtype.Timestamptz
+	ReleasedAt  *time.Time
+	CommittedAt *time.Time
+	ReturnedAt  *time.Time
 }
 
 type Store struct {
@@ -429,8 +441,8 @@ type StoreDomain struct {
 	VerificationToken string
 	FailureReason     string
 	CheckAttempts     int32
-	VerifiedAt        pgtype.Timestamptz
-	LastCheckedAt     pgtype.Timestamptz
+	VerifiedAt        *time.Time
+	LastCheckedAt     *time.Time
 	CreatedAt         time.Time
 }
 
@@ -443,8 +455,8 @@ type StoreInvitation struct {
 	InvitedBy  ulid.ID
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
-	AcceptedAt pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
+	AcceptedAt *time.Time
+	RevokedAt  *time.Time
 }
 
 type StoreMembership struct {
@@ -480,16 +492,16 @@ type StoreTheme struct {
 type User struct {
 	ID              ulid.ID
 	Email           string
-	EmailVerifiedAt pgtype.Timestamptz
+	EmailVerifiedAt *time.Time
 	Name            string
 	PasswordHash    string
 	Status          string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Phone           *string
-	PhoneVerifiedAt pgtype.Timestamptz
+	PhoneVerifiedAt *time.Time
 	TotpSecret      []byte
-	TotpEnabledAt   pgtype.Timestamptz
+	TotpEnabledAt   *time.Time
 	TotpLastStep    int64
 }
 
@@ -506,7 +518,7 @@ type UserRecoveryCode struct {
 	UserID    ulid.ID
 	CodeHash  []byte
 	CreatedAt time.Time
-	UsedAt    pgtype.Timestamptz
+	UsedAt    *time.Time
 }
 
 type UserSession struct {
@@ -518,7 +530,7 @@ type UserSession struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
-	RevokedAt  pgtype.Timestamptz
+	RevokedAt  *time.Time
 }
 
 type Variant struct {
@@ -533,7 +545,7 @@ type Variant struct {
 	Position       int32
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	DeletedAt      pgtype.Timestamptz
+	DeletedAt      *time.Time
 }
 
 type WebhookBody struct {
@@ -551,6 +563,6 @@ type WebhookReceipt struct {
 	ConnectionID ulid.ID
 	EventID      string
 	ReceivedAt   time.Time
-	ProcessedAt  pgtype.Timestamptz
+	ProcessedAt  *time.Time
 	Outcome      string
 }

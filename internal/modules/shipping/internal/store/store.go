@@ -250,3 +250,89 @@ func codColumns(f *domain.CODFee) codCols {
 	bp := int32(f.BP) //nolint:gosec // ≤ MaxBP
 	return codCols{fixed: &f.FixedMinor, bp: &bp, min: &f.MinMinor, max: &f.MaxMinor}
 }
+
+// ErrCarrierConnected is returned when the store already has an active
+// connection to the carrier.
+var ErrCarrierConnected = errors.New("shipping store: carrier already connected")
+
+// SealedConnection is a connection with what it keeps sealed or hashed.
+type SealedConnection struct {
+	domain.Connection
+	Credentials       []byte // envelope blob
+	WebhookSecretHash []byte
+}
+
+// InsertConnection stores a new active connection.
+func InsertConnection(ctx context.Context, tx Tx, c SealedConnection) (domain.Connection, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Connection{}, err
+	}
+	row, err := shippingdb.New(tx).InsertConnection(ctx, shippingdb.InsertConnectionParams{ID: c.ID, StoreID: store, Carrier: c.Carrier,
+		Credentials: c.Credentials, WebhookSecretHash: c.WebhookSecretHash})
+	if postgres.IsUniqueViolation(err, "carrier_connections_one_active") {
+		return domain.Connection{}, ErrCarrierConnected
+	}
+	if err != nil {
+		return domain.Connection{}, fmt.Errorf("shipping store: insert connection: %w", err)
+	}
+	return toConnection(row).Connection, nil
+}
+
+// ListConnections returns the store's connections, newest first.
+func ListConnections(ctx context.Context, tx Tx) ([]domain.Connection, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := shippingdb.New(tx).ListConnections(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("shipping store: list connections: %w", err)
+	}
+	out := make([]domain.Connection, len(rows))
+	for i, r := range rows {
+		out[i] = toConnection(r).Connection
+	}
+	return out, nil
+}
+
+// GetConnection returns a connection with its sealed credentials, or
+// domain.ErrNotFound.
+func GetConnection(ctx context.Context, tx Tx, id ulid.ID) (SealedConnection, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return SealedConnection{}, err
+	}
+	row, err := shippingdb.New(tx).GetConnection(ctx, shippingdb.GetConnectionParams{StoreID: store, ID: id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SealedConnection{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return SealedConnection{}, fmt.Errorf("shipping store: get connection: %w", err)
+	}
+	return toConnection(row), nil
+}
+
+// Disconnect marks an active connection disconnected; domain.ErrNotFound
+// when there is no such active connection.
+func Disconnect(ctx context.Context, tx Tx, id ulid.ID) (domain.Connection, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Connection{}, err
+	}
+	row, err := shippingdb.New(tx).DisconnectConnection(ctx, shippingdb.DisconnectConnectionParams{StoreID: store, ID: id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Connection{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Connection{}, fmt.Errorf("shipping store: disconnect: %w", err)
+	}
+	return toConnection(row).Connection, nil
+}
+
+func toConnection(r shippingdb.CarrierConnection) SealedConnection {
+	return SealedConnection{
+		Connection:  domain.Connection{ID: r.ID, Carrier: r.Carrier, Status: r.Status, CreatedAt: r.CreatedAt, DisconnectedAt: r.DisconnectedAt},
+		Credentials: r.Credentials, WebhookSecretHash: r.WebhookSecretHash,
+	}
+}

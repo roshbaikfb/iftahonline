@@ -74,3 +74,20 @@ DELETE FROM shipping_city_rates WHERE store_id = @store_id AND zone_id = @zone_i
 INSERT INTO shipping_city_rates (store_id, zone_id, city_key, city_name, rate_minor)
 SELECT @store_id, @zone_id, unnest(@keys::text[]), unnest(@names::text[]), unnest(@rates::bigint[]);
 
+
+-- name: InsertConnection :one
+INSERT INTO carrier_connections (id, store_id, carrier, credentials, webhook_secret_hash)
+VALUES (@id, @store_id, @carrier, @credentials, @webhook_secret_hash)
+RETURNING *;
+
+-- name: ListConnections :many
+-- A store has a handful (one active per carrier, plus past ones).
+SELECT * FROM carrier_connections WHERE store_id = @store_id ORDER BY created_at DESC LIMIT 100;
+
+-- name: GetConnection :one
+SELECT * FROM carrier_connections WHERE store_id = @store_id AND id = @id;
+
+-- name: DisconnectConnection :one
+UPDATE carrier_connections SET status = 'disconnected', disconnected_at = now(), updated_at = now()
+WHERE store_id = @store_id AND id = @id AND status = 'active'
+RETURNING *;

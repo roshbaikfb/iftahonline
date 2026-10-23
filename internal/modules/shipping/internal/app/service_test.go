@@ -13,13 +13,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -61,6 +64,7 @@ func (r *recorder) counts() (int, int) {
 }
 
 type fixture struct {
+	t          testing.TB
 	pool       *pgxpool.Pool
 	qc         *testkit.QueryCounter
 	rec        *recorder
@@ -71,16 +75,32 @@ type fixture struct {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	pool, qc := testkit.CountingPool(t, infra.AppURL)
-	f := fixture{pool: pool, qc: qc, rec: &recorder{}, ids: ulid.NewGenerator()}
+	f := fixture{t: t, pool: pool, qc: qc, rec: &recorder{}, ids: ulid.NewGenerator()}
 	f.ctxA, f.ctxB = f.mkStore(t), f.mkStore(t)
 	return f
 }
 
-func (f fixture) service() *app.Service {
+func (f fixture) service() *app.Service { return f.serviceWith(app.Carriers{fake.Name: fake.New()}) }
+
+func (f fixture) serviceWith(carriers app.Carriers) *app.Service {
 	return app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Audit: f.rec, Events: f.rec, Cache: app.DefaultCacheConfig(),
+		Carriers: carriers, Sealer: sealer(f.t), PublicURL: "https://app.example.com/",
 		Stores: func(context.Context) (app.StoreInfo, error) {
 			return app.StoreInfo{Currency: money.EGP, Country: geo.EG}, nil
 		}})
+}
+
+func sealer(t testing.TB) *envelope.Sealer {
+	t.Helper()
+	k, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=") // public dev key
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := envelope.New(envelope.FromKeyring(k))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }
 
 func (f fixture) mkStore(t *testing.T) context.Context {

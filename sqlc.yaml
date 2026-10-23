@@ -312,6 +312,11 @@ sql:
             go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
           - db_type: timestamptz
             go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
 
 rules:
   - name: no-unbounded-delete

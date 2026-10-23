@@ -101,6 +101,18 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type CarrierConnection struct {
+	ID                pgtype.UUID
+	StoreID           pgtype.UUID
+	Carrier           string
+	Credentials       []byte
+	WebhookSecretHash []byte
+	Status            string
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	DisconnectedAt    pgtype.Timestamptz
+}
+
 type Cart struct {
 	ID        pgtype.UUID
 	StoreID   pgtype.UUID
