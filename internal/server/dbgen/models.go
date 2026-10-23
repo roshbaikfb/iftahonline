@@ -223,6 +223,8 @@ type Order struct {
 	UpdatedAt       pgtype.Timestamptz
 	StatusChangedAt pgtype.Timestamptz
 	CodFeeMinor     int64
+	PaymentMethod   string
+	PaymentStatus   string
 }
 
 type OrderEvent struct {

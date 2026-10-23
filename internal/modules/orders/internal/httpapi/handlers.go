@@ -267,6 +267,7 @@ func toOrder(o domain.Order) Order {
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,
 		Address: c.Address, Notes: c.Notes, Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(),
 		ShippingMinor: o.Shipping.Amount(), CodFeeMinor: o.CODFee.Amount(), TotalMinor: o.Total.Amount(), ItemCount: o.ItemCount,
+		PaymentMethod: OrderPaymentMethod(o.PaymentMethod), PaymentStatus: OrderPaymentStatus(o.PaymentStatus),
 		CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt, StatusChangedAt: o.StatusChangedAt,
 	}
 }

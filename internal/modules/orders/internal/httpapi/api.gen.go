@@ -18,6 +18,51 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for OrderPaymentMethod.
+const (
+	Card OrderPaymentMethod = "card"
+	Cod  OrderPaymentMethod = "cod"
+)
+
+// Valid indicates whether the value is a known member of the OrderPaymentMethod enum.
+func (e OrderPaymentMethod) Valid() bool {
+	switch e {
+	case Card:
+		return true
+	case Cod:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderPaymentStatus.
+const (
+	Awaiting          OrderPaymentStatus = "awaiting"
+	Paid              OrderPaymentStatus = "paid"
+	PartiallyRefunded OrderPaymentStatus = "partially_refunded"
+	Refunded          OrderPaymentStatus = "refunded"
+	Unpaid            OrderPaymentStatus = "unpaid"
+)
+
+// Valid indicates whether the value is a known member of the OrderPaymentStatus enum.
+func (e OrderPaymentStatus) Valid() bool {
+	switch e {
+	case Awaiting:
+		return true
+	case Paid:
+		return true
+	case PartiallyRefunded:
+		return true
+	case Refunded:
+		return true
+	case Unpaid:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderSource.
 const (
 	Merchant   OrderSource = "merchant"
@@ -156,10 +201,14 @@ type Order struct {
 	Governorate string `json:"governorate"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id        ULID   `json:"id"`
-	ItemCount int    `json:"item_count"`
-	Name      string `json:"name"`
-	Notes     string `json:"notes"`
+	Id            ULID               `json:"id"`
+	ItemCount     int                `json:"item_count"`
+	Name          string             `json:"name"`
+	Notes         string             `json:"notes"`
+	PaymentMethod OrderPaymentMethod `json:"payment_method"`
+
+	// PaymentStatus COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
+	PaymentStatus OrderPaymentStatus `json:"payment_status"`
 
 	// Phone Example: +201012345678
 	Phone string `json:"phone"`
@@ -176,6 +225,12 @@ type Order struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	Version    int       `json:"version"`
 }
+
+// OrderPaymentMethod defines model for Order.PaymentMethod.
+type OrderPaymentMethod string
+
+// OrderPaymentStatus COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
+type OrderPaymentStatus string
 
 // OrderSource defines model for Order.Source.
 type OrderSource string

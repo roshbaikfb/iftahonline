@@ -58,6 +58,9 @@ func New(d Deps) (*Module, error) {
 // Fulfilment is the API courier integrations use.
 func (m *Module) Fulfilment() Fulfilment { return m.svc }
 
+// Payments is the API payment integrations use.
+func (m *Module) Payments() Payments { return m.svc }
+
 // Shop is the API shoppers use (through the storefront).
 func (m *Module) Shop() Shop { return m.svc }
 
@@ -84,10 +87,11 @@ func NewShop(d ShopDeps) (Shop, error) {
 	return svc, nil
 }
 
-// NewFulfilment builds what the worker role's courier jobs need: read
-// orders and move them on a carrier's behalf. It takes the shopper side's
+// NewFulfilment builds what the worker role's courier and payment jobs
+// need: read orders, move them and record their payments on a system's
+// behalf. It takes the shopper side's
 // dependencies and holds no merchant permissions either.
-func NewFulfilment(d ShopDeps) (Fulfilment, error) {
+func NewFulfilment(d ShopDeps) (Payments, error) {
 	svc, err := withoutPermissions(d)
 	if err != nil {
 		return nil, err

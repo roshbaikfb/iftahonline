@@ -272,7 +272,7 @@ func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency)
 	if o.Lines, o.Subtotal, o.ItemCount, err = s.priceLines(ctx, d.Lines, cur); err != nil {
 		return domain.Order{}, err
 	}
-	q, err := s.charges(ctx, d.Contact.Governorate, d.Contact.City, o.Subtotal)
+	q, err := s.charges(ctx, d.Contact.Governorate, d.Contact.City, o.Subtotal, d.PaymentMethod)
 	if err != nil {
 		return domain.Order{}, err
 	}
@@ -280,6 +280,10 @@ func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency)
 		return domain.Order{}, errNotDelivered
 	}
 	o.Shipping, o.CODFee, o.Total = q.Shipping, q.CODFee, q.Total
+	o.PaymentMethod, o.PaymentStatus = d.PaymentMethod, domain.PaymentUnpaid
+	if d.PaymentMethod == domain.PaymentCard {
+		o.PaymentStatus = domain.PaymentAwaiting
+	}
 	return o, nil
 }
 
@@ -340,8 +344,9 @@ type Quote struct {
 	FreeShipping bool
 }
 
-// charges quotes delivering subtotal's order to governorate and city.
-func (s *Service) charges(ctx context.Context, governorate, city string, subtotal money.Money) (Quote, error) {
+// charges quotes delivering subtotal's order to governorate and city; a
+// card order pays no cash-on-delivery fee.
+func (s *Service) charges(ctx context.Context, governorate, city string, subtotal money.Money, method domain.PaymentMethod) (Quote, error) {
 	q := Quote{Subtotal: subtotal, Total: subtotal, Deliverable: true}
 	var err error
 	if q.Shipping, err = money.Zero(subtotal.Currency()); err != nil {
@@ -359,7 +364,10 @@ func (s *Service) charges(ctx context.Context, governorate, city string, subtota
 		q.Deliverable = false
 		return q, nil
 	}
-	q.Shipping, q.CODFee, q.FreeShipping = sq.Shipping, sq.CODFee, sq.FreeShipping
+	q.Shipping, q.FreeShipping = sq.Shipping, sq.FreeShipping
+	if method != domain.PaymentCard {
+		q.CODFee = sq.CODFee
+	}
 	if q.Total, err = q.Total.Add(q.Shipping); err != nil {
 		return Quote{}, err
 	}
@@ -384,7 +392,36 @@ func (s *Service) Quote(ctx context.Context, in domain.QuoteInput) (Quote, error
 	if err != nil {
 		return Quote{}, err
 	}
-	return s.charges(ctx, q.Governorate, q.City, subtotal)
+	return s.charges(ctx, q.Governorate, q.City, subtotal, q.PaymentMethod)
+}
+
+// SetPaymentStatusTx records a card order's payment status on the
+// gateway's word (ADR-0029), in the caller's transaction, with an audit
+// entry and an orders.order.payment_changed event. actor names the
+// system ("gateway:paymob"). Setting the status it has is a no-op.
+func (s *Service) SetPaymentStatusTx(ctx context.Context, tx pgx.Tx, id ulid.ID, st domain.PaymentStatus, actor string) (changed bool, err error) {
+	if !st.Valid() || !actorRE.MatchString(actor) {
+		return false, fmt.Errorf("orders: invalid payment status %q or actor %q", st, actor)
+	}
+	o, err := store.Get(ctx, tx, id, true)
+	if err != nil {
+		return false, notFound(err)
+	}
+	if o.PaymentMethod != domain.PaymentCard || o.PaymentStatus == st {
+		return false, nil
+	}
+	if err = store.SetPaymentStatus(ctx, tx, id, st); err != nil {
+		return false, notFound(err)
+	}
+	if err = s.audit.RecordTx(ctx, tx, audit.Entry{Action: "order.payment_" + string(st), TargetType: "order", TargetID: id.String(),
+		Metadata: map[string]any{"from": string(o.PaymentStatus), "to": string(st), "actor": actor}}); err != nil {
+		return false, err
+	}
+	m, err := event.MetaFor(ctx, s.ids, domain.EventOrderPaymentChanged, 1)
+	if err != nil {
+		return false, err
+	}
+	return true, s.events.PublishTx(ctx, tx, domain.OrderPaymentChanged{Meta: m, OrderID: id, From: o.PaymentStatus, To: st})
 }
 
 // Transition moves an order to status to, if the state machine allows it
