@@ -3,21 +3,13 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
-import { dateTime, money, statusLabel, statuses, type Order, type OrderStatus } from '../lib/orders';
+import { dateTime, dayStart, money, statusLabel, statuses, type Order, type OrderStatus } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 
 // The filters live in the URL, so a filtered list can be shared or
 // reloaded.
 const filterKeys = ['status', 'phone', 'from', 'to'] as const;
-
-// dayStart is the start of a local calendar day; the "to" filter is
-// exclusive, so it takes the start of the day after.
-function dayStart(day: string, plusDays = 0): string {
-  const d = new Date(`${day}T00:00:00`);
-  d.setDate(d.getDate() + plusDays);
-  return d.toISOString();
-}
 
 interface ListQuery {
   status?: OrderStatus;

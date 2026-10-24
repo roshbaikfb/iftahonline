@@ -9,6 +9,16 @@ export interface Call {
 
 type Handler = (call: Call) => { status: number; body?: unknown };
 
+// parseBody reads a JSON body, or keeps any other (a CSV upload) as text.
+function parseBody(text: string): unknown {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
 // mockAPI routes fetch by "METHOD /path" (the path may end in "*") and
 // records every call, so a test can assert what the page sent.
 export function mockAPI(routes: Record<string, Handler>): Call[] {
@@ -17,7 +27,7 @@ export function mockAPI(routes: Record<string, Handler>): Call[] {
     const req = input instanceof Request ? input : new Request(input);
     const url = new URL(req.url);
     const text = await req.text();
-    const call: Call = { method: req.method, path: url.pathname, search: url.searchParams, body: text ? (JSON.parse(text) as unknown) : undefined };
+    const call: Call = { method: req.method, path: url.pathname, search: url.searchParams, body: parseBody(text) };
     calls.push(call);
     const key = Object.keys(routes).find((k) => {
       const [m, p = ''] = k.split(' ');

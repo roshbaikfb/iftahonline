@@ -60,3 +60,11 @@ export function money(minor: number, currency: string): string {
 export function dateTime(iso: string): string {
   return new Date(iso).toLocaleString('ar-EG-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' });
 }
+
+// dayStart is the start of a local calendar day; "to" filters are
+// exclusive, so they take the start of the day after (plusDays 1).
+export function dayStart(day: string, plusDays = 0): string {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + plusDays);
+  return d.toISOString();
+}
