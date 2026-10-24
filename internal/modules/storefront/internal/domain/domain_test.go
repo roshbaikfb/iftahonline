@@ -204,7 +204,7 @@ func TestValidateHomeAndPolicy(t *testing.T) {
 	t.Parallel()
 	home, err := domain.ValidatePage(domain.KindHome, "", domain.PageInput{Slug: "ignored", Status: "draft",
 		Sections: domain.DefaultHome().Sections}, fakeSettings{}, ids())
-	if err != nil || home.Slug != domain.HomeSlug || home.Status != "published" || home.Title != "" || len(home.Sections) != 3 {
+	if err != nil || home.Slug != domain.HomeSlug || home.Status != "published" || home.Title != "" || len(home.Sections) != len(domain.DefaultHome().Sections) {
 		t.Fatalf("home %+v, %v", home, err)
 	}
 
