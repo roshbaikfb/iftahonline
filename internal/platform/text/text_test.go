@@ -69,3 +69,61 @@ func FuzzClean(f *testing.F) {
 		}
 	})
 }
+
+func TestClip(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"short", 10, "short"},
+		{"منى أحمد", 3, "منى"},
+		{"abcdef", 0, ""},
+		{"", 5, ""},
+	}
+	for _, tt := range tests {
+		if got := text.Clip(tt.in, tt.n); got != tt.want {
+			t.Errorf("Clip(%q, %d) = %q, want %q", tt.in, tt.n, got, tt.want)
+		}
+	}
+}
+
+func TestRedact(t *testing.T) {
+	t.Parallel()
+	tests := []struct{ in, want string }{
+		{"phone_number: +201012345678 is not valid", "phone_number: [number] is not valid"},
+		{"رقم ٠١٠١٢٣٤٥٦٧٨ غير صحيح", "رقم [number] غير صحيح"},
+		{"call 010 1234 5678 or 010-1234-5678", "call [number] or [number]"},
+		{"email mona.ahmed@example.com refused", "email [email] refused"},
+		{`{"phone":["+201012345678 is not valid"],"email":["mona@mail.example.eg is taken"]}`, `{"phone":["[number] is not valid"],"email":["[email] is taken"]}`},
+		{"amount 52000 exceeds 4100", "amount 52000 exceeds 4100"}, // short numbers stay: amounts, codes
+		{"Refund amount exceeds the captured amount", "Refund amount exceeds the captured amount"},
+	}
+	for _, tt := range tests {
+		if got := text.Redact(tt.in); got != tt.want {
+			t.Errorf("Redact(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func FuzzRedact(f *testing.F) {
+	for _, s := range []string{"+201012345678", "a@b.co", "٠١٠١٢٣٤٥٦٧٨", "x 1234567 y", ""} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		out := text.Redact(s)
+		digits := 0
+		for _, r := range out {
+			switch {
+			case (r >= '0' && r <= '9') || (r >= '٠' && r <= '٩'):
+				digits++
+				if digits >= 7 {
+					t.Fatalf("Redact(%q) = %q keeps a run of 7 digits", s, out)
+				}
+			default:
+				digits = 0
+			}
+		}
+	})
+}
