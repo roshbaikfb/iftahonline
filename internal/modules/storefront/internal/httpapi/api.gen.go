@@ -416,7 +416,12 @@ type ThemeInput struct {
 
 // ThemeSettings defines model for ThemeSettings.
 type ThemeSettings struct {
-	Colors struct {
+	// About A few words on the store, in the footer.
+	About *string `json:"about,omitempty"`
+
+	// Announcement The bar above the header (one line, e.g. free shipping over 1,000); empty shows none.
+	Announcement *string `json:"announcement,omitempty"`
+	Colors       struct {
 		// Accent Example: #0f766e
 		Accent Color `json:"accent"`
 
@@ -429,6 +434,14 @@ type ThemeSettings struct {
 		// Text Example: #0f766e
 		Text Color `json:"text"`
 	} `json:"colors"`
+
+	// Contact How shoppers reach the store; empty fields are not shown.
+	Contact *struct {
+		Email *string `json:"email,omitempty"`
+
+		// Whatsapp With its country code, e.g. +201012345678; stored in E.164.
+		Whatsapp *string `json:"whatsapp,omitempty"`
+	} `json:"contact,omitempty"`
 
 	// Font Self-hosted fonts only; system uses the device's font.
 	Font   ThemeSettingsFont   `json:"font"`

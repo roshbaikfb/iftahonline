@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 )
 
 // ErrNotFound is returned by the store layer when a row is missing,
@@ -69,7 +72,26 @@ type ThemeSettings struct {
 	Colors Colors `json:"colors"`
 	Font   Font   `json:"font"`
 	Radius Radius `json:"radius"`
+	// Announcement is the bar above the header ("free shipping over
+	// 1,000"); empty shows none.
+	Announcement string `json:"announcement,omitempty"`
+	// About is a few words on the store, in the footer.
+	About string `json:"about,omitempty"`
+	// Contact is how shoppers reach the store (footer, product page).
+	Contact Contact `json:"contact"`
 }
+
+// Contact is how shoppers reach the store; empty fields are not shown.
+type Contact struct {
+	WhatsApp string `json:"whatsapp,omitempty"` // E.164, e.g. +201012345678
+	Email    string `json:"email,omitempty"`
+}
+
+// Lengths of the theme's texts, in runes.
+const (
+	MaxAnnouncement = 120
+	MaxAbout        = 300
+)
 
 // Theme is a store's saved settings. Version 0 means nothing is saved
 // yet and Settings are the defaults.
@@ -83,8 +105,8 @@ type Theme struct {
 // anything.
 func DefaultTheme() ThemeSettings {
 	return ThemeSettings{
-		Colors: Colors{Primary: "#0f766e", Accent: "#f59e0b", Background: "#ffffff", Text: "#1f2937"},
-		Font:   FontCairo,
+		Colors: Colors{Primary: "#0f2e52", Accent: "#15803d", Background: "#ffffff", Text: "#0f172a"},
+		Font:   FontPlexArabic,
 		Radius: RadiusMedium,
 	}
 }
@@ -110,6 +132,34 @@ func ValidateTheme(in ThemeSettings) (ThemeSettings, error) {
 		},
 		Font:   in.Font,
 		Radius: in.Radius,
+	}
+	line := func(field, v string, maxRunes int) string {
+		clean, err := text.Clean(v, field, 0, maxRunes)
+		if err != nil {
+			var e *errs.Error
+			if errors.As(err, &e) {
+				fields = append(fields, e.Fields...)
+			}
+		}
+		return clean
+	}
+	out.Announcement = line("announcement", in.Announcement, MaxAnnouncement)
+	out.About = line("about", in.About, MaxAbout)
+	if wa := strings.TrimSpace(in.Contact.WhatsApp); wa != "" {
+		n, err := phone.Parse(wa, phone.EG) // international only (checked below): the region is not used
+		if err != nil || (!strings.HasPrefix(wa, "+") && !strings.HasPrefix(wa, "00")) {
+			fields = append(fields, errs.FieldError{Field: "contact.whatsapp", Code: "invalid",
+				Message: "write the WhatsApp number with its country code, like +201012345678"})
+		} else {
+			out.Contact.WhatsApp = n.Unmasked()
+		}
+	}
+	if em := strings.TrimSpace(in.Contact.Email); em != "" {
+		n, ok := email.Normalize(em)
+		if !ok {
+			fields = append(fields, errs.FieldError{Field: "contact.email", Code: "invalid", Message: "contact.email must be an email address"})
+		}
+		out.Contact.Email = n
 	}
 	if !slices.Contains(Fonts(), out.Font) {
 		fields = append(fields, errs.FieldError{Field: "font", Code: "invalid", Message: "font must be one of the offered fonts"})
