@@ -2919,7 +2919,13 @@ export interface components {
             asset: components["schemas"]["LogoAsset"];
             upload: components["schemas"]["PresignedUpload"];
         };
-        /** @enum {string} */
+        /**
+         * @description A section's type. This list grows: new types are added within /v1
+         *     (ADR-0032). Clients must accept a type they do not know, by
+         *     skipping that section or showing it as unsupported, never by
+         *     failing. Never treat the list as closed.
+         * @enum {string}
+         */
         SectionType: "hero" | "product_grid" | "product_landing" | "reviews" | "faq" | "trust_badges" | "countdown" | "category_tiles" | "promo_tiles" | "whatsapp_cta";
         SectionTypeInfo: {
             type: components["schemas"]["SectionType"];

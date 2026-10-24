@@ -37,3 +37,4 @@ supersedes it.
 | [0029](0029-card-payments-paymob.md) | Card payments: one gateway contract, a fake, Paymob, and the gateway's word | Accepted |
 | [0030](0030-card-checkout-through-api-host.md) | Card checkout passes through the API host | Accepted |
 | [0031](0031-p5-review-money-safety.md) | Money safety after the P5 review | Accepted |
+| [0032](0032-extensible-section-types.md) | Section types are an extensible list | Accepted |

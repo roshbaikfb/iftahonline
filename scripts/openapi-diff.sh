@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Fails on breaking changes to api/openapi.yaml relative to the base branch
-# (CLAUDE.md rule 11: no breaking changes inside /v1).
+# (CLAUDE.md rule 11: no breaking changes inside /v1). The only accepted
+# exceptions are the exact findings listed in api/openapi-breaking-ignore.txt
+# (ADR-0032: new values of an extensible list).
 set -euo pipefail
 
 SPEC=api/openapi.yaml
+IGNORE=api/openapi-breaking-ignore.txt
 BASE_REF="${OPENAPI_BASE_REF:-origin/main}"
 
 if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
@@ -22,5 +25,5 @@ fi
 base="$(mktemp --suffix=.yaml)"
 trap 'rm -f "$base"' EXIT
 git show "$BASE_REF:$SPEC" >"$base"
-go tool oasdiff breaking "$base" "$SPEC" --fail-on ERR
+go tool oasdiff breaking "$base" "$SPEC" --fail-on ERR --err-ignore "$IGNORE"
 echo "openapi-diff: no breaking changes vs $BASE_REF"

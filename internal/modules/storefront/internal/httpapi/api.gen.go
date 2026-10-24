@@ -380,17 +380,30 @@ type Section struct {
 
 	// Settings Validated against the type's schema (listSectionTypes).
 	Settings *json.RawMessage `json:"settings,omitempty"`
-	Type     SectionType      `json:"type"`
+
+	// Type A section's type. This list grows: new types are added within /v1
+	// (ADR-0032). Clients must accept a type they do not know, by
+	// skipping that section or showing it as unsupported, never by
+	// failing. Never treat the list as closed.
+	Type SectionType `json:"type"`
 }
 
-// SectionType defines model for SectionType.
+// SectionType A section's type. This list grows: new types are added within /v1
+// (ADR-0032). Clients must accept a type they do not know, by
+// skipping that section or showing it as unsupported, never by
+// failing. Never treat the list as closed.
 type SectionType string
 
 // SectionTypeInfo defines model for SectionTypeInfo.
 type SectionTypeInfo struct {
 	// Schema JSON Schema 2020-12 of the settings; $refs point into `definitions`.
 	Schema json.RawMessage `json:"schema"`
-	Type   SectionType     `json:"type"`
+
+	// Type A section's type. This list grows: new types are added within /v1
+	// (ADR-0032). Clients must accept a type they do not know, by
+	// skipping that section or showing it as unsupported, never by
+	// failing. Never treat the list as closed.
+	Type SectionType `json:"type"`
 }
 
 // SectionTypeList defines model for SectionTypeList.
