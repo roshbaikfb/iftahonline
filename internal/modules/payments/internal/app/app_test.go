@@ -72,7 +72,7 @@ func newFixture(t *testing.T) fixture {
 	return f
 }
 
-func (f fixture) service(g gateway.Gateway) *app.Service {
+func (f fixture) sealer() *envelope.Sealer {
 	k, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=") // public dev key
 	if err != nil {
 		f.t.Fatal(err)
@@ -81,7 +81,11 @@ func (f fixture) service(g gateway.Gateway) *app.Service {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Gateways: app.Gateways{fake.Name: g}, Sealer: sealer,
+	return sealer
+}
+
+func (f fixture) service(g gateway.Gateway) *app.Service {
+	return app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Gateways: app.Gateways{fake.Name: g}, Sealer: f.sealer(),
 		PublicURL: "https://app.example.com", Orders: f.orders, Jobs: f.jobs, Inbox: f.inbox})
 }
 
@@ -741,5 +745,34 @@ func TestCardOrderNeverPaid(t *testing.T) {
 	}
 	if err := f.svc.ExpireOrder(f.ctxA, ulid.NewGenerator().New()); err != nil {
 		t.Fatalf("an unknown order: %v", err)
+	}
+}
+
+// TestConnectionChanges: connecting and disconnecting a gateway publish
+// payments.connection.changed, so the storefront stops (or starts)
+// offering cards at once.
+func TestConnectionChanges(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	evs := testkit.NewEvents()
+	svc := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Events: evs, Gateways: app.Gateways{fake.Name: f.gw}, Sealer: f.sealer(),
+		PublicURL: "https://app.example.com", Orders: f.orders, Jobs: f.jobs})
+	c, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: fake.Name, APIKey: apiKey, WebhookSecret: hookSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.Disconnect(f.ctxB, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, ev := range evs.All() {
+		cc, ok := ev.(domain.ConnectionChanged)
+		if !ok || cc.ConnectionID != c.ID {
+			t.Fatalf("event %+v", ev)
+		}
+		got = append(got, cc.EventMeta().Type+" "+cc.Status)
+	}
+	if strings.Join(got, ", ") != "payments.connection.changed active, payments.connection.changed disconnected" {
+		t.Fatalf("events %v", got)
 	}
 }

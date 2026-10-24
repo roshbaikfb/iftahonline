@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -187,6 +188,9 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 		if c, txErr = store.InsertConnection(ctx, tx, id, in.Gateway, sealed); txErr != nil {
 			return txErr
 		}
+		if txErr = s.connectionChangedTx(ctx, tx, c); txErr != nil {
+			return txErr
+		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "payment_connection.created", TargetType: "payment_connection",
 			TargetID: id.String(), Metadata: map[string]any{"gateway": in.Gateway}})
 	})
@@ -213,6 +217,9 @@ func (s *Service) Disconnect(ctx context.Context, id ulid.ID) error {
 		if txErr != nil {
 			return txErr
 		}
+		if txErr = s.connectionChangedTx(ctx, tx, c); txErr != nil {
+			return txErr
+		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "payment_connection.disconnected", TargetType: "payment_connection",
 			TargetID: id.String(), Metadata: map[string]any{"gateway": c.Gateway}})
 	})
@@ -220,6 +227,15 @@ func (s *Service) Disconnect(ctx context.Context, id ulid.ID) error {
 		return ErrConnectionNotFound
 	}
 	return err
+}
+
+// connectionChangedTx publishes payments.connection.changed for c.
+func (s *Service) connectionChangedTx(ctx context.Context, tx pgx.Tx, c domain.Connection) error {
+	m, err := event.MetaFor(ctx, s.ids, domain.EventConnectionChanged, 1)
+	if err != nil {
+		return err
+	}
+	return s.events.PublishTx(ctx, tx, domain.ConnectionChanged{Meta: m, ConnectionID: c.ID, Gateway: c.Gateway, Status: c.Status})
 }
 
 // CardEnabled reports whether the store in ctx takes card payments.
