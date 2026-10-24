@@ -102,6 +102,9 @@ func roleEnv(addr string) []string {
 		"IMGPROXY_SALT=6465762d6f6e6c792d696d6770726f78792d73616c742d7075626c6963",
 		"DRAIN_DELAY=700ms",
 		"SHUTDOWN_TIMEOUT=5s",
+		// Every fake on, as in development (.env.example): their webhook
+		// providers must register side by side.
+		"SHIPPING_FAKE_CARRIER=true", "PAYMENTS_FAKE_GATEWAY=true",
 	}
 }
 

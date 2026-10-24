@@ -164,7 +164,7 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 			creds.IntegrationIDs = append(creds.IntegrationIDs, id)
 		}
 	}
-	if in.Gateway != "fake" && len(creds.IntegrationIDs) == 0 {
+	if needs, ok := g.(gateway.IntegrationIDsNeeded); ok && needs.NeedsIntegrationIDs() && len(creds.IntegrationIDs) == 0 {
 		return domain.Connection{}, errNoIntegration
 	}
 	vctx, cancel := context.WithTimeout(ctx, verifyTimeout)

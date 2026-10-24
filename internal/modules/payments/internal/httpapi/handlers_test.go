@@ -78,7 +78,7 @@ const (
 	apiKey       = "merchant-api-key"
 	hookSecret   = "merchant-hook-secret"
 	reasonOfB    = "سبب استرداد المتجر ب السري"
-	connectInput = `{"gateway":"fake","api_key":"` + apiKey + `","webhook_secret":"` + hookSecret + `"}`
+	connectInput = `{"gateway":"fakepay","api_key":"` + apiKey + `","webhook_secret":"` + hookSecret + `"}`
 )
 
 type fixture struct {
@@ -216,12 +216,12 @@ func TestHappyPath(t *testing.T) {
 	a := f.storeA
 
 	code, list := f.do(t, req(t, http.MethodGet, path(a, "/gateways"), tokOwnerA, ""))
-	if code != http.StatusOK || fmt.Sprint(list["gateways"]) != "[fake]" || len(list["connections"].([]any)) != 0 {
+	if code != http.StatusOK || fmt.Sprint(list["gateways"]) != "[fakepay]" || len(list["connections"].([]any)) != 0 {
 		t.Fatalf("listPaymentConnections = %d %v", code, list)
 	}
 	code, conn := f.do(t, req(t, http.MethodPost, path(a, "/gateways"), tokOwnerA, connectInput))
-	if code != http.StatusCreated || conn["status"] != "active" || conn["gateway"] != "fake" ||
-		conn["webhook_url"] != "https://app.example.com/v1/webhooks/fake/"+a.String()+"/"+conn["id"].(string) {
+	if code != http.StatusCreated || conn["status"] != "active" || conn["gateway"] != "fakepay" ||
+		conn["webhook_url"] != "https://app.example.com/v1/webhooks/fakepay/"+a.String()+"/"+conn["id"].(string) {
 		t.Fatalf("connectPaymentGateway = %d %v", code, conn)
 	}
 	if _, list = f.do(t, req(t, http.MethodGet, path(a, "/gateways"), tokOwnerA, "")); len(list["connections"].([]any)) != 1 {

@@ -112,6 +112,12 @@ type WebhookRequest struct {
 	Body   []byte
 }
 
+// IntegrationIDsNeeded is implemented by gateways whose accounts route
+// card payments through integration IDs the merchant must give (Paymob).
+type IntegrationIDsNeeded interface {
+	NeedsIntegrationIDs() bool
+}
+
 // Gateway is one payment gateway's API.
 type Gateway interface {
 	// Name is the gateway's ID in connections and webhook URLs.
