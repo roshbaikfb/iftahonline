@@ -64,6 +64,7 @@ type Service struct {
 	jobs      jobs.Inserter
 	objects   media.Objects
 	inbox     webhooks.Inbox
+	now       func() time.Time
 }
 
 // Deps are the service's dependencies.
@@ -99,8 +100,12 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: newConfigs(d.Cache),
-		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, objects: d.Objects, inbox: d.Inbox}
+		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, objects: d.Objects, inbox: d.Inbox,
+		now: time.Now}
 }
+
+// SetClock replaces the clock (tests).
+func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
 // Config returns the store's settings and zones as stored now (for the
 // merchant, who must see their own writes).

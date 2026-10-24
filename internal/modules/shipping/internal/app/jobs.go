@@ -200,7 +200,7 @@ func (s *Service) CancelShipment(ctx context.Context, id ulid.ID) error {
 // again (after PollEvery).
 func (s *Service) TrackShipment(ctx context.Context, id ulid.ID) (again bool, err error) {
 	sh, err := s.shipmentNow(ctx, id)
-	if err != nil || !sh.Status.Tracked() || sh.Status.Final() {
+	if err != nil || !sh.Status.Tracked() || sh.Status.Final() || s.clock().Sub(sh.CreatedAt) > MaxTrackFor {
 		return false, ignoreGone(err)
 	}
 	adapter, creds, err := s.Credentials(ctx, sh.ConnectionID)
