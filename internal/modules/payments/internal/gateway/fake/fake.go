@@ -21,8 +21,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 )
 
-// Name is the fake gateway's name.
-const Name = "fake"
+// Name is the fake gateway's name. It is not "fake": the fake carrier
+// (shipping) has that name, and webhook providers are named uniquely.
+const Name = "fakepay"
 
 // InvalidKey is the API key the fake refuses.
 const InvalidKey = "invalid-key"

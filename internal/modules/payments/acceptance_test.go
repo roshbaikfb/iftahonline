@@ -251,7 +251,7 @@ func TestWebhookReplayedFiveTimesChangesStateOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn := p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fake","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
+	conn := p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fakepay","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
 	webhookPath := strings.TrimPrefix(conn["webhook_url"].(string), "https://app.example.com")
 
 	placed, err := p.shop.PlaceOrder(p.ctx, orders.NewOrder{Source: orders.SourceStorefront, PaymentMethod: orders.PaymentCard,
@@ -330,7 +330,7 @@ func TestWebhookReplayedFiveTimesChangesStateOnce(t *testing.T) {
 	var byGateway []string
 	for _, e := range order["events"].([]any) {
 		ev := e.(map[string]any)
-		if ev["actor"] == "gateway:fake" {
+		if ev["actor"] == "gateway:fakepay" {
 			byGateway = append(byGateway, ev["to"].(string))
 		}
 	}
@@ -362,7 +362,7 @@ func TestCardCheckoutThroughTheAPIHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fake","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
+	p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fakepay","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
 	placed, err := p.shop.PlaceOrder(p.ctx, orders.NewOrder{Source: orders.SourceStorefront, PaymentMethod: orders.PaymentCard,
 		Name: "منى أحمد", Phone: "01012345678", Governorate: "EG-C", City: "مدينة نصر", Address: "12 شارع عباس العقاد",
 		Lines: []orders.LineInput{{VariantID: variant, Qty: 1}}})

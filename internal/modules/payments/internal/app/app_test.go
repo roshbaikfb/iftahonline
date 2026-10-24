@@ -18,6 +18,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/paymob"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/paytest"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
@@ -161,6 +162,12 @@ func TestConnect(t *testing.T) {
 	if _, err := f.svc.Connect(f.ctxB, app.ConnectInput{Gateway: fake.Name, APIKey: "k"}); !isField(err, "webhook_secret", "invalid") {
 		t.Errorf("no webhook secret: %v", err)
 	}
+	withPaymob := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Gateways: app.Gateways{paymob.Name: paymob.New(paymob.Options{BaseURL: "http://127.0.0.1:1"})},
+		Orders: f.orders, Jobs: f.jobs})
+	if _, err := withPaymob.Connect(f.ctxB, app.ConnectInput{Gateway: paymob.Name, SecretKey: "sk", PublicKey: "pk", APIKey: "k", WebhookSecret: "s",
+		IntegrationIDs: []int{0, -3}}); !isField(err, "integration_ids", "required") {
+		t.Errorf("Paymob without integration IDs: %v", err)
+	}
 	var blob []byte
 	if err := postgres.InTenantTx(f.ctxA, f.pool, func(tx pgx.Tx) error {
 		return tx.QueryRow(f.ctxA, `SELECT credentials FROM payment_connections WHERE id = $1`, f.conn.ID).Scan(&blob)
@@ -261,7 +268,7 @@ func TestPaidByWebhook(t *testing.T) {
 	}
 	o := f.orders.Order(order)
 	if o.PaymentStatus != orders.PaymentPaid || o.Status != orders.StatusConfirmed ||
-		strings.Join(f.orders.History(), "; ") != "payment paid by gateway:fake; confirmed by gateway:fake" {
+		strings.Join(f.orders.History(), "; ") != "payment paid by gateway:fakepay; confirmed by gateway:fakepay" {
 		t.Fatalf("order %+v, history %v", o, f.orders.History())
 	}
 	for range 4 {

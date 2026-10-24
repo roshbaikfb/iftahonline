@@ -162,6 +162,12 @@ func (g *Gateway) token(ctx context.Context, base string, creds gateway.Credenti
 	return out.Token, nil
 }
 
+// NeedsIntegrationIDs implements gateway.IntegrationIDsNeeded: Paymob
+// routes card payments through the account's integration IDs.
+func (*Gateway) NeedsIntegrationIDs() bool { return true }
+
+var _ gateway.IntegrationIDsNeeded = (*Gateway)(nil)
+
 // Verify implements gateway.Gateway: the API key gets an auth token, and
 // every other key Paymob needs is present.
 func (g *Gateway) Verify(ctx context.Context, creds gateway.Credentials) error {

@@ -71,7 +71,9 @@ The return URL must be an http(s) URL on a host of the same store
 
 - **The contract suite** (`internal/gateway/gatewaytest`) runs against
   every adapter.
-- **`fake`:** in memory, signed with HMAC-SHA256 in `X-Fake-Signature`.
+- **`fakepay`:** in memory, signed with HMAC-SHA256 in `X-Fake-Signature`
+  (not `fake`: that is the fake carrier, and webhook providers have
+  unique names).
   It is used in tests, and in development when `PAYMENTS_FAKE_GATEWAY=true`.
 - **`paymob`:**
   - The Intention API with the unified checkout; status from
