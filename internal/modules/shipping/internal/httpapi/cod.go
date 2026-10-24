@@ -2,11 +2,12 @@ package httpapi
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -48,11 +49,11 @@ func (h *Handlers) ListHeldCOD(ctx context.Context, req ListHeldCODRequestObject
 	}
 	var after *app.Cursor
 	if c := deref(req.Params.Cursor); c != "" {
-		cur, err := parseCursor(c)
+		at, id, err := cursor.Decode(c)
 		if err != nil {
 			return nil, errBadCursor
 		}
-		after = &cur
+		after = &domain.Cursor{At: at, ID: id}
 	}
 	p, err := h.svc.Held(ctx, after, deref(req.Params.Limit))
 	if err != nil {
@@ -65,7 +66,7 @@ func (h *Handlers) ListHeldCOD(ctx context.Context, req ListHeldCODRequestObject
 			HeldMinor: max(hp.Expected.Amount()-hp.Settled.Amount(), 0), DeliveredAt: hp.DeliveredAt}
 	}
 	if p.Next != nil {
-		c := strconv.FormatInt(p.Next.At.UnixMicro(), 10) + "." + p.Next.ID.String()
+		c := cursor.Encode(p.Next.At, p.Next.ID)
 		out.NextCursor = &c
 	}
 	return out, nil

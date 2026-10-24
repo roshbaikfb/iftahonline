@@ -5,14 +5,11 @@ package app
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/netip"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
@@ -20,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/password"
@@ -369,7 +367,7 @@ type AuditPage struct {
 }
 
 // Audit lists admin actions, newest first.
-func (s *Service) Audit(ctx context.Context, cursor string, limit int) (AuditPage, error) {
+func (s *Service) Audit(ctx context.Context, after string, limit int) (AuditPage, error) {
 	if _, ok := IdentityFrom(ctx); !ok {
 		return AuditPage{}, errNoSession
 	}
@@ -381,8 +379,8 @@ func (s *Service) Audit(ctx context.Context, cursor string, limit int) (AuditPag
 	}
 	var at *time.Time
 	var bid *ulid.ID
-	if cursor != "" {
-		t, id, err := decodeCursor(cursor)
+	if after != "" {
+		t, id, err := cursor.Decode(after)
 		if err != nil {
 			return AuditPage{}, errs.Validation(errs.FieldError{Field: "cursor", Code: "invalid", Message: "invalid cursor"})
 		}
@@ -396,26 +394,9 @@ func (s *Service) Audit(ctx context.Context, cursor string, limit int) (AuditPag
 	if len(items) > limit {
 		page.Items = items[:limit]
 		last := page.Items[limit-1]
-		page.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(last.OccurredAt.UnixMicro(), 10) + ":" + last.ID.String()))
+		page.NextCursor = cursor.Encode(last.OccurredAt, last.ID)
 	}
 	return page, nil
-}
-
-func decodeCursor(c string) (time.Time, ulid.ID, error) {
-	raw, err := base64.RawURLEncoding.DecodeString(c)
-	if err != nil {
-		return time.Time{}, ulid.ID{}, err
-	}
-	us, ids, ok := strings.Cut(string(raw), ":")
-	if !ok {
-		return time.Time{}, ulid.ID{}, fmt.Errorf("admin: cursor")
-	}
-	n, err := strconv.ParseInt(us, 10, 64)
-	if err != nil {
-		return time.Time{}, ulid.ID{}, err
-	}
-	id, err := ulid.Parse(ids)
-	return time.UnixMicro(n).UTC(), id, err
 }
 
 func (s *Service) audit(ctx context.Context, adminID *ulid.ID, action, targetType, targetID string, meta map[string]any) error {

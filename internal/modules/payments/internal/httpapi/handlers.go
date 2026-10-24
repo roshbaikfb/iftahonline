@@ -7,13 +7,11 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -125,11 +123,11 @@ func (h *Handlers) ListPayments(ctx context.Context, req ListPaymentsRequestObje
 	}
 	var after *domain.Payment
 	if c := deref(req.Params.Cursor); c != "" {
-		cur, err := parseCursor(c)
+		at, id, err := cursor.Decode(c)
 		if err != nil {
 			return nil, errBadCursor
 		}
-		after = &cur
+		after = &domain.Payment{ID: id, CreatedAt: at}
 	}
 	p, err := h.svc.Payments(ctx, after, deref(req.Params.Limit))
 	if err != nil {
@@ -137,28 +135,10 @@ func (h *Handlers) ListPayments(ctx context.Context, req ListPaymentsRequestObje
 	}
 	out := ListPayments200JSONResponse{Items: toPayments(p.Items)}
 	if p.Next != nil {
-		c := strconv.FormatInt(p.Next.CreatedAt.UnixMicro(), 10) + "." + p.Next.ID.String()
+		c := cursor.Encode(p.Next.CreatedAt, p.Next.ID)
 		out.NextCursor = &c
 	}
 	return out, nil
-}
-
-// parseCursor reads "<created at, unix µs>.<id>" into the payment the
-// page continues after.
-func parseCursor(s string) (domain.Payment, error) {
-	at, id, ok := strings.Cut(s, ".")
-	if !ok {
-		return domain.Payment{}, errBadCursor
-	}
-	micros, err := strconv.ParseInt(at, 10, 64)
-	if err != nil {
-		return domain.Payment{}, err
-	}
-	uid, err := ulid.Parse(id)
-	if err != nil {
-		return domain.Payment{}, err
-	}
-	return domain.Payment{ID: uid, CreatedAt: time.UnixMicro(micros).UTC()}, nil
 }
 
 // GetPayment implements StrictServerInterface.
