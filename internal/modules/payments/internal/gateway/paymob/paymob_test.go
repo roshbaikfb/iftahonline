@@ -2,6 +2,8 @@ package paymob_test
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -268,4 +270,30 @@ func TestStatusIsNotTakenOnTrust(t *testing.T) {
 			t.Fatalf("an authorization: %+v %v, want pending", st, err)
 		}
 	})
+}
+
+// TestRefusalsCarryNoPersonalData: Paymob's error bodies may echo the
+// customer's phone or email; what the adapter keeps of them (in errors,
+// logs and the payment's failure) hides both.
+func TestRefusalsCarryNoPersonalData(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"billing_data":{"phone_number":["+201012345678 is not valid"],"email":["mona.ahmed@example.com is taken"]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	g := paymob.New(paymob.Options{BaseURL: srv.URL, Retry: &fast})
+	_, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), gatewaytest.Request(t, money.EGP))
+	if !errors.Is(err, gateway.ErrRejected) {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	for _, leak := range []string{"1012345678", "mona.ahmed@example.com"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("the refusal keeps %q: %v", leak, err)
+		}
+	}
+	if !strings.Contains(err.Error(), "is not valid") {
+		t.Errorf("the refusal lost Paymob's reason: %v", err)
+	}
 }

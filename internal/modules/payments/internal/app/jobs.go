@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -244,7 +245,7 @@ func (s *Service) RefundPayment(ctx context.Context, id ulid.ID) error {
 		if st.Refunded.Amount() < made+r.Amount.Amount() {
 			refundID, err = g.Refund(gctx, creds, p.TransactionID, r.Amount)
 			if errors.Is(err, gateway.ErrRejected) || errors.Is(err, gateway.ErrAuth) {
-				return store.SetRefund(ctx, tx, id, domain.RefundFailed, "", clip(err.Error()))
+				return store.SetRefund(ctx, tx, id, domain.RefundFailed, "", text.Clip(err.Error(), 300))
 			}
 			if err != nil {
 				return err // maybe made: the retried job asks the gateway first

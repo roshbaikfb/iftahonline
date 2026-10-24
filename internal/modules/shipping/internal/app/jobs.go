@@ -15,6 +15,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -129,10 +130,10 @@ func (s *Service) CreateShipment(ctx context.Context, id ulid.ID) error {
 
 func (s *Service) failShipment(ctx context.Context, id ulid.ID, why string) error {
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		if _, err := store.SetStatus(ctx, tx, id, domain.ShipmentFailed, "", clip(why), s.clock()); err != nil {
+		if _, err := store.SetStatus(ctx, tx, id, domain.ShipmentFailed, "", text.Clip(why, 300), s.clock()); err != nil {
 			return err
 		}
-		return s.timelineTx(ctx, tx, id, domain.ShipmentFailed, "", domain.SourceAPI, clip(why))
+		return s.timelineTx(ctx, tx, id, domain.ShipmentFailed, "", domain.SourceAPI, text.Clip(why, 300))
 	})
 }
 

@@ -2,8 +2,11 @@ package bosta_test
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -208,4 +211,26 @@ func FuzzParseWebhook(f *testing.F) {
 			t.Fatalf("accepted %q as %+v", body, ev)
 		}
 	})
+}
+
+// TestRefusalsCarryNoPersonalData: Bosta's messages may echo the
+// receiver's phone or email; what the adapter keeps hides both.
+func TestRefusalsCarryNoPersonalData(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"success":false,"message":"Receiver phone 01012345678 or email mona@example.com is invalid"}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := bosta.New(bosta.Options{BaseURL: srv.URL})
+	err := c.Verify(t.Context(), carrier.Credentials{APIKey: "key"})
+	if !errors.Is(err, carrier.ErrRejected) {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	for _, leak := range []string{"01012345678", "mona@example.com"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("the refusal keeps %q: %v", leak, err)
+		}
+	}
 }
