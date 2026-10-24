@@ -21,12 +21,14 @@ test('home → product → landing page → one-step order, on a phone, in Arabi
   expect(home?.headers()['cache-tag']).toMatch(/^s-[0-9A-Z]{26},/);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('أهلًا بك في متجر العرض');
-  await expect(page.getByText('الدفع عند الاستلام')).toBeVisible();
-  const cards = page.locator('a.card');
+  // The trust badge in the page, and the payment method in the footer.
+  await expect(page.locator('#main').getByText('الدفع عند الاستلام')).toBeVisible();
+  await expect(page.getByRole('contentinfo').getByText('الدفع عند الاستلام')).toBeVisible();
+  const cards = page.locator('.card');
   await expect(cards).toHaveCount(8);
 
-  // Product: open the oud perfume from the grid.
-  await page.locator('a.card', { hasText: 'عطر العود الملكي' }).click();
+  // Product: open the oud perfume from the grid, by its title link.
+  await cards.getByRole('link', { name: 'عطر العود الملكي' }).click();
   await expect(page).toHaveURL(/\/p\/royal-oud$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('عطر العود الملكي');
   const price = page.locator('form[data-buy] [data-price]');
