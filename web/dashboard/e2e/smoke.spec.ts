@@ -107,3 +107,29 @@ test('a merchant sets up a shipping zone and connects a carrier', async ({ page 
   await expect(page.getByRole('cell', { name: 'مربوط' })).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
 });
+
+// Money: connect the card gateway (the fake one), so checkout offers
+// cards, and read the cash-on-delivery report.
+test('a merchant connects a card gateway and reads the COD report', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/orders$/);
+
+  await page.getByRole('link', { name: 'الدفع بالبطاقة' }).click();
+  await page.getByRole('combobox', { name: 'البوابة' }).selectOption({ label: 'بوابة دفع تجريبية' });
+  await page.getByLabel('API key').fill('demo-gateway-key');
+  await page.getByLabel('سر الإشعارات').fill('demo-webhook-secret');
+  await page.getByRole('button', { name: 'ربط' }).click();
+  await expect(page.getByText(/تم الربط/)).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'مربوطة' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'التحصيل' }).click();
+  await expect(page.getByRole('heading', { name: 'تحصيل الدفع عند الاستلام' })).toBeVisible();
+  await expect(page.getByText(/حُوِّلت قيمتها|لا توجد طرود/).first()).toBeVisible();
+  await page.getByRole('link', { name: 'المدفوعات' }).click();
+  await expect(page.getByText('لا توجد مدفوعات بالبطاقة بعد.')).toBeVisible();
+  expect(errors, 'no console errors').toEqual([]);
+});

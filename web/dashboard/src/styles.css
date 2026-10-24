@@ -245,3 +245,39 @@ td {
 .secret code {
   word-break: break-all;
 }
+.pay-paid {
+  background: #dcfce7;
+  color: #166534;
+}
+.pay-pending,
+.pay-awaiting,
+.pay-unpaid {
+  background: #fef3c7;
+  color: #92400e;
+}
+.pay-failed,
+.pay-expired,
+.pay-partially_refunded,
+.pay-refunded {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.cod dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+}
+.late {
+  color: #991b1b;
+  font-weight: 600;
+}
+.refund {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+}
+.refund label {
+  display: grid;
+  gap: 0.25rem;
+}
