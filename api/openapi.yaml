@@ -3365,7 +3365,7 @@ components:
         upload: { $ref: "#/components/schemas/PresignedUpload" }
     SectionType:
       type: string
-      enum: [hero, product_grid, product_landing, reviews, faq, trust_badges, countdown]
+      enum: [hero, product_grid, product_landing, reviews, faq, trust_badges, countdown, category_tiles, promo_tiles, whatsapp_cta]
     SectionTypeInfo:
       type: object
       required: [type, schema]

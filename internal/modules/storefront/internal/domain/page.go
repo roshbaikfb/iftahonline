@@ -76,11 +76,17 @@ const (
 	SectionFAQ            SectionType = "faq"
 	SectionTrustBadges    SectionType = "trust_badges"
 	SectionCountdown      SectionType = "countdown"
+	SectionCategoryTiles  SectionType = "category_tiles"
+	SectionPromoTiles     SectionType = "promo_tiles"
+	SectionWhatsAppCTA    SectionType = "whatsapp_cta"
 )
 
 // SectionTypes lists every section type.
 func SectionTypes() []SectionType {
-	return []SectionType{SectionHero, SectionProductGrid, SectionProductLanding, SectionReviews, SectionFAQ, SectionTrustBadges, SectionCountdown}
+	return []SectionType{
+		SectionHero, SectionProductGrid, SectionProductLanding, SectionReviews, SectionFAQ, SectionTrustBadges, SectionCountdown,
+		SectionCategoryTiles, SectionPromoTiles, SectionWhatsAppCTA,
+	}
 }
 
 // Section is one block of a page. Settings are validated against the

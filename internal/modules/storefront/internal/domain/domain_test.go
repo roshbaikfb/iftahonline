@@ -253,7 +253,7 @@ func TestDefaults(t *testing.T) {
 			t.Fatalf("default policy %+v", d)
 		}
 	}
-	if len(domain.Fonts()) != 5 || len(domain.Radii()) != 4 || len(domain.SectionTypes()) != 7 {
+	if len(domain.Fonts()) != 5 || len(domain.Radii()) != 4 || len(domain.SectionTypes()) != 10 {
 		t.Fatal("enum lists changed: update the OpenAPI enums and docs too")
 	}
 }

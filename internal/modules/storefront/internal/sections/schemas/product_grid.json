@@ -16,7 +16,8 @@
       "uniqueItems": true,
       "items": { "$ref": "defs.json#/$defs/id" }
     },
-    "limit": { "type": "integer", "minimum": 1, "maximum": 24, "default": 8 }
+    "limit": { "type": "integer", "minimum": 1, "maximum": 24, "default": 8 },
+    "layout": { "description": "grid: rows of cards; carousel: one row that scrolls sideways.", "enum": ["grid", "carousel"], "default": "grid" }
   },
   "allOf": [
     {

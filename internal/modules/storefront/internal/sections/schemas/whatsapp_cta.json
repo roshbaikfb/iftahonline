@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/whatsapp_cta.json",
+  "title": "WhatsApp help",
+  "description": "A card inviting shoppers to message the store on WhatsApp. Shown only when the store has a WhatsApp number (theme contact).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "title": { "description": "Empty uses the default (Need help with your order?).", "$ref": "defs.json#/$defs/line", "maxLength": 60 },
+    "text": { "$ref": "defs.json#/$defs/line", "maxLength": 120 }
+  }
+}
