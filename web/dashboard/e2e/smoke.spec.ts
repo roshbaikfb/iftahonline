@@ -75,3 +75,35 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   await expect(page.getByRole('button', { name: 'تسجيل الدخول' })).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
 });
+
+// Delivery setup: a zone with its rate and a city rate, then the store's
+// carrier account (the fake one), whose webhook secret is shown once.
+test('a merchant sets up a shipping zone and connects a carrier', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/orders$/);
+
+  await page.getByRole('link', { name: 'مناطق الشحن' }).click();
+  await page.getByRole('button', { name: 'منطقة جديدة' }).click();
+  const zone = page.locator('form.zone');
+  await zone.getByLabel('اسم المنطقة').fill('الإسكندرية');
+  await zone.getByLabel('سعر الشحن').fill('60');
+  await zone.getByRole('checkbox', { name: 'الإسكندرية' }).check();
+  await zone.getByRole('button', { name: '+ مدينة' }).click();
+  await zone.getByLabel('المدينة').fill('سموحة');
+  await zone.getByLabel('سعرها').fill('45');
+  await zone.getByRole('button', { name: 'حفظ المنطقة' }).click();
+  await expect(page.getByText('أُضيفت المنطقة')).toBeVisible();
+  await expect(page.locator('.zones li').filter({ hasText: 'الإسكندرية' })).toContainText('60 ج.م');
+
+  await page.getByRole('link', { name: 'شركات الشحن' }).click();
+  await page.getByRole('combobox', { name: 'الشركة' }).selectOption({ label: 'شركة شحن تجريبية' });
+  await page.getByLabel('مفتاح API من لوحة الشركة').fill('demo-carrier-key');
+  await page.getByRole('button', { name: 'ربط' }).click();
+  await expect(page.locator('.secret')).toContainText('/v1/webhooks/fake/');
+  await expect(page.getByRole('cell', { name: 'مربوط' })).toBeVisible();
+  expect(errors, 'no console errors').toEqual([]);
+});

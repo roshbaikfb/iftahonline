@@ -62,6 +62,7 @@ func run(addr, bin string) error {
 	// startup).
 	api.Env = append([]string{},
 		"APP_ENV=test", "HTTP_ADDR="+inner, "DATABASE_URL="+infra.AppURL, "REDIS_URL="+infra.RedisURL, "DRAIN_DELAY=0s",
+		"SHIPPING_FAKE_CARRIER=true", "PAYMENTS_FAKE_GATEWAY=true",
 		// Public development-only values (see .env.example), not secrets.
 		"SECRETBOX_KEYS=1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
 		"OTP_PEPPER=ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
