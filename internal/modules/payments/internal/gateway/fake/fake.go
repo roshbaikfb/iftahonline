@@ -30,16 +30,22 @@ const InvalidKey = "invalid-key"
 // SignatureHeader carries the fake's webhook signature.
 const SignatureHeader = "X-Fake-Signature"
 
+// DefaultCheckoutBase is where the fake's hosted pages are, unless
+// NewWithCheckout says otherwise.
+const DefaultCheckoutBase = "https://pay.fake.test/checkout/"
+
 // Gateway is the fake gateway.
 type Gateway struct {
 	mu       sync.Mutex
 	seq      int
+	base     string
 	payments map[string]*payment // by key|reference
 	byTxn    map[string]*payment
 }
 
 type payment struct {
 	key, ref  string
+	redirect  string
 	amount    money.Money
 	state     gateway.State
 	txn       string
@@ -50,7 +56,13 @@ type payment struct {
 }
 
 // New returns an empty fake gateway.
-func New() *Gateway { return &Gateway{payments: map[string]*payment{}, byTxn: map[string]*payment{}} }
+func New() *Gateway { return NewWithCheckout(DefaultCheckoutBase) }
+
+// NewWithCheckout returns an empty fake gateway whose hosted pages are
+// base + the payment's reference (the development page, ADR-0030).
+func NewWithCheckout(base string) *Gateway {
+	return &Gateway{base: base, payments: map[string]*payment{}, byTxn: map[string]*payment{}}
+}
 
 var _ gateway.Gateway = (*Gateway)(nil)
 
@@ -84,9 +96,10 @@ func (g *Gateway) CreatePayment(_ context.Context, creds gateway.Credentials, re
 		if err != nil {
 			return gateway.Checkout{}, err
 		}
-		g.payments[k] = &payment{key: creds.APIKey, ref: req.Reference, amount: req.Amount, state: gateway.StatePending, refunded: zero, at: time.Now().UTC()}
+		g.payments[k] = &payment{key: creds.APIKey, ref: req.Reference, redirect: req.RedirectURL, amount: req.Amount, state: gateway.StatePending,
+			refunded: zero, at: time.Now().UTC()}
 	}
-	return gateway.Checkout{URL: "https://pay.fake.test/checkout/" + req.Reference, ProviderRef: "fp_" + req.Reference}, nil
+	return gateway.Checkout{URL: g.base + req.Reference, ProviderRef: "fp_" + req.Reference}, nil
 }
 
 // VerifyWebhook implements gateway.Gateway.
@@ -180,6 +193,52 @@ func (g *Gateway) settle(apiKey, reference string, st gateway.State) (string, er
 	p.changes++
 	g.byTxn[p.txn] = p
 	return p.txn, nil
+}
+
+// Page is what the fake's hosted page shows of a payment.
+type Page struct {
+	Amount   money.Money
+	Pending  bool
+	Redirect string // where the shopper goes back
+}
+
+// PageOf finds a payment by its reference alone, as the hosted page
+// does.
+func (g *Gateway) PageOf(reference string) (Page, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	p := g.byRef(reference)
+	if p == nil {
+		return Page{}, false
+	}
+	return Page{Amount: p.amount, Pending: p.state == gateway.StatePending, Redirect: p.redirect}, true
+}
+
+// Answer pays (or declines) a pending payment by its reference alone, as
+// the shopper does on the hosted page.
+func (g *Gateway) Answer(reference string, pay bool) error {
+	g.mu.Lock()
+	p := g.byRef(reference)
+	pending := p != nil && p.state == gateway.StatePending
+	g.mu.Unlock()
+	if !pending {
+		return fmt.Errorf("fake gateway: no pending payment %s", reference)
+	}
+	st := gateway.StateFailed
+	if pay {
+		st = gateway.StatePaid
+	}
+	_, err := g.settle(p.key, reference, st)
+	return err
+}
+
+func (g *Gateway) byRef(reference string) *payment {
+	for _, p := range g.payments {
+		if p.ref == reference {
+			return p
+		}
+	}
+	return nil
 }
 
 type webhook struct {

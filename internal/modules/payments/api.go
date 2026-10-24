@@ -9,9 +9,15 @@ package payments
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/payapi"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -55,6 +61,32 @@ type Checkout interface {
 }
 
 var _ Checkout = (*app.Service)(nil)
+
+// CardCheck tells the storefront whether the store in ctx takes cards.
+// It reads no keys, so the storefront role (which holds none) can use
+// it.
+type CardCheck interface {
+	CardEnabled(ctx context.Context) (bool, error)
+}
+
+var _ CardCheck = (*app.Service)(nil)
+
+// NewCardCheck builds a CardCheck on pool.
+func NewCardCheck(pool *pgxpool.Pool) CardCheck { return app.NewService(app.Deps{DB: pool}) }
+
+// StartURL is where the storefront sends a card order's shopper: the
+// API host's checkout route (apiOrigin, e.g. https://app.iftahonline.com),
+// which opens the gateway's page and brings the shopper back to back,
+// a URL on one of the store's hosts (ADR-0030).
+func StartURL(apiOrigin string, store tenant.StoreID, orderID ulid.ID, back string) string {
+	return strings.TrimRight(apiOrigin, "/") + "/v1/pay/" + store.String() + "/" + orderID.String() + "?return=" + url.QueryEscape(back)
+}
+
+// HostOwner reports which store a host belongs to (tenancy's resolver).
+type HostOwner = payapi.HostOwner
+
+// ClientIPFunc is the server's real-IP lookup.
+type ClientIPFunc = payapi.ClientIPFunc
 
 // FakePayer plays the shopper and the fake gateway (development and
 // end-to-end tests; never in production): it pays a payment on the

@@ -57,3 +57,47 @@ func TestCredentialsNeverPrint(t *testing.T) {
 		}
 	}
 }
+
+// TestHostedPage: the development page finds a payment by reference,
+// pays or declines it once, and sends the shopper back.
+func TestHostedPage(t *testing.T) {
+	t.Parallel()
+	g := fake.NewWithCheckout("http://localhost:18080/fake-gateway/checkout/")
+	amount, err := money.New(52000, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	creds := gateway.Credentials{APIKey: key}
+	for _, ref := range []string{"pay-me", "decline-me"} {
+		c, createErr := g.CreatePayment(t.Context(), creds, gateway.PaymentRequest{Reference: ref, Amount: amount,
+			NotificationURL: "https://app.example.com/hook", RedirectURL: "https://app.example.com/back/" + ref})
+		if createErr != nil || c.URL != "http://localhost:18080/fake-gateway/checkout/"+ref {
+			t.Fatalf("checkout %+v %v", c, createErr)
+		}
+	}
+	page, ok := g.PageOf("pay-me")
+	if !ok || !page.Pending || page.Amount.Amount() != 52000 || page.Redirect != "https://app.example.com/back/pay-me" {
+		t.Fatalf("page %+v %v", page, ok)
+	}
+	if err = g.Answer("pay-me", true); err != nil {
+		t.Fatal(err)
+	}
+	if err = g.Answer("decline-me", false); err != nil {
+		t.Fatal(err)
+	}
+	for ref, want := range map[string]gateway.State{"pay-me": gateway.StatePaid, "decline-me": gateway.StateFailed} {
+		st, stErr := g.FetchStatus(t.Context(), creds, ref, money.EGP)
+		if stErr != nil || st.State != want {
+			t.Errorf("%s: %+v %v, want %s", ref, st, stErr, want)
+		}
+	}
+	if err = g.Answer("pay-me", true); err == nil {
+		t.Error("a paid payment was answered again")
+	}
+	if _, ok = g.PageOf("unknown"); ok {
+		t.Error("an unknown payment has a page")
+	}
+	if err = g.Answer("unknown", true); err == nil {
+		t.Error("an unknown payment was answered")
+	}
+}

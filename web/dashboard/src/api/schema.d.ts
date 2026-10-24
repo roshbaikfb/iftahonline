@@ -2031,6 +2031,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pay/{store_id}/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Send a card order's shopper to the gateway
+         * @description Opens (or reuses, within 30 minutes) the gateway's hosted page for
+         *     a card order awaiting payment, and redirects there. When the order
+         *     no longer awaits a payment (paid, cancelled) or the store stopped
+         *     taking cards, it redirects straight to `return`. A `return` that
+         *     is not an http(s) URL on one of the store's hosts is 404, as are
+         *     unknown stores and orders. Rate-limited per client IP.
+         */
+        get: operations["startCardPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pay/{store_id}/{order_id}/return/{to}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The gateway sends the shopper back
+         * @description Asks the gateway about the order's payment now (bounded; the
+         *     webhook catches up otherwise), then redirects to `to`: the return
+         *     URL given to startCardPayment, base64url-encoded so the gateway's
+         *     own query parameters cannot change it. The same host check
+         *     applies.
+         */
+        get: operations["finishCardPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -6108,6 +6157,56 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentRefund"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startCardPayment: {
+        parameters: {
+            query: {
+                /** @description Where the shopper ends up (the store's thank-you page). */
+                return: string;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the gateway's page, or back to `return`. */
+            303: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    finishCardPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["schemas"]["ULID"];
+                to: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to the store. */
+            303: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

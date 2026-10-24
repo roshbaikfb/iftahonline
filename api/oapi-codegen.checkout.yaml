@@ -1,0 +1,9 @@
+# Server stubs for the `checkout` tag (see docs/modules/TEMPLATE.md).
+# Not strict: handlers answer with redirects and problem pages.
+package: payapi
+output: internal/modules/payments/internal/payapi/api.gen.go
+generate:
+  std-http-server: true
+  models: true
+output-options:
+  include-tags: [checkout]

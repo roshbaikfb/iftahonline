@@ -3,6 +3,7 @@ package payments_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 const (
 	apiKey     = "merchant-api-key"
 	hookSecret = "merchant-hook-secret"
+	shopHost   = "souq.iftahonline.test"
 )
 
 // platform is the api and worker roles in one process, wired as
@@ -138,8 +140,20 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
+	store := tenant.StoreID{ID: ids.New()}
+	checkoutLimiter, err := ratelimit.New(rdb, "acc-pay-"+strings.ToLower(ids.New().String()))
+	if err != nil {
+		t.Fatal(err)
+	}
 	pay, err := payments.New(payments.Deps{Pool: pool, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true},
-		Sealer: sealer, PublicURL: "https://app.example.com", Orders: ord.Payments(), Jobs: ins, Inbox: hooks.Inbox()})
+		Sealer: sealer, PublicURL: "https://app.example.com", Orders: ord.Payments(), Jobs: ins, Inbox: hooks.Inbox(),
+		Limiter: checkoutLimiter, ClientIP: func(context.Context) (netip.Addr, bool) { return netip.MustParseAddr("198.51.100.22"), true },
+		Hosts: func(_ context.Context, host string) (tenant.StoreID, error) {
+			if host == shopHost {
+				return store, nil
+			}
+			return tenant.StoreID{}, errors.New("unknown host")
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +185,6 @@ func newPlatform(t *testing.T) platform {
 		_ = rc.Stop(stop)
 	})
 
-	store := tenant.StoreID{ID: ids.New()}
 	sctx := tenant.WithStore(ctx, store)
 	if err = postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
 		_, execErr := tx.Exec(sctx, `INSERT INTO stores (id, slug, name, currency, locale, timezone) VALUES ($1, $2, 'Test', 'EGP', 'ar', 'Africa/Cairo')`,
@@ -189,6 +202,9 @@ func newPlatform(t *testing.T) platform {
 	pay.Mount(api, pol, scope, resp)
 	public := http.NewServeMux()
 	hooks.Mount(public, resp)
+	if err = pay.MountCheckout(public, resp); err != nil {
+		t.Fatal(err)
+	}
 	return platform{api: api, public: public, shop: ord.Shop(), checkout: pay.Checkout(), payer: pay.FakePayer(), store: store, ctx: sctx,
 		token: "owner"}
 }
@@ -333,4 +349,57 @@ func TestWebhookReplayedFiveTimesChangesStateOnce(t *testing.T) {
 	eventually(t, "the order to follow", func() bool {
 		return p.call(t, http.MethodGet, "/orders/"+orderID, "", http.StatusOK)["order"].(map[string]any)["payment_status"] == "partially_refunded"
 	})
+}
+
+// TestCardCheckoutThroughTheAPIHost is the shopper's side of ADR-0030
+// on the real modules: from the storefront's pay URL to the fake
+// gateway's page, back through the return route, and on to the store's
+// thank-you page with the order paid and confirmed (no webhook needed).
+func TestCardCheckoutThroughTheAPIHost(t *testing.T) {
+	p := newPlatform(t)
+	prod := p.call(t, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
+	variant, err := ulid.Parse(prod["variants"].([]any)[0].(map[string]any)["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fake","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
+	placed, err := p.shop.PlaceOrder(p.ctx, orders.NewOrder{Source: orders.SourceStorefront, PaymentMethod: orders.PaymentCard,
+		Name: "منى أحمد", Phone: "01012345678", Governorate: "EG-C", City: "مدينة نصر", Address: "12 شارع عباس العقاد",
+		Lines: []orders.LineInput{{VariantID: variant, Qty: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	thanks := "https://" + shopHost + "/thank-you/" + placed.Order.ID.String()
+	follow := func(method, target, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		rq := httptest.NewRequestWithContext(t.Context(), method, strings.TrimPrefix(target, "https://app.example.com"), strings.NewReader(body))
+		if body != "" {
+			rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		rec := httptest.NewRecorder()
+		p.public.ServeHTTP(rec, rq)
+		return rec
+	}
+	rec := follow(http.MethodGet, payments.StartURL("https://app.example.com", p.store, placed.Order.ID, thanks), "")
+	page := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.Contains(page, "/v1/fake-gateway/checkout/") {
+		t.Fatalf("start = %d %q", rec.Code, page)
+	}
+	if rec = follow(http.MethodGet, page, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "450.00 EGP") {
+		t.Fatalf("gateway page = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = follow(http.MethodPost, page, "answer=pay")
+	i := strings.Index(rec.Body.String(), `content="0;url=`)
+	if rec.Code != http.StatusOK || i < 0 {
+		t.Fatalf("pay = %d %s", rec.Code, rec.Body.String())
+	}
+	back := rec.Body.String()[i+len(`content="0;url=`):]
+	back = strings.ReplaceAll(back[:strings.Index(back, `"`)], "&amp;", "&")
+	if rec = follow(http.MethodGet, back, ""); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != thanks {
+		t.Fatalf("return = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	o := p.call(t, http.MethodGet, "/orders/"+placed.Order.ID.String(), "", http.StatusOK)["order"].(map[string]any)
+	if o["payment_status"] != "paid" || o["status"] != "confirmed" {
+		t.Fatalf("order after the return: %v", o)
+	}
 }
