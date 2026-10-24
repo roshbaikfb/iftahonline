@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
@@ -91,66 +93,93 @@ func (s *Service) ExpirePayment(ctx context.Context, id ulid.ID) error {
 	})
 }
 
+// errRefundWaiting: an older refund of the same payment is still to be
+// answered; this one runs after it.
+var errRefundWaiting = errors.New("payments: an older refund of this payment is not answered yet")
+
+// IsRefundWaiting reports whether a refund job waits for an older refund
+// of its payment (the worker snoozes it).
+func IsRefundWaiting(err error) bool { return errors.Is(err, errRefundWaiting) }
+
+// refundWait is how long a refund waits for an older one of its payment.
+const refundWait = 30 * time.Second
+
+// older reports whether a was asked before b (IDs break ties).
+func older(a, b domain.Refund) bool {
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return bytes.Compare(a.ID[:], b.ID[:]) < 0
+}
+
+// refundTimeout bounds asking the gateway and refunding, while the
+// payment's row is held.
+const refundTimeout = 20 * time.Second
+
 // RefundPayment runs RefundPaymentArgs: the gateway refunds, the refund is
 // recorded as made, and a sync job brings the payment's new amounts. A
 // refusal fails the refund with the reason.
+//
+// The payment's row is held for the whole job, so the refunds of one
+// payment run one at a time, oldest first. Paymob takes no idempotency
+// key: before refunding, the job asks the gateway what it refunded, and
+// when that is more than the refunds recorded as made, the oldest
+// unanswered refund (this one) went through already (its answer was
+// lost) and is recorded instead of sent again.
 func (s *Service) RefundPayment(ctx context.Context, id ulid.ID) error {
-	var r domain.Refund
-	var p domain.Payment
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		if r, txErr = store.GetRefund(ctx, tx, id); txErr != nil {
-			return txErr
-		}
-		p, txErr = store.GetPayment(ctx, tx, r.PaymentID, false)
-		return txErr
-	})
-	if errors.Is(err, domain.ErrNotFound) || (err == nil && r.Status != domain.RefundRequested) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	c, err := s.connection(ctx, p.ConnectionID)
-	if err != nil {
-		return err
-	}
-	g, creds, err := s.open(ctx, c, true)
-	if err != nil {
-		return err
-	}
-	// Paymob takes no idempotency key for refunds: if a run died after
-	// the gateway refunded and before that was recorded, the gateway
-	// already shows more refunded than this payment knows of, and the
-	// refund is recorded instead of asked for again.
-	st, err := g.FetchStatus(ctx, creds, p.ID.String(), p.Amount.Currency())
-	if err != nil {
-		return err
-	}
-	if st.Refunded.Amount() >= p.Refunded.Amount()+r.Amount.Amount() {
-		return s.recordRefundTx(ctx, id, p.ID, "")
-	}
-	refundID, err := g.Refund(ctx, creds, p.TransactionID, r.Amount)
-	if errors.Is(err, gateway.ErrRejected) || errors.Is(err, gateway.ErrAuth) {
-		return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-			return store.SetRefund(ctx, tx, id, domain.RefundFailed, "", clip(err.Error()))
-		})
-	}
-	if err != nil {
-		return err
-	}
-	// The gateway refunded: that is recorded before anything else can
-	// fail, so a retry of this job never asks for the refund twice.
-	return s.recordRefundTx(ctx, id, p.ID, refundID)
-}
-
-// recordRefundTx marks a refund made; the payment's new amounts come
-// from the gateway in a job of their own.
-func (s *Service) recordRefundTx(ctx context.Context, refundID, paymentID ulid.ID, providerID string) error {
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		if txErr := store.SetRefund(ctx, tx, refundID, domain.RefundSucceeded, providerID, ""); txErr != nil {
-			return txErr
+		r, err := store.GetRefund(ctx, tx, id)
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
 		}
-		return s.enqueueTx(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return SyncPaymentArgs{TenantArgs: t, PaymentID: paymentID} }, nil)
+		if err != nil || r.Status != domain.RefundRequested {
+			return err
+		}
+		p, err := store.GetPayment(ctx, tx, r.PaymentID, true)
+		if err != nil {
+			return err
+		}
+		all, err := store.Refunds(ctx, tx, p.ID)
+		if err != nil {
+			return err
+		}
+		var made int64
+		for _, other := range all {
+			switch {
+			case other.Status == domain.RefundSucceeded:
+				made += other.Amount.Amount()
+			case other.Status == domain.RefundRequested && other.ID != r.ID && older(other, r):
+				return errRefundWaiting
+			}
+		}
+		c, err := store.GetConnection(ctx, tx, p.ConnectionID)
+		if err != nil {
+			return err
+		}
+		g, creds, err := s.open(ctx, c, true)
+		if err != nil {
+			return err
+		}
+		gctx, cancel := context.WithTimeout(ctx, refundTimeout)
+		defer cancel()
+		st, err := g.FetchStatus(gctx, creds, p.ID.String(), p.Amount.Currency())
+		if err != nil {
+			return err
+		}
+		refundID := ""
+		if st.Refunded.Amount() < made+r.Amount.Amount() {
+			refundID, err = g.Refund(gctx, creds, p.TransactionID, r.Amount)
+			if errors.Is(err, gateway.ErrRejected) || errors.Is(err, gateway.ErrAuth) {
+				return store.SetRefund(ctx, tx, id, domain.RefundFailed, "", clip(err.Error()))
+			}
+			if err != nil {
+				return err // maybe made: the retried job asks the gateway first
+			}
+		}
+		if err = store.SetRefund(ctx, tx, id, domain.RefundSucceeded, refundID, ""); err != nil {
+			return err
+		}
+		return s.enqueueTx(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return SyncPaymentArgs{TenantArgs: t, PaymentID: p.ID} }, nil)
 	})
 }
 
@@ -322,7 +351,11 @@ type refundWorker struct {
 }
 
 func (w *refundWorker) Work(ctx context.Context, job *river.Job[RefundPaymentArgs]) error {
-	return w.svc.RefundPayment(ctx, job.Args.RefundID)
+	err := w.svc.RefundPayment(ctx, job.Args.RefundID)
+	if IsRefundWaiting(err) {
+		return river.JobSnooze(refundWait)
+	}
+	return err
 }
 
 type webhookWorker struct {

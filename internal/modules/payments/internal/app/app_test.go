@@ -590,3 +590,113 @@ func TestRefreshOrder(t *testing.T) {
 		t.Fatalf("ReturnURL = %q", got)
 	}
 }
+
+// TestRefundsBeforeTheSync: two refunds of one payment run before the
+// sync job brings the payment's new amounts: each must reach the
+// gateway once. A refund whose job runs before an older one of the same
+// payment waits for it.
+func TestRefundsBeforeTheSync(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
+	p := f.checkout(t, order)
+	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	f.deliver(t, p)
+	first, err := f.svc.Refund(f.ctxA, p.ID, 20000, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.svc.Refund(f.ctxA, p.ID, 15000, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refunded := func() int64 {
+		t.Helper()
+		st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP)
+		if stErr != nil {
+			t.Fatal(stErr)
+		}
+		return st.Refunded.Amount()
+	}
+	// The newer one first: it waits, asking nothing of the gateway.
+	if err = f.svc.RefundPayment(f.ctxA, second.ID); !app.IsRefundWaiting(err) {
+		t.Fatalf("the newer refund ran first: %v", err)
+	}
+	var snooze *river.JobSnoozeError
+	if err = f.svc.RunJob(f.ctxA, app.RefundPaymentArgs{RefundID: second.ID}); !errors.As(err, &snooze) {
+		t.Fatalf("the worker must snooze a waiting refund: %v", err)
+	}
+	if got := refunded(); got != 0 {
+		t.Fatalf("the gateway refunded %d before the older refund", got)
+	}
+	for _, id := range []ulid.ID{first.ID, second.ID} {
+		if err = f.svc.RefundPayment(f.ctxA, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := refunded(); got != 35000 {
+		t.Fatalf("the gateway refunded %d, want 35000 (each refund once)", got)
+	}
+	// Run again (a retried job): nothing more goes back.
+	for _, id := range []ulid.ID{first.ID, second.ID} {
+		if err = f.svc.RefundPayment(f.ctxA, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := refunded(); got != 35000 {
+		t.Fatalf("retried jobs refunded again: %d", got)
+	}
+	_, refunds, err := f.svc.Payment(f.ctxA, p.ID)
+	if err != nil || len(refunds) != 2 || refunds[0].Status != domain.RefundSucceeded || refunds[1].Status != domain.RefundSucceeded {
+		t.Fatalf("refunds %+v %v", refunds, err)
+	}
+}
+
+// lostRefundGateway refunds, then loses the answer, once.
+type lostRefundGateway struct {
+	*fake.Gateway
+	lost *bool
+}
+
+func (g lostRefundGateway) Refund(ctx context.Context, creds gateway.Credentials, txn string, amount money.Money) (string, error) {
+	id, err := g.Gateway.Refund(ctx, creds, txn, amount)
+	if err == nil && !*g.lost {
+		*g.lost = true
+		return "", errors.New("gateway timeout")
+	}
+	return id, err
+}
+
+// TestRefundAnswerLost: the gateway refunded but the job never heard;
+// the retried job records it instead of refunding again.
+func TestRefundAnswerLost(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	lost := false
+	svc := f.service(lostRefundGateway{Gateway: f.gw, lost: &lost})
+	order := f.orders.Add(t, orders.PaymentCard, 0)
+	p := f.checkout(t, order)
+	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	f.deliver(t, p)
+	r, err := svc.Refund(f.ctxA, p.ID, 20000, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.RefundPayment(f.ctxA, r.ID); err == nil {
+		t.Fatal("a lost answer must fail the job (River retries it)")
+	}
+	if err = svc.RefundPayment(f.ctxA, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	st, err := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP)
+	if err != nil || st.Refunded.Amount() != 20000 {
+		t.Fatalf("the gateway refunded %v (%v), want 20000 once", st.Refunded, err)
+	}
+	if _, refunds, _ := svc.Payment(f.ctxA, p.ID); refunds[0].Status != domain.RefundSucceeded {
+		t.Fatalf("refund %+v", refunds[0])
+	}
+}
