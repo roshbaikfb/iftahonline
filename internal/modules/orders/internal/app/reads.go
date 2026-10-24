@@ -53,6 +53,21 @@ func (s *Service) detail(ctx context.Context, id ulid.ID, events bool) (Detail, 
 	return d, notFound(err)
 }
 
+// GetTx returns an order with its lines in the caller's transaction,
+// locked until it ends: for integrations that read an order and then
+// move it, or record its payment, in one transaction (no second
+// connection, and no change in between).
+func (s *Service) GetTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (domain.Order, error) {
+	o, err := store.Get(ctx, tx, id, true)
+	if err != nil {
+		return domain.Order{}, notFound(err)
+	}
+	if o.Lines, err = store.Lines(ctx, tx, id, o.Total.Currency()); err != nil {
+		return domain.Order{}, err
+	}
+	return o, nil
+}
+
 // Page is one page of orders, newest first.
 type Page struct {
 	Items []domain.Order // without lines

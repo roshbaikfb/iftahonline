@@ -117,6 +117,10 @@ var _ Shop = (*app.Service)(nil)
 type Fulfilment interface {
 	// Get returns an order with its lines, or ErrOrderNotFound.
 	Get(ctx context.Context, id ulid.ID) (Order, error)
+	// GetTx is Get in the caller's transaction, the order locked until it
+	// ends. Use it, not Get, inside a transaction: Get takes a second
+	// connection from the pool.
+	GetTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (Order, error)
 	// TransitionSystemTx moves an order in the caller's transaction on
 	// behalf of actor ("carrier:bosta"), without a person's permission.
 	// Moving to the current status is a no-op (moved false); a forbidden
