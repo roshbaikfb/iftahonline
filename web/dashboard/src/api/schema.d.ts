@@ -3006,6 +3006,14 @@ export interface components {
              */
             max_minor: number;
         };
+        ShippingArea: {
+            /** @example EG-C */
+            code: string;
+            /** @example القاهرة */
+            name_ar: string;
+            /** @example Cairo */
+            name_en: string;
+        };
         ShippingSettings: {
             cod_fee: components["schemas"]["CODFee"];
             /**
@@ -3058,6 +3066,8 @@ export interface components {
         ShippingConfig: {
             /** @example EGP */
             currency: string;
+            /** @description The governorates of the store's country, the codes zones are made of. */
+            areas: components["schemas"]["ShippingArea"][];
             settings: components["schemas"]["ShippingSettings"];
             zones: components["schemas"]["ShippingZone"][];
         };

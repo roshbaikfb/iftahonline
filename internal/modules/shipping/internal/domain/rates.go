@@ -215,6 +215,7 @@ func fieldsOf(err error) []errs.FieldError {
 // Config is everything a quote needs about one store.
 type Config struct {
 	Currency money.Currency
+	Country  geo.Country
 	Settings Settings
 	Zones    []Zone
 }

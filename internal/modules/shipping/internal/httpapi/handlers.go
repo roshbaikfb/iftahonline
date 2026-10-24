@@ -12,6 +12,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -57,6 +58,9 @@ func (h *Handlers) GetShipping(ctx context.Context, _ GetShippingRequestObject) 
 		return nil, err
 	}
 	out := GetShipping200JSONResponse{Currency: string(cfg.Currency), Settings: toSettings(cfg.Settings), Zones: make([]ShippingZone, len(cfg.Zones))}
+	for _, a := range geo.Areas(cfg.Country) {
+		out.Areas = append(out.Areas, ShippingArea{Code: a.Code, NameAr: a.NameAR, NameEn: a.NameEN})
+	}
 	for i, z := range cfg.Zones {
 		out.Zones[i] = toZone(z)
 	}
