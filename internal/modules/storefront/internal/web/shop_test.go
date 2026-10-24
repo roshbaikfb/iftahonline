@@ -260,9 +260,10 @@ type fakeOrders struct {
 }
 
 type orderLog struct {
-	mu   sync.Mutex
-	reqs []web.OrderRequest
-	err  error // returned by the next PlaceOrder
+	mu      sync.Mutex
+	reqs    []web.OrderRequest
+	err     error             // returned by the next PlaceOrder
+	summary *web.OrderSummary // what the thank-you page shows, when set
 }
 
 func (f fakeOrders) PlaceOrder(_ context.Context, req web.OrderRequest) (string, error) {
@@ -285,16 +286,24 @@ func (f fakeOrders) placed() []web.OrderRequest {
 	return append([]web.OrderRequest(nil), f.log.reqs...)
 }
 
-func (fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummary, error) {
+func (f fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummary, error) {
 	if ref != "IFT-1001" {
 		return web.OrderSummary{}, web.ErrOrderNotFound
+	}
+	if f.log != nil {
+		f.log.mu.Lock()
+		defer f.log.mu.Unlock()
+		if f.log.summary != nil {
+			return *f.log.summary, nil
+		}
 	}
 	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}},
 		Subtotal: egp(30000), Shipping: egp(5000), CODFee: egp(1000), Total: egp(36000)}, nil
 }
 
-// Quote delivers to Cairo for 50, free from 1,000, with a 10 COD fee,
-// and not to Aswan; "EG-XX" is invalid and "EG-LX" fails.
+// Quote delivers to Cairo for 50, free from 1,000, with a 10 COD fee
+// (none by card), and not to Aswan; "EG-XX" is invalid and "EG-LX"
+// fails.
 func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView, error) {
 	sub := int64(0)
 	for _, l := range req.Lines {
@@ -312,8 +321,12 @@ func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView,
 	if sub >= 100000 {
 		ship = 0
 	}
-	return web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(1000),
-		Total: egp(sub + ship + 1000)}, nil
+	fee := int64(1000)
+	if req.Card {
+		fee = 0
+	}
+	return web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(fee),
+		Total: egp(sub + ship + fee)}, nil
 }
 
 type fakeSigner struct{}

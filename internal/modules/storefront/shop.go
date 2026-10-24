@@ -13,6 +13,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/captcha"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store"
@@ -124,6 +125,11 @@ type ShopDeps struct {
 	// Captcha is Cloudflare Turnstile, shown to risky order submissions
 	// (ADR-0022); empty keys disable it.
 	Captcha config.Captcha
+	// Cards tells checkout whether the store takes cards, and
+	// CheckoutURL is the API host card shoppers pay through (ADR-0030);
+	// nil Cards offers cash on delivery only.
+	Cards       payments.CardCheck
+	CheckoutURL string
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -154,12 +160,19 @@ func NewShop(d ShopDeps) (*Shop, error) {
 	if d.Orders != nil {
 		ords = shopOrders{shop: d.Orders}
 	}
+	var pays web.Payments
+	if d.Cards != nil && d.Orders != nil {
+		if d.CheckoutURL == "" {
+			return nil, errors.New("storefront: card payment needs CheckoutURL")
+		}
+		pays = shopPayments{cards: d.Cards, origin: d.CheckoutURL}
+	}
 	var verifier web.CaptchaVerifier
 	if d.Captcha.Enabled() {
 		verifier = captcha.NewTurnstile(d.Captcha.SecretKey)
 	}
 	shop, err := web.New(web.Deps{
-		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords,
+		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
 		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL,

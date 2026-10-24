@@ -7,8 +7,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -23,8 +25,8 @@ type shopOrders struct {
 var _ web.Orders = shopOrders{}
 
 func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (string, error) {
-	in := orders.NewOrder{IdempotencyKey: req.Key, Source: orders.SourceStorefront, Name: req.Name, Phone: req.Phone,
-		Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes}
+	in := orders.NewOrder{IdempotencyKey: req.Key, Source: orders.SourceStorefront, PaymentMethod: method(req.Card), Name: req.Name,
+		Phone: req.Phone, Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes}
 	for _, l := range req.Lines {
 		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
 	}
@@ -62,8 +64,39 @@ func invalidOrder(e *errs.Error) *web.OrderInvalidError {
 	return inv
 }
 
+func method(card bool) orders.PaymentMethod {
+	if card {
+		return orders.PaymentCard
+	}
+	return orders.PaymentCOD
+}
+
+// shopPayments adapts the payments module to the shop's payment port:
+// the storefront reads whether the store takes cards, and sends card
+// shoppers to the API host to pay (ADR-0030). It holds no gateway keys.
+type shopPayments struct {
+	cards  payments.CardCheck
+	origin string
+}
+
+var _ web.Payments = shopPayments{}
+
+func (p shopPayments) CardEnabled(ctx context.Context) (bool, error) { return p.cards.CardEnabled(ctx) }
+
+func (p shopPayments) PayURL(store, orderRef, back string) string {
+	s, err := tenant.ParseStoreID(store)
+	if err != nil {
+		return ""
+	}
+	id, err := ulid.Parse(orderRef)
+	if err != nil {
+		return ""
+	}
+	return payments.StartURL(p.origin, s, id, back)
+}
+
 func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteView, error) {
-	in := orders.QuoteInput{Governorate: req.Governorate, City: req.City}
+	in := orders.QuoteInput{Governorate: req.Governorate, City: req.City, PaymentMethod: method(req.Card)}
 	for _, l := range req.Lines {
 		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
 	}
@@ -93,7 +126,8 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 	if err != nil {
 		return web.OrderSummary{}, err
 	}
-	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total}
+	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Card: ord.PaymentMethod == orders.PaymentCard, PaymentStatus: string(ord.PaymentStatus),
+		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total}
 	for _, l := range ord.Lines {
 		title := l.Title
 		if l.VariantTitle != "" {

@@ -39,6 +39,9 @@ type Deps struct {
 	// orders module exists: the page is then a 404).
 	Carts  Carts
 	Orders Orders
+	// Payments offers card payment at checkout; nil means cash on
+	// delivery only.
+	Payments Payments
 	// Limiter rate-limits cart writes and orders; nil disables.
 	Limiter Limiter
 	// Captcha verifies the challenge risky order submissions must pass,
@@ -66,6 +69,7 @@ type Shop struct {
 	edge     string // Cache-Control of a page
 	carts    Carts
 	orders   Orders
+	payments Payments
 	limiter  Limiter
 	captcha  CaptchaVerifier
 	siteKey  string
@@ -97,7 +101,7 @@ func New(d Deps) (*Shop, error) {
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders,
-		limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now}, nil
+		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request

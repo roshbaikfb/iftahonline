@@ -14,6 +14,11 @@ templ layout(p *pageCtx, body templ.Component) {
 			if p.desc != "" {
 				<meta name="description" content={ p.desc }/>
 			}
+			if p.refresh > 0 && p.refreshTo != "" {
+				<meta http-equiv="refresh" content={ strconv.Itoa(p.refresh) + ";url=" + p.refreshTo }/>
+			} else if p.refresh > 0 {
+				<meta http-equiv="refresh" content={ strconv.Itoa(p.refresh) }/>
+			}
 			if p.noindex {
 				<meta name="robots" content="noindex"/>
 			}
