@@ -27,3 +27,6 @@ web/dashboard/blob-report/
 !.vscode/extensions.json
 .DS_Store
 /.cache/
+
+# go build ./cmd/platform output
+/platform
