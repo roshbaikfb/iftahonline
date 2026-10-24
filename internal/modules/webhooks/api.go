@@ -7,11 +7,13 @@ package webhooks
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -54,3 +56,9 @@ type Inbox interface {
 }
 
 var _ Inbox = (*app.Service)(nil)
+
+// URL is where a provider sends a store connection's webhooks (the
+// receiveWebhook route), under the platform's public origin.
+func URL(publicURL, provider string, store tenant.StoreID, connection ulid.ID) string {
+	return strings.TrimRight(publicURL, "/") + "/v1/webhooks/" + provider + "/" + store.String() + "/" + connection.String()
+}

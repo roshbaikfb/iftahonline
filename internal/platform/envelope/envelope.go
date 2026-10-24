@@ -22,10 +22,13 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // MaxPlaintext bounds what Seal accepts: credentials, not documents.
@@ -280,3 +283,31 @@ func (e KeyringKEK) Unwrap(_ context.Context, wrapped, aad []byte) ([]byte, erro
 
 // Current implements KEK.
 func (e KeyringKEK) Current(wrapped []byte) bool { return !e.k.NeedsRotation(wrapped) }
+
+// ConnectionAAD binds a module's sealed connection credentials to the
+// module, the provider, the store and the connection (ADR-0024): a blob
+// copied to another row, store or module does not open.
+func ConnectionAAD(module, provider string, store tenant.StoreID, id ulid.ID) []byte {
+	return []byte(module + ":" + provider + ":" + store.String() + ":" + id.String())
+}
+
+// SealJSON seals v encoded as JSON.
+func (s *Sealer) SealJSON(ctx context.Context, v any, aad []byte) ([]byte, error) {
+	raw, err := json.Marshal(v) //nolint:gosec // credentials are marshalled only to be sealed on the next line
+	if err != nil {
+		return nil, fmt.Errorf("envelope: encode: %w", err)
+	}
+	return s.Seal(ctx, raw, aad)
+}
+
+// OpenJSON opens a blob sealed by SealJSON into out.
+func (s *Sealer) OpenJSON(ctx context.Context, blob, aad []byte, out any) error {
+	raw, err := s.Open(ctx, blob, aad)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("envelope: decode: %w", err)
+	}
+	return nil
+}

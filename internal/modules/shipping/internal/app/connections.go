@@ -4,11 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,7 +14,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/carrier"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -88,12 +88,7 @@ func (s *Service) Connect(ctx context.Context, carrierName, apiKey string) (Conn
 	}
 
 	id := s.ids.New()
-	raw, err := json.Marshal(creds) //nolint:gosec // marshalled only to be sealed on the next line
-
-	if err != nil {
-		return Connected{}, err
-	}
-	sealed, err := s.sealer.Seal(ctx, raw, connectionAAD(carrierName, storeID, id))
+	sealed, err := s.sealer.SealJSON(ctx, creds, envelope.ConnectionAAD(module, carrierName, storeID, id))
 	if err != nil {
 		return Connected{}, err
 	}
@@ -126,7 +121,7 @@ func (s *Service) Connect(ctx context.Context, carrierName, apiKey string) (Conn
 
 // WebhookURL is where the carrier sends a connection's webhooks.
 func (s *Service) WebhookURL(storeID tenant.StoreID, c domain.Connection) string {
-	return strings.TrimRight(s.publicURL, "/") + "/v1/webhooks/" + c.Carrier + "/" + storeID.String() + "/" + c.ID.String()
+	return webhooks.URL(s.publicURL, c.Carrier, storeID, c.ID)
 }
 
 // Connections lists the store's connections, newest first.
@@ -171,13 +166,9 @@ func (s *Service) Credentials(ctx context.Context, id ulid.ID) (carrier.Carrier,
 	if !ok {
 		return nil, carrier.Credentials{}, fmt.Errorf("shipping: carrier %q is not configured", c.Carrier)
 	}
-	raw, err := s.sealer.Open(ctx, c.Credentials, connectionAAD(c.Carrier, storeID, c.ID))
-	if err != nil {
-		return nil, carrier.Credentials{}, fmt.Errorf("shipping: open connection %s: %w", c.ID, err)
-	}
 	var creds carrier.Credentials
-	if err = json.Unmarshal(raw, &creds); err != nil {
-		return nil, carrier.Credentials{}, fmt.Errorf("shipping: connection %s credentials: %w", c.ID, err)
+	if err = s.sealer.OpenJSON(ctx, c.Credentials, envelope.ConnectionAAD(module, c.Carrier, storeID, c.ID), &creds); err != nil {
+		return nil, carrier.Credentials{}, fmt.Errorf("shipping: open connection %s: %w", c.ID, err)
 	}
 	return adapter, creds, nil
 }
@@ -211,11 +202,8 @@ func (s *Service) activeConnection(ctx context.Context, id ulid.ID) (store.Seale
 	return c, err
 }
 
-// connectionAAD binds sealed credentials to their carrier, store and
-// connection (ADR-0024).
-func connectionAAD(carrierName string, storeID tenant.StoreID, id ulid.ID) []byte {
-	return []byte("shipping:" + carrierName + ":" + storeID.String() + ":" + id.String())
-}
+// module names shipping in its sealed credentials' AAD (ADR-0024).
+const module = "shipping"
 
 // newSecret is a webhook secret: 32 random bytes, URL-safe.
 func newSecret() (string, error) {

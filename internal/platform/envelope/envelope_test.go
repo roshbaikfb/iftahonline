@@ -10,6 +10,8 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 func key(t testing.TB) string {
@@ -235,4 +237,37 @@ func FuzzOpen(f *testing.F) {
 		}
 		_ = s.NeedsRewrap(b)
 	})
+}
+
+// TestSealJSON: a value sealed as JSON opens only with the AAD of its
+// own connection.
+func TestSealJSON(t *testing.T) {
+	t.Parallel()
+	s := sealer(t, envelope.FromKeyring(keyring(t, "1:"+key(t))))
+	ids := ulid.NewGenerator()
+	storeA, storeB, conn := tenant.StoreID{ID: ids.New()}, tenant.StoreID{ID: ids.New()}, ids.New()
+	type creds struct {
+		APIKey string `json:"api_key"`
+	}
+	aad := envelope.ConnectionAAD("payments", "paymob", storeA, conn)
+	blob, err := s.SealJSON(t.Context(), creds{APIKey: "k-123"}, aad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got creds
+	if err = s.OpenJSON(t.Context(), blob, aad, &got); err != nil || got.APIKey != "k-123" {
+		t.Fatalf("OpenJSON = %+v %v", got, err)
+	}
+	for name, other := range map[string][]byte{
+		"another store":    envelope.ConnectionAAD("payments", "paymob", storeB, conn),
+		"another provider": envelope.ConnectionAAD("payments", "fakepay", storeA, conn),
+		"another module":   envelope.ConnectionAAD("shipping", "paymob", storeA, conn),
+	} {
+		if err = s.OpenJSON(t.Context(), blob, other, &got); err == nil {
+			t.Errorf("opened with %s's AAD", name)
+		}
+	}
+	if string(aad) != "payments:paymob:"+storeA.String()+":"+conn.String() {
+		t.Fatalf("AAD %q changed: connections sealed before would no longer open", aad)
+	}
 }

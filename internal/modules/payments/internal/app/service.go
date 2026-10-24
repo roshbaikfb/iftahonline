@@ -9,7 +9,6 @@ package app
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -179,11 +178,7 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 		return domain.Connection{}, errs.Unavailable(30*time.Second, fmt.Errorf("payments: verify %s keys: %w", in.Gateway, err))
 	}
 	id := s.ids.New()
-	raw, err := json.Marshal(creds) //nolint:gosec // marshalled only to be sealed on the next line
-	if err != nil {
-		return domain.Connection{}, err
-	}
-	sealed, err := s.sealer.Seal(ctx, raw, connectionAAD(in.Gateway, storeID, id))
+	sealed, err := s.sealer.SealJSON(ctx, creds, envelope.ConnectionAAD(module, in.Gateway, storeID, id))
 	if err != nil {
 		return domain.Connection{}, err
 	}
@@ -254,13 +249,9 @@ func (s *Service) open(ctx context.Context, c store.SealedConnection, anyStatus 
 	if err != nil {
 		return nil, gateway.Credentials{}, err
 	}
-	raw, err := s.sealer.Open(ctx, c.Credentials, connectionAAD(c.Gateway, storeID, c.ID))
-	if err != nil {
-		return nil, gateway.Credentials{}, fmt.Errorf("payments: open connection %s: %w", c.ID, err)
-	}
 	var creds gateway.Credentials
-	if err = json.Unmarshal(raw, &creds); err != nil {
-		return nil, gateway.Credentials{}, fmt.Errorf("payments: connection %s credentials: %w", c.ID, err)
+	if err = s.sealer.OpenJSON(ctx, c.Credentials, envelope.ConnectionAAD(module, c.Gateway, storeID, c.ID), &creds); err != nil {
+		return nil, gateway.Credentials{}, fmt.Errorf("payments: open connection %s: %w", c.ID, err)
 	}
 	return g, creds, nil
 }
@@ -279,7 +270,7 @@ func (s *Service) connection(ctx context.Context, id ulid.ID) (store.SealedConne
 
 // WebhookURL is where the gateway notifies a connection's payments.
 func (s *Service) WebhookURL(storeID tenant.StoreID, c domain.Connection) string {
-	return strings.TrimRight(s.publicURL, "/") + "/v1/webhooks/" + c.Gateway + "/" + storeID.String() + "/" + c.ID.String()
+	return webhooks.URL(s.publicURL, c.Gateway, storeID, c.ID)
 }
 
 // ReturnURL is where the gateway sends the shopper back after paying an
@@ -291,8 +282,5 @@ func (s *Service) ReturnURL(storeID tenant.StoreID, orderID ulid.ID, back string
 		base64.RawURLEncoding.EncodeToString([]byte(back))
 }
 
-// connectionAAD binds sealed credentials to their gateway, store and
-// connection (ADR-0024).
-func connectionAAD(gw string, storeID tenant.StoreID, id ulid.ID) []byte {
-	return []byte("payments:" + gw + ":" + storeID.String() + ":" + id.String())
-}
+// module names payments in its sealed credentials' AAD (ADR-0024).
+const module = "payments"
