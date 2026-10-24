@@ -101,6 +101,9 @@ type Payments struct {
 	// FakeGateway offers the in-memory gateway, for development and
 	// demos. Refused in production.
 	FakeGateway bool
+	// CheckoutURL is the API host's public origin, where the storefront
+	// sends card orders' shoppers (ADR-0030; storefront role).
+	CheckoutURL string
 }
 
 // Edge configures the CDN in front of the storefront (ADR-0019). The
@@ -354,6 +357,10 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		c.Edge.CacheTTL = r.duration("EDGE_CACHE_TTL", time.Minute)
 		if c.Edge.CacheTTL > 24*time.Hour {
 			r.errorf("EDGE_CACHE_TTL: at most 24h")
+		}
+		c.Payments.CheckoutURL = r.url("CHECKOUT_URL", false, "https", "http")
+		if c.Payments.CheckoutURL == "" {
+			c.Payments.CheckoutURL = "https://app." + c.Tenancy.BaseDomain
 		}
 		c.Captcha.SiteKey = r.str("TURNSTILE_SITE_KEY", "")
 		c.Captcha.SecretKey = r.secretOptional("TURNSTILE_SECRET_KEY")

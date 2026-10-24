@@ -134,6 +134,16 @@ func TestPayments(t *testing.T) {
 	if err != nil || !c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "https://accept.paymob.com" {
 		t.Fatalf("set: %+v %v", c.Payments, err)
 	}
+	if c, err = config.Load(config.RoleStorefront, env(base())); err != nil || c.Payments.CheckoutURL != "https://app.iftahonline.com" {
+		t.Fatalf("storefront default: %+v %v", c.Payments, err)
+	}
+	if c, err = config.Load(config.RoleStorefront, env(with("CHECKOUT_URL", "http://localhost:5173"))); err != nil ||
+		c.Payments.CheckoutURL != "http://localhost:5173" {
+		t.Fatalf("storefront set: %+v %v", c.Payments, err)
+	}
+	if _, err = config.Load(config.RoleStorefront, env(with("CHECKOUT_URL", "ftp://app"))); err == nil {
+		t.Fatal("ftp checkout URL accepted")
+	}
 }
 
 func TestSecretsAndMail(t *testing.T) {
