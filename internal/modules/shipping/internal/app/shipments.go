@@ -30,6 +30,10 @@ const (
 	// PollEvery is how often an active shipment is tracked when no
 	// webhook says it moved: the fallback when webhooks are lost.
 	PollEvery = 6 * time.Hour
+	// MaxTrackFor ends the poll of a shipment the carrier never finishes
+	// (created and never picked up, say): two months covers any real
+	// delivery and its returns; the carrier's webhooks still move it.
+	MaxTrackFor = 60 * 24 * time.Hour
 )
 
 // Shipment errors.
@@ -336,7 +340,7 @@ func (s *Service) enqueueTx(ctx context.Context, tx pgx.Tx, mk func(jobs.TenantA
 	return nil
 }
 
-func (s *Service) clock() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
+func (s *Service) clock() time.Time { return s.now().UTC().Truncate(time.Microsecond) }
 
 func shipmentNotFound(err error) error {
 	if errors.Is(err, domain.ErrNotFound) {

@@ -475,3 +475,19 @@ func TestWorkersRegister(t *testing.T) {
 		t.Fatal("workers registered twice")
 	}
 }
+
+// TestTrackingStopsAfterMaxAge: a shipment the carrier never finishes
+// (created, never picked up) is not polled forever: past MaxTrackFor the
+// poll ends; the carrier's webhooks still move it.
+func TestTrackingStopsAfterMaxAge(t *testing.T) {
+	t.Parallel()
+	f := newShipFixture(t)
+	sh := f.ship(t, f.orders.Add(t, "ready_to_ship"))
+	if again, err := f.svc.TrackShipment(f.ctxA, sh.ID); err != nil || !again {
+		t.Fatalf("a young shipment: again=%v %v", again, err)
+	}
+	f.svc.SetClock(func() time.Time { return time.Now().Add(app.MaxTrackFor + time.Hour) })
+	if again, err := f.svc.TrackShipment(f.ctxA, sh.ID); err != nil || again {
+		t.Fatalf("a shipment older than MaxTrackFor is still polled: again=%v %v", again, err)
+	}
+}
