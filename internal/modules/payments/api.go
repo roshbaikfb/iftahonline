@@ -52,6 +52,14 @@ const WatchOrdersSubscriber = "payments.watch_card_orders"
 // EventPaymentStatusChanged is the type of PaymentStatusChanged.
 const EventPaymentStatusChanged = domain.EventPaymentStatusChanged
 
+// EventConnectionChanged is published when a store connects or
+// disconnects a gateway (ConnectionChanged): whether it takes cards
+// changed.
+const EventConnectionChanged = domain.EventConnectionChanged
+
+// ConnectionChanged is the payments.connection.changed event.
+type ConnectionChanged = domain.ConnectionChanged
+
 // Checkout is what the storefront uses to take card payments. Every
 // method acts on the store in ctx.
 type Checkout interface {

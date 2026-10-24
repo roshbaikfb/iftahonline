@@ -8,6 +8,19 @@ import (
 // EventPaymentStatusChanged is the type of PaymentStatusChanged.
 const EventPaymentStatusChanged = "payments.payment.status_changed"
 
+// EventConnectionChanged is the type of ConnectionChanged.
+const EventConnectionChanged = "payments.connection.changed"
+
+// ConnectionChanged is published when a store connects or disconnects a
+// gateway: whether it takes cards changed (the storefront's caches
+// follow).
+type ConnectionChanged struct {
+	event.Meta
+	ConnectionID ulid.ID `json:"connection_id"`
+	Gateway      string  `json:"gateway"`
+	Status       string  `json:"status"`
+}
+
 // PaymentStatusChanged is published when a payment's status changes.
 type PaymentStatusChanged struct {
 	event.Meta
