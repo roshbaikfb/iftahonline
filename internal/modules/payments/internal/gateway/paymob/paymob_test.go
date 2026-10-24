@@ -220,3 +220,52 @@ func TestRefundIsNeverRepeated(t *testing.T) {
 		t.Fatalf("Paymob refunded %d, want 10000 once", got)
 	}
 }
+
+// TestStatusIsNotTakenOnTrust: an inquiry's answer counts as paid only
+// when it is the transaction of the reference asked about, in the
+// payment's currency, and captured (an authorization alone is not
+// money taken).
+func TestStatusIsNotTakenOnTrust(t *testing.T) {
+	t.Parallel()
+	for name, fields := range map[string]map[string]any{
+		"another order's transaction": {"merchant_order_id": "someone-else"},
+		"another currency":            {"currency": "USD"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			g, srv := standIn(t)
+			req := gatewaytest.Request(t, money.EGP)
+			if _, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), req); err != nil {
+				t.Fatal(err)
+			}
+			if err := srv.Pay(req.Reference); err != nil {
+				t.Fatal(err)
+			}
+			if err := srv.Override(req.Reference, fields); err != nil {
+				t.Fatal(err)
+			}
+			st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+			if err == nil || st.State == gateway.StatePaid {
+				t.Fatalf("believed %+v (%v)", st, err)
+			}
+		})
+	}
+	t.Run("an authorization not captured", func(t *testing.T) {
+		t.Parallel()
+		g, srv := standIn(t)
+		req := gatewaytest.Request(t, money.EGP)
+		if _, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), req); err != nil {
+			t.Fatal(err)
+		}
+		if err := srv.Pay(req.Reference); err != nil {
+			t.Fatal(err)
+		}
+		if err := srv.Override(req.Reference, map[string]any{"is_auth": true, "is_capture": false, "is_standalone_payment": false}); err != nil {
+			t.Fatal(err)
+		}
+		st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+		if err != nil || st.State != gateway.StatePending {
+			t.Fatalf("an authorization: %+v %v, want pending", st, err)
+		}
+	})
+}

@@ -233,6 +233,9 @@ type transaction struct {
 	RefundedAmountCents int64       `json:"refunded_amount_cents"`
 	IsRefunded          bool        `json:"is_refunded"`
 	IsVoided            bool        `json:"is_voided"`
+	IsAuth              bool        `json:"is_auth"`
+	IsCapture           bool        `json:"is_capture"`
+	Currency            string      `json:"currency"`
 	CreatedAt           string      `json:"created_at"`
 	Order               struct {
 		MerchantOrderID string `json:"merchant_order_id"`
@@ -268,10 +271,18 @@ func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, re
 	if !found || t.ID == "" {
 		return st, nil // no transaction yet: the shopper has not paid
 	}
+	// The answer is believed only for what was asked: this reference, in
+	// this currency.
+	if t.Order.MerchantOrderID != reference {
+		return gateway.Status{}, fmt.Errorf("paymob: the inquiry for %s answered with order %q", reference, t.Order.MerchantOrderID)
+	}
+	if t.Currency != "" && t.Currency != string(cur) { // absent: nothing to compare (to check in the sandbox run)
+		return gateway.Status{}, fmt.Errorf("paymob: the inquiry for %s answered in %q, not %s", reference, t.Currency, cur)
+	}
 	st.TransactionID = t.ID.String()
 	st.At, _ = time.Parse(time.RFC3339Nano, t.CreatedAt) //nolint:errcheck // a time Paymob writes otherwise stays zero
 	switch {
-	case t.Pending:
+	case t.Pending, t.IsAuth && !t.IsCapture: // an authorization alone is not money taken
 	case t.Success && !t.IsVoided:
 		st.State = gateway.StatePaid
 		if st.Amount, err = money.New(t.AmountCents, cur); err != nil {
