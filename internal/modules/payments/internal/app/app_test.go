@@ -541,3 +541,45 @@ func TestWorkers(t *testing.T) {
 		t.Fatalf("expiry cancelled a paid order: %+v", f.orders.Order(order))
 	}
 }
+
+// slowGateway never answers status inquiries in time.
+type slowGateway struct{ *fake.Gateway }
+
+func (slowGateway) FetchStatus(ctx context.Context, _ gateway.Credentials, _ string, _ money.Currency) (gateway.Status, error) {
+	<-ctx.Done()
+	return gateway.Status{}, ctx.Err()
+}
+
+// TestRefreshOrder: the shopper is back; the order's open payment is
+// asked about at once. A gateway that does not answer changes nothing.
+func TestRefreshOrder(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
+	p := f.checkout(t, order)
+	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service(slowGateway{f.gw}).RefreshOrder(f.ctxA, order); err == nil {
+		t.Fatal("a gateway that never answered: no error")
+	}
+	if got := f.orders.Order(order); got.PaymentStatus != orders.PaymentAwaiting {
+		t.Fatalf("changed without the gateway's word: %+v", got)
+	}
+	if err := f.svc.RefreshOrder(f.ctxA, order); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.orders.Order(order); got.PaymentStatus != orders.PaymentPaid || got.Status != orders.StatusConfirmed {
+		t.Fatalf("after refresh: %+v", got)
+	}
+	if err := f.svc.RefreshOrder(f.ctxA, order); err != nil { // nothing open: nothing asked
+		t.Fatal(err)
+	}
+	if err := f.svc.RefreshOrder(f.ctxA, ulid.NewGenerator().New()); err != nil {
+		t.Fatalf("an order without payments: %v", err)
+	}
+	if got := f.svc.ReturnURL(tenant.StoreID{ID: order}, order, "https://x.test/t"); !strings.HasPrefix(got, "https://app.example.com/v1/pay/") ||
+		!strings.HasSuffix(got, "/return/aHR0cHM6Ly94LnRlc3QvdA") {
+		t.Fatalf("ReturnURL = %q", got)
+	}
+}
