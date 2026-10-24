@@ -18,7 +18,8 @@ function order(id: string, status: Order['status'], extra: Partial<Order> = {}):
   return {
     id, code: id.slice(-8), status, version: 1, source: 'storefront', customer_id: '01M5CUST000000000000000000',
     name: 'منى أحمد', phone: '+201012345678', governorate: 'EG-ALX', city: 'سموحة', address: '14 شارع فوزي معاذ', notes: '',
-    currency: 'EGP', subtotal_minor: 34950, shipping_minor: 0, cod_fee_minor: 0, total_minor: 34950, item_count: 2,
+    currency: 'EGP', subtotal_minor: 34950, shipping_minor: 0, cod_fee_minor: 0, payment_method: 'cod', payment_status: 'unpaid',
+    total_minor: 34950, item_count: 2,
     created_at: '2026-10-22T10:00:00Z', updated_at: '2026-10-22T10:00:00Z', status_changed_at: '2026-10-22T10:00:00Z', ...extra,
   };
 }
