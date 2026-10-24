@@ -16,6 +16,7 @@ keys: [ADR-0024](../adr/0024-inbound-webhooks-envelope-encryption-card-data.md).
 | `Module.MountCheckout` | The shopper's checkout routes (`checkout` tag) and, with the fake gateway, its hosted page (api role; needs `Deps.Hosts`, `ClientIP`, `Limiter`) |
 | `NewCardCheck(pool) CardCheck`, `StartURL` | For the storefront, which holds no keys: does the store take cards, and where its shoppers pay |
 | `Module.RegisterWorkers` | The expiry, refund, webhook and sync jobs (worker role) |
+| `Module.OrderPlacedHandler`, `WatchOrdersSubscriber` | Subscribe to `orders.EventOrderPlaced` on every role's bus (the worker sets the handler): schedules each card order's expiry |
 | `Module.WebhookProviders` | One per gateway; register them on the webhooks module (api role) |
 | `Module.FakePayer()` | Pays the fake gateway's payments; nil unless `PAYMENTS_FAKE_GATEWAY=true` |
 | `Payment`, `Status`, `CheckoutPage`, `PaymentStatusChanged` | DTOs; `EventPaymentStatusChanged` |
@@ -45,7 +46,9 @@ payment status, move it), the webhooks inbox (worker), the envelope
   - paid: the order is marked `paid` and confirmed if pending;
   - money taken twice, or for a cancelled order: refunded at once;
   - refunds: the order is marked `partially_refunded` or `refunded`.
-- **Expiry.** 60 minutes after the order is placed:
+- **Expiry.** 60 minutes after the order is placed, whether or not the
+  shopper reached the gateway (scheduled from `orders.order.placed`,
+  ADR-0031):
   - the gateway is asked once more;
   - an unpaid payment expires;
   - an order with no open or captured payment is cancelled, which
@@ -53,15 +56,20 @@ payment status, move it), the webhooks inbox (worker), the envelope
 - **Refunds.**
   - They are partial or full, reserved when asked, and never more than
     was paid.
-  - The job checks what the gateway already refunded before asking, so
-    a retried job never refunds twice.
+  - The refunds of one payment run one at a time, oldest first: the job
+    holds the payment while it asks the gateway (20 s at most).
+  - The job compares what the gateway refunded with the refunds recorded
+    as made. When the gateway shows more, the oldest unanswered refund
+    went through (its answer was lost), and it is recorded, not sent
+    again.
+  - A gateway sends a refund at most once (ADR-0031).
 
 ## The shopper's checkout (tag `checkout`, ADR-0030)
 
 | Route | What |
 |---|---|
 | `GET /v1/pay/{store}/{order}?return=` | Opens or reuses the hosted page and redirects there (303). An order no longer awaiting payment, or a store without cards, goes straight back. Rate-limited per IP (20 in 10 min). |
-| `GET /v1/pay/{store}/{order}/return/{to}` | The gateway's way back: asks the gateway now (`RefreshOrder`), then redirects to `to` (base64url) |
+| `GET /v1/pay/{store}/{order}/return/{to}` | The gateway's way back: asks the gateway now (`RefreshOrder`; 30 in 10 min per IP, then without the inquiry), then redirects to `to` (base64url) |
 | `/v1/fake-gateway/checkout/{ref}` | The fake gateway's page: pay or decline (development only) |
 
 The return URL must be an http(s) URL on a host of the same store
@@ -103,9 +111,10 @@ owner and the manager.
 
 | Kind | When | What |
 |---|---|---|
-| `payments.expire_payment` | 60 min after the order | Last inquiry, then expire, and cancel the order if nothing is open or paid |
+| `payments.expire_order` | 60 min after a card order is placed | Its open payments expire (last inquiry each); the order is cancelled if nothing is open or paid |
+| `payments.expire_payment` | 60 min after the order (per payment) | Last inquiry, then expire, and cancel the order if nothing is open or paid |
 | `payments.process_webhook` | An accepted webhook | Re-query, apply, record the receipt's outcome (`updated`, `unchanged`, `unknown_payment`, `unreadable`) |
-| `payments.refund_payment` | A refund asked | Check what was already refunded, refund, record |
+| `payments.refund_payment` | A refund asked | One at a time per payment, oldest first: check what was already refunded, refund once, record |
 | `payments.sync_payment` | After a refund | Re-query and apply the new amounts |
 
 ## Data
