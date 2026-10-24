@@ -77,8 +77,9 @@ function orderForms() {
 
 // orderQuotes shows what the order costs delivered (shipping, COD fee,
 // total) once the shopper picks a governorate (ADR-0025). Only the
-// address and the product are sent, never the name or phone; the server
-// answers with the line to show, in the page's language.
+// address, the product and the payment method are sent, never the name
+// or phone; the server answers with the line to show, in the page's
+// language.
 function orderQuotes() {
   for (const form of document.querySelectorAll("form[data-order]")) {
     const out = form.querySelector("[data-quote]");
@@ -86,8 +87,8 @@ function orderQuotes() {
     let seq = 0;
     const update = async () => {
       const body = new URLSearchParams();
-      for (const name of ["governorate", "city", "variant", "qty"]) {
-        const el = form.elements.namedItem(name);
+      for (const name of ["governorate", "city", "variant", "qty", "pay_method"]) {
+        const el = form.elements.namedItem(name); // a radio group reads as its checked value
         if (el && el.value) body.set(name, el.value);
       }
       if (!body.get("governorate")) { out.hidden = true; return; }
@@ -103,9 +104,8 @@ function orderQuotes() {
         // offline or busy: the order still shows its total after placing
       }
     };
-    for (const name of ["governorate", "city", "variant", "qty"]) {
-      const el = form.elements.namedItem(name);
-      if (el) el.addEventListener("change", update);
+    for (const name of ["governorate", "city", "variant", "qty", "pay_method"]) {
+      for (const el of form.querySelectorAll(`[name="${name}"]`)) el.addEventListener("change", update);
     }
     update();
   }

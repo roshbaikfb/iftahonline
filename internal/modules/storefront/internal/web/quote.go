@@ -56,7 +56,7 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 		}
 	}
 
-	req := QuoteRequest{Governorate: r.PostForm.Get("governorate"), City: r.PostForm.Get("city")}
+	req := QuoteRequest{Governorate: r.PostForm.Get("governorate"), City: r.PostForm.Get("city"), Card: r.PostForm.Get("pay_method") == "card"}
 	if req.Governorate == "" {
 		writeQuote(w, quoteResponse{Deliverable: true})
 		return

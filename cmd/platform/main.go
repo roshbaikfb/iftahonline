@@ -41,6 +41,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -419,7 +420,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	pay, err := newPayments(c, ord.Payments(), nil)
+	pay, err := newPayments(c, ord.Payments(), nil, ten)
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +450,9 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ship.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		pay.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
+			c.log.Error("card checkout not mounted", "err", mountErr)
+		}
 		hooks.Mount(rt.Mux, rt.Problems)
 		if console != nil {
 			mountErr = console.Mount(rt.Mux, rt.Problems)
@@ -516,7 +520,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Orders: shopOrders, Captcha: c.cfg.Captcha,
+		Orders: shopOrders, Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL,
@@ -658,7 +662,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err = ship.RegisterWorkers(workers); err != nil {
 		return err
 	}
-	pay, err := newPayments(c, ords, hooks.Inbox())
+	pay, err := newPayments(c, ords, hooks.Inbox(), nil)
 	if err != nil {
 		return err
 	}

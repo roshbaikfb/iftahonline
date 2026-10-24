@@ -126,6 +126,16 @@ const (
 	MsgShippingFree
 	MsgCODFee
 	MsgErrNotDelivered
+	MsgPaymentMethod
+	MsgPayCash
+	MsgPayCard
+	MsgPayCardNote
+	MsgPayByCardCTA
+	MsgPaid
+	MsgPaymentPending
+	MsgPayNow
+	MsgPaymentExpired
+	MsgErrCardUnavailable
 	msgCount
 )
 
@@ -210,6 +220,17 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgShippingFree:      {"مجاني", "Free"},
 	MsgCODFee:            {"رسوم الدفع عند الاستلام", "Cash-on-delivery fee"},
 	MsgErrNotDelivered:   {"لا نوصّل إلى هذه المحافظة حاليًا.", "We do not deliver to this governorate yet."},
+	MsgPaymentMethod:     {"طريقة الدفع", "Payment method"},
+	MsgPayCash:           {"نقدًا عند الاستلام", "Cash on delivery"},
+	MsgPayCard:           {"بطاقة بنكية (أونلاين)", "Card (online)"},
+	MsgPayCardNote:       {"ستنتقل إلى صفحة الدفع الآمنة لإتمام الدفع. لا نرى بيانات بطاقتك.", "You will pay on the secure payment page. We never see your card."},
+	MsgPayByCardCTA:      {"تأكيد الطلب والدفع", "Place order and pay"},
+	MsgPaid:              {"تم الدفع بنجاح.", "Your payment was received."},
+	MsgPaymentPending: {"لم يصلنا الدفع بعد. إذا دفعت للتو فسيتأكد خلال لحظات (تتحدّث الصفحة تلقائيًا)، وإلا فادفع الآن.",
+		"We have not received your payment yet. If you just paid, it will be confirmed in a moment (this page updates itself); otherwise, pay now."},
+	MsgPayNow:             {"ادفع الآن", "Pay now"},
+	MsgPaymentExpired:     {"انتهت مهلة الدفع وأُلغي الطلب. يمكنك الطلب من جديد.", "The payment window passed and the order was cancelled. You can order again."},
+	MsgErrCardUnavailable: {"الدفع بالبطاقة غير متاح حاليًا؛ اختر الدفع عند الاستلام.", "Card payment is not available right now; please choose cash on delivery."},
 }
 
 // T returns the message in l.

@@ -54,11 +54,24 @@ templ cartPage(p *pageCtx, v app.CartView, problem string) {
 	</section>
 }
 
-templ thankYouPage(p *pageCtx, o OrderSummary) {
+templ thankYouPage(p *pageCtx, o OrderSummary, payURL string) {
 	<section class="sec cart">
 		<h1>{ p.l.T(MsgThankYou) }</h1>
 		<p>{ p.l.T(MsgThankYouText) }</p>
 		<p>{ p.l.T(MsgOrderRef) }: <strong dir="ltr">{ o.Code }</strong></p>
+		if o.Card {
+			switch {
+				case o.Cancelled:
+					<p class="alert" role="alert">{ p.l.T(MsgPaymentExpired) }</p>
+				case o.PaymentStatus != PaymentAwaiting:
+					<p class="paid">{ p.l.T(MsgPaid) }</p>
+				default:
+					<p class="alert" role="status">{ p.l.T(MsgPaymentPending) }</p>
+					if payURL != "" {
+						<p><a class="btn" href={ templ.URL(payURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a></p>
+					}
+			}
+		}
 		<ul class="lines">
 			for _, l := range o.Lines {
 				<li class="line">

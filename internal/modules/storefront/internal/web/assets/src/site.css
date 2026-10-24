@@ -121,6 +121,10 @@ main { display: block; min-block-size: 50vh; }
 .order .bad input, .order .bad select, .order .bad textarea { border-color: #b42318; }
 .order .err { color: #b42318; }
 .order .cod { font-size: .9rem; opacity: .85; }
+.order .pay { border: 1px solid currentColor; border-radius: .5rem; padding: .5rem .75rem; margin: .75rem 0; }
+.order .pay label { display: block; padding: .25rem 0; }
+.order .pay small { display: block; opacity: .8; }
+.paid { color: #146c2e; font-weight: 600; }
 .order .quote { font-weight: 600; margin: .5rem 0; }
 .order .quote.bad { color: #b42318; }
 .hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }

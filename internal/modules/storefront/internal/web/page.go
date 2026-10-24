@@ -25,9 +25,11 @@ type pageCtx struct {
 	image     string // og:image
 	jsonLD    []byte // already JSON
 	tags      []string
-	eagerN    int  // images still to load eagerly
-	noindex   bool // pages for one shopper (cart, thank-you)
-	challenge bool // the page shows a Turnstile challenge
+	eagerN    int    // images still to load eagerly
+	noindex   bool   // pages for one shopper (cart, thank-you)
+	challenge bool   // the page shows a Turnstile challenge
+	refresh   int    // seconds before the page reloads itself (or goes to refreshTo); 0 never
+	refreshTo string // where the refresh goes; empty: the page itself
 }
 
 // eagerImages is how many of a page's first images load eagerly, at high

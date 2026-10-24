@@ -36,13 +36,19 @@ var _ Carts = (*app.Service)(nil)
 // OrderSummary is what the thank-you page shows of a placed order. The
 // orders module provides it.
 type OrderSummary struct {
-	Ref      string // the order's ID, in the thank-you URL
-	Code     string // its short code, shown to the shopper
-	Lines    []OrderLine
-	Subtotal money.Money
-	Shipping money.Money
-	CODFee   money.Money
-	Total    money.Money
+	Ref  string // the order's ID, in the thank-you URL
+	Code string // its short code, shown to the shopper
+	// Card orders are paid online: PaymentStatus is awaiting until the
+	// gateway says paid. Cancelled is true once the order is cancelled
+	// (an unpaid card order is, after an hour).
+	Card          bool
+	PaymentStatus string
+	Cancelled     bool
+	Lines         []OrderLine
+	Subtotal      money.Money
+	Shipping      money.Money
+	CODFee        money.Money
+	Total         money.Money
 }
 
 // OrderLine is one line of an OrderSummary.
@@ -71,6 +77,7 @@ type Orders interface {
 // QuoteRequest is the part of the order form a quote needs.
 type QuoteRequest struct {
 	Governorate, City string
+	Card              bool // paid online: no cash-on-delivery fee
 	Lines             []OrderRequestLine
 }
 
@@ -88,7 +95,24 @@ type QuoteView struct {
 type OrderRequest struct {
 	Key                                            string // idempotency key; may be empty
 	Name, Phone, Governorate, City, Address, Notes string
+	Card                                           bool // paid online, not cash on delivery
 	Lines                                          []OrderRequestLine
+}
+
+// Payment states an OrderSummary reports.
+const (
+	PaymentAwaiting = "awaiting"
+	PaymentPaid     = "paid"
+)
+
+// Payments takes card payments through the platform's API host
+// (ADR-0030); nil means cash on delivery only.
+type Payments interface {
+	// CardEnabled reports whether the store in ctx takes cards.
+	CardEnabled(ctx context.Context) (bool, error)
+	// PayURL is where a card order's shopper pays; back is the absolute
+	// thank-you URL they return to.
+	PayURL(store, orderRef, back string) string
 }
 
 // OrderRequestLine is one variant and quantity.
@@ -337,7 +361,17 @@ func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref 
 		return
 	}
 	p.title, p.noindex = p.l.T(MsgThankYou)+" | "+p.v.name, true
-	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, o))
+	payURL := ""
+	if o.Card && o.PaymentStatus == PaymentAwaiting && !o.Cancelled && s.payments != nil {
+		// Not paid yet: the webhook may be seconds away, so the page looks
+		// again by itself; or the shopper pays (again) now.
+		payURL = s.payments.PayURL(p.store, o.Ref, p.base+p.localize(p.l, "/thank-you/"+o.Ref))
+		p.refresh = 10
+		if r.URL.Query().Get("pay") == "1" { // just placed: on to the payment
+			p.refresh, p.refreshTo = 1, payURL
+		}
+	}
+	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, o, payURL))
 }
 
 func (s *Shop) writeNotFoundPrivate(w http.ResponseWriter, r *http.Request, p *pageCtx) {

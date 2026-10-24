@@ -40,7 +40,16 @@ templ orderFields(p *pageCtx, f *orderForm) {
 		<div class="cf-turnstile" data-sitekey={ f.challenge } data-language={ string(p.l) }></div>
 	}
 	<p class="quote" data-quote={ p.URL("/order/quote") } aria-live="polite" hidden></p>
-	<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
+	if f.card {
+		<fieldset class="pay">
+			<legend>{ p.l.T(MsgPaymentMethod) }</legend>
+			<label><input type="radio" name="pay_method" value="cod" checked?={ !f.payByCard() }/> { p.l.T(MsgPayCash) }</label>
+			<label><input type="radio" name="pay_method" value="card" checked?={ f.payByCard() }/> { p.l.T(MsgPayCard) }</label>
+			<small>{ p.l.T(MsgPayCardNote) }</small>
+		</fieldset>
+	} else {
+		<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
+	}
 	<button class="btn btn-block" type="submit">{ p.l.Or(f.cta, MsgPlaceOrder) }</button>
 }
 

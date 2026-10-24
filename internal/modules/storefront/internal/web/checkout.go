@@ -55,7 +55,11 @@ type orderForm struct {
 	areas     []geo.Area
 	summary   *orderSummary
 	cta       string
+	card      bool // card payment is offered (checkout from the cart only)
 }
+
+// payByCard reports whether the shopper chose card payment.
+func (f *orderForm) payByCard() bool { return f.card && f.value("pay_method") == "card" }
 
 func (f *orderForm) value(name string) string { return f.values[name] }
 
@@ -117,7 +121,7 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 		http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
 		return
 	}
-	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: cartSummary(view)}
+	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: cartSummary(view), card: s.cardOffered(r.Context())}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }
 
@@ -141,7 +145,7 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 	}
 	ctx := r.Context()
 	f := &orderForm{action: "/order", areas: geo.Areas(p.v.country), values: map[string]string{}, errors: map[string]Msg{}}
-	for _, k := range append([]string{"key"}, formFields...) {
+	for _, k := range append([]string{"key", "pay_method"}, formFields...) {
 		f.values[k] = r.PostForm.Get(k)
 	}
 	req := OrderRequest{Key: f.values["key"], Name: f.values["name"], Phone: f.values["phone"], Governorate: f.values["governorate"],
@@ -160,6 +164,13 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 			return
 		}
 		f.summary = cartSummary(view)
+		f.card = s.cardOffered(ctx)
+		if f.value("pay_method") == "card" && !f.card {
+			f.problem = p.l.T(MsgErrCardUnavailable)
+			s.renderOrder(w, r, p, http.StatusConflict, f)
+			return
+		}
+		req.Card = f.payByCard()
 		for _, l := range view.Lines {
 			if !l.Available {
 				f.problem = p.l.T(MsgErrCartChanged)
@@ -253,7 +264,28 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 		s.setUnitsCookie(w, 0)
 	}
 	w.Header().Set("Cache-Control", noStore)
-	http.Redirect(w, r, p.localize(p.l, "/thank-you/"+ref), http.StatusSeeOther)
+	thanks := p.localize(p.l, "/thank-you/"+ref)
+	if req.Card {
+		// The thank-you page sends the shopper on to pay (ADR-0030): a
+		// redirect from here would put the API host and the gateway under
+		// this form's form-action.
+		thanks += "?pay=1"
+	}
+	http.Redirect(w, r, thanks, http.StatusSeeOther)
+}
+
+// cardOffered reports whether checkout offers card payment. A failed
+// check offers only cash on delivery: the order can still be placed.
+func (s *Shop) cardOffered(ctx context.Context) bool {
+	if s.payments == nil {
+		return false
+	}
+	on, err := s.payments.CardEnabled(ctx)
+	if err != nil {
+		s.log.WarnContext(ctx, "storefront: card payment check", "err", err)
+		return false
+	}
+	return on
 }
 
 // orderRisk applies the order limits. A limiter failure asks for a
