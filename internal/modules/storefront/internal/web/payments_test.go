@@ -6,19 +6,26 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 )
 
 // fakePayments takes cards when on; its pay URL names the store, the
-// order and the way back.
+// order and the way back. asked counts the checks, when set.
 type fakePayments struct {
-	on  bool
-	err error
+	on    bool
+	err   error
+	asked *atomic.Int64
 }
 
-func (p fakePayments) CardEnabled(context.Context) (bool, error) { return p.on, p.err }
+func (p fakePayments) CardEnabled(context.Context) (bool, error) {
+	if p.asked != nil {
+		p.asked.Add(1)
+	}
+	return p.on, p.err
+}
 
 func (fakePayments) PayURL(store, orderRef, back string) string {
 	return "https://app.test/v1/pay/" + store + "/" + orderRef + "?return=" + url.QueryEscape(back)
@@ -141,5 +148,35 @@ func TestCardQuote(t *testing.T) {
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("%s quote: %d %s, want %q", method, rec.Code, rec.Body.String(), want)
 		}
+	}
+}
+
+// TestCardCheckIsCached: the checkout page asks whether the store takes
+// cards once per cache period, not on every view; placing an order asks
+// every time (it decides), and an invalidation (the store connected or
+// disconnected a gateway) asks again at once.
+func TestCardCheckIsCached(t *testing.T) {
+	t.Parallel()
+	asked := &atomic.Int64{}
+	f := newCheckoutFixture(t, withCards(fakePayments{on: true, asked: asked}))
+	cookies, form := checkoutCart(t, f)
+	for range 3 {
+		if rec := f.getWith(t, "/checkout", cookies); rec.Code != http.StatusOK {
+			t.Fatalf("checkout = %d", rec.Code)
+		}
+	}
+	if n := asked.Load(); n != 1 {
+		t.Fatalf("asked %d times for 3 views, want 1", n)
+	}
+	form.Set("pay_method", "card")
+	f.post(t, "/checkout", form, cookies, nil)
+	if n := asked.Load(); n != 2 {
+		t.Fatalf("placing the order asked %d times in all, want 2 (it always asks)", n)
+	}
+	f.shop.Invalidate(f.store)
+	cookies, _ = checkoutCart(t, f)
+	f.getWith(t, "/checkout", cookies)
+	if n := asked.Load(); n != 3 {
+		t.Fatalf("after an invalidation: asked %d times, want 3", n)
 	}
 }

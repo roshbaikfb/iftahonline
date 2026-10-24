@@ -121,7 +121,7 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 		http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
 		return
 	}
-	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: cartSummary(view), card: s.cardOffered(r.Context())}
+	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: cartSummary(view), card: s.cardOffered(r.Context(), false)}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }
 
@@ -164,7 +164,7 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 			return
 		}
 		f.summary = cartSummary(view)
-		f.card = s.cardOffered(ctx)
+		f.card = s.cardOffered(ctx, true) // placing the order decides: never from the cache
 		if f.value("pay_method") == "card" && !f.card {
 			f.problem = p.l.T(MsgErrCardUnavailable)
 			s.renderOrder(w, r, p, http.StatusConflict, f)
@@ -274,17 +274,30 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 	http.Redirect(w, r, thanks, http.StatusSeeOther)
 }
 
-// cardOffered reports whether checkout offers card payment. A failed
-// check offers only cash on delivery: the order can still be placed.
-func (s *Shop) cardOffered(ctx context.Context) bool {
+// cardOffered reports whether checkout offers card payment. The page
+// reads it from the cache (TTL, and dropped when the store connects or
+// disconnects a gateway); placing the order asks (fresh). A failed check
+// offers only cash on delivery: the order can still be placed.
+func (s *Shop) cardOffered(ctx context.Context, fresh bool) bool {
 	if s.payments == nil {
 		return false
+	}
+	store, err := tenant.FromContext(ctx)
+	if err != nil {
+		return false
+	}
+	key := s.caches.prefix(store) + "cards"
+	if !fresh {
+		if on, ok := s.caches.cards.Get(key); ok {
+			return on
+		}
 	}
 	on, err := s.payments.CardEnabled(ctx)
 	if err != nil {
 		s.log.WarnContext(ctx, "storefront: card payment check", "err", err)
 		return false
 	}
+	s.caches.cards.Add(key, on)
 	return on
 }
 
