@@ -94,6 +94,13 @@ tags:
       the background. Connecting a gateway needs payments.manage (the
       owner), refunding payments.refund, reading orders.read. Amounts are
       integer minor units of the payment's currency.
+  - name: checkout
+    description: |
+      The shopper's card payment, through the platform's API host
+      (ADR-0030): the storefront never holds a merchant's gateway keys,
+      so it sends the shopper here after placing a card order. These are
+      browser redirects (303), not JSON operations; errors are problem
+      pages. The return URL must be on a host of the same store.
   - name: webhooks
     description: |
       Inbound webhooks from carriers and payment gateways (ADR-0024).
@@ -2282,6 +2289,57 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PaymentRefund" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/pay/{store_id}/{order_id}:
+    get:
+      tags: [checkout]
+      operationId: startCardPayment
+      summary: Send a card order's shopper to the gateway
+      description: |
+        Opens (or reuses, within 30 minutes) the gateway's hosted page for
+        a card order awaiting payment, and redirects there. When the order
+        no longer awaits a payment (paid, cancelled) or the store stopped
+        taking cards, it redirects straight to `return`. A `return` that
+        is not an http(s) URL on one of the store's hosts is 404, as are
+        unknown stores and orders. Rate-limited per client IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/StoreID"
+        - { name: order_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+        - name: return
+          in: query
+          required: true
+          description: Where the shopper ends up (the store's thank-you page).
+          schema: { type: string, maxLength: 2000 }
+      responses:
+        "303":
+          description: To the gateway's page, or back to `return`.
+          headers:
+            Location: { schema: { type: string } }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/pay/{store_id}/{order_id}/return/{to}:
+    get:
+      tags: [checkout]
+      operationId: finishCardPayment
+      summary: The gateway sends the shopper back
+      description: |
+        Asks the gateway about the order's payment now (bounded; the
+        webhook catches up otherwise), then redirects to `to`: the return
+        URL given to startCardPayment, base64url-encoded so the gateway's
+        own query parameters cannot change it. The same host check
+        applies.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/StoreID"
+        - { name: order_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+        - { name: to, in: path, required: true, schema: { type: string, maxLength: 2700 } }
+      responses:
+        "303":
+          description: Back to the store.
+          headers:
+            Location: { schema: { type: string } }
         default:
           $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:

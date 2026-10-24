@@ -172,6 +172,26 @@ func (s *Service) Refresh(ctx context.Context, id ulid.ID) (domain.Payment, erro
 	return s.payment(ctx, id)
 }
 
+// RefreshOrder asks the gateway about an order's open payments now (the
+// shopper is back from the hosted page), bounded by createTimeout while
+// they wait. A gateway that does not answer in time changes nothing: the
+// webhook, or the expiry's last inquiry, will.
+func (s *Service) RefreshOrder(ctx context.Context, orderID ulid.ID) error {
+	ps, err := s.OrderPayments(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	rctx, cancel := context.WithTimeout(ctx, createTimeout)
+	defer cancel()
+	var errList []error
+	for _, p := range ps {
+		if p.Status.Open() {
+			errList = append(errList, s.fetchAndApply(rctx, p))
+		}
+	}
+	return errors.Join(errList...)
+}
+
 // fetchAndApply asks the gateway about p and applies the answer.
 func (s *Service) fetchAndApply(ctx context.Context, p domain.Payment) error {
 	c, err := s.connection(ctx, p.ConnectionID)

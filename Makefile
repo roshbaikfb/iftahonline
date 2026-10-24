@@ -67,6 +67,7 @@ gen: dash-deps ## Regenerate code: oapi-codegen, sqlc, templ, TS client
 	go tool oapi-codegen -config api/oapi-codegen.orders.yaml api/openapi.yaml
 	go tool oapi-codegen -config api/oapi-codegen.shipping.yaml api/openapi.yaml
 	go tool oapi-codegen -config api/oapi-codegen.payments.yaml api/openapi.yaml
+	go tool oapi-codegen -config api/oapi-codegen.checkout.yaml api/openapi.yaml
 	go tool oapi-codegen -config api/oapi-codegen.webhooks.yaml api/openapi.yaml
 	$(SQLC) generate
 	go tool templ generate -path internal/server/views

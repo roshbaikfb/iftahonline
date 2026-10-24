@@ -8,6 +8,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -276,6 +277,15 @@ func (s *Service) connection(ctx context.Context, id ulid.ID) (store.SealedConne
 // WebhookURL is where the gateway notifies a connection's payments.
 func (s *Service) WebhookURL(storeID tenant.StoreID, c domain.Connection) string {
 	return strings.TrimRight(s.publicURL, "/") + "/v1/webhooks/" + c.Gateway + "/" + storeID.String() + "/" + c.ID.String()
+}
+
+// ReturnURL is where the gateway sends the shopper back after paying an
+// order: the API host's return route (ADR-0030), carrying the store's
+// thank-you URL base64url-encoded, so the gateway's own query
+// parameters cannot change it.
+func (s *Service) ReturnURL(storeID tenant.StoreID, orderID ulid.ID, back string) string {
+	return strings.TrimRight(s.publicURL, "/") + "/v1/pay/" + storeID.String() + "/" + orderID.String() + "/return/" +
+		base64.RawURLEncoding.EncodeToString([]byte(back))
 }
 
 // connectionAAD binds sealed credentials to their gateway, store and
