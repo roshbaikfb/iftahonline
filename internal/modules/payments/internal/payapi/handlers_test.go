@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,8 +73,19 @@ type fixture struct {
 	ctxA           context.Context
 }
 
-func newFixture(t *testing.T) fixture {
+// options change the fixture: a limiter whose Redis is down, a gateway
+// that fails in some way.
+type options struct {
+	limiterDown bool
+	wrap        func(gateway.Gateway) gateway.Gateway
+}
+
+func newFixture(t *testing.T, with ...func(*options)) fixture {
 	t.Helper()
+	var o options
+	for _, opt := range with {
+		opt(&o)
+	}
 	ctx := t.Context()
 	pool, err := pgxpool.New(ctx, infra.AppURL)
 	if err != nil {
@@ -85,6 +97,9 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	rdb := redis.NewClient(opts)
+	if o.limiterDown {
+		rdb = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: 100 * time.Millisecond, MaxRetries: -1})
+	}
 	t.Cleanup(func() { _ = rdb.Close() })
 	ids := ulid.NewGenerator()
 	limiter, err := ratelimit.New(rdb, "pay-"+strings.ToLower(ids.New().String()))
@@ -100,7 +115,11 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	f := fixture{gw: fake.NewWithCheckout(apiBase + payapi.FakeCheckoutPath), orders: paytest.NewOrders(), asked: &atomic.Int64{}}
-	f.svc = app.NewService(app.Deps{DB: pool, IDs: ids, Gateways: app.Gateways{fake.Name: countingGateway{Gateway: f.gw, asked: f.asked}}, Sealer: sealer, PublicURL: apiBase,
+	var gw gateway.Gateway = countingGateway{Gateway: f.gw, asked: f.asked}
+	if o.wrap != nil {
+		gw = o.wrap(gw)
+	}
+	f.svc = app.NewService(app.Deps{DB: pool, IDs: ids, Gateways: app.Gateways{fake.Name: gw}, Sealer: sealer, PublicURL: apiBase,
 		Orders: f.orders, Jobs: testkit.NewJobs(), Inbox: webhookstest.NewInbox()})
 	mk := func() tenant.StoreID {
 		id := tenant.StoreID{ID: ids.New()}
@@ -314,4 +333,55 @@ func TestReturnRateLimited(t *testing.T) {
 	if n := f.asked.Load(); n > 30 {
 		t.Fatalf("the gateway was asked %d times for 40 returns, want at most 30", n)
 	}
+}
+
+// downGateway creates no payments.
+type downGateway struct{ gateway.Gateway }
+
+func (downGateway) CreatePayment(context.Context, gateway.Credentials, gateway.PaymentRequest) (gateway.Checkout, error) {
+	return gateway.Checkout{}, errors.New("gateway timeout")
+}
+
+// TestFailures: whatever fails, the shopper is sent back to the store,
+// never left on the API host; a limiter that is down lets a checkout
+// start (the payment is reused) but skips the inquiry on the way back.
+func TestFailures(t *testing.T) {
+	t.Parallel()
+	t.Run("gateway down", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, func(o *options) { o.wrap = func(g gateway.Gateway) gateway.Gateway { return downGateway{g} } })
+		order := f.orders.Add(t, orders.PaymentCard, 0)
+		if rec := f.get(t, startPath(f.storeA, order, thanks(order))); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != thanks(order) {
+			t.Fatalf("start = %d %q, want back to the thank-you page", rec.Code, rec.Header().Get("Location"))
+		}
+	})
+	t.Run("limiter down", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, func(o *options) { o.limiterDown = true })
+		order := f.orders.Add(t, orders.PaymentCard, 0)
+		rec := f.get(t, startPath(f.storeA, order, thanks(order)))
+		if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), apiBase+payapi.FakeCheckoutPath) {
+			t.Fatalf("start = %d %q, want the gateway's page", rec.Code, rec.Header().Get("Location"))
+		}
+		before := f.asked.Load()
+		rec = f.get(t, strings.TrimPrefix(f.svc.ReturnURL(f.storeA, order, thanks(order)), apiBase))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != thanks(order) || f.asked.Load() != before {
+			t.Fatalf("return = %d %q, asked %d more, want back without an inquiry", rec.Code, rec.Header().Get("Location"), f.asked.Load()-before)
+		}
+	})
+	t.Run("bad requests", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		order := f.orders.Add(t, orders.PaymentCard, 0)
+		if rec := f.get(t, "/v1/pay/"+f.storeA.String()+"/"+order.String()); rec.Code != http.StatusBadRequest {
+			t.Errorf("no return = %d, want 400", rec.Code)
+		}
+		rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, payapi.FakeCheckoutPath+"unknown", strings.NewReader("answer=pay"))
+		rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, rq)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("answering an unknown payment = %d, want 404", rec.Code)
+		}
+	})
 }

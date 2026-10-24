@@ -620,3 +620,49 @@ func TestCODAPI(t *testing.T) {
 		}
 	}
 }
+
+// TestBadParameters: malformed IDs read as not found, malformed cursors
+// and filters as validation errors, never as a 500.
+func TestBadParameters(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	tests := []struct {
+		name, path string
+		want       int
+		field      string
+	}{
+		{"malformed shipment", "/shipments/nope", http.StatusNotFound, ""},
+		{"malformed label", "/shipments/nope/label", http.StatusNotFound, ""},
+		{"shipments cursor", "/shipments?cursor=nope", http.StatusUnprocessableEntity, "cursor"},
+		{"shipments cursor of another list's shape", "/shipments?cursor=1.01J9ZQ3W5Y8V4K2N6M7P0R1S2T", http.StatusUnprocessableEntity, "cursor"},
+		{"held cursor", "/cod/held?cursor=nope", http.StatusUnprocessableEntity, "cursor"},
+		{"shipments limit", "/shipments?limit=500", http.StatusUnprocessableEntity, "limit"},
+		{"held limit", "/cod/held?limit=500", http.StatusUnprocessableEntity, "limit"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, body := f.do(t, req(t, http.MethodGet, path(a, tt.path), tokOwnerA, ""))
+			if code != tt.want {
+				t.Fatalf("GET %s = %d %v, want %d", tt.path, code, body, tt.want)
+			}
+			if tt.field != "" && !strings.Contains(fmt.Sprint(body["errors"]), "field:"+tt.field+" ") {
+				t.Fatalf("errors = %v, want one on %s", body["errors"], tt.field)
+			}
+		})
+	}
+	// A malformed order filter matches nothing.
+	if code, page := f.do(t, req(t, http.MethodGet, path(a, "/shipments?order_id=nope"), tokOwnerA, "")); code != http.StatusOK || len(page["items"].([]any)) != 0 {
+		t.Fatalf("malformed order filter = %d %v", code, page)
+	}
+	// Paging through the held parcels with the cursor handed out.
+	code, page := f.do(t, req(t, http.MethodGet, path(a, "/cod/held?limit=1"), tokOwnerA, ""))
+	if code != http.StatusOK {
+		t.Fatalf("held = %d %v", code, page)
+	}
+	if next, ok := page["next_cursor"].(string); ok {
+		if code, _ = f.do(t, req(t, http.MethodGet, path(a, "/cod/held?limit=1&cursor="+next), tokOwnerA, "")); code != http.StatusOK {
+			t.Fatalf("held page 2 = %d", code)
+		}
+	}
+}
