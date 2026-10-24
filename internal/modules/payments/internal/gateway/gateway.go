@@ -136,6 +136,8 @@ type Gateway interface {
 	// the gateway has no transaction for yet is pending.
 	FetchStatus(ctx context.Context, creds Credentials, reference string, cur money.Currency) (Status, error)
 	// Refund refunds amount of a paid transaction; it returns the
-	// gateway's refund ID.
+	// gateway's refund ID. It sends the refund at most once: an answer
+	// that is lost is an error (not ErrRejected), never a second try, and
+	// the caller asks FetchStatus what was refunded before calling again.
 	Refund(ctx context.Context, creds Credentials, transactionID string, amount money.Money) (string, error)
 }

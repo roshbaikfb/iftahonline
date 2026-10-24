@@ -296,15 +296,15 @@ func (g *Gateway) Refund(ctx context.Context, creds gateway.Credentials, transac
 	if err != nil || amount.Amount() <= 0 {
 		return "", fmt.Errorf("%w: refund needs a Paymob transaction and a positive amount", gateway.ErrRejected)
 	}
+	// Sent once, never retried here: Paymob takes no idempotency key, and
+	// a refund whose answer was lost may have gone through. The caller
+	// asks the gateway what was refunded before trying again.
 	var out transaction
-	err = retry.Do(ctx, g.retry, func(ctx context.Context) error {
-		code, doErr := g.do(ctx, http.MethodPost, base+"/api/acceptance/void_refund/refund", "Token "+creds.SecretKey,
-			map[string]int64{"transaction_id": txn, "amount_cents": amount.Amount()}, &out)
-		if doErr == nil && code == http.StatusNotFound {
-			return retry.Permanent(fmt.Errorf("%w: no transaction %s", gateway.ErrRejected, transactionID))
-		}
-		return doErr
-	})
+	code, err := g.do(ctx, http.MethodPost, base+"/api/acceptance/void_refund/refund", "Token "+creds.SecretKey,
+		map[string]int64{"transaction_id": txn, "amount_cents": amount.Amount()}, &out)
+	if err == nil && code == http.StatusNotFound {
+		err = fmt.Errorf("%w: no transaction %s", gateway.ErrRejected, transactionID)
+	}
 	if err != nil {
 		return "", err
 	}
