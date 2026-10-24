@@ -113,15 +113,18 @@ has a Go type in `internal/sections/types.go` (`sections.Decode`).
 
 | Type | Settings |
 |---|---|
-| `hero` | `heading`, `subheading`, `button_label` + `button_link`, `image_product_id`, `align` |
-| `product_grid` | `title`, `source` (newest / category + `category_id` / manual + `product_ids` ≤ 24), `limit` ≤ 24 |
+| `hero` | `badge`, `heading`, `subheading`, `button_label` + `button_link` (a link alone shows "Shop now"), `image_product_id`, `align` |
+| `product_grid` | `title`, `source` (newest / category + `category_id` / manual + `product_ids` ≤ 24), `limit` ≤ 24, `layout` (grid / carousel) |
 | `product_landing` | `product_id`, `headline`, `highlights` (≤ 6), `show_description`, `cta_label` |
 | `reviews` | `title`, `items` (1–20 of `name`, `location`, `rating` 1–5, `text`) |
 | `faq` | `title`, `items` (1–30 of `question`, `answer`) |
 | `trust_badges` | `items` (1–6 of `icon` from shipping/cod/returns/secure/support/quality, `title`, `text`) |
 | `countdown` | `title`, `subtitle`, `ends_at` (RFC 3339), `hide_when_ended` |
+| `category_tiles` | `title`, `category_ids` (≤ 12; empty: the top categories), `limit` ≤ 12 |
+| `promo_tiles` | `items` (1–3 of `label`, `title`, `link`, `tone` amber/green/blue/primary) |
+| `whatsapp_cta` | `title`, `text`; shown only with the theme's WhatsApp number |
 
-**Links** are `/path` on the store or `https://…`, and nothing else.
+**Links** are `/path` on the store, `#s-<section id>` on the page, or `https://…`, and nothing else.
 **Empty texts** are filled at render time in the shopper's language.
 
 **Adding a type** takes:

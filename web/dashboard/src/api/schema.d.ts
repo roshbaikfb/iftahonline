@@ -2920,7 +2920,7 @@ export interface components {
             upload: components["schemas"]["PresignedUpload"];
         };
         /** @enum {string} */
-        SectionType: "hero" | "product_grid" | "product_landing" | "reviews" | "faq" | "trust_badges" | "countdown";
+        SectionType: "hero" | "product_grid" | "product_landing" | "reviews" | "faq" | "trust_badges" | "countdown" | "category_tiles" | "promo_tiles" | "whatsapp_cta";
         SectionTypeInfo: {
             type: components["schemas"]["SectionType"];
             /** @description JSON Schema 2020-12 of the settings; $refs point into `definitions`. */

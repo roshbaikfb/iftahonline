@@ -311,7 +311,7 @@ func TestHappyPath(t *testing.T) {
 
 	code, st := f.do(t, req(t, http.MethodGet, storePath(a, "/section-types"), tokOwnerA, ""))
 	items, _ := st["items"].([]any)
-	if code != http.StatusOK || len(items) != 7 || st["definitions"] == nil {
+	if code != http.StatusOK || len(items) != 10 || st["definitions"] == nil {
 		t.Fatalf("listSectionTypes = %d %v", code, st)
 	}
 	if first := items[0].(map[string]any); first["type"] != "hero" || first["schema"].(map[string]any)["title"] != "Hero" {

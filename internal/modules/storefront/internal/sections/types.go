@@ -15,6 +15,7 @@ import (
 
 // Hero is a large opening banner.
 type Hero struct {
+	Badge          string   `json:"badge"`
 	Heading        string   `json:"heading"`
 	Subheading     string   `json:"subheading"`
 	ButtonLabel    string   `json:"button_label"`
@@ -33,6 +34,7 @@ type ProductGrid struct {
 	CategoryID *ulid.ID  `json:"category_id"`
 	ProductIDs []ulid.ID `json:"product_ids"`
 	Limit      int       `json:"limit"`
+	Layout     string    `json:"layout"` // grid or carousel
 }
 
 // ProductLanding is one product, big.
@@ -90,6 +92,37 @@ type Countdown struct {
 	HideWhenEnded *bool     `json:"hide_when_ended"`
 }
 
+// MaxCategoryTiles is the most categories the tiles show (the schema's
+// maximum).
+const MaxCategoryTiles = 12
+
+// CategoryTiles links to categories: the listed ones, or the store's top
+// categories.
+type CategoryTiles struct {
+	Title       string    `json:"title"`
+	CategoryIDs []ulid.ID `json:"category_ids"`
+	Limit       int       `json:"limit"`
+}
+
+// PromoTile is one colored tile.
+type PromoTile struct {
+	Label string `json:"label"`
+	Title string `json:"title"`
+	Link  string `json:"link"`
+	Tone  string `json:"tone"` // amber, green, blue or primary
+}
+
+// PromoTiles shows one to three colored tiles.
+type PromoTiles struct {
+	Items []PromoTile `json:"items"`
+}
+
+// WhatsAppCTA invites shoppers to message the store.
+type WhatsAppCTA struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
+}
+
 // Decode turns stored settings into the type's Go value (Hero,
 // ProductGrid, ...), with schema defaults applied.
 func Decode(t domain.SectionType, raw json.RawMessage) (any, error) {
@@ -98,7 +131,7 @@ func Decode(t domain.SectionType, raw json.RawMessage) (any, error) {
 	case domain.SectionHero:
 		v = &Hero{Align: "center"}
 	case domain.SectionProductGrid:
-		v = &ProductGrid{Limit: 8}
+		v = &ProductGrid{Limit: 8, Layout: "grid"}
 	case domain.SectionProductLanding:
 		v = &ProductLanding{}
 	case domain.SectionReviews:
@@ -109,6 +142,12 @@ func Decode(t domain.SectionType, raw json.RawMessage) (any, error) {
 		v = &TrustBadges{}
 	case domain.SectionCountdown:
 		v = &Countdown{}
+	case domain.SectionCategoryTiles:
+		v = &CategoryTiles{Limit: 8}
+	case domain.SectionPromoTiles:
+		v = &PromoTiles{}
+	case domain.SectionWhatsAppCTA:
+		v = &WhatsAppCTA{}
 	default:
 		return nil, fmt.Errorf("sections: unknown type %q", t)
 	}

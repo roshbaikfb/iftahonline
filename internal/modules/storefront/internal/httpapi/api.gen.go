@@ -120,18 +120,23 @@ func (e PageInputStatus) Valid() bool {
 
 // Defines values for SectionType.
 const (
+	CategoryTiles  SectionType = "category_tiles"
 	Countdown      SectionType = "countdown"
 	Faq            SectionType = "faq"
 	Hero           SectionType = "hero"
 	ProductGrid    SectionType = "product_grid"
 	ProductLanding SectionType = "product_landing"
+	PromoTiles     SectionType = "promo_tiles"
 	Reviews        SectionType = "reviews"
 	TrustBadges    SectionType = "trust_badges"
+	WhatsappCta    SectionType = "whatsapp_cta"
 )
 
 // Valid indicates whether the value is a known member of the SectionType enum.
 func (e SectionType) Valid() bool {
 	switch e {
+	case CategoryTiles:
+		return true
 	case Countdown:
 		return true
 	case Faq:
@@ -142,9 +147,13 @@ func (e SectionType) Valid() bool {
 		return true
 	case ProductLanding:
 		return true
+	case PromoTiles:
+		return true
 	case Reviews:
 		return true
 	case TrustBadges:
+		return true
+	case WhatsappCta:
 		return true
 	default:
 		return false

@@ -6,9 +6,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "badge": { "description": "A short label above the heading, e.g. New collection.", "$ref": "defs.json#/$defs/line", "maxLength": 30 },
     "heading": { "description": "Empty shows the store's name.", "$ref": "defs.json#/$defs/line", "maxLength": 120 },
     "subheading": { "$ref": "defs.json#/$defs/line", "maxLength": 300 },
-    "button_label": { "$ref": "defs.json#/$defs/line", "maxLength": 40 },
+    "button_label": { "description": "Empty with a link shows the default (Shop now).", "$ref": "defs.json#/$defs/line", "maxLength": 40 },
     "button_link": { "$ref": "defs.json#/$defs/link" },
     "image_product_id": { "$ref": "defs.json#/$defs/id" },
     "align": { "enum": ["start", "center"], "default": "center" }

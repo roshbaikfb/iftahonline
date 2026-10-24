@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.iftahonline.com/storefront/category_tiles.json",
+  "title": "Category tiles",
+  "description": "Shop by category: chips on a phone, round tiles on a wide screen. Empty categories shows the store's top categories.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "title": { "$ref": "defs.json#/$defs/title" },
+    "category_ids": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "$ref": "defs.json#/$defs/id" }
+    },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 12, "default": 8 }
+  }
+}

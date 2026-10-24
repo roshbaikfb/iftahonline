@@ -78,6 +78,9 @@ func TestValidateSettings(t *testing.T) {
 		{"hero unknown field", domain.SectionHero, `{"script":"<script>"}`, []string{"script:unknown"}},
 		{"hero bad id", domain.SectionHero, `{"image_product_id":"not-an-id"}`, []string{"image_product_id:pattern"}},
 		{"hero bad align", domain.SectionHero, `{"align":"left"}`, []string{"align:enum"}},
+		{"hero badge", domain.SectionHero, `{"badge":"تشكيلة جديدة","button_link":"#s-newest"}`, nil},
+		{"hero badge too long", domain.SectionHero, `{"badge":"` + strings.Repeat("ع", 31) + `"}`, []string{"badge:maxLength"}},
+		{"hero bad in-page link", domain.SectionHero, `{"button_link":"#x\" onclick"}`, []string{"button_link:pattern"}},
 
 		{"grid newest", domain.SectionProductGrid, `{"source":"newest","limit":12,"title":"الأحدث"}`, nil},
 		{"grid category", domain.SectionProductGrid, `{"source":"category","category_id":"` + pid + `"}`, nil},
@@ -91,6 +94,8 @@ func TestValidateSettings(t *testing.T) {
 		// fail to render.
 		{"grid fractional-looking integer", domain.SectionProductGrid, `{"source":"newest","limit":8.0}`, []string{"limit:type"}},
 		{"reviews exponent rating", domain.SectionReviews, `{"items":[{"name":"a","rating":5e0,"text":"b"}]}`, []string{"items[0].rating:type"}},
+		{"grid carousel", domain.SectionProductGrid, `{"source":"newest","layout":"carousel"}`, nil},
+		{"grid bad layout", domain.SectionProductGrid, `{"source":"newest","layout":"masonry"}`, []string{"layout:enum"}},
 		{"grid duplicate ids", domain.SectionProductGrid, `{"source":"manual","product_ids":["` + pid + `","` + pid + `"]}`, []string{"product_ids:uniqueItems"}},
 
 		{"landing", domain.SectionProductLanding, `{"product_id":"` + pid + `","highlights":["قطن ١٠٠٪","شحن مجاني"],"show_description":false,"cta_label":"اطلب الآن"}`, nil},
@@ -113,6 +118,21 @@ func TestValidateSettings(t *testing.T) {
 		{"countdown lower-case date", domain.SectionCountdown, `{"ends_at":"2026-12-31t22:00:00z"}`, []string{"ends_at:invalid"}},
 		{"countdown leap second", domain.SectionCountdown, `{"ends_at":"2026-12-31T23:59:60Z"}`, []string{"ends_at:invalid"}},
 		{"countdown missing", domain.SectionCountdown, `{}`, []string{"ends_at:required"}},
+
+		{"category tiles top", domain.SectionCategoryTiles, `{}`, nil},
+		{"category tiles listed", domain.SectionCategoryTiles, `{"title":"تسوّق حسب التصنيف","category_ids":["` + pid + `"],"limit":6}`, nil},
+		{"category tiles too many", domain.SectionCategoryTiles, `{"limit":13}`, []string{"limit:maximum"}},
+		{"category tiles bad id", domain.SectionCategoryTiles, `{"category_ids":["x"]}`, []string{"category_ids[0]:pattern"}},
+
+		{"promo tiles", domain.SectionPromoTiles, `{"items":[{"label":"لفترة محدودة","title":"خصم 20% على التيشيرتات","link":"/c/tshirts","tone":"amber"},{"title":"إكسسوارات الشتاء","link":"/c/winter","tone":"green"}]}`, nil},
+		{"promo tiles none", domain.SectionPromoTiles, `{"items":[]}`, []string{"items:minItems"}},
+		{"promo tiles four", domain.SectionPromoTiles, `{"items":[{"title":"a","link":"/"},{"title":"b","link":"/"},{"title":"c","link":"/"},{"title":"d","link":"/"}]}`, []string{"items:maxItems"}},
+		{"promo tile needs a link", domain.SectionPromoTiles, `{"items":[{"title":"a"}]}`, []string{"items[0].link:required"}},
+		{"promo tile javascript", domain.SectionPromoTiles, `{"items":[{"title":"a","link":"javascript:x"}]}`, []string{"items[0].link:pattern"}},
+		{"promo tile bad tone", domain.SectionPromoTiles, `{"items":[{"title":"a","link":"/","tone":"neon"}]}`, []string{"items[0].tone:enum"}},
+
+		{"whatsapp", domain.SectionWhatsAppCTA, `{"title":"محتاج مساعدة؟","text":"كلّمنا على واتساب"}`, nil},
+		{"whatsapp line break", domain.SectionWhatsAppCTA, `{"text":"a\nb"}`, []string{"text:pattern"}},
 
 		{"not an object", domain.SectionFAQ, `[1,2]`, []string{":type"}},
 		{"not JSON", domain.SectionFAQ, `{`, []string{":invalid"}},
@@ -186,6 +206,9 @@ func FuzzValidateSettings(f *testing.F) {
 	f.Add("countdown", `{"ends_at":"2026-12-31T22:00:00Z"}`)
 	f.Add("faq", `{"items":[{"question":"q","answer":"a"}],"x":{"y":[1,2,{"z":null}]}}`)
 	f.Add("trust_badges", `{"items":[{"icon":"cod","title":"\u0000"}]}`)
+	f.Add("category_tiles", `{"category_ids":["`+pid+`"],"limit":3}`)
+	f.Add("promo_tiles", `{"items":[{"label":"x","title":"y","link":"#s-a","tone":"green"}]}`)
+	f.Add("whatsapp_cta", `{"title":"x","text":"y"}`)
 	f.Fuzz(func(t *testing.T, typ, raw string) {
 		st := domain.SectionType(typ)
 		fes := r.ValidateSettings(st, json.RawMessage(raw))

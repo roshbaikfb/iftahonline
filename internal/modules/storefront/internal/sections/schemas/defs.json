@@ -14,10 +14,10 @@
       "pattern": "^[^\\x00-\\x1f\\x7f]*$"
     },
     "link": {
-      "description": "Where a button goes: a path on the store (/p/shirt) or an https URL (https://wa.me/...). Nothing else, so no javascript: or data: links.",
+      "description": "Where a button goes: a path on the store (/p/shirt), a section of the page (#s-newest) or an https URL (https://wa.me/...). Nothing else, so no javascript: or data: links.",
       "type": "string",
       "maxLength": 500,
-      "pattern": "^(/([^/\\\\\\s][^\\s]*)?|https://[^\\s]+)$"
+      "pattern": "^(/([^/\\\\\\s][^\\s]*)?|#s-[a-z0-9_-]{1,40}|https://[^\\s]+)$"
     },
     "title": {
       "description": "A section heading; empty uses the default in the shopper's language.",
