@@ -58,9 +58,10 @@ type Options struct {
 
 // Gateway is the Paymob adapter.
 type Gateway struct {
-	base  string
-	http  *http.Client
-	retry retry.Policy
+	base   string
+	http   *http.Client
+	retry  retry.Policy
+	tokens *tokens
 }
 
 var _ gateway.Gateway = (*Gateway)(nil)
@@ -77,7 +78,7 @@ func New(o Options) *Gateway {
 	if o.Retry != nil {
 		p = *o.Retry
 	}
-	return &Gateway{base: strings.TrimRight(o.BaseURL, "/"), http: o.Client, retry: p}
+	return &Gateway{base: strings.TrimRight(o.BaseURL, "/"), http: o.Client, retry: p, tokens: newTokens()}
 }
 
 // Name implements gateway.Gateway.
@@ -161,6 +162,20 @@ func (g *Gateway) token(ctx context.Context, base string, creds gateway.Credenti
 		return "", retry.Permanent(gateway.ErrAuth)
 	}
 	return out.Token, nil
+}
+
+// inquiryToken is a cached auth token for inquiries, or a new one.
+func (g *Gateway) inquiryToken(ctx context.Context, base string, creds gateway.Credentials) (string, tokenKey, error) {
+	k := keyOf(base, creds.APIKey)
+	if tok, ok := g.tokens.get(k); ok {
+		return tok, k, nil
+	}
+	tok, err := g.token(ctx, base, creds)
+	if err != nil {
+		return "", k, err
+	}
+	g.tokens.put(k, tok)
+	return tok, k, nil
 }
 
 // NeedsIntegrationIDs implements gateway.IntegrationIDsNeeded: Paymob
@@ -252,12 +267,26 @@ func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, re
 	var t transaction
 	var found bool
 	err = retry.Do(ctx, g.retry, func(ctx context.Context) error {
-		tok, tokErr := g.token(ctx, base, creds)
+		tok, k, tokErr := g.inquiryToken(ctx, base, creds)
 		if tokErr != nil {
 			return tokErr
 		}
-		code, doErr := g.do(ctx, http.MethodPost, base+"/api/ecommerce/orders/transaction_inquiry", "Bearer "+tok,
-			map[string]string{"merchant_order_id": reference}, &t)
+		inquire := func(tok string) (int, error) {
+			return g.do(ctx, http.MethodPost, base+"/api/ecommerce/orders/transaction_inquiry", "Bearer "+tok,
+				map[string]string{"merchant_order_id": reference}, &t)
+		}
+		code, doErr := inquire(tok)
+		if errors.Is(doErr, gateway.ErrAuth) {
+			// The cached token expired: a new one, once (a bad API key
+			// fails at the token itself).
+			g.tokens.drop(k)
+			if tok, k, tokErr = g.inquiryToken(ctx, base, creds); tokErr != nil {
+				return tokErr
+			}
+			if code, doErr = inquire(tok); errors.Is(doErr, gateway.ErrAuth) {
+				g.tokens.drop(k)
+			}
+		}
 		found = code != http.StatusNotFound
 		return doErr
 	})
