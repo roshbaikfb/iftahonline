@@ -92,7 +92,7 @@ func (a *Assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 var fontFamilies = map[domain.Font]struct{ file, family string }{ //nolint:gochecknoglobals // constant lookup table
 	domain.FontCairo:      {"cairo", "Cairo"},
 	domain.FontTajawal:    {"tajawal", "Tajawal"},
-	domain.FontPlexArabic: {"ibm-plex-sans-arabic", "IBM Plex Sans Arabic"},
+	domain.FontPlexArabic: {"iftah-sans-arabic", "Iftah Sans Arabic"}, // IBM Plex Sans Arabic, subset and renamed (scripts/build-iftah-sans.py)
 	domain.FontNotoKufi:   {"noto-kufi-arabic", "Noto Kufi Arabic"},
 }
 
