@@ -90,6 +90,15 @@ type ordersAdapter struct{ f orders.Fulfilment }
 
 func (a *ordersAdapter) Order(ctx context.Context, id ulid.ID) (shipping.OrderInfo, error) {
 	o, err := a.f.Get(ctx, id)
+	return info(o, err)
+}
+
+func (a *ordersAdapter) OrderTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (shipping.OrderInfo, error) {
+	o, err := a.f.GetTx(ctx, tx, id)
+	return info(o, err)
+}
+
+func info(o orders.Order, err error) (shipping.OrderInfo, error) {
 	if err != nil {
 		return shipping.OrderInfo{}, shipping.ErrOrderUnknown
 	}
@@ -115,6 +124,19 @@ func newPlatform(t *testing.T) platform {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
+	// Orders and shipping get one connection between them: a job that
+	// holds a transaction and asks for a second connection deadlocks
+	// here, not in production under load.
+	oneCfg, err := pgxpool.ParseConfig(infra.AppURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oneCfg.MaxConns, oneCfg.MinConns = 1, 0
+	one, err := pgxpool.NewWithConfig(ctx, oneCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(one.Close)
 	opts, err := redis.ParseURL(infra.RedisURL)
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +182,7 @@ func newPlatform(t *testing.T) platform {
 		t.Fatal(err)
 	}
 	adapter := &ordersAdapter{}
-	ship, err := shipping.New(shipping.Deps{Pool: pool, IDs: ids, Redis: rdb, Log: log, Events: bus,
+	ship, err := shipping.New(shipping.Deps{Pool: one, IDs: ids, Redis: rdb, Log: log, Events: bus,
 		Carriers: config.Shipping{FakeCarrier: true}, Sealer: sealer, PublicURL: "https://app.example.com",
 		Orders: adapter, Jobs: ins, Objects: &labels{m: map[string][]byte{}}, Inbox: hooks.Inbox(),
 		Stores: func(context.Context) (shipping.StoreInfo, error) {
@@ -178,7 +200,7 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ord, err := orders.New(orders.Deps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+	ord, err := orders.New(orders.Deps{Pool: one, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
 		Shipping: ship.Quoter(), Auth: pol,
 		Stores: func(context.Context) (orders.StoreInfo, error) {
 			return orders.StoreInfo{Currency: money.EGP, Country: geo.EG, Location: time.UTC}, nil

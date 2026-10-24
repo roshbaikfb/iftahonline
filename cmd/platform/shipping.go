@@ -26,6 +26,16 @@ var _ shipping.Orders = (*shippingOrders)(nil)
 
 func (a *shippingOrders) Order(ctx context.Context, id ulid.ID) (shipping.OrderInfo, error) {
 	o, err := a.f.Get(ctx, id)
+	return orderInfo(o, err)
+}
+
+// OrderTx reads the order in the caller's transaction.
+func (a *shippingOrders) OrderTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (shipping.OrderInfo, error) {
+	o, err := a.f.GetTx(ctx, tx, id)
+	return orderInfo(o, err)
+}
+
+func orderInfo(o orders.Order, err error) (shipping.OrderInfo, error) {
 	if errors.Is(err, orders.ErrOrderNotFound) {
 		return shipping.OrderInfo{}, shipping.ErrOrderUnknown
 	}

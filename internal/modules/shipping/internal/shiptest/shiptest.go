@@ -59,6 +59,11 @@ func (o *Orders) Order(_ context.Context, id ulid.ID) (app.OrderInfo, error) {
 	return *info, nil
 }
 
+// OrderTx implements app.Orders.
+func (o *Orders) OrderTx(ctx context.Context, _ pgx.Tx, id ulid.ID) (app.OrderInfo, error) {
+	return o.Order(ctx, id)
+}
+
 // MoveTx implements app.Orders.
 func (o *Orders) MoveTx(_ context.Context, _ pgx.Tx, id ulid.ID, to, actor, _ string) (bool, error) {
 	o.mu.Lock()

@@ -73,6 +73,9 @@ type OrderInfo struct {
 // deliveries through shipping).
 type Orders interface {
 	Order(ctx context.Context, id ulid.ID) (OrderInfo, error)
+	// OrderTx is Order in the caller's transaction (the order locked until
+	// it ends): inside a transaction, Order would take a second connection.
+	OrderTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (OrderInfo, error)
 	MoveTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to, actor, note string) (bool, error)
 }
 
@@ -275,7 +278,7 @@ func (s *Service) applyTracking(ctx context.Context, tx pgx.Tx, id ulid.ID, tr c
 // it is there already). It reports false when the order refused a move,
 // and stops there.
 func (s *Service) moveOrderTx(ctx context.Context, tx pgx.Tx, sh domain.Shipment) (bool, error) {
-	o, err := s.orders.Order(ctx, sh.OrderID)
+	o, err := s.orders.OrderTx(ctx, tx, sh.OrderID)
 	if errors.Is(err, ErrOrderUnknown) {
 		return false, nil
 	}
