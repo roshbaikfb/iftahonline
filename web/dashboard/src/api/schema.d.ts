@@ -2872,6 +2872,16 @@ export interface components {
             font: "cairo" | "tajawal" | "ibm-plex-sans-arabic" | "noto-kufi-arabic" | "system";
             /** @enum {string} */
             radius: "none" | "small" | "medium" | "large";
+            /** @description The bar above the header (one line, e.g. free shipping over 1,000); empty shows none. */
+            announcement?: string;
+            /** @description A few words on the store, in the footer. */
+            about?: string;
+            /** @description How shoppers reach the store; empty fields are not shown. */
+            contact?: {
+                /** @description With its country code, e.g. +201012345678; stored in E.164. */
+                whatsapp?: string;
+                email?: string;
+            };
         };
         Theme: {
             settings: components["schemas"]["ThemeSettings"];

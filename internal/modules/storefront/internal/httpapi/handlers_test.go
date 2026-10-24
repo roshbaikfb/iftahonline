@@ -289,13 +289,24 @@ func TestHappyPath(t *testing.T) {
 	a := f.storeA
 
 	code, th := f.do(t, req(t, http.MethodGet, storePath(a, "/theme"), tokOwnerA, ""))
-	if code != http.StatusOK || th["version"] != float64(0) || th["settings"].(map[string]any)["font"] != "cairo" || th["updated_at"] != nil {
+	if code != http.StatusOK || th["version"] != float64(0) || th["settings"].(map[string]any)["font"] != "ibm-plex-sans-arabic" || th["updated_at"] != nil {
 		t.Fatalf("getStorefrontTheme = %d %v", code, th)
 	}
 	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, fmt.Sprintf(themeBody, 0)))
 	colors := th["settings"].(map[string]any)["colors"].(map[string]any)
 	if code != http.StatusOK || th["version"] != float64(1) || colors["primary"] != "#0f766e" || th["updated_at"] == nil {
 		t.Fatalf("updateStorefrontTheme = %d %v", code, th)
+	}
+	// The bar, the footer's words and the contact details round-trip,
+	// cleaned; a WhatsApp number without its country code is refused.
+	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":1,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"ibm-plex-sans-arabic","radius":"medium","announcement":"  شحن مجاني فوق 1,000 ج.م ","about":"قطن مصري","contact":{"whatsapp":"+20 101 234 5678","email":"Shop@Example.com"}}}`))
+	settings := th["settings"].(map[string]any)
+	if code != http.StatusOK || settings["announcement"] != "شحن مجاني فوق 1,000 ج.م" || settings["about"] != "قطن مصري" ||
+		fmt.Sprint(settings["contact"]) != "map[email:shop@example.com whatsapp:+201012345678]" {
+		t.Fatalf("theme texts and contact = %d %v", code, th)
+	}
+	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","contact":{"whatsapp":"01012345678"}}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "contact.whatsapp") {
+		t.Fatalf("a WhatsApp number without its country code = %d %v", bad, body)
 	}
 
 	code, st := f.do(t, req(t, http.MethodGet, storePath(a, "/section-types"), tokOwnerA, ""))

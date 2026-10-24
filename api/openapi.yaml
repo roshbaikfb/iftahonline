@@ -3305,6 +3305,20 @@ components:
         radius:
           type: string
           enum: [none, small, medium, large]
+        announcement:
+          type: string
+          maxLength: 120
+          description: The bar above the header (one line, e.g. free shipping over 1,000); empty shows none.
+        about:
+          type: string
+          maxLength: 300
+          description: A few words on the store, in the footer.
+        contact:
+          type: object
+          description: How shoppers reach the store; empty fields are not shown.
+          properties:
+            whatsapp: { type: string, maxLength: 32, description: "With its country code, e.g. +201012345678; stored in E.164." }
+            email: { type: string, maxLength: 254 }
     Theme:
       type: object
       required: [settings, version]

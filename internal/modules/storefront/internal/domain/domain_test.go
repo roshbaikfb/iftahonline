@@ -49,6 +49,15 @@ func TestValidateTheme(t *testing.T) {
 		{"low contrast", func(s *domain.ThemeSettings) { s.Colors.Text, s.Colors.Background = "#777777", "#888888" }, []string{"colors.text:low_contrast"}},
 		{"dark theme", func(s *domain.ThemeSettings) { s.Colors.Text, s.Colors.Background = "#f9fafb", "#111827" }, nil},
 		{"bad font and radius", func(s *domain.ThemeSettings) { s.Font, s.Radius = "comic-sans", "huge" }, []string{"font:invalid", "radius:invalid"}},
+		{"announcement, about and contact", func(s *domain.ThemeSettings) {
+			s.Announcement, s.About = "  شحن مجاني فوق 1,000 ج.م  ", "قطن مصري 100%"
+			s.Contact = domain.Contact{WhatsApp: "+20 101 234 5678", Email: " Shop@Example.com "}
+		}, nil},
+		{"announcement too long", func(s *domain.ThemeSettings) { s.Announcement = strings.Repeat("x", domain.MaxAnnouncement+1) }, []string{"announcement:too_long"}},
+		{"about too long", func(s *domain.ThemeSettings) { s.About = strings.Repeat("ب", domain.MaxAbout+1) }, []string{"about:too_long"}},
+		{"whatsapp without country code", func(s *domain.ThemeSettings) { s.Contact.WhatsApp = "01012345678" }, []string{"contact.whatsapp:invalid"}},
+		{"whatsapp not a number", func(s *domain.ThemeSettings) { s.Contact.WhatsApp = "+20 abc" }, []string{"contact.whatsapp:invalid"}},
+		{"bad email", func(s *domain.ThemeSettings) { s.Contact.Email = "not-an-email" }, []string{"contact.email:invalid"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -63,6 +72,29 @@ func TestValidateTheme(t *testing.T) {
 				t.Fatalf("primary not normalized: %q", out.Colors.Primary)
 			}
 		})
+	}
+}
+
+// TestThemeTextsAreCleaned: the texts are one trimmed line and the
+// contact details normalized, so the footer and links can use them as
+// they are.
+func TestThemeTextsAreCleaned(t *testing.T) {
+	t.Parallel()
+	in := domain.DefaultTheme()
+	in.Announcement, in.About = "  شحن مجاني \n فوق 1,000  ", "\u200bقطن مصري"
+	in.Contact = domain.Contact{WhatsApp: "00966 50 123 4567", Email: " Shop@Example.COM "}
+	out, err := domain.ValidateTheme(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Announcement != "شحن مجاني فوق 1,000" || out.About != "قطن مصري" {
+		t.Fatalf("texts %q / %q", out.Announcement, out.About)
+	}
+	if out.Contact.WhatsApp != "+966501234567" || out.Contact.Email != "shop@example.com" {
+		t.Fatalf("contact %+v", out.Contact)
+	}
+	if def := domain.DefaultTheme(); def.Font != domain.FontPlexArabic || def.Colors.Primary != "#0f2e52" || def.Colors.Accent != "#15803d" {
+		t.Fatalf("default theme %+v", def)
 	}
 }
 
