@@ -50,6 +50,7 @@ type caches struct {
 	cfg   CacheConfig
 	pages *expirable.LRU[string, cached]
 	views *expirable.LRU[string, *storeView]
+	cards *expirable.LRU[string, bool] // whether a store takes cards (checkout)
 
 	mu   sync.Mutex
 	gens map[tenant.StoreID]uint64 // only stores invalidated since start: bounded by the number of stores
@@ -60,6 +61,7 @@ func newCaches(cfg CacheConfig) *caches {
 		cfg:   cfg,
 		pages: expirable.NewLRU[string, cached](cfg.Pages, nil, cfg.TTL),
 		views: expirable.NewLRU[string, *storeView](cfg.Views, nil, cfg.TTL),
+		cards: expirable.NewLRU[string, bool](cfg.Views, nil, cfg.TTL),
 		gens:  map[tenant.StoreID]uint64{},
 	}
 }

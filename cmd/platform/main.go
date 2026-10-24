@@ -207,6 +207,11 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(shipping.EventRatesChanged, shipping.InvalidateSubscriber, shipping.InvalidateHandler(rdb)); err != nil {
 		return clients{}, err
 	}
+	// A gateway connected or disconnected: whether checkout offers cards.
+	// Checkout is private (never at the edge): the instances' caches only.
+	if err = bus.Subscribe(payments.EventConnectionChanged, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
 	watch := &lateHandler{}
 	if err = bus.Subscribe(orders.EventOrderPlaced, payments.WatchOrdersSubscriber, watch.Handle); err != nil {
 		return clients{}, err
