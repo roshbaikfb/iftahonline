@@ -33,6 +33,9 @@ export function Layout({ storeId, children }: { storeId: string; children: React
           <Link to={`/stores/${storeId}/shipments`}>الشحنات</Link>
           <Link to={`/stores/${storeId}/shipping`}>مناطق الشحن</Link>
           <Link to={`/stores/${storeId}/carriers`}>شركات الشحن</Link>
+          <Link to={`/stores/${storeId}/cod`}>التحصيل</Link>
+          <Link to={`/stores/${storeId}/payments`}>المدفوعات</Link>
+          <Link to={`/stores/${storeId}/gateways`}>الدفع بالبطاقة</Link>
         </nav>
         {memberships.length > 1 && (
           <select
