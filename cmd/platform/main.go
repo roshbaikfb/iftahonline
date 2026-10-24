@@ -207,9 +207,12 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(shipping.EventRatesChanged, shipping.InvalidateSubscriber, shipping.InvalidateHandler(rdb)); err != nil {
 		return clients{}, err
 	}
-	// A gateway connected or disconnected: whether checkout offers cards.
-	// Checkout is private (never at the edge): the instances' caches only.
+	// A gateway connected or disconnected: whether checkout offers cards,
+	// and the payment methods every page's footer lists (so the edge too).
 	if err = bus.Subscribe(payments.EventConnectionChanged, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
+	if err = bus.Subscribe(payments.EventConnectionChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
 		return clients{}, err
 	}
 	watch := &lateHandler{}

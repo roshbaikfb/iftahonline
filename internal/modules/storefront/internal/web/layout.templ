@@ -43,8 +43,25 @@ templ layout(p *pageCtx, body templ.Component) {
 		</head>
 		<body>
 			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>
+			if p.v.theme.Announcement != "" {
+				<div class="announce">{ p.v.theme.Announcement }</div>
+			}
 			<header class="top">
-				<div class="wrap">
+				<div class="wrap bar">
+					if cats := p.v.topCategories(); len(cats) > 0 {
+						<details class="menu">
+							<summary>
+								@icon("menu")
+								<span class="sr">{ p.l.T(MsgMenu) }</span>
+							</summary>
+							<nav aria-label={ p.l.T(MsgMenu) }>
+								<a href={ p.URL("/") }>{ p.l.T(MsgHome) }</a>
+								for _, c := range cats {
+									<a href={ p.URL(categoryPath(c.Slug)) }>{ c.Name }</a>
+								}
+							</nav>
+						</details>
+					}
 					<a class="brand" href={ p.URL("/") }>
 						if p.v.logo != nil {
 							<picture>
@@ -55,35 +72,91 @@ templ layout(p *pageCtx, body templ.Component) {
 							{ p.v.name }
 						}
 					</a>
-					<nav class="nav" aria-label={ p.l.T(MsgProducts) }>
-						for _, c := range p.v.topCategories() {
-							<a href={ p.URL(categoryPath(c.Slug)) }>{ c.Name }</a>
+					<div class="tools">
+						<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
+							{ p.l.Other().T(MsgLanguageName) }
+						</a>
+						<a class="cartlink" href={ p.URL("/cart") }>
+							@icon("bag")
+							<span class="lbl">{ p.l.T(MsgCart) }</span>
+							<span class="count" data-cart-count hidden></span>
+						</a>
+					</div>
+				</div>
+				if cats := p.v.topCategories(); len(cats) > 0 {
+					<nav class="wrap cats" aria-label={ p.l.T(MsgProducts) }>
+						@navLink(p, "/", p.l.T(MsgHome))
+						for _, c := range cats {
+							@navLink(p, categoryPath(c.Slug), c.Name)
 						}
 					</nav>
-					<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
-						{ p.l.Other().T(MsgLanguageName) }
-					</a>
-					<a class="cartlink" href={ p.URL("/cart") }>
-						{ p.l.T(MsgCart) }
-						<span class="badge" data-cart-count hidden></span>
-					</a>
-				</div>
+				}
 			</header>
 			<main id="main" class="wrap">
 				@body
 			</main>
-			<footer class="foot">
-				<div class="wrap">
-					if len(p.v.policies) > 0 {
-						<ul>
-							for _, pol := range p.v.policies {
-								<li><a href={ p.URL("/policies/" + pol.Slug) }>{ p.policyTitle(pol.Title, pol.Slug) }</a></li>
-							}
-						</ul>
-					}
-					<small>© { p.v.name } · { p.l.T(MsgPoweredBy) }</small>
-				</div>
-			</footer>
+			@footer(p)
 		</body>
 	</html>
+}
+
+templ navLink(p *pageCtx, path, label string) {
+	if p.active(path) {
+		<a href={ p.URL(path) } aria-current="page">{ label }</a>
+	} else {
+		<a href={ p.URL(path) }>{ label }</a>
+	}
+}
+
+// footer: what the store is, its policies, how to reach it and how
+// shoppers can pay. Columns with nothing to say are left out.
+templ footer(p *pageCtx) {
+	<footer class="foot">
+		<div class="wrap cols">
+			<div>
+				<strong class="name">{ p.v.name }</strong>
+				if p.v.theme.About != "" {
+					<p>{ p.v.theme.About }</p>
+				}
+			</div>
+			if len(p.v.policies) > 0 {
+				<div>
+					<h2>{ p.l.T(MsgHelp) }</h2>
+					<ul>
+						for _, pol := range p.v.policies {
+							<li><a href={ p.URL("/policies/" + pol.Slug) }>{ p.policyTitle(pol.Title, pol.Slug) }</a></li>
+						}
+					</ul>
+				</div>
+			}
+			if c := p.v.theme.Contact; c.WhatsApp != "" || c.Email != "" {
+				<div>
+					<h2>{ p.l.T(MsgContactUs) }</h2>
+					<ul>
+						if c.WhatsApp != "" {
+							<li>{ p.l.T(MsgWhatsApp) }: <a href={ waLink(c.WhatsApp) } dir="ltr">{ c.WhatsApp }</a></li>
+						}
+						if c.Email != "" {
+							<li>{ p.l.T(MsgEmail) }: <a href={ mailto(c.Email) }>{ c.Email }</a></li>
+						}
+					</ul>
+				</div>
+			}
+			<div>
+				<h2>{ p.l.T(MsgPaymentMethods) }</h2>
+				<ul>
+					<li>{ p.l.T(MsgBadgeCOD) }</li>
+					if p.v.cards {
+						<li>{ cardBrands(p.l, p.v.country) }</li>
+					}
+				</ul>
+			</div>
+		</div>
+		<p class="copy">© { p.v.name } · { p.l.T(MsgPoweredBy) }</p>
+	</footer>
+}
+
+// icon is one of our own line icons.
+templ icon(name string) {
+	@templ.Raw(iconSVG(name))
 }

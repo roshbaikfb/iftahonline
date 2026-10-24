@@ -57,6 +57,7 @@ type storeView struct {
 	logo       *logoView
 	categories []catalog.Category
 	policies   []domain.Page
+	cards      bool // checkout offers card payment: the footer says so
 }
 
 type logoView struct {
@@ -118,6 +119,7 @@ func (s *Shop) buildView(ctx context.Context) (*storeView, error) {
 		name: st.Name, country: country, locale: ParseLocale(string(st.Locale)), theme: content.Theme,
 		categories: cats, policies: content.Policies,
 	}
+	v.cards = s.cardOffered(ctx, false)
 	v.css = s.assets.themeCSS(content.Theme)
 	v.styleHash = styleHash(v.css)
 	if lg := content.Logo; lg != nil {
@@ -132,6 +134,22 @@ func (s *Shop) buildView(ctx context.Context) (*storeView, error) {
 		v.logo = &logoView{avif: s.signer.URL(lg.ObjectKey, logoBox, "avif"), webp: s.signer.URL(lg.ObjectKey, logoBox, "webp"), width: w, height: h}
 	}
 	return v, nil
+}
+
+// cardBrands names the cards a store in country takes through its
+// gateway: Visa and Mastercard everywhere, and the local scheme where
+// there is one (Meeza in Egypt, mada in Saudi Arabia).
+func cardBrands(l Locale, country geo.Country) string {
+	local := map[geo.Country][2]string{geo.EG: {"ميزة", "Meeza"}, geo.SA: {"مدى", "mada"}}[country]
+	brands := "Visa · Mastercard"
+	switch {
+	case local[0] == "":
+	case l == English:
+		brands += " · " + local[1]
+	default:
+		brands += " · " + local[0]
+	}
+	return brands
 }
 
 // paragraphs splits plain text into paragraphs at blank lines.

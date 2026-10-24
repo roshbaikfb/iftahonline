@@ -136,6 +136,21 @@ const (
 	MsgPayNow
 	MsgPaymentExpired
 	MsgErrCardUnavailable
+	MsgMenu
+	MsgShopNow
+	MsgShopByCategory
+	MsgAll
+	MsgSalePercent
+	MsgSoldOutShort
+	MsgViewAll
+	MsgHelp
+	MsgContactUs
+	MsgPaymentMethods
+	MsgWhatsAppHelp
+	MsgWhatsAppHelpText
+	MsgContact
+	MsgWhatsApp
+	MsgEmail
 	msgCount
 )
 
@@ -164,7 +179,7 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgNotFoundText:      {"ربما نُقلت هذه الصفحة أو لم تعد متاحة.", "This page may have moved or is no longer available."},
 	MsgBackHome:          {"العودة إلى المتجر", "Back to the store"},
 	MsgLanguageName:      {"العربية", "English"},
-	MsgPoweredBy:         {"يعمل بواسطة iftahonline", "Powered by iftahonline"},
+	MsgPoweredBy:         {"بمنصة افتح أونلاين", "Powered by iftahonline"},
 	MsgRatingOf:          {"التقييم %d من 5", "Rated %d out of 5"},
 	MsgSkipToContent:     {"انتقل إلى المحتوى", "Skip to content"},
 	MsgPolicyShipping:    {"سياسة الشحن", "Shipping policy"},
@@ -231,6 +246,21 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgPayNow:             {"ادفع الآن", "Pay now"},
 	MsgPaymentExpired:     {"انتهت مهلة الدفع وأُلغي الطلب. يمكنك الطلب من جديد.", "The payment window passed and the order was cancelled. You can order again."},
 	MsgErrCardUnavailable: {"الدفع بالبطاقة غير متاح حاليًا؛ اختر الدفع عند الاستلام.", "Card payment is not available right now; please choose cash on delivery."},
+	MsgMenu:               {"القائمة", "Menu"},
+	MsgShopNow:            {"تسوّق الآن", "Shop now"},
+	MsgShopByCategory:     {"تسوّق حسب التصنيف", "Shop by category"},
+	MsgAll:                {"الكل", "All"},
+	MsgSalePercent:        {"خصم %d%%", "%d%% off"},
+	MsgSoldOutShort:       {"نفد", "Sold out"},
+	MsgViewAll:            {"عرض الكل", "View all"},
+	MsgHelp:               {"المساعدة", "Help"},
+	MsgContactUs:          {"تواصل معنا", "Contact us"},
+	MsgPaymentMethods:     {"طرق الدفع", "Payment methods"},
+	MsgWhatsAppHelp:       {"محتاج مساعدة في الطلب؟", "Need help with your order?"},
+	MsgWhatsAppHelpText:   {"كلّمنا على واتساب ونرد عليك بسرعة", "Message us on WhatsApp and we will reply quickly"},
+	MsgContact:            {"تواصل", "Chat"},
+	MsgWhatsApp:           {"واتساب", "WhatsApp"},
+	MsgEmail:              {"البريد", "Email"},
 }
 
 // T returns the message in l.

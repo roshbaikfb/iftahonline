@@ -33,7 +33,7 @@ templ picture(img image, sizes string, eager bool) {
 }
 
 templ price(pv priceView) {
-	<span class="price" data-price>
+	<span class={ "price", templ.KV("sale", pv.compare != "") } data-price>
 		{ pv.price }
 		if pv.compare != "" {
 			<s>{ pv.compare }</s>
@@ -41,19 +41,33 @@ templ price(pv priceView) {
 	</span>
 }
 
+// card is a product in a list: picture with a sold-out or discount tag,
+// title, price, and on wide screens an add-to-cart button (a form when
+// there is nothing to choose, else a link to the product).
 templ card(p *pageCtx, pr catalog.StorefrontProduct) {
-	<a class="card" href={ p.URL(productPath(pr.Slug)) }>
-		<div class="ph">
+	<div class="card">
+		<a class="ph" href={ p.URL(productPath(pr.Slug)) } tabindex="-1" aria-hidden="true">
 			if img := imageOf(pr); img != nil {
 				@picture(*img, "(min-width: 48rem) 25vw, 50vw", p.eager())
 			}
 			if !pr.Available() {
-				<span class="badge">{ p.l.T(MsgSoldOut) }</span>
+				<span class="tag out">{ p.l.T(MsgSoldOutShort) }</span>
+			} else if pct := salePercent(pr.PriceFrom()); pct > 0 {
+				<span class="tag">{ fmt.Sprintf(p.l.T(MsgSalePercent), pct) }</span>
 			}
-		</div>
-		<h3>{ pr.Title }</h3>
+		</a>
+		<a class="name" href={ p.URL(productPath(pr.Slug)) }>{ pr.Title }</a>
 		@price(p.priceOf(pr.PriceFrom()))
-	</a>
+		if pr.Available() && len(pr.Variants) == 1 {
+			<form class="add" method="post" action={ p.URL("/cart") }>
+				<input type="hidden" name="variant" value={ pr.Variants[0].ID.String() }/>
+				<input type="hidden" name="qty" value="1"/>
+				<button type="submit">{ p.l.T(MsgAddToCart) }</button>
+			</form>
+		} else if pr.Available() {
+			<a class="add" href={ p.URL(productPath(pr.Slug)) }>{ p.l.T(MsgAddToCart) }</a>
+		}
+	</div>
 }
 
 // buyForm picks a variant and quantity. It posts to the cart; without
@@ -86,10 +100,15 @@ templ buyForm(p *pageCtx, pr catalog.StorefrontProduct, cta string) {
 	</form>
 }
 
+// sectionsPage lays sections out in a wrapping row: each takes the
+// full width, except that a hero and promo tiles after it share one
+// line on wide screens.
 templ sectionsPage(p *pageCtx, secs []sectionView) {
-	for i, s := range secs {
-		@section(p, s, i == 0)
-	}
+	<div class="secs">
+		for i, s := range secs {
+			@section(p, s, i == 0)
+		}
+	</div>
 	if len(secs) == 0 {
 		<p class="empty">{ p.l.T(MsgNoProducts) }</p>
 	}
@@ -98,9 +117,31 @@ templ sectionsPage(p *pageCtx, secs []sectionView) {
 templ section(p *pageCtx, s sectionView, first bool) {
 	switch {
 		case s.hero != nil:
-			@hero(p, s.hero, first)
+			@hero(p, s.id, s.hero, first)
 		case s.grid != nil:
-			@grid(p, s.grid)
+			@grid(p, s.id, s.grid)
+		case s.cats != nil:
+			@categoryTiles(p, s.id, s.cats)
+		case s.promos != nil:
+			<section class="promos" id={ "s-" + s.id }>
+				for _, t := range s.promos.Items {
+					<a class="promo" data-tone={ orString(t.Tone, "amber") } href={ p.link(t.Link) }>
+						if t.Label != "" {
+							<span>{ t.Label }</span>
+						}
+						<strong>{ t.Title }</strong>
+					</a>
+				}
+			</section>
+		case s.whatsapp != nil:
+			<section class="wa" id={ "s-" + s.id }>
+				@icon("chat")
+				<div>
+					<strong>{ p.l.Or(s.whatsapp.Title, MsgWhatsAppHelp) }</strong>
+					<p>{ p.l.Or(s.whatsapp.Text, MsgWhatsAppHelpText) }</p>
+				</div>
+				<a href={ waLink(p.v.theme.Contact.WhatsApp) } rel="noopener" target="_blank">{ p.l.T(MsgContact) }</a>
+			</section>
 		case s.landing != nil:
 			@productLanding(p, s.landing, first)
 		case s.reviews != nil:
@@ -135,11 +176,15 @@ templ section(p *pageCtx, s sectionView, first bool) {
 			<section class="sec badges" id={ "s-" + s.id }>
 				for _, b := range s.badges.Items {
 					<div>
-						@badgeIcon(b.Icon)
-						<strong>{ orString(b.Title, p.l.BadgeTitle(b.Icon)) }</strong>
-						if b.Text != "" {
-							<span>{ b.Text }</span>
-						}
+						<i>
+							@badgeIcon(b.Icon)
+						</i>
+						<p>
+							<strong>{ orString(b.Title, p.l.BadgeTitle(b.Icon)) }</strong>
+							if b.Text != "" {
+								<span>{ b.Text }</span>
+							}
+						</p>
 					</div>
 				}
 			</section>
@@ -148,42 +193,74 @@ templ section(p *pageCtx, s sectionView, first bool) {
 	}
 }
 
-templ hero(p *pageCtx, h *heroView, first bool) {
-	<section class="sec hero" data-align={ orString(h.cfg.Align, "center") }>
+// hero is a banner card: the picture under a scrim, then a tag, the
+// heading, a line and the button. A link without a label reads "Shop
+// now".
+templ hero(p *pageCtx, id string, h *heroView, first bool) {
+	<section class={ "sec", "hero", templ.KV("pic", h.image != nil) } id={ "s-" + id } data-align={ orString(h.cfg.Align, "center") }>
 		if h.image != nil {
-			@picture(*h.image, "100vw", p.eager())
+			@picture(*h.image, "(min-width: 48rem) 66vw, 100vw", p.eager())
 		}
-		if first {
-			<h1>{ orString(h.cfg.Heading, p.v.name) }</h1>
-		} else {
-			<h2>{ orString(h.cfg.Heading, p.v.name) }</h2>
-		}
-		if h.cfg.Subheading != "" {
-			<p>{ h.cfg.Subheading }</p>
-		}
-		if h.cfg.ButtonLabel != "" && h.cfg.ButtonLink != "" {
-			<a class="btn" href={ p.link(h.cfg.ButtonLink) }>{ h.cfg.ButtonLabel }</a>
-		}
+		<div class="txt">
+			if h.cfg.Badge != "" {
+				<span class="pill">{ h.cfg.Badge }</span>
+			}
+			if first {
+				<h1>{ orString(h.cfg.Heading, p.v.name) }</h1>
+			} else {
+				<h2>{ orString(h.cfg.Heading, p.v.name) }</h2>
+			}
+			if h.cfg.Subheading != "" {
+				<p>{ h.cfg.Subheading }</p>
+			}
+			if h.cfg.ButtonLink != "" {
+				<a class="btn" href={ p.link(h.cfg.ButtonLink) }>{ p.l.Or(h.cfg.ButtonLabel, MsgShopNow) }</a>
+			}
+		</div>
 	</section>
 }
 
-templ grid(p *pageCtx, g *gridView) {
-	<section class="sec">
-		if g.title != "" {
-			<h2>{ g.title }</h2>
+// grid is products in rows, or in one row that scrolls sideways.
+templ grid(p *pageCtx, id string, g *gridView) {
+	<section class="sec" id={ "s-" + id }>
+		if g.title != "" || g.more != "" {
+			<div class="head">
+				if g.title != "" {
+					<h2>{ g.title }</h2>
+				}
+				if g.more != "" {
+					<a href={ p.URL(g.more) }>{ p.l.T(MsgViewAll) }</a>
+				}
+			</div>
 		}
 		if len(g.products) == 0 {
 			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
 		} else {
-			<div class="grid">
+			<div class={ "grid", templ.KV("row", g.carousel) }>
 				for _, pr := range g.products {
 					@card(p, pr)
 				}
 			</div>
 		}
-		if g.more != "" {
-			<p class="more"><a href={ p.URL(g.more) }>{ p.l.T(MsgShowMore) }</a></p>
-		}
+	</section>
+}
+
+// categoryTiles: chips that scroll sideways on phones ("All" first, for
+// the page being shown), round tiles with the name's initial on wide
+// screens.
+templ categoryTiles(p *pageCtx, id string, c *catsView) {
+	<section class="sec tiles" id={ "s-" + id }>
+		<h2>{ p.l.Or(c.title, MsgShopByCategory) }</h2>
+		<nav aria-label={ p.l.Or(c.title, MsgShopByCategory) }>
+			if p.active("/") {
+				<a class="all" href={ p.URL("/") } aria-current="page">{ p.l.T(MsgAll) }</a>
+			} else {
+				<a class="all" href={ p.URL("/") }>{ p.l.T(MsgAll) }</a>
+			}
+			for _, cat := range c.cats {
+				<a href={ p.URL(categoryPath(cat.Slug)) }><i aria-hidden="true">{ initial(cat.Name) }</i>{ cat.Name }</a>
+			}
+		</nav>
 	</section>
 }
 

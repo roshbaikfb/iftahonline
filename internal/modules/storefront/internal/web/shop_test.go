@@ -463,7 +463,7 @@ func TestHomeArabicAndEnglish(t *testing.T) {
 		`<html lang="ar" dir="rtl">`, "<title>متجر منى</title>",
 		`<h1>متجر منى</h1>`,                                     // hero heading defaults to the store name
 		"وصل حديثًا", "تيشيرت قطن", "150 ج.م", "<s>200 ج.م</s>", // newest grid, price and compare-at
-		"نفدت الكمية",                                   // the cap is sold out
+		`<span class="tag out">نفد</span>`, `<span class="tag">خصم 25%</span>`, // the cap is sold out; the shirt is 150 instead of 200
 		"الدفع عند الاستلام", "شحن سريع", "استرجاع سهل", // default badges in Arabic
 		`href="/c/tshirts"`, `href="/p/cotton-tee"`,
 		`hreflang="en" href="https://mona.iftahonline.com/en/"`, `rel="canonical" href="https://mona.iftahonline.com/"`,

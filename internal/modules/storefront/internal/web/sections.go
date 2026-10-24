@@ -26,6 +26,9 @@ type sectionView struct {
 	faq       *sections.FAQ
 	badges    *sections.TrustBadges
 	countdown *countdownView
+	cats      *catsView
+	promos    *sections.PromoTiles
+	whatsapp  *sections.WhatsAppCTA
 }
 
 type heroView struct {
@@ -37,6 +40,14 @@ type gridView struct {
 	title    string
 	products []catalog.StorefrontProduct
 	more     string // link to all of them, when the grid is a category's
+	carousel bool   // one scrolling row instead of a grid
+}
+
+// catsView is a category_tiles section: the store's categories, read
+// from the store view (no catalog call).
+type catsView struct {
+	title string
+	cats  []catalog.Category
 }
 
 type landingView struct {
@@ -145,6 +156,18 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 			sv.faq = c
 		case *sections.TrustBadges:
 			sv.badges = c
+		case *sections.CategoryTiles:
+			sv.cats = pickCategories(p.v, c)
+			if len(sv.cats.cats) == 0 {
+				continue
+			}
+		case *sections.PromoTiles:
+			sv.promos = c
+		case *sections.WhatsAppCTA:
+			if p.v.theme.Contact.WhatsApp == "" {
+				continue // nowhere to send the shopper
+			}
+			sv.whatsapp = c
 		case *sections.Countdown:
 			left := c.EndsAt.Sub(now)
 			hide := c.HideWhenEnded == nil || *c.HideWhenEnded
@@ -162,7 +185,7 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 
 func (s *Shop) grid(p *pageCtx, c *sections.ProductGrid, byID map[ulid.ID]catalog.StorefrontProduct,
 	newest []catalog.StorefrontProduct, inCat map[ulid.ID][]catalog.StorefrontProduct) *gridView {
-	g := &gridView{title: c.Title}
+	g := &gridView{title: c.Title, carousel: c.Layout == "carousel"}
 	switch c.Source {
 	case "manual":
 		for _, id := range c.ProductIDs {
@@ -191,6 +214,28 @@ func (s *Shop) grid(p *pageCtx, c *sections.ProductGrid, byID map[ulid.ID]catalo
 	}
 	p.tagProducts(g.products)
 	return g
+}
+
+// pickCategories are the categories the merchant picked, in their order,
+// or else the top-level ones; gone ones are skipped.
+func pickCategories(v *storeView, c *sections.CategoryTiles) *catsView {
+	out := &catsView{title: c.Title}
+	if len(c.CategoryIDs) == 0 {
+		for _, cat := range v.categories {
+			if cat.ParentID == nil {
+				out.cats = append(out.cats, cat)
+			}
+		}
+	}
+	for _, id := range c.CategoryIDs {
+		if cat, ok := v.categoryByID(id); ok {
+			out.cats = append(out.cats, cat)
+		}
+	}
+	if len(out.cats) > c.Limit {
+		out.cats = out.cats[:c.Limit]
+	}
+	return out
 }
 
 func containsID(ids []ulid.ID, id ulid.ID) bool {
