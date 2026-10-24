@@ -1,8 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
+import { Carriers } from './pages/Carriers';
 import { Login } from './pages/Login';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
+import { ShipmentDetail } from './pages/ShipmentDetail';
+import { Shipments } from './pages/Shipments';
+import { Shipping } from './pages/Shipping';
 import { useSession } from './session';
 import { SessionProvider } from './SessionProvider';
 
@@ -31,6 +35,10 @@ function Gate() {
           <Route path="/" element={<Home />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
+          <Route path="/stores/:storeId/shipments" element={<Shipments />} />
+          <Route path="/stores/:storeId/shipments/:shipmentId" element={<ShipmentDetail />} />
+          <Route path="/stores/:storeId/shipping" element={<Shipping />} />
+          <Route path="/stores/:storeId/carriers" element={<Carriers />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       );

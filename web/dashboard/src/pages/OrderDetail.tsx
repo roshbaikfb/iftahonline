@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { OrderShipping } from '../components/OrderShipping';
 import { dateTime, money, nextSteps, statusLabel, stepLabel, type OrderStatus } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 
@@ -61,6 +62,18 @@ export function OrderDetail() {
       </p>
       {error && <p role="alert">{error}</p>}
       {detail && <OrderView detail={detail} busy={busy} onMove={(s) => void move(s)} />}
+      {detail && (
+        <OrderShipping
+          storeId={storeId}
+          orderId={orderId}
+          status={detail.order.status}
+          onShipped={() => {
+            void fetchOrder(storeId, orderId).then((r) => {
+              if (r.detail) setDetail(r.detail);
+            });
+          }}
+        />
+      )}
     </Layout>
   );
 }

@@ -168,3 +168,80 @@ td {
   margin-inline-start: 0.5rem;
   opacity: 0.8;
 }
+.sh-requested,
+.sh-created {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.sh-in_transit,
+.sh-out_for_delivery,
+.sh-delivered {
+  background: #dcfce7;
+  color: #166534;
+}
+.sh-failed_attempt {
+  background: #fef3c7;
+  color: #92400e;
+}
+.sh-returned,
+.sh-cancelled,
+.sh-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.panel {
+  display: grid;
+  gap: 0.75rem;
+  max-inline-size: 40rem;
+  padding: 1rem;
+  margin-block: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+.panel label {
+  display: grid;
+  gap: 0.25rem;
+}
+.panel label.inline,
+.checks label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.panel fieldset {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+.fee {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+.checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.25rem 0.75rem;
+}
+.city {
+  display: flex;
+  gap: 0.5rem;
+  margin-block-end: 0.5rem;
+}
+.zones {
+  list-style: none;
+  padding: 0;
+}
+.zones li {
+  padding-block: 0.75rem;
+  border-block-end: 1px solid var(--line);
+}
+.zones .areas {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.secret {
+  background: #fef3c7;
+}
+.secret code {
+  word-break: break-all;
+}
