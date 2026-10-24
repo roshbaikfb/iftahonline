@@ -60,7 +60,8 @@ reconciliation).
 - **Jobs:**
   - `shipping.create_shipment` and `shipping.fetch_label`;
   - `shipping.cancel_shipment`;
-  - `shipping.track_shipment`: polls every 6 h until final, snoozing;
+  - `shipping.track_shipment`: polls every 6 h until final, snoozing,
+    for at most 60 days (`MaxTrackFor`; webhooks still move it);
   - `shipping.process_webhook`: re-queries the carrier.
 - **Tracking.** Every change lands in `applyTracking`, which moves the
   order too: shipped, delivered, failed_delivery, returned, as
