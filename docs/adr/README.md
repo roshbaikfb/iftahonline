@@ -35,3 +35,4 @@ supersedes it.
 | [0027](0027-shipments-tracking-order-moves.md) | Shipments: created by jobs, tracked by webhooks and polls, moving their orders | Accepted |
 | [0028](0028-cod-reconciliation.md) | Cash-on-delivery reconciliation | Accepted |
 | [0029](0029-card-payments-paymob.md) | Card payments: one gateway contract, a fake, Paymob, and the gateway's word | Accepted |
+| [0030](0030-card-checkout-through-api-host.md) | Card checkout passes through the API host | Accepted |

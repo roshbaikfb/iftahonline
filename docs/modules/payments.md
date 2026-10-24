@@ -3,7 +3,8 @@
 The payments module takes **card payments** through the merchant's own
 gateway account. Paymob is the first gateway. Shoppers pay on the
 gateway's hosted page, so card data never reaches the platform. Design:
-[ADR-0029](../adr/0029-card-payments-paymob.md). Webhooks and sealed
+[ADR-0029](../adr/0029-card-payments-paymob.md); the shopper's trip
+through the API host: [ADR-0030](../adr/0030-card-checkout-through-api-host.md). Webhooks and sealed
 keys: [ADR-0024](../adr/0024-inbound-webhooks-envelope-encryption-card-data.md).
 
 ## Public API (`internal/modules/payments/api.go`)
@@ -11,7 +12,9 @@ keys: [ADR-0024](../adr/0024-inbound-webhooks-envelope-encryption-card-data.md).
 | Symbol | Purpose |
 |---|---|
 | `New(Deps)`, `Module.Mount` | Wiring, and the merchant HTTP API (behind identity's membership middleware) |
-| `Module.Checkout() Checkout` | `CardEnabled`, `StartCheckout`, `Refresh` for the store in ctx; the storefront takes card payments with it (5e-2) |
+| `Module.Checkout() Checkout` | `CardEnabled`, `StartCheckout`, `Refresh` for the store in ctx |
+| `Module.MountCheckout` | The shopper's checkout routes (`checkout` tag) and, with the fake gateway, its hosted page (api role; needs `Deps.Hosts`, `ClientIP`, `Limiter`) |
+| `NewCardCheck(pool) CardCheck`, `StartURL` | For the storefront, which holds no keys: does the store take cards, and where its shoppers pay |
 | `Module.RegisterWorkers` | The expiry, refund, webhook and sync jobs (worker role) |
 | `Module.WebhookProviders` | One per gateway; register them on the webhooks module (api role) |
 | `Module.FakePayer()` | Pays the fake gateway's payments; nil unless `PAYMENTS_FAKE_GATEWAY=true` |
@@ -52,6 +55,17 @@ payment status, move it), the webhooks inbox (worker), the envelope
     was paid.
   - The job checks what the gateway already refunded before asking, so
     a retried job never refunds twice.
+
+## The shopper's checkout (tag `checkout`, ADR-0030)
+
+| Route | What |
+|---|---|
+| `GET /v1/pay/{store}/{order}?return=` | Opens or reuses the hosted page and redirects there (303). An order no longer awaiting payment, or a store without cards, goes straight back. Rate-limited per IP (20 in 10 min). |
+| `GET /v1/pay/{store}/{order}/return/{to}` | The gateway's way back: asks the gateway now (`RefreshOrder`), then redirects to `to` (base64url) |
+| `/v1/fake-gateway/checkout/{ref}` | The fake gateway's page: pay or decline (development only) |
+
+The return URL must be an http(s) URL on a host of the same store
+(tenancy's resolver); anything else is 404 before any payment is made.
 
 ## Gateways
 

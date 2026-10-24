@@ -54,7 +54,7 @@ store's cached pages.
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
 | `/order` (POST) | A landing page's one-step order form |
 | `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart |
-| `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code) |
+| `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code); for a card order, its payment status, and `?pay=1` sends the shopper on to pay |
 
 The cart:
 - **Redis and limits.** The cart is a Redis hash found by the SHA-256 of
@@ -77,6 +77,19 @@ Orders (ADR-0022):
   4. Turnstile when risky; that response's CSP alone allows Cloudflare.
   5. The orders module (validation, duplicate window, blocked
      customers, stock).
+
+Card payment (ADR-0030):
+- **Where it is offered.** Checkout from the cart offers it when the
+  store has a gateway connected (`payments.CardCheck`; no keys in this
+  role). Landing pages' quick forms stay cash on delivery.
+- **The trip.** A card order goes to `/thank-you/{ref}?pay=1`. That page
+  sends the shopper on to the API host's `/v1/pay/…`
+  (`CHECKOUT_URL`), then to the gateway, and back.
+- **Why no redirect from the form.** The form's `form-action 'self'`
+  would also bind the redirect chain.
+- **What the thank-you page shows.** Paid; not paid yet (it looks again
+  every 10 s, with "pay now"); or cancelled after the hour.
+- **The quote.** It leaves out the COD fee for card payment.
 
 Languages and responses:
 - The store's locale has no prefix; the other language is under `/en`
