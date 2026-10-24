@@ -700,3 +700,46 @@ func TestRefundAnswerLost(t *testing.T) {
 		t.Fatalf("refund %+v", refunds[0])
 	}
 }
+
+// TestCardOrderNeverPaid: a card order whose shopper never reached the
+// gateway (the tab closed, a script, the gateway disconnected) is
+// cancelled an hour after it was placed, so its stock comes back. The
+// expiry is scheduled when the order is placed, not when a checkout
+// starts.
+func TestCardOrderNeverPaid(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	order := f.orders.Add(t, orders.PaymentCard, 2*time.Hour)
+	if err := f.svc.WatchOrder(f.ctxA, order); err != nil {
+		t.Fatal(err)
+	}
+	if kinds := f.jobs.Kinds(); len(kinds) != 1 || kinds[0] != "payments.expire_order" {
+		t.Fatalf("jobs %v, want the order's expiry", kinds)
+	}
+	if err := f.svc.RunJob(f.ctxA, f.jobs.Args[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.orders.Order(order); got.Status != orders.StatusCancelled {
+		t.Fatalf("an unpaid card order was kept: %+v", got)
+	}
+
+	// A COD order is not watched; a paid card order is kept.
+	cod := f.orders.Add(t, orders.PaymentCOD, 2*time.Hour)
+	if err := f.svc.WatchOrder(f.ctxA, cod); err != nil || len(f.jobs.Kinds()) != 1 {
+		t.Fatalf("a COD order was watched: %v %v", err, f.jobs.Kinds())
+	}
+	paid := f.orders.Add(t, orders.PaymentCard, 2*time.Hour)
+	p := f.checkout(t, paid)
+	if _, err := f.gw.Pay(apiKey, p.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.ExpireOrder(f.ctxA, paid); err != nil { // the last inquiry finds it paid
+		t.Fatal(err)
+	}
+	if got := f.orders.Order(paid); got.Status != orders.StatusConfirmed || got.PaymentStatus != orders.PaymentPaid {
+		t.Fatalf("a paid order: %+v", got)
+	}
+	if err := f.svc.ExpireOrder(f.ctxA, ulid.NewGenerator().New()); err != nil {
+		t.Fatalf("an unknown order: %v", err)
+	}
+}

@@ -16,6 +16,8 @@ func (s *Service) RunJob(ctx context.Context, args river.JobArgs) error {
 		return (&refundWorker{svc: s}).Work(ctx, &river.Job[RefundPaymentArgs]{Args: a})
 	case ProcessWebhookArgs:
 		return (&webhookWorker{svc: s}).Work(ctx, &river.Job[ProcessWebhookArgs]{Args: a})
+	case ExpireOrderArgs:
+		return (&expireOrderWorker{svc: s}).Work(ctx, &river.Job[ExpireOrderArgs]{Args: a})
 	case SyncPaymentArgs:
 		return (&syncWorker{svc: s}).Work(ctx, &river.Job[SyncPaymentArgs]{Args: a})
 	}
