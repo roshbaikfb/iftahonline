@@ -1,0 +1,38 @@
+# Breaking-change exceptions accepted on purpose (scripts/openapi-diff.sh).
+# Each line is one exact oasdiff finding: method, path and message. Only
+# what ADR-0032 allows belongs here: new values of SectionType, an
+# extensible list (clients ignore types they do not know). Anything
+# else stays an error. A line here matches nothing once main has the
+# value, so the file can be emptied after the merge.
+#
+# U2a: category_tiles, promo_tiles, whatsapp_cta
+GET /v1/stores/{store_id}/storefront/home added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/home added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/home added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages added the new `category_tiles` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages added the new `promo_tiles` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages added the new `whatsapp_cta` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages/{page_id} added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages/{page_id} added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/pages/{page_id} added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies added the new `category_tiles` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies added the new `promo_tiles` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies added the new `whatsapp_cta` enum value to the `items/items/sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies/{policy} added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies/{policy} added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/policies/{policy} added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/section-types added the new `category_tiles` enum value to the `items/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/section-types added the new `promo_tiles` enum value to the `items/items/type` response property for the response status `200`
+GET /v1/stores/{store_id}/storefront/section-types added the new `whatsapp_cta` enum value to the `items/items/type` response property for the response status `200`
+POST /v1/stores/{store_id}/storefront/pages added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `201`
+POST /v1/stores/{store_id}/storefront/pages added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `201`
+POST /v1/stores/{store_id}/storefront/pages added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `201`
+PUT /v1/stores/{store_id}/storefront/home added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/home added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/home added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/pages/{page_id} added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/pages/{page_id} added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/pages/{page_id} added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
+PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`

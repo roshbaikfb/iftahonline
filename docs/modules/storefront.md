@@ -137,6 +137,10 @@ Each type has a schema in `internal/sections/schemas/<type>.json`, with
 shared definitions in `defs.json` (IDs, single lines, links). It also
 has a Go type in `internal/sections/types.go` (`sections.Decode`).
 
+The list is extensible within /v1 (ADR-0032). Clients must tolerate a
+type they do not know. A new type adds its exact oasdiff findings to
+`api/openapi-breaking-ignore.txt` in the same PR.
+
 | Type | Settings |
 |---|---|
 | `hero` | `badge`, `heading`, `subheading`, `button_label` + `button_link` (a link alone shows "Shop now"), `image_product_id`, `align` |
