@@ -2,11 +2,8 @@ package app
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,6 +12,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -70,7 +68,7 @@ var errBadCursor = errs.Validation(errs.FieldError{Field: "cursor", Code: "inval
 
 // ListAudit returns a page of the current store's log. The caller has
 // already authorized audit.read.
-func (s *Service) ListAudit(ctx context.Context, cursor string, limit int) (AuditPage, error) {
+func (s *Service) ListAudit(ctx context.Context, after string, limit int) (AuditPage, error) {
 	if limit <= 0 {
 		limit = DefaultAuditLimit
 	}
@@ -79,8 +77,8 @@ func (s *Service) ListAudit(ctx context.Context, cursor string, limit int) (Audi
 	}
 	var beforeAt *time.Time
 	var beforeID *ulid.ID
-	if cursor != "" {
-		at, id, err := decodeCursor(cursor)
+	if after != "" {
+		at, id, err := cursor.Decode(after)
 		if err != nil {
 			return AuditPage{}, errBadCursor
 		}
@@ -99,31 +97,7 @@ func (s *Service) ListAudit(ctx context.Context, cursor string, limit int) (Audi
 	if len(items) > limit {
 		page.Items = items[:limit]
 		last := page.Items[limit-1]
-		page.NextCursor = encodeCursor(last.OccurredAt, last.ID)
+		page.NextCursor = cursor.Encode(last.OccurredAt, last.ID)
 	}
 	return page, nil
-}
-
-func encodeCursor(at time.Time, id ulid.ID) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(at.UnixMicro(), 10) + ":" + id.String()))
-}
-
-func decodeCursor(c string) (time.Time, ulid.ID, error) {
-	raw, err := base64.RawURLEncoding.DecodeString(c)
-	if err != nil {
-		return time.Time{}, ulid.ID{}, err
-	}
-	us, ids, ok := strings.Cut(string(raw), ":")
-	if !ok {
-		return time.Time{}, ulid.ID{}, fmt.Errorf("identity: cursor")
-	}
-	n, err := strconv.ParseInt(us, 10, 64)
-	if err != nil {
-		return time.Time{}, ulid.ID{}, err
-	}
-	id, err := ulid.Parse(ids)
-	if err != nil {
-		return time.Time{}, ulid.ID{}, err
-	}
-	return time.UnixMicro(n).UTC(), id, nil
 }

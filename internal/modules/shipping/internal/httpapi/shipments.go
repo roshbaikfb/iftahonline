@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -35,11 +33,11 @@ func (h *Handlers) ListShipments(ctx context.Context, req ListShipmentsRequestOb
 		q.Status = &st
 	}
 	if c := deref(req.Params.Cursor); c != "" {
-		cur, err := parseCursor(c)
+		at, id, err := cursor.Decode(c)
 		if err != nil {
 			return nil, errBadCursor
 		}
-		q.After = &cur
+		q.After = &domain.Cursor{At: at, ID: id}
 	}
 	p, err := h.svc.Shipments(ctx, q)
 	if err != nil {
@@ -50,26 +48,10 @@ func (h *Handlers) ListShipments(ctx context.Context, req ListShipmentsRequestOb
 		out.Items[i] = toShipment(s)
 	}
 	if p.Next != nil {
-		c := strconv.FormatInt(p.Next.At.UnixMicro(), 10) + "." + p.Next.ID.String()
+		c := cursor.Encode(p.Next.At, p.Next.ID)
 		out.NextCursor = &c
 	}
 	return out, nil
-}
-
-func parseCursor(s string) (domain.Cursor, error) {
-	at, id, ok := strings.Cut(s, ".")
-	if !ok {
-		return domain.Cursor{}, errBadCursor
-	}
-	micros, err := strconv.ParseInt(at, 10, 64)
-	if err != nil {
-		return domain.Cursor{}, err
-	}
-	uid, err := ulid.Parse(id)
-	if err != nil {
-		return domain.Cursor{}, err
-	}
-	return domain.Cursor{At: time.UnixMicro(micros).UTC(), ID: uid}, nil
 }
 
 // CreateShipments implements StrictServerInterface.
