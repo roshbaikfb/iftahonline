@@ -183,6 +183,19 @@ func OrderPayments(ctx context.Context, tx Tx, orderID ulid.ID) ([]domain.Paymen
 	return toPayments(rows)
 }
 
+// LockOrderPayments returns an order's payments locked until tx ends.
+func LockOrderPayments(ctx context.Context, tx Tx, orderID ulid.ID) ([]domain.Payment, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := paymentsdb.New(tx).LockOrderPayments(ctx, paymentsdb.LockOrderPaymentsParams{StoreID: store, OrderID: orderID})
+	if err != nil {
+		return nil, fmt.Errorf("payments store: lock order payments: %w", err)
+	}
+	return toPayments(rows)
+}
+
 // ListPayments returns one page of the store's payments, newest first.
 func ListPayments(ctx context.Context, tx Tx, beforeAt time.Time, beforeID ulid.ID, limit int) ([]domain.Payment, error) {
 	store, err := current(ctx)

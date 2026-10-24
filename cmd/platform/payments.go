@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -9,6 +11,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/server"
@@ -43,4 +46,26 @@ func newPayments(c clients, ords orders.Payments, inbox webhooks.Inbox, ten *ten
 		}
 	}
 	return payments.New(d)
+}
+
+// lateHandler is an event handler supplied after the bus subscriptions
+// are made: every role subscribes (publishers need the subscriber list),
+// and only the worker, which runs handlers, sets it before River starts.
+type lateHandler struct {
+	h atomic.Pointer[eventbus.Handler]
+}
+
+var errHandlerNotSet = errors.New("platform: event handler not set in this role")
+
+// Set supplies the handler.
+func (l *lateHandler) Set(h eventbus.Handler) { l.h.Store(&h) }
+
+// Handle implements eventbus.Handler; before Set, it fails (the delivery
+// is retried).
+func (l *lateHandler) Handle(ctx context.Context, d eventbus.Delivery) error {
+	h := l.h.Load()
+	if h == nil {
+		return errHandlerNotSet
+	}
+	return (*h)(ctx, d)
 }

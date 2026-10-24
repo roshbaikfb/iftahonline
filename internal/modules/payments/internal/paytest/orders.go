@@ -65,6 +65,11 @@ func (o *Orders) Get(_ context.Context, id ulid.ID) (orders.Order, error) {
 	return *got, nil
 }
 
+// GetTx implements the port.
+func (o *Orders) GetTx(ctx context.Context, _ pgx.Tx, id ulid.ID) (orders.Order, error) {
+	return o.Get(ctx, id)
+}
+
 // TransitionSystemTx implements the port.
 func (o *Orders) TransitionSystemTx(_ context.Context, _ pgx.Tx, id ulid.ID, to orders.Status, actor, _ string) (bool, error) {
 	o.mu.Lock()

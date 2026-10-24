@@ -35,6 +35,11 @@ SELECT * FROM payments WHERE store_id = @store_id AND id = @id FOR UPDATE;
 -- An order's payments, newest first (a handful: one per checkout attempt).
 SELECT * FROM payments WHERE store_id = @store_id AND order_id = @order_id ORDER BY created_at DESC LIMIT 50;
 
+-- name: LockOrderPayments :many
+-- An order's payments, locked: what the gateway's word does to them waits
+-- for the caller (cancelling an unpaid order), and the other way round.
+SELECT * FROM payments WHERE store_id = @store_id AND order_id = @order_id ORDER BY id LIMIT 50 FOR UPDATE;
+
 -- name: ListPayments :many
 SELECT * FROM payments
 WHERE store_id = @store_id AND (created_at, id) < (@before_at::timestamptz, @before_id::uuid)

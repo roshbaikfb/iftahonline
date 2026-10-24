@@ -52,6 +52,9 @@ const verifyTimeout = 10 * time.Second
 // Orders is what payments use of the orders module (orders.Payments).
 type Orders interface {
 	Get(ctx context.Context, id ulid.ID) (orders.Order, error)
+	// GetTx reads (and locks) an order in the caller's transaction; use it
+	// inside one, so a job never holds two connections.
+	GetTx(ctx context.Context, tx pgx.Tx, id ulid.ID) (orders.Order, error)
 	TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to orders.Status, actor, note string) (bool, error)
 	SetPaymentStatusTx(ctx context.Context, tx pgx.Tx, id ulid.ID, st orders.PaymentStatus, actor string) (bool, error)
 }

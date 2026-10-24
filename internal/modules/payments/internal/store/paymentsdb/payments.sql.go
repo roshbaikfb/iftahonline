@@ -393,6 +393,55 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 	return items, nil
 }
 
+const lockOrderPayments = `-- name: LockOrderPayments :many
+SELECT id, store_id, order_id, connection_id, gateway, currency, amount_minor, status, refunded_minor, checkout_url, provider_ref, transaction_id, failure, status_at, created_at, updated_at, version FROM payments WHERE store_id = $1 AND order_id = $2 ORDER BY id LIMIT 50 FOR UPDATE
+`
+
+type LockOrderPaymentsParams struct {
+	StoreID ulid.ID
+	OrderID ulid.ID
+}
+
+// An order's payments, locked: what the gateway's word does to them waits
+// for the caller (cancelling an unpaid order), and the other way round.
+func (q *Queries) LockOrderPayments(ctx context.Context, arg LockOrderPaymentsParams) ([]Payment, error) {
+	rows, err := q.db.Query(ctx, lockOrderPayments, arg.StoreID, arg.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Payment{}
+	for rows.Next() {
+		var i Payment
+		if err := rows.Scan(
+			&i.ID,
+			&i.StoreID,
+			&i.OrderID,
+			&i.ConnectionID,
+			&i.Gateway,
+			&i.Currency,
+			&i.AmountMinor,
+			&i.Status,
+			&i.RefundedMinor,
+			&i.CheckoutUrl,
+			&i.ProviderRef,
+			&i.TransactionID,
+			&i.Failure,
+			&i.StatusAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const orderPayments = `-- name: OrderPayments :many
 SELECT id, store_id, order_id, connection_id, gateway, currency, amount_minor, status, refunded_minor, checkout_url, provider_ref, transaction_id, failure, status_at, created_at, updated_at, version FROM payments WHERE store_id = $1 AND order_id = $2 ORDER BY created_at DESC LIMIT 50
 `

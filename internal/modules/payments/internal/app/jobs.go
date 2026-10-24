@@ -49,47 +49,121 @@ type ProcessWebhookArgs struct {
 func (ProcessWebhookArgs) Kind() string { return "payments.process_webhook" }
 
 // ExpirePayment runs ExpirePaymentArgs: it asks the gateway one last
-// time; a payment still not paid expires, and when none of its order's
-// payments is open or captured, the order is cancelled (its stock comes
-// back).
+// time; a payment still not paid expires, and its order is cancelled when
+// none of its payments is open or captured.
 func (s *Service) ExpirePayment(ctx context.Context, id ulid.ID) error {
 	p, err := s.payment(ctx, id)
-	if errors.Is(err, ErrPaymentNotFound) || (err == nil && !p.Status.Open()) {
+	if errors.Is(err, ErrPaymentNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if err = s.fetchAndApply(ctx, p); err != nil && !errors.Is(err, ErrConnectionNotFound) {
+	if p.Status.Open() {
+		if err = s.fetchAndApply(ctx, p); err != nil && !errors.Is(err, ErrConnectionNotFound) {
+			return err
+		}
+		if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+			cur, txErr := store.GetPayment(ctx, tx, id, true)
+			if txErr != nil || !cur.Status.Open() {
+				return txErr
+			}
+			cur.Status, cur.Failure = domain.StatusExpired, "not paid within the hour"
+			_, txErr = store.SetState(ctx, tx, cur)
+			return txErr
+		}); err != nil {
+			return err
+		}
+	}
+	// Also when the payment had expired already: a retried job finishes
+	// what a failed one began.
+	return s.cancelUnpaid(ctx, p.OrderID)
+}
+
+// ExpireOrderArgs ends a card order's wait for its payment, ExpireAfter
+// after it was placed, whether or not its shopper ever reached the
+// gateway. Scheduled by WatchOrder when the order is placed.
+type ExpireOrderArgs struct {
+	jobs.TenantArgs
+	OrderID ulid.ID `json:"order_id"`
+}
+
+// Kind implements river.JobArgs.
+func (ExpireOrderArgs) Kind() string { return "payments.expire_order" }
+
+// WatchOrder schedules a new card order's expiry; it handles
+// orders.order.placed, which is published with the order, so every card
+// order gets one. Other orders are ignored.
+func (s *Service) WatchOrder(ctx context.Context, orderID ulid.ID) error {
+	o, err := s.orders.Get(ctx, orderID)
+	if errors.Is(err, orders.ErrOrderNotFound) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
+	if o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting {
+		return nil
+	}
+	at := o.CreatedAt.Add(ExpireAfter)
+	if earliest := s.now().Add(time.Minute); at.Before(earliest) {
+		at = earliest
+	}
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		cur, txErr := store.GetPayment(ctx, tx, id, true)
-		if txErr != nil || !cur.Status.Open() {
-			return txErr
-		}
-		cur.Status, cur.Failure = domain.StatusExpired, "not paid within the hour"
-		if _, txErr = store.SetState(ctx, tx, cur); txErr != nil {
-			return txErr
-		}
-		all, txErr := store.OrderPayments(ctx, tx, cur.OrderID)
-		if txErr != nil {
-			return txErr
-		}
-		for _, q := range all {
-			if q.ID != cur.ID && (q.Status.Open() || q.Status.Captured()) {
-				return nil // another attempt is still open or paid
+		return s.enqueueTx(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return ExpireOrderArgs{TenantArgs: t, OrderID: orderID} },
+			&river.InsertOpts{ScheduledAt: at, UniqueOpts: river.UniqueOpts{ByArgs: true}})
+	})
+}
+
+// ExpireOrder runs ExpireOrderArgs: its open payments expire (each asked
+// about one last time), then the order is cancelled if nothing is open
+// or captured.
+func (s *Service) ExpireOrder(ctx context.Context, orderID ulid.ID) error {
+	ps, err := s.OrderPayments(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	for _, p := range ps {
+		if p.Status.Open() {
+			if err = s.ExpirePayment(ctx, p.ID); err != nil {
+				return err
 			}
 		}
-		o, txErr := s.orders.Get(ctx, cur.OrderID)
-		if txErr != nil || o.Status != orders.StatusPending || o.PaymentStatus != orders.PaymentAwaiting {
-			return txErr
-		}
-		_, txErr = s.orders.TransitionSystemTx(ctx, tx, cur.OrderID, orders.StatusCancelled, expiryActor, "not paid within the hour")
-		if errors.Is(txErr, orders.ErrInvalidTransition) {
+	}
+	return s.cancelUnpaid(ctx, orderID)
+}
+
+// cancelUnpaid cancels a card order still pending and awaiting its
+// payment when none of its payments is open or captured; its stock comes
+// back. The order and its payments are locked: a payment the gateway
+// confirms meanwhile waits, then finds the order cancelled and is
+// refunded (orderFollowsTx), and a merchant's move wins.
+func (s *Service) cancelUnpaid(ctx context.Context, orderID ulid.ID) error {
+	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		o, err := s.orders.GetTx(ctx, tx, orderID)
+		if errors.Is(err, orders.ErrOrderNotFound) {
 			return nil
 		}
-		return txErr
+		if err != nil {
+			return err
+		}
+		if o.Status != orders.StatusPending || o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting {
+			return nil
+		}
+		ps, err := store.LockOrderPayments(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		for _, p := range ps {
+			if p.Status.Open() || p.Status.Captured() {
+				return nil
+			}
+		}
+		_, err = s.orders.TransitionSystemTx(ctx, tx, orderID, orders.StatusCancelled, expiryActor, "not paid within the hour")
+		if errors.Is(err, orders.ErrInvalidTransition) {
+			return nil
+		}
+		return err
 	})
 }
 
@@ -333,6 +407,7 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		river.AddWorkerSafely(w, &refundWorker{svc: s}),
 		river.AddWorkerSafely(w, &webhookWorker{svc: s}),
 		river.AddWorkerSafely(w, &syncWorker{svc: s}),
+		river.AddWorkerSafely(w, &expireOrderWorker{svc: s}),
 	)
 }
 
@@ -374,4 +449,13 @@ type syncWorker struct {
 
 func (w *syncWorker) Work(ctx context.Context, job *river.Job[SyncPaymentArgs]) error {
 	return w.svc.SyncPayment(ctx, job.Args.PaymentID)
+}
+
+type expireOrderWorker struct {
+	river.WorkerDefaults[ExpireOrderArgs]
+	svc *Service
+}
+
+func (w *expireOrderWorker) Work(ctx context.Context, job *river.Job[ExpireOrderArgs]) error {
+	return w.svc.ExpireOrder(ctx, job.Args.OrderID)
 }

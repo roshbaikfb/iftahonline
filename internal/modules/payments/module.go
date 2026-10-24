@@ -1,6 +1,7 @@
 package payments
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -117,6 +118,13 @@ func (m *Module) FakePayer() FakePayer {
 		return nil
 	}
 	return payer{f: m.fake}
+}
+
+// OrderPlacedHandler schedules a new card order's expiry, an hour after it
+// was placed (whether or not its shopper reaches the gateway). Subscribe
+// it as WatchOrdersSubscriber to orders.EventOrderPlaced (worker role).
+func (m *Module) OrderPlacedHandler() eventbus.Handler {
+	return eventbus.Typed(func(ctx context.Context, ev orders.OrderPlaced) error { return m.svc.WatchOrder(ctx, ev.OrderID) })
 }
 
 // RegisterWorkers adds the payment jobs' workers (worker role).

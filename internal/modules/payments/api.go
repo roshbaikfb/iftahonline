@@ -43,6 +43,12 @@ const (
 	StatusRefunded          = domain.StatusRefunded
 )
 
+// WatchOrdersSubscriber is the event bus subscriber name of
+// Module.OrderPlacedHandler: subscribe it to orders.EventOrderPlaced on
+// every role's bus, so each card order's expiry is scheduled with the
+// order (ADR-0031).
+const WatchOrdersSubscriber = "payments.watch_card_orders"
+
 // EventPaymentStatusChanged is the type of PaymentStatusChanged.
 const EventPaymentStatusChanged = domain.EventPaymentStatusChanged
 

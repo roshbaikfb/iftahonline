@@ -249,7 +249,7 @@ func (s *Service) orderFollowsTx(ctx context.Context, tx pgx.Tx, was, p domain.P
 	if !p.Status.Captured() {
 		return nil
 	}
-	o, err := s.orders.Get(ctx, p.OrderID)
+	o, err := s.orders.GetTx(ctx, tx, p.OrderID)
 	if err != nil {
 		return err
 	}

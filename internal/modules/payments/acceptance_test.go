@@ -59,6 +59,7 @@ const (
 // cmd/platform wires them: catalog, customers, shipping (quotes),
 // orders, payments and the webhooks inbox, with River running the jobs.
 type platform struct {
+	pool        *pgxpool.Pool
 	api, public http.Handler
 	shop        orders.Shop
 	checkout    payments.Checkout
@@ -77,6 +78,20 @@ func newPlatform(t *testing.T) platform {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
+	// Orders and payments get one connection between them: a job that
+	// holds a transaction and asks for a second connection (instead of
+	// reading in its transaction) deadlocks here, not in production
+	// under load.
+	oneCfg, err := pgxpool.ParseConfig(infra.AppURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oneCfg.MaxConns, oneCfg.MinConns = 1, 0
+	one, err := pgxpool.NewWithConfig(ctx, oneCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(one.Close)
 	opts, err := redis.ParseURL(infra.RedisURL)
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +147,7 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ord, err := orders.New(orders.Deps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+	ord, err := orders.New(orders.Deps{Pool: one, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
 		Shipping: ship.Quoter(), Auth: pol,
 		Stores: func(context.Context) (orders.StoreInfo, error) {
 			return orders.StoreInfo{Currency: money.EGP, Country: geo.EG, Location: time.UTC}, nil
@@ -145,7 +160,7 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pay, err := payments.New(payments.Deps{Pool: pool, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true},
+	pay, err := payments.New(payments.Deps{Pool: one, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true},
 		Sealer: sealer, PublicURL: "https://app.example.com", Orders: ord.Payments(), Jobs: ins, Inbox: hooks.Inbox(),
 		Limiter: checkoutLimiter, ClientIP: func(context.Context) (netip.Addr, bool) { return netip.MustParseAddr("198.51.100.22"), true },
 		Hosts: func(_ context.Context, host string) (tenant.StoreID, error) {
@@ -161,6 +176,9 @@ func newPlatform(t *testing.T) platform {
 		if err = hooks.Register(p); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err = bus.Subscribe(orders.EventOrderPlaced, payments.WatchOrdersSubscriber, pay.OrderPlacedHandler()); err != nil {
+		t.Fatal(err)
 	}
 
 	workers := river.NewWorkers()
@@ -205,7 +223,7 @@ func newPlatform(t *testing.T) platform {
 	if err = pay.MountCheckout(public, resp); err != nil {
 		t.Fatal(err)
 	}
-	return platform{api: api, public: public, shop: ord.Shop(), checkout: pay.Checkout(), payer: pay.FakePayer(), store: store, ctx: sctx,
+	return platform{pool: pool, api: api, public: public, shop: ord.Shop(), checkout: pay.Checkout(), payer: pay.FakePayer(), store: store, ctx: sctx,
 		token: "owner"}
 }
 
@@ -401,5 +419,33 @@ func TestCardCheckoutThroughTheAPIHost(t *testing.T) {
 	o := p.call(t, http.MethodGet, "/orders/"+placed.Order.ID.String(), "", http.StatusOK)["order"].(map[string]any)
 	if o["payment_status"] != "paid" || o["status"] != "confirmed" {
 		t.Fatalf("order after the return: %v", o)
+	}
+}
+
+// TestCardOrderExpiryIsScheduledWithTheOrder: placing a card order
+// schedules its expiry through orders.order.placed, before any checkout
+// starts, so an order whose shopper never reaches the gateway is still
+// cancelled an hour later (and its stock released).
+func TestCardOrderExpiryIsScheduledWithTheOrder(t *testing.T) {
+	p := newPlatform(t)
+	prod := p.call(t, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
+	variant, err := ulid.Parse(prod["variants"].([]any)[0].(map[string]any)["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	placed, err := p.shop.PlaceOrder(p.ctx, orders.NewOrder{Source: orders.SourceStorefront, PaymentMethod: orders.PaymentCard,
+		Name: "منى أحمد", Phone: "01012345678", Governorate: "EG-C", City: "مدينة نصر", Address: "12 شارع عباس العقاد",
+		Lines: []orders.LineInput{{VariantID: variant, Qty: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var at time.Time
+	eventually(t, "the order's expiry to be scheduled", func() bool {
+		qErr := p.pool.QueryRow(t.Context(), `SELECT scheduled_at FROM river_job WHERE kind = 'payments.expire_order' AND args->>'order_id' = $1`,
+			placed.Order.ID.String()).Scan(&at)
+		return qErr == nil
+	})
+	if d := at.Sub(placed.Order.CreatedAt); d < 59*time.Minute || d > 61*time.Minute {
+		t.Fatalf("expiry scheduled %s after the order, want an hour", d)
 	}
 }
