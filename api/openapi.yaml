@@ -2329,7 +2329,9 @@ paths:
         webhook catches up otherwise), then redirects to `to`: the return
         URL given to startCardPayment, base64url-encoded so the gateway's
         own query parameters cannot change it. The same host check
-        applies.
+        applies. The inquiry is rate-limited per client IP: past the
+        limit the shopper is still sent back, without it (the webhook
+        brings the payment).
       security: []
       parameters:
         - $ref: "#/components/parameters/StoreID"
