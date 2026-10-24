@@ -18,6 +18,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -253,9 +254,9 @@ func (s *Service) applyTracking(ctx context.Context, tx pgx.Tx, id ulid.ID, tr c
 	}
 	next, known := fromCarrier(tr.Status)
 	if sh.Status.Final() || !known || next == sh.Status {
-		return false, store.Touch(ctx, tx, id, clip(tr.RawState))
+		return false, store.Touch(ctx, tx, id, text.Clip(tr.RawState, 300))
 	}
-	if sh, err = store.SetStatus(ctx, tx, id, next, clip(tr.RawState), "", s.clock()); err != nil {
+	if sh, err = store.SetStatus(ctx, tx, id, next, text.Clip(tr.RawState, 300), "", s.clock()); err != nil {
 		return false, err
 	}
 	note := ""
@@ -264,7 +265,7 @@ func (s *Service) applyTracking(ctx context.Context, tx pgx.Tx, id ulid.ID, tr c
 	} else if !moved {
 		note = "the order was not moved (its status does not follow the parcel)"
 	}
-	if err = s.timelineTx(ctx, tx, id, next, clip(tr.RawState), source, note); err != nil {
+	if err = s.timelineTx(ctx, tx, id, next, text.Clip(tr.RawState, 300), source, note); err != nil {
 		return false, err
 	}
 	m, err := event.MetaFor(ctx, s.ids, domain.EventShipmentStatusChanged, 1)
@@ -342,12 +343,4 @@ func shipmentNotFound(err error) error {
 		return ErrShipmentNotFound
 	}
 	return err
-}
-
-func clip(s string) string {
-	const maxLen = 300
-	if r := []rune(s); len(r) > maxLen {
-		return string(r[:maxLen])
-	}
-	return s
 }

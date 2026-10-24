@@ -32,6 +32,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 )
 
 // Name is Paymob's gateway name.
@@ -134,7 +135,7 @@ func (g *Gateway) do(ctx context.Context, method, rawURL, auth string, in, out a
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return resp.StatusCode, fmt.Errorf("paymob: %s: status %d", req.URL.Path, resp.StatusCode)
 	case resp.StatusCode >= 400:
-		return resp.StatusCode, retry.Permanent(fmt.Errorf("%w: %s (status %d)", gateway.ErrRejected, clip(string(raw)), resp.StatusCode))
+		return resp.StatusCode, retry.Permanent(fmt.Errorf("%w: %s (status %d)", gateway.ErrRejected, text.Redact(text.Clip(string(raw), 200)), resp.StatusCode))
 	}
 	if out != nil {
 		if err = json.Unmarshal(raw, out); err != nil {
@@ -204,7 +205,7 @@ func (g *Gateway) CreatePayment(ctx context.Context, creds gateway.Credentials, 
 		"amount": req.Amount.Amount(), "currency": string(req.Amount.Currency()), "payment_methods": creds.IntegrationIDs,
 		// One item for the whole amount: Paymob requires the items to add
 		// up to it exactly.
-		"items": []map[string]any{{"name": clip(req.Description), "amount": req.Amount.Amount(), "description": clip(req.Description), "quantity": 1}},
+		"items": []map[string]any{{"name": text.Clip(req.Description, 200), "amount": req.Amount.Amount(), "description": text.Clip(req.Description, 200), "quantity": 1}},
 		"billing_data": map[string]string{"first_name": orNA(c.FirstName), "last_name": orNA(c.LastName), "phone_number": c.Phone, "email": email,
 			"apartment": "NA", "floor": "NA", "street": "NA", "building": "NA", "city": "NA", "country": "NA", "state": "NA"},
 		"special_reference": req.Reference, "notification_url": req.NotificationURL, "redirection_url": req.RedirectURL,
@@ -416,14 +417,6 @@ func Sign(secret string, body []byte) (string, error) {
 func orNA(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "NA"
-	}
-	return s
-}
-
-func clip(s string) string {
-	const maxLen = 200
-	if r := []rune(s); len(r) > maxLen {
-		return string(r[:maxLen])
 	}
 	return s
 }

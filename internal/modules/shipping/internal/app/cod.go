@@ -18,6 +18,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -123,7 +124,7 @@ func (s *Service) PullSettlements(ctx context.Context, connectionID ulid.ID) (ag
 		if g.Amount.Currency() != info.Currency {
 			return true, fmt.Errorf("shipping: %s settlement in %s, store in %s", adapter.Name(), g.Amount.Currency(), info.Currency)
 		}
-		lines = append(lines, domain.SettlementLine{TrackingNumber: g.TrackingNumber, Amount: g.Amount, SettledAt: g.SettledAt, Reference: clip(g.Reference)})
+		lines = append(lines, domain.SettlementLine{TrackingNumber: g.TrackingNumber, Amount: g.Amount, SettledAt: g.SettledAt, Reference: text.Clip(g.Reference, 300)})
 	}
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		c, txErr := store.GetConnection(ctx, tx, connectionID)

@@ -31,6 +31,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 )
 
 // Name is Bosta's carrier name.
@@ -132,7 +133,7 @@ func (c *Carrier) do(ctx context.Context, creds carrier.Credentials, method, pat
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return fmt.Errorf("bosta: %s %s: status %d", method, path, resp.StatusCode)
 	case resp.StatusCode >= 400 || (env.Success != nil && !*env.Success):
-		return retry.Permanent(fmt.Errorf("%w: %s (status %d)", carrier.ErrRejected, clip(env.Message), resp.StatusCode))
+		return retry.Permanent(fmt.Errorf("%w: %s (status %d)", carrier.ErrRejected, text.Redact(text.Clip(env.Message, 300)), resp.StatusCode))
 	}
 	if out == nil {
 		return nil
@@ -239,8 +240,8 @@ func createBody(req carrier.ShipmentRequest) (createRequest, error) {
 	}
 	first, last := splitName(req.Receiver.Name)
 	return createRequest{
-		Type: deliveryTypeSend, COD: majorUnits(req.COD), Notes: clip(req.Notes),
-		Specs:             specs{PackageType: "Parcel", Size: "SMALL", PackageDetails: packageDetails{ItemsCount: max(req.Items, 1), Description: clip(req.Description)}},
+		Type: deliveryTypeSend, COD: majorUnits(req.COD), Notes: text.Clip(req.Notes, 300),
+		Specs:             specs{PackageType: "Parcel", Size: "SMALL", PackageDetails: packageDetails{ItemsCount: max(req.Items, 1), Description: text.Clip(req.Description, 300)}},
 		DropOffAddress:    dropOffAddress{City: city, FirstLine: req.Address.Line, SecondLine: req.Address.City},
 		Receiver:          receiver{FirstName: first, LastName: last, Phone: localPhone(req.Receiver.Phone)},
 		BusinessReference: req.Reference,
@@ -302,7 +303,7 @@ func (c *Carrier) Track(ctx context.Context, creds carrier.Credentials, tracking
 	if err := c.call(ctx, creds, http.MethodGet, "/deliveries/business/"+url.PathEscape(tracking), nil, &d); err != nil {
 		return carrier.Tracking{}, err
 	}
-	return carrier.Tracking{Status: MapState(d.State.Code), RawState: strconv.Itoa(d.State.Code) + " " + clip(d.State.Value), At: d.UpdatedAt}, nil
+	return carrier.Tracking{Status: MapState(d.State.Code), RawState: strconv.Itoa(d.State.Code) + " " + text.Clip(d.State.Value, 300), At: d.UpdatedAt}, nil
 }
 
 // Cancel implements carrier.Carrier ("terminate" in Bosta's words). The
@@ -430,12 +431,4 @@ func splitName(name string) (first, last string) {
 func majorUnits(m money.Money) json.Number {
 	a := m.Amount()
 	return json.Number(strconv.FormatInt(a/100, 10) + "." + fmt.Sprintf("%02d", a%100))
-}
-
-func clip(s string) string {
-	const maxLen = 300
-	if r := []rune(s); len(r) > maxLen {
-		return string(r[:maxLen])
-	}
-	return s
 }

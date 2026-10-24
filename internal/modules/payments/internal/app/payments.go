@@ -21,6 +21,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -133,7 +134,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 		NotificationURL: s.WebhookURL(storeID, conn.Connection), RedirectURL: redirectURL,
 	})
 	if err != nil {
-		if failErr := s.fail(ctx, p.ID, clip(err.Error())); failErr != nil {
+		if failErr := s.fail(ctx, p.ID, text.Clip(err.Error(), 300)); failErr != nil {
 			return Checkout{}, failErr
 		}
 		return Checkout{}, errs.Unavailable(10*time.Second, fmt.Errorf("%w: %w", errGatewayDown, err))
@@ -444,12 +445,4 @@ func splitName(name string) (first, last string) {
 		return parts[0], parts[0]
 	}
 	return parts[0], strings.Join(parts[1:], " ")
-}
-
-func clip(s string) string {
-	const maxLen = 300
-	if r := []rune(s); len(r) > maxLen {
-		return string(r[:maxLen])
-	}
-	return s
 }
