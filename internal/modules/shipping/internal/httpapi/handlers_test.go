@@ -225,7 +225,8 @@ func TestHappyPath(t *testing.T) {
 	a := f.storeA
 
 	code, cfg := f.do(t, req(t, http.MethodGet, path(a, ""), tokSupportA, ""))
-	if code != http.StatusOK || cfg["currency"] != "EGP" || len(cfg["zones"].([]any)) != 0 || cfg["settings"].(map[string]any)["version"] != float64(0) {
+	if code != http.StatusOK || cfg["currency"] != "EGP" || len(cfg["zones"].([]any)) != 0 || cfg["settings"].(map[string]any)["version"] != float64(0) ||
+		len(cfg["areas"].([]any)) != 27 || cfg["areas"].([]any)[0].(map[string]any)["name_ar"] == "" {
 		t.Fatalf("getShipping (empty) = %d %v", code, cfg)
 	}
 	code, z := f.do(t, req(t, http.MethodPost, path(a, "/zones"), tokOwnerA, defaultInput))

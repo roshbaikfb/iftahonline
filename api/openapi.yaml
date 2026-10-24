@@ -3459,6 +3459,13 @@ components:
         bp: { type: integer, minimum: 0, maximum: 1000, description: "Basis points of subtotal + shipping (150 = 1.5%)." }
         min_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         max_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000, description: 0 means no maximum. }
+    ShippingArea:
+      type: object
+      required: [code, name_ar, name_en]
+      properties:
+        code: { type: string, example: EG-C }
+        name_ar: { type: string, example: القاهرة }
+        name_en: { type: string, example: Cairo }
     ShippingSettings:
       type: object
       required: [cod_fee, version]
@@ -3519,9 +3526,13 @@ components:
         version: { type: integer, minimum: 1, description: Required when updating. }
     ShippingConfig:
       type: object
-      required: [currency, settings, zones]
+      required: [currency, areas, settings, zones]
       properties:
         currency: { type: string, example: EGP }
+        areas:
+          type: array
+          description: The governorates of the store's country, the codes zones are made of.
+          items: { $ref: "#/components/schemas/ShippingArea" }
         settings: { $ref: "#/components/schemas/ShippingSettings" }
         zones:
           type: array

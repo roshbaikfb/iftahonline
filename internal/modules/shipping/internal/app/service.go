@@ -109,7 +109,7 @@ func (s *Service) Config(ctx context.Context) (domain.Config, error) {
 	if err != nil {
 		return domain.Config{}, err
 	}
-	cfg := domain.Config{Currency: info.Currency}
+	cfg := domain.Config{Currency: info.Currency, Country: info.Country}
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
 		cfg.Settings, cfg.Zones, txErr = store.Load(ctx, tx)
 		return txErr

@@ -363,6 +363,18 @@ type ShipmentPage struct {
 // ShipmentStatus defines model for ShipmentStatus.
 type ShipmentStatus string
 
+// ShippingArea defines model for ShippingArea.
+type ShippingArea struct {
+	// Code Example: EG-C
+	Code string `json:"code"`
+
+	// NameAr Example: القاهرة
+	NameAr string `json:"name_ar"`
+
+	// NameEn Example: Cairo
+	NameEn string `json:"name_en"`
+}
+
 // ShippingCity defines model for ShippingCity.
 type ShippingCity struct {
 	Name      string `json:"name"`
@@ -371,6 +383,9 @@ type ShippingCity struct {
 
 // ShippingConfig defines model for ShippingConfig.
 type ShippingConfig struct {
+	// Areas The governorates of the store's country, the codes zones are made of.
+	Areas []ShippingArea `json:"areas"`
+
 	// Currency Example: EGP
 	Currency string           `json:"currency"`
 	Settings ShippingSettings `json:"settings"`
