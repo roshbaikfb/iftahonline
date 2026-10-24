@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -22,11 +23,13 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/payapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/paytest"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
@@ -48,10 +51,22 @@ const (
 	apiBase = "https://app.example.com"
 )
 
+// countingGateway counts the status inquiries a fake answers.
+type countingGateway struct {
+	*fake.Gateway
+	asked *atomic.Int64
+}
+
+func (g countingGateway) FetchStatus(ctx context.Context, c gateway.Credentials, ref string, cur money.Currency) (gateway.Status, error) {
+	g.asked.Add(1)
+	return g.Gateway.FetchStatus(ctx, c, ref, cur)
+}
+
 type fixture struct {
 	h              http.Handler
 	svc            *app.Service
 	gw             *fake.Gateway
+	asked          *atomic.Int64
 	orders         *paytest.Orders
 	storeA, storeB tenant.StoreID
 	ctxA           context.Context
@@ -84,8 +99,8 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{gw: fake.NewWithCheckout(apiBase + payapi.FakeCheckoutPath), orders: paytest.NewOrders()}
-	f.svc = app.NewService(app.Deps{DB: pool, IDs: ids, Gateways: app.Gateways{fake.Name: f.gw}, Sealer: sealer, PublicURL: apiBase,
+	f := fixture{gw: fake.NewWithCheckout(apiBase + payapi.FakeCheckoutPath), orders: paytest.NewOrders(), asked: &atomic.Int64{}}
+	f.svc = app.NewService(app.Deps{DB: pool, IDs: ids, Gateways: app.Gateways{fake.Name: countingGateway{Gateway: f.gw, asked: f.asked}}, Sealer: sealer, PublicURL: apiBase,
 		Orders: f.orders, Jobs: testkit.NewJobs(), Inbox: webhookstest.NewInbox()})
 	mk := func() tenant.StoreID {
 		id := tenant.StoreID{ID: ids.New()}
@@ -276,5 +291,27 @@ func TestRateLimited(t *testing.T) {
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("21st checkout = %d, want 429", last)
+	}
+}
+
+// TestReturnRateLimited: the way back asks the gateway, so it is
+// bounded per address too; past the bound the shopper still goes back to
+// the store (the webhook brings the payment), without the inquiry.
+func TestReturnRateLimited(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	order := f.orders.Add(t, orders.PaymentCard, 0)
+	if rec := f.get(t, startPath(f.storeA, order, thanks(order))); rec.Code != http.StatusSeeOther {
+		t.Fatalf("start = %d", rec.Code)
+	}
+	back := strings.TrimPrefix(f.svc.ReturnURL(f.storeA, order, thanks(order)), apiBase)
+	for i := range 40 {
+		rec := f.get(t, back)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != thanks(order) {
+			t.Fatalf("return %d = %d %q, want back to the store", i, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	if n := f.asked.Load(); n > 30 {
+		t.Fatalf("the gateway was asked %d times for 40 returns, want at most 30", n)
 	}
 }

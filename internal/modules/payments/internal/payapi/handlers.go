@@ -30,6 +30,11 @@ const MaxReturnURL = 2000
 // a few times; a script creating payments does not need us.
 var payPerIP = ratelimit.Limit{Burst: 20, Period: 10 * time.Minute} //nolint:gochecknoglobals // constant policy
 
+// returnPerIP bounds the gateway inquiries the way back makes from one
+// address. Past it the shopper still goes back to the store, without
+// the inquiry: the webhook brings the payment.
+var returnPerIP = ratelimit.Limit{Burst: 30, Period: 10 * time.Minute} //nolint:gochecknoglobals // constant policy
+
 var (
 	errNotFound = errs.NotFound("not_found", "not found")
 	errBusy     = errs.RateLimited(10 * time.Minute)
@@ -115,10 +120,27 @@ func (h *Handlers) FinishCardPayment(w http.ResponseWriter, r *http.Request, sto
 	if !ok {
 		return
 	}
-	if err = h.svc.RefreshOrder(ctx, order); err != nil {
-		h.log.WarnContext(ctx, "payments: refresh on return", "err", err) // the webhook catches up
+	if h.mayAsk(ctx) {
+		if err = h.svc.RefreshOrder(ctx, order); err != nil {
+			h.log.WarnContext(ctx, "payments: refresh on return", "err", err) // the webhook catches up
+		}
 	}
 	redirect(w, back)
+}
+
+// mayAsk reports whether the way back may ask the gateway now. When the
+// limiter cannot tell, it does not: the inquiry is only a shortcut.
+func (h *Handlers) mayAsk(ctx context.Context) bool {
+	if h.limiter == nil {
+		return true
+	}
+	ip, _ := h.clientIP(ctx)
+	res, err := h.limiter.Allow(ctx, "pay:return:ip:"+ip.String(), returnPerIP)
+	if err != nil {
+		h.log.WarnContext(ctx, "payments: return limiter unavailable", "err", err)
+		return false
+	}
+	return res.Allowed
 }
 
 // target reads the store, the order and the return URL, which must be
