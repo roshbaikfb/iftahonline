@@ -45,6 +45,11 @@ reconciliation).
     `SHIPPING_FAKE_CARRIER=true`;
   - `bosta`: Egypt. It follows Bosta's SDKs and is unverified until the
     sandbox run (`BOSTA_SANDBOX_API_KEY=… go test ./internal/modules/shipping/internal/carrier/bosta/`).
+    Bosta takes no idempotency key: every create first searches by
+    `businessReference` (the shipment's ID). If Bosta's search lags
+    behind a create whose answer was lost, the retry can create a second
+    delivery; check for it in the staging run, and cancel the extra one
+    in Bosta's dashboard if it happens.
 - **Settlements.** Bosta has no settlements API: `CODSettlements` is
   `ErrUnsupported`.
 - **Connections** keep the merchant's key envelope-sealed. The webhook
