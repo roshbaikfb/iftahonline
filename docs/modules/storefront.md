@@ -36,10 +36,13 @@ form's shipping and COD-fee line (`POST /order/quote`):
 | `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
 
 The module consumes `catalog.product.changed`, `catalog.product.deleted`,
-`catalog.category.changed` and its own two events: the subscriber
+`catalog.category.changed`, `payments.connection.changed` and its own
+two events: the subscriber
 `storefront.invalidate_pages` publishes the store ID on the Redis
 channel `storefront:invalidate`, and every storefront instance drops that
-store's cached pages.
+store's cached pages, and `storefront.purge_edge` purges the edge
+cache's pages (`payments.connection.changed` purges the whole store:
+every footer lists the payment methods).
 
 ## Rendering (`internal/web`)
 
@@ -55,6 +58,29 @@ store's cached pages.
 | `/order` (POST) | A landing page's one-step order form |
 | `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart |
 | `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code); for a card order, its payment status, and `?pay=1` sends the shopper on to pay |
+
+Every page (the approved U1 design):
+- **Header.** The theme's announcement bar when set; the brand, the
+  other language and the cart (icon, with the `cart_n` count). On phones
+  the top categories are in a `<details>` menu; on wide screens they are
+  a row under the bar, the current page underlined (`aria-current`).
+- **Footer.** The store's name and its about text; "Help" (the
+  published policies); "Contact us" (WhatsApp as a `wa.me` link, email
+  as `mailto:`) when either is set; "Payment methods": cash on delivery,
+  plus the card brands of the store's country (Visa · Mastercard, and
+  Meeza in Egypt or mada in Saudi Arabia) when card payment is on. That
+  check is the cached `cardOffered`, taken once per store view.
+- **Product cards.** A gray "sold out" tag, or a red "N% off" tag
+  (rounded down) with the sale price in red. On wide screens there is an
+  add-to-cart button: a form for a product with one variant, a link to
+  the product otherwise, nothing when it is sold out.
+- **Sections.** They lay out in one wrapping row: a hero followed by
+  promo tiles share a line on wide screens.
+- **The default home.** In this order: hero (button to `#s-newest`),
+  category tiles, trust badges, newest products, WhatsApp invitation
+  (hidden until the store has a number).
+- **Not shown yet.** Search and order tracking are in the mockups but
+  come with U2d. No control is rendered before it works.
 
 The cart:
 - **Redis and limits.** The cart is a Redis hash found by the SHA-256 of

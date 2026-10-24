@@ -69,9 +69,45 @@ func (p *pageCtx) link(target string) templ.SafeURL {
 		return templ.SafeURL(target) //nolint:gosec // https only, validated on save
 	case strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//") && !strings.HasPrefix(target, "/\\"):
 		return p.URL(target)
+	case strings.HasPrefix(target, "#s-"):
+		return templ.SafeURL(target) //nolint:gosec // a section on this page, validated on save
 	}
 	return "#"
 }
+
+// salePercent is how much cheaper v is than its compare-at price, rounded
+// down so the badge never overstates it; 0 when it is not on sale.
+func salePercent(v catalog.StorefrontVariant) int {
+	if v.CompareAt == nil || v.CompareAt.Currency() != v.Price.Currency() {
+		return 0
+	}
+	was, now := v.CompareAt.Amount(), v.Price.Amount()
+	if was <= 0 || now >= was {
+		return 0
+	}
+	return int((was - now) * 100 / was)
+}
+
+// waLink opens a chat with an E.164 number (validated on save).
+func waLink(e164 string) templ.SafeURL {
+	return templ.SafeURL("https://wa.me/" + strings.TrimPrefix(e164, "+")) //nolint:gosec // digits only
+}
+
+// mailto writes to a validated address.
+func mailto(addr string) templ.SafeURL {
+	return templ.SafeURL("mailto:" + addr) //nolint:gosec // validated on save
+}
+
+// initial is the first letter of a name, for a tile without a picture.
+func initial(name string) string {
+	for _, r := range name {
+		return string(r)
+	}
+	return ""
+}
+
+// active reports whether path is the page being shown.
+func (p *pageCtx) active(path string) bool { return p.path == path }
 
 // badgeSVG is the icon of a trust badge: our own static markup.
 func badgeSVG(icon string) string {
@@ -85,6 +121,21 @@ func badgeSVG(icon string) string {
 		"quality":  `<circle cx="12" cy="9" r="5"/><path d="M9 13.5 8 21l4-2 4 2-1-7.5"/>`,
 	}
 	p, ok := paths[icon]
+	if !ok {
+		return ""
+	}
+	return open + p + `</svg>`
+}
+
+// iconSVG is a line icon of the interface: our own static markup.
+func iconSVG(name string) string {
+	const open = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+	paths := map[string]string{
+		"menu": `<path d="M4 7h16M4 12h16M4 17h16"/>`,
+		"bag":  `<path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/>`,
+		"chat": `<path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.4A9 9 0 1 1 21 12z"/>`,
+	}
+	p, ok := paths[name]
 	if !ok {
 		return ""
 	}

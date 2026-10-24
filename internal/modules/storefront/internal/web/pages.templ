@@ -41,8 +41,14 @@ templ productPage(p *pageCtx, pr catalog.StorefrontProduct, crumb *catalog.Categ
 }
 
 templ categoryPage(p *pageCtx, c catalog.Category, products []catalog.StorefrontProduct, more string) {
+	<nav class="crumbs" aria-label="breadcrumb">
+		<a href={ p.URL("/") }>{ p.l.T(MsgHome) }</a>
+		› <span aria-current="page">{ c.Name }</span>
+	</nav>
 	<section class="sec">
-		<h1>{ c.Name }</h1>
+		<div class="lead">
+			<h1>{ c.Name }</h1>
+		</div>
 		if len(products) == 0 {
 			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
 		} else {
@@ -53,7 +59,7 @@ templ categoryPage(p *pageCtx, c catalog.Category, products []catalog.Storefront
 			</div>
 		}
 		if more != "" {
-			<p class="more"><a href={ templ.SafeURL(more) }>{ p.l.T(MsgShowMore) }</a></p>
+			<p class="more"><a class="btn" href={ templ.SafeURL(more) }>{ p.l.T(MsgShowMore) }</a></p>
 		}
 	</section>
 }
@@ -68,7 +74,8 @@ templ policyPage(title string, paras []string) {
 }
 
 templ notFoundPage(p *pageCtx) {
-	<section class="sec empty">
+	<section class="sec lost">
+		<div class="big" aria-hidden="true">404</div>
 		<h1>{ p.l.T(MsgNotFoundTitle) }</h1>
 		<p>{ p.l.T(MsgNotFoundText) }</p>
 		<a class="btn" href={ p.URL("/") }>{ p.l.T(MsgBackHome) }</a>

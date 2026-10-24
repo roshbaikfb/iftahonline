@@ -319,7 +319,7 @@ func TestHappyPath(t *testing.T) {
 	}
 
 	code, home := f.do(t, req(t, http.MethodGet, storePath(a, "/home"), tokOwnerA, ""))
-	if code != http.StatusOK || home["id"] != nil || home["version"] != float64(0) || len(home["sections"].([]any)) != 3 {
+	if code != http.StatusOK || home["id"] != nil || home["version"] != float64(0) || len(home["sections"].([]any)) != len(domain.DefaultHome().Sections) {
 		t.Fatalf("getHomePage default = %d %v", code, home)
 	}
 	homeBody := `{"title":"متجري","version":0,"sections":[{"type":"hero","settings":{"heading":"مرحبًا","button_label":"تسوق","button_link":"/c/new"}},{"id":"grid","type":"product_grid","settings":{"source":"newest","limit":12}}]}`

@@ -36,6 +36,7 @@ function variantPickers() {
       const opt = select.selectedOptions[0];
       if (!opt) return;
       price.replaceChildren(opt.dataset.amount);
+      price.classList.toggle("sale", !!opt.dataset.compare);
       if (opt.dataset.compare) {
         const s = document.createElement("s");
         s.textContent = opt.dataset.compare;
