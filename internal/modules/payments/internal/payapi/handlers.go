@@ -158,8 +158,8 @@ func (h *Handlers) target(w http.ResponseWriter, r *http.Request, storeID, order
 		h.resp.Write(w, r, errNotFound)
 		return nil, tenant.StoreID{}, ulid.ID{}, "", false
 	}
-	u, err := url.Parse(back)
-	if err != nil || len(back) > MaxReturnURL || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+	u, ok := checkReturn(back)
+	if !ok {
 		h.resp.Write(w, r, errNotFound)
 		return nil, tenant.StoreID{}, ulid.ID{}, "", false
 	}
@@ -169,6 +169,20 @@ func (h *Handlers) target(w http.ResponseWriter, r *http.Request, storeID, order
 		return nil, tenant.StoreID{}, ulid.ID{}, "", false
 	}
 	return tenant.WithStore(r.Context(), store), store, order, u.String(), true
+}
+
+// checkReturn reads a return URL: http(s), with a host, without
+// credentials, at most MaxReturnURL bytes. Whose host it is, is the
+// caller's to check.
+func checkReturn(back string) (*url.URL, bool) {
+	if len(back) > MaxReturnURL {
+		return nil, false
+	}
+	u, err := url.Parse(back)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+		return nil, false
+	}
+	return u, true
 }
 
 func redirect(w http.ResponseWriter, to string) {
