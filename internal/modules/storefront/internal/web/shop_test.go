@@ -709,7 +709,7 @@ func TestAssets(t *testing.T) {
 			t.Errorf("%s: headers %v, %d bytes", path, rec.Header(), rec.Body.Len())
 		}
 	}
-	font := regexp.MustCompile(`url\((/assets/ibm-plex-sans-arabic-arabic-400\.[0-9a-f]{8}\.woff2)\)`).FindStringSubmatch(f.get(t, "/").Body.String())
+	font := regexp.MustCompile(`url\((/assets/iftah-sans-arabic-arabic-400\.[0-9a-f]{8}\.woff2)\)`).FindStringSubmatch(f.get(t, "/").Body.String())
 	if font == nil {
 		t.Fatal("no font face for the default font")
 	}
