@@ -43,6 +43,27 @@ type Server struct {
 	byRef   map[string]*txn
 	byID    map[int64]*txn
 	intents map[string]map[string]any
+	// loseRefundReplies is how many of the next refunds are made but
+	// answered 502, as when Paymob's answer is lost on the way back.
+	loseRefundReplies int
+}
+
+// LoseRefundReplies makes the next n refunds go through at Paymob and
+// answer 502 (the answer lost on the way back).
+func (s *Server) LoseRefundReplies(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loseRefundReplies = n
+}
+
+// Refunded is what Paymob refunded of a payment, by our reference.
+func (s *Server) Refunded(ref string) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.byRef[ref]; ok {
+		return t.refunded
+	}
+	return 0
 }
 
 type txn struct {
@@ -174,6 +195,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		default:
 			t.refunded += int64(amount)
 			s.seq++
+			if s.loseRefundReplies > 0 {
+				s.loseRefundReplies--
+				reply(w, http.StatusBadGateway, map[string]any{"detail": "upstream timeout"})
+				return
+			}
 			reply(w, http.StatusOK, map[string]any{"id": 900000 + s.seq, "success": true, "amount_cents": int64(amount)})
 		}
 	default:

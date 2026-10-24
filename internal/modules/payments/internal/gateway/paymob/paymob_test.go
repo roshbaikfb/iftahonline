@@ -189,3 +189,34 @@ func FuzzVerifyWebhook(f *testing.F) {
 		}
 	})
 }
+
+// TestRefundIsNeverRepeated: Paymob takes no idempotency key, so a refund
+// whose answer is lost must not be sent again by the adapter: the money
+// went back once, and the caller (the refund job) finds that out from
+// the gateway's refunded amount before trying again.
+func TestRefundIsNeverRepeated(t *testing.T) {
+	t.Parallel()
+	g, srv := standIn(t)
+	req := gatewaytest.Request(t, money.EGP)
+	if _, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), req); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Pay(req.Reference); err != nil {
+		t.Fatal(err)
+	}
+	st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	amount, err := money.New(10000, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.LoseRefundReplies(1)
+	if _, err = g.Refund(t.Context(), paymobtest.Credentials(), st.TransactionID, amount); err == nil || errors.Is(err, gateway.ErrRejected) {
+		t.Fatalf("a lost answer must be a retryable error, got %v", err)
+	}
+	if got := srv.Refunded(req.Reference); got != 10000 {
+		t.Fatalf("Paymob refunded %d, want 10000 once", got)
+	}
+}
