@@ -297,3 +297,35 @@ func TestRefusalsCarryNoPersonalData(t *testing.T) {
 		t.Errorf("the refusal lost Paymob's reason: %v", err)
 	}
 }
+
+// TestAuthTokenIsReused: an inquiry needs an auth token from the API
+// key; one token serves a merchant's inquiries until Paymob stops taking
+// it, then a new one is asked for, once.
+func TestAuthTokenIsReused(t *testing.T) {
+	t.Parallel()
+	g, srv := standIn(t)
+	req := gatewaytest.Request(t, money.EGP)
+	if _, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), req); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := srv.TokenCalls(); n != 1 {
+		t.Fatalf("%d tokens asked for 3 inquiries, want 1", n)
+	}
+	srv.ExpireTokens()
+	if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP); err != nil {
+		t.Fatalf("after the token expired: %v", err)
+	}
+	if n := srv.TokenCalls(); n != 2 {
+		t.Fatalf("%d tokens asked for, want 2 (one new after it expired)", n)
+	}
+	other := paymobtest.Credentials()
+	other.APIKey = "another-merchant"
+	if _, err := g.FetchStatus(t.Context(), other, req.Reference, money.EGP); err == nil {
+		t.Fatal("another merchant's key used the first merchant's token")
+	}
+}

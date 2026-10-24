@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +47,23 @@ type Server struct {
 	// loseRefundReplies is how many of the next refunds are made but
 	// answered 502, as when Paymob's answer is lost on the way back.
 	loseRefundReplies int
+	tokens            map[string]bool // auth tokens still valid
+	tokenCalls        int
+}
+
+// TokenCalls is how many auth tokens were asked for.
+func (s *Server) TokenCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenCalls
+}
+
+// ExpireTokens makes every auth token given so far invalid (401), as
+// Paymob's do after an hour.
+func (s *Server) ExpireTokens() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokens = map[string]bool{}
 }
 
 // LoseRefundReplies makes the next n refunds go through at Paymob and
@@ -92,7 +110,7 @@ func (s *Server) Override(ref string, fields map[string]any) error {
 // New starts a server closed at the end of the test.
 func New(t testing.TB) *Server {
 	t.Helper()
-	s := &Server{byRef: map[string]*txn{}, byID: map[int64]*txn{}, intents: map[string]map[string]any{}}
+	s := &Server{byRef: map[string]*txn{}, byID: map[int64]*txn{}, intents: map[string]map[string]any{}, tokens: map[string]bool{}}
 	ts := httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(ts.Close)
 	s.URL = ts.URL
@@ -183,7 +201,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			reply(w, http.StatusForbidden, map[string]any{"detail": "Incorrect credentials"})
 			return
 		}
-		reply(w, http.StatusCreated, map[string]any{"token": "tok_" + APIKey})
+		s.tokenCalls++
+		tok := "tok_" + strconv.Itoa(s.tokenCalls)
+		s.tokens[tok] = true
+		reply(w, http.StatusCreated, map[string]any{"token": tok})
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/intention/":
 		if auth != "Token "+SecretKey {
 			reply(w, http.StatusUnauthorized, map[string]any{"detail": "Invalid token"})
@@ -191,7 +212,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		s.intention(w, in)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/ecommerce/orders/transaction_inquiry":
-		if auth != "Bearer tok_"+APIKey {
+		if !strings.HasPrefix(auth, "Bearer ") || !s.tokens[strings.TrimPrefix(auth, "Bearer ")] {
 			reply(w, http.StatusUnauthorized, map[string]any{"detail": "Invalid token"})
 			return
 		}
