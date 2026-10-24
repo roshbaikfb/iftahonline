@@ -72,6 +72,21 @@ type txn struct {
 	amount, refunded        int64
 	success, pending, voids bool
 	paid                    bool
+	over                    map[string]any // fields the answers carry instead
+}
+
+// Override makes the transaction of ref carry fields other than its own
+// in answers (a test of what the adapter refuses to believe);
+// "merchant_order_id" replaces the order's.
+func (s *Server) Override(ref string, fields map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.byRef[ref]
+	if !ok {
+		return fmt.Errorf("paymobtest: no transaction for %s", ref)
+	}
+	t.over = fields
+	return nil
 }
 
 // New starts a server closed at the end of the test.
@@ -136,7 +151,7 @@ func (s *Server) Callback(ref string) ([]byte, url.Values, error) {
 }
 
 func (s *Server) obj(t *txn) map[string]any {
-	return map[string]any{
+	obj := map[string]any{
 		"id": t.id, "pending": t.pending, "amount_cents": t.amount, "success": t.success, "is_auth": false, "is_capture": false,
 		"is_standalone_payment": true, "is_voided": t.voids, "is_refunded": t.refunded > 0, "is_3d_secure": true,
 		"integration_id": 4100, "has_parent_transaction": false, "currency": "EGP", "error_occured": !t.success,
@@ -144,6 +159,14 @@ func (s *Server) obj(t *txn) map[string]any {
 		"order":       map[string]any{"id": 5000 + t.id, "merchant_order_id": t.ref},
 		"source_data": map[string]any{"type": "card", "sub_type": "MasterCard", "pan": "2346"}, // nocarddata:allow masked last four digits, as Paymob sends them
 	}
+	for k, v := range t.over {
+		if k == "merchant_order_id" {
+			obj["order"] = map[string]any{"id": 5000 + t.id, "merchant_order_id": v}
+			continue
+		}
+		obj[k] = v
+	}
+	return obj
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
