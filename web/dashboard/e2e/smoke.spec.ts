@@ -45,7 +45,9 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
 
   // Bulk confirm the two pending orders.
   await page.getByLabel('تحديد كل الطلبات قيد الانتظار').check();
-  await page.getByRole('button', { name: 'تأكيد المحدد (2)' }).click();
+  const bulk = page.getByRole('region', { name: 'إجراءات المحدد' });
+  await expect(bulk).toContainText('طلبان محددان');
+  await bulk.getByRole('button', { name: 'تأكيد' }).click();
   await expect(page.getByText('تم تأكيد 2 طلب')).toBeVisible();
   await expect(rows.filter({ hasText: 'قيد الانتظار' })).toHaveCount(0);
 
@@ -54,15 +56,16 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   await page.getByRole('button', { name: 'تصفية' }).click();
   await expect(rows).toHaveCount(1);
   await rows.first().getByRole('link').click();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('مؤكد');
+  const status = page.locator('.title-row .status');
+  await expect(status).toHaveText('مؤكد');
   await expect(page.getByText('أحمد حسن')).toBeVisible();
   await page.getByRole('button', { name: 'جاهز للشحن' }).click();
   await page.getByRole('button', { name: 'شُحن' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('تم الشحن');
-  await expect(page.locator('.timeline li')).toHaveCount(4);
+  await expect(status).toHaveText('تم الشحن');
+  await expect(page.locator('.od-timeline li')).toHaveCount(4);
 
   // Export: a CSV with every order, a BOM and the Arabic names.
-  await page.getByRole('link', { name: '→ الطلبات' }).click();
+  await page.getByRole('navigation', { name: 'مسار الصفحة' }).getByRole('link', { name: 'الطلبات' }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'تصدير CSV' }).click()]);
   expect(download.suggestedFilename()).toMatch(/^orders-\d{4}-\d{2}-\d{2}\.csv$/);
   const path = await download.path();

@@ -76,7 +76,7 @@ export function OrderPayments({ storeId, order, onChanged }: { storeId: string; 
 
   if (order.payment_method !== 'card') return null;
   return (
-    <section>
+    <section className="card">
       <h2>الدفع بالبطاقة</h2>
       <p>
         حالة الدفع: <span className={`status pay-${order.payment_status}`}>{orderPaymentLabel[order.payment_status]}</span>

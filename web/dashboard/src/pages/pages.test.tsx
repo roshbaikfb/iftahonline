@@ -83,14 +83,21 @@ describe('Login', () => {
   });
 });
 
+const counts = { pending: 2, confirmed: 0, ready_to_ship: 0, shipped: 1, delivered: 4, cancelled: 0, failed_delivery: 0, returned: 0 };
+
 describe('Orders', () => {
-  it('lists orders, filters them, confirms the selected ones and exports', async () => {
+  it('lists orders under status tabs, confirms the selected ones from the bar and exports', async () => {
     const pending1 = order('01M5ORDER00000000000000001', 'pending');
-    const pending2 = order('01M5ORDER00000000000000002', 'pending', { name: 'سارة' });
-    const shipped = order('01M5ORDER00000000000000003', 'shipped');
+    const pending2 = order('01M5ORDER00000000000000002', 'pending', { name: 'سارة', payment_method: 'card', payment_status: 'awaiting' });
+    const shipped = order('01M5ORDER00000000000000003', 'shipped', { payment_method: 'card', payment_status: 'paid' });
     const calls = mockAPI({
       ...storeRoute,
       [`GET /v1/stores/${store}/orders`]: () => ({ status: 200, body: { items: [pending1, pending2, shipped] } }),
+      [`GET /v1/stores/${store}/orders/counts`]: () => ({ status: 200, body: counts }),
+      [`GET /v1/stores/${store}/shipping`]: () => ({
+        status: 200,
+        body: { currency: 'EGP', areas: [{ code: 'EG-ALX', name_ar: 'الإسكندرية', name_en: 'Alexandria' }], settings: { cod_fee: { fixed_minor: 0, bp: 0, min_minor: 0, max_minor: 0 }, version: 0 }, zones: [] },
+      }),
       [`POST /v1/stores/${store}/orders/transitions`]: () => ({
         status: 200,
         body: { results: [{ order_id: pending1.id, ok: true, order: { ...pending1, status: 'confirmed' } }] },
@@ -102,17 +109,32 @@ describe('Orders', () => {
     expect(await within(table).findByText('#00000001')).toBeInTheDocument();
     expect(within(table).getAllByText('349.50 ج.م')).toHaveLength(3);
     expect(within(table).getByText('تم الشحن')).toBeInTheDocument();
-    // Only pending orders can be selected.
+    // how each is paid, and where it goes by name
+    expect(within(table).getByText('عند الاستلام')).toBeInTheDocument();
+    expect(within(table).getByText('بانتظار الدفع')).toBeInTheDocument();
+    expect(within(table).getByText('مدفوع بالبطاقة')).toBeInTheDocument();
+    expect(await within(table).findAllByText('الإسكندرية')).toHaveLength(3);
+    // the tabs carry the counts; "all" is chosen
+    const tabs = screen.getByRole('tablist', { name: 'حالة الطلب' });
+    expect(await within(tabs).findByRole('tab', { name: 'الكل 7' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(tabs).getByRole('tab', { name: 'قيد الانتظار 2' })).toHaveAttribute('aria-selected', 'false');
+    // Only pending orders can be selected; the bar appears with them.
     expect(within(table).queryByLabelText('تحديد الطلب 00000003')).toBeNull();
-
+    expect(screen.queryByRole('region', { name: 'إجراءات المحدد' })).toBeNull();
     await user.click(within(table).getByLabelText('تحديد الطلب 00000001'));
-    await user.click(screen.getByRole('button', { name: 'تأكيد المحدد (1)' }));
+    const bar = screen.getByRole('region', { name: 'إجراءات المحدد' });
+    expect(bar).toHaveTextContent('طلب واحد محدد');
+    await user.click(within(bar).getByRole('button', { name: 'تأكيد' }));
     expect(await screen.findByText('تم تأكيد 1 طلب')).toBeInTheDocument();
     const bulk = calls.find((c) => c.method === 'POST');
     expect(bulk?.body).toEqual({ order_ids: [pending1.id], status: 'confirmed', note: '' });
+    // the counts are read again after the change
+    await waitFor(() => {
+      expect(calls.filter((c) => c.path.endsWith('/orders/counts')).length).toBeGreaterThanOrEqual(2);
+    });
 
-    // Filters go to the API and to the export link.
-    await user.selectOptions(screen.getByLabelText('الحالة'), 'pending');
+    // A tab and the filters go to the API and to the export link.
+    await user.click(within(tabs).getByRole('tab', { name: /قيد الانتظار/ }));
     await user.type(screen.getByLabelText('رقم الموبايل'), '01012345678');
     await user.click(screen.getByRole('button', { name: 'تصفية' }));
     await waitFor(() => {
@@ -120,6 +142,7 @@ describe('Orders', () => {
       expect(last?.search.get('status')).toBe('pending');
       expect(last?.search.get('phone')).toBe('01012345678');
     });
+    expect(within(tabs).getByRole('tab', { name: /قيد الانتظار/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('link', { name: 'تصدير CSV' })).toHaveAttribute('href', `/v1/stores/${store}/orders/export?status=pending`);
   });
 
@@ -151,11 +174,24 @@ describe('OrderDetail', () => {
     });
     renderAt(`/stores/${store}/orders/${o.id}`);
     const user = userEvent.setup();
-    expect(await screen.findByText('اتصلي قبل الوصول')).toBeInTheDocument();
+    expect(await screen.findByText('ملاحظة العميل: اتصلي قبل الوصول')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(`الطلب #${o.code}`);
     expect(screen.getByText('تيشيرت')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'إلغاء' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'تأكيد' }));
+    expect(screen.getByRole('heading', { name: 'المنتجات (2)' })).toBeInTheDocument();
+    // a cash order waiting is a call to make before shipping
+    expect(screen.getByRole('note')).toHaveTextContent('اتصل بالعميل لتأكيده قبل الشحن');
+    expect(screen.getByRole('link', { name: 'اتصال' })).toHaveAttribute('href', 'tel:+201012345678');
+    expect(screen.getByRole('link', { name: 'واتساب' })).toHaveAttribute('href', 'https://wa.me/201012345678');
+    expect(screen.getByRole('link', { name: 'طلبات هذا العميل' })).toHaveAttribute('href', `/stores/${store}/orders?phone=%2B201012345678`);
+    expect(screen.getByRole('button', { name: 'إلغاء' })).toHaveClass('danger');
+    // cash is collected by the courier; shipping comes once the order is ready
+    expect(screen.getByText('لم يُحصَّل')).toBeInTheDocument();
+    expect(screen.getByText(/يحصّل المندوب/)).toBeInTheDocument();
+    expect(screen.getByText('تُنشأ الشحنة بعد أن يصبح الطلب جاهزًا للشحن.')).toBeInTheDocument();
+    expect(screen.getByText('وصل الطلب من المتجر')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'تأكيد الطلب' }));
     expect(await screen.findByRole('button', { name: 'جاهز للشحن' })).toBeInTheDocument();
+    expect(screen.queryByRole('note')).toBeNull();
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ status: 'confirmed', note: '', version: 3 });
   });
 
@@ -171,10 +207,13 @@ describe('OrderDetail', () => {
           events: [],
         },
       }),
+      [`GET /v1/stores/${store}/shipping`]: () => ({ status: 200, body: { areas: [{ code: 'EG-ALX', name_ar: 'الإسكندرية' }] } }),
     });
     renderAt(`/stores/${store}/orders/${o.id}`);
-    expect(await screen.findByText('الشحن')).toBeInTheDocument();
-    expect(screen.getByText('رسوم الدفع عند الاستلام')).toBeInTheDocument();
-    expect(screen.getByText('الإجمالي').closest('tr')).toHaveTextContent('375');
+    // the governorate is named, not coded
+    const ship = await screen.findByText('الشحن إلى الإسكندرية');
+    expect(ship.nextElementSibling).toHaveTextContent('60');
+    expect(screen.getByText('رسوم الدفع عند الاستلام').nextElementSibling).toHaveTextContent('15');
+    expect(screen.getByText('الإجمالي').nextElementSibling).toHaveTextContent('375');
   });
 });
