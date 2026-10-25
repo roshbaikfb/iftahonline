@@ -11,17 +11,17 @@
     {
       "slug": "skincare",
       "name": "العناية بالبشرة",
-      "image": "beauty-1"
+      "image": "beauty-skincare"
     },
     {
       "slug": "makeup",
       "name": "مكياج",
-      "image": "beauty-2"
+      "image": "beauty-makeup"
     },
     {
       "slug": "haircare",
       "name": "العناية بالشعر",
-      "image": "beauty-3"
+      "image": "beauty-haircare"
     }
   ],
   "products": [

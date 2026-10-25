@@ -11,17 +11,17 @@
     {
       "slug": "tshirts",
       "name": "تيشيرتات",
-      "image": "clothing-1"
+      "image": "clothing-tshirts"
     },
     {
       "slug": "pants",
       "name": "بناطيل",
-      "image": "clothing-2"
+      "image": "clothing-pants"
     },
     {
       "slug": "jackets",
       "name": "جواكت",
-      "image": "clothing-3"
+      "image": "clothing-jackets"
     }
   ],
   "products": [

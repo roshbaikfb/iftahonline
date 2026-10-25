@@ -11,17 +11,17 @@
     {
       "slug": "decor",
       "name": "ديكور",
-      "image": "home-1"
+      "image": "home-decor"
     },
     {
       "slug": "kitchen",
       "name": "مطبخ",
-      "image": "home-2"
+      "image": "home-kitchen"
     },
     {
       "slug": "bedding",
       "name": "مفارش",
-      "image": "home-3"
+      "image": "home-bedding"
     }
   ],
   "products": [

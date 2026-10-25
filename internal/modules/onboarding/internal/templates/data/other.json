@@ -11,17 +11,17 @@
     {
       "slug": "featured",
       "name": "مختارات",
-      "image": "other-1"
+      "image": "other-featured"
     },
     {
       "slug": "gifts",
       "name": "هدايا",
-      "image": "other-2"
+      "image": "other-gifts"
     },
     {
       "slug": "new-arrivals",
       "name": "وصل حديثًا",
-      "image": "other-3"
+      "image": "other-new-arrivals"
     }
   ],
   "products": [

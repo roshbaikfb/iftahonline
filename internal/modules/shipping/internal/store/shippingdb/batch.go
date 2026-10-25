@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 

@@ -11,17 +11,17 @@
     {
       "slug": "kids-clothes",
       "name": "ملابس أطفال",
-      "image": "kids-1"
+      "image": "kids-kids-clothes"
     },
     {
       "slug": "toys",
       "name": "ألعاب",
-      "image": "kids-2"
+      "image": "kids-toys"
     },
     {
       "slug": "baby",
       "name": "مستلزمات الرضع",
-      "image": "kids-3"
+      "image": "kids-baby"
     }
   ],
   "products": [

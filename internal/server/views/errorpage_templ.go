@@ -5,10 +5,8 @@ package views
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import (
-	"github.com/a-h/templ"
-	templruntime "github.com/a-h/templ/runtime"
-)
+import "github.com/a-h/templ"
+import templruntime "github.com/a-h/templ/runtime"
 
 // ErrorPage is the storefront's minimal error document. It is bilingual
 // (Arabic first) and has no inline script or style, so it satisfies the
