@@ -3,6 +3,7 @@ package storefront
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
@@ -137,13 +138,25 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 		return web.OrderSummary{}, err
 	}
 	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Card: ord.PaymentMethod == orders.PaymentCard, PaymentStatus: string(ord.PaymentStatus),
-		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total}
+		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total,
+		Governorate: ord.Contact.Governorate, City: ord.Contact.City}
+	if f := strings.Fields(ord.Contact.Name); len(f) > 0 {
+		s.FirstName = f[0]
+	}
+	in := orders.QuoteInput{Governorate: ord.Contact.Governorate, City: ord.Contact.City, PaymentMethod: ord.PaymentMethod}
 	for _, l := range ord.Lines {
 		title := l.Title
 		if l.VariantTitle != "" {
 			title += " (" + l.VariantTitle + ")"
 		}
-		s.Lines = append(s.Lines, web.OrderLine{Title: title, Qty: l.Qty, Total: l.Total})
+		s.Lines = append(s.Lines, web.OrderLine{VariantID: l.VariantID, Title: title, Qty: l.Qty, Total: l.Total})
+		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
+	}
+	// How long delivery takes is today's word for the zone: the order
+	// keeps the price it was quoted, not the days. When the order can no
+	// longer be quoted (a product off sale), the page says no days.
+	if q, qErr := o.shop.Quote(ctx, in); qErr == nil && q.Delivery != nil {
+		s.Days = &web.DeliveryDays{Min: q.Delivery.Min, Max: q.Delivery.Max}
 	}
 	return s, nil
 }

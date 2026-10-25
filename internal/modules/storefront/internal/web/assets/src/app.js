@@ -93,12 +93,19 @@ function orderQuotes() {
         const el = form.elements.namedItem(name); // a radio group reads as its checked value
         if (el && el.value) body.set(name, el.value);
       }
-      if (!body.get("governorate")) { out.hidden = true; return; }
+      if (!body.get("governorate")) {
+        if (!out.hasAttribute("data-totals")) out.hidden = true;
+        return;
+      }
       const mine = ++seq;
       try {
         const res = await fetch(out.dataset.quote, { method: "POST", body, credentials: "same-origin" });
         if (!res.ok || mine !== seq) return;
         const q = await res.json();
+        if (out.hasAttribute("data-totals")) {
+          fillTotals(form, out, q);
+          return;
+        }
         out.textContent = q.text;
         out.hidden = !q.text;
         out.classList.toggle("bad", !q.deliverable);
@@ -125,6 +132,44 @@ function formatMoney(minor, f) {
   if (frac) s += "." + String(frac).padStart(f.units, "0");
   if (neg) s = "-" + s;
   return f.after ? `${s} ${f.sym}` : `${f.sym} ${s}`;
+}
+
+// fillTotals writes checkout's totals card from the quote: each amount
+// on its line, the cash fee's row only when there is one, the summary's
+// total, and the cash choice's note with its fee.
+function fillTotals(form, card, q) {
+  const bad = card.querySelector("[data-not-delivered]");
+  bad.textContent = q.deliverable ? "" : q.text;
+  bad.hidden = q.deliverable;
+  const a = q.amounts;
+  if (!a) return;
+  for (const el of card.querySelectorAll("[data-amt]")) {
+    const v = a[el.dataset.amt];
+    if (v !== undefined) el.textContent = v;
+  }
+  card.querySelector("[data-cod-row]").hidden = !a.cod_fee;
+  const sum = document.querySelector("[data-sum-total]");
+  if (sum) sum.textContent = a.total;
+  const note = form.querySelector("[data-cod-note]");
+  if (note && a.cod_note) note.textContent = a.cod_note;
+}
+
+// payChoice keeps checkout's button and note in step with the payment
+// method: "confirm and pay" and the secure page for a card, "confirm"
+// and paying the courier for cash.
+function payChoice() {
+  for (const form of document.querySelectorAll("form[data-order]")) {
+    const cta = form.querySelector("[data-card-label]");
+    const note = form.querySelector("[data-card-text]");
+    if (!cta) continue;
+    const update = () => {
+      const el = form.querySelector('[name="pay_method"]:checked');
+      const card = !!el && el.value === "card";
+      cta.textContent = card ? cta.dataset.cardLabel : cta.dataset.codLabel;
+      if (note) note.querySelector("[data-secure-text]").textContent = card ? note.dataset.cardText : note.dataset.codText;
+    };
+    for (const el of form.querySelectorAll('[name="pay_method"]')) el.addEventListener("change", update);
+  }
 }
 
 // productForms follows the shopper's choice on the product page: the
@@ -313,6 +358,7 @@ variantPickers();
 cartBadge();
 orderForms();
 orderQuotes();
+payChoice();
 productForms();
 deliveryQuote();
 share();

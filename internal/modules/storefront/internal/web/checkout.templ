@@ -7,6 +7,24 @@ import "strconv"
 // key and stops a second click. "website" is a honeypot: hidden from
 // people, filled by naive bots.
 templ orderFields(p *pageCtx, f *orderForm) {
+	@contactFields(p, f)
+	<p class="quote" data-quote={ p.URL("/order/quote") } aria-live="polite" hidden></p>
+	if f.card {
+		<fieldset class="pay">
+			<legend>{ p.l.T(MsgPaymentMethod) }</legend>
+			<label><input type="radio" name="pay_method" value="cod" checked?={ !f.payByCard() }/> { p.l.T(MsgPayCash) }</label>
+			<label><input type="radio" name="pay_method" value="card" checked?={ f.payByCard() }/> { p.l.T(MsgPayCard) }</label>
+			<small>{ p.l.T(MsgPayCardNote) }</small>
+		</fieldset>
+	} else {
+		<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
+	}
+	<button class="btn btn-block" type="submit">{ p.l.Or(f.cta, MsgPlaceOrder) }</button>
+}
+
+// contactFields are who and where: the same on checkout and on a landing
+// page's one-step form.
+templ contactFields(p *pageCtx, f *orderForm) {
 	<input type="hidden" name="key" value={ f.value("key") } data-order-key/>
 	<div class="hp" aria-hidden="true">
 		<label for="o-website">Website</label>
@@ -27,30 +45,19 @@ templ orderFields(p *pageCtx, f *orderForm) {
 	@field(p, f, "city", MsgCity, "text", "address-level2", 80)
 	<div class={ "fld", templ.KV("bad", f.bad("address")) }>
 		<label for="o-address">{ p.l.T(MsgAddress) }</label>
-		<textarea name="address" id="o-address" rows="2" maxlength="300" required autocomplete="street-address">{ f.value("address") }</textarea>
+		<textarea name="address" id="o-address" rows="2" maxlength="300" required autocomplete="street-address" aria-describedby="o-address-hint">{ f.value("address") }</textarea>
+		<small class="hint" id="o-address-hint">{ p.l.T(MsgAddressHint) }</small>
 		@fieldError(p, f, "address")
 	</div>
 	<div class={ "fld", templ.KV("bad", f.bad("notes")) }>
 		<label for="o-notes">{ p.l.T(MsgNotes) } <small>({ p.l.T(MsgOptional) })</small></label>
-		<textarea name="notes" id="o-notes" rows="2" maxlength="500">{ f.value("notes") }</textarea>
+		<textarea name="notes" id="o-notes" rows="2" maxlength="500" placeholder={ p.l.T(MsgNotesExample) }>{ f.value("notes") }</textarea>
 		@fieldError(p, f, "notes")
 	</div>
 	if f.challenge != "" {
 		<p class="alert" role="alert">{ p.l.T(MsgVerifyHuman) }</p>
 		<div class="cf-turnstile" data-sitekey={ f.challenge } data-language={ string(p.l) }></div>
 	}
-	<p class="quote" data-quote={ p.URL("/order/quote") } aria-live="polite" hidden></p>
-	if f.card {
-		<fieldset class="pay">
-			<legend>{ p.l.T(MsgPaymentMethod) }</legend>
-			<label><input type="radio" name="pay_method" value="cod" checked?={ !f.payByCard() }/> { p.l.T(MsgPayCash) }</label>
-			<label><input type="radio" name="pay_method" value="card" checked?={ f.payByCard() }/> { p.l.T(MsgPayCard) }</label>
-			<small>{ p.l.T(MsgPayCardNote) }</small>
-		</fieldset>
-	} else {
-		<p class="cod">{ p.l.T(MsgPayOnDelivery) }</p>
-	}
-	<button class="btn btn-block" type="submit">{ p.l.Or(f.cta, MsgPlaceOrder) }</button>
 }
 
 templ field(p *pageCtx, f *orderForm, name string, label Msg, kind, autocomplete string, maxLen int) {
@@ -81,38 +88,97 @@ templ fieldError(p *pageCtx, f *orderForm, name string) {
 
 // orderPage is the order form on a page of its own: checkout from the
 // cart, or a landing page's form sent back with problems. It is private
-// and never cached.
+// and never cached. The layout is the approved mockup: the summary
+// (opened on demand), then cards for the delivery details, the payment
+// method and the totals, which follow the quote.
 templ orderPage(p *pageCtx, f *orderForm) {
-	<section class="sec cart checkout">
-		<h1>{ p.l.T(MsgCheckout) }</h1>
+	<section class="checkout">
+		<h1 class="sr">{ p.l.T(MsgCheckout) }</h1>
+		if f.summary != nil {
+			<details class="card-box sum">
+				<summary>
+					<span>{ p.l.T(MsgOrderSummary) } ({ p.l.Pieces(f.summary.units) }) · <span class="show">{ p.l.T(MsgShow) }</span><span class="hide">{ p.l.T(MsgHide) }</span></span>
+					if f.summary.subtotal != nil {
+						<strong data-sum-total>{ p.l.Price(*f.summary.subtotal) }</strong>
+					}
+				</summary>
+				<ul class="mini">
+					for _, l := range f.summary.lines {
+						<li>
+							@lineThumb(l.thumb, l.title)
+							<span class="t">
+								{ l.title } × { strconv.Itoa(l.qty) }
+								if l.options != "" {
+									<small>{ l.options }</small>
+								}
+							</span>
+							<span>{ p.l.Price(l.total) }</span>
+						</li>
+					}
+				</ul>
+			</details>
+		}
 		if f.problem != "" {
 			<p class="alert" role="alert">{ f.problem }</p>
-		}
-		if f.summary != nil {
-			<h2>{ p.l.T(MsgOrderSummary) }</h2>
-			<ul class="lines">
-				for _, l := range f.summary.lines {
-					<li class="line">
-						<div class="what">
-							{ l.title } × { strconv.Itoa(l.qty) }
-							if l.options != "" {
-								<small>{ l.options }</small>
-							}
-						</div>
-						<strong class="total">{ p.l.Price(l.total) }</strong>
-					</li>
-				}
-			</ul>
-			if f.summary.subtotal != nil {
-				<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(*f.summary.subtotal) }</strong></p>
-			}
 		}
 		<form class="order" method="post" action={ p.URL(f.action) } data-order>
 			if !f.variant.IsZero() {
 				<input type="hidden" name="variant" value={ f.variant.String() }/>
 				<input type="hidden" name="qty" value={ strconv.Itoa(f.qty) }/>
 			}
-			@orderFields(p, f)
+			<section class="card-box">
+				<h2>{ p.l.T(MsgDeliveryDetails) }</h2>
+				@contactFields(p, f)
+			</section>
+			<section class="card-box">
+				<h2>{ p.l.T(MsgPaymentMethod) }</h2>
+				if f.card {
+					<div class="pay-cards">
+						<label>
+							<input type="radio" name="pay_method" value="card" checked?={ f.payByCard() }/>
+							<span><strong>{ p.l.T(MsgPayCardShort) }</strong><small>{ cardBrands(p.l, p.v.country) } — { p.l.T(MsgCardNoFee) }</small></span>
+						</label>
+						<label>
+							<input type="radio" name="pay_method" value="cod" checked?={ !f.payByCard() }/>
+							<span><strong>{ p.l.T(MsgPayCash) }</strong><small data-cod-note>{ p.l.T(MsgCODCash) }</small></span>
+						</label>
+					</div>
+				} else {
+					<p class="cod-only"><strong>{ p.l.T(MsgPayCODOnly) }</strong><small data-cod-note>{ p.l.T(MsgCODCash) }</small></p>
+				}
+			</section>
+			<section class="card-box totals" data-quote={ p.URL("/order/quote") } data-totals aria-live="polite">
+				if f.summary != nil && f.summary.subtotal != nil {
+					<p class="row"><span>{ p.l.T(MsgProducts) }</span><span data-amt="subtotal">{ p.l.Price(*f.summary.subtotal) }</span></p>
+				}
+				<p class="row"><span data-amt="ship_label">{ p.l.T(MsgShipping) }</span><span data-amt="shipping">{ p.l.T(MsgShippingLater) }</span></p>
+				<p class="row" data-cod-row hidden><span>{ p.l.T(MsgCODFee) }</span><span data-amt="cod_fee"></span></p>
+				<p class="row total"><span>{ p.l.T(MsgTotal) }</span>
+					if f.summary != nil && f.summary.subtotal != nil {
+						<strong data-amt="total">{ p.l.Price(*f.summary.subtotal) }</strong>
+					} else {
+						<strong data-amt="total"></strong>
+					}
+				</p>
+				<p class="bad" data-not-delivered hidden></p>
+			</section>
+			<button class="btn btn-block cta" type="submit" data-cod-label={ p.l.T(MsgPlaceOrder) } data-card-label={ p.l.T(MsgPayByCardCTA) }>
+				if f.payByCard() {
+					{ p.l.T(MsgPayByCardCTA) }
+				} else {
+					{ p.l.Or(f.cta, MsgPlaceOrder) }
+				}
+			</button>
+			<p class="secure" data-cod-text={ p.l.T(MsgSecureNoteCOD) } data-card-text={ p.l.T(MsgSecureNoteCard) }>
+				@icon("lock")
+				<span data-secure-text>
+					if f.payByCard() {
+						{ p.l.T(MsgSecureNoteCard) }
+					} else {
+						{ p.l.T(MsgSecureNoteCOD) }
+					}
+				</span>
+			</p>
 		</form>
 	</section>
 }

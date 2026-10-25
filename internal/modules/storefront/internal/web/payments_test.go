@@ -52,7 +52,10 @@ func TestCardCheckout(t *testing.T) {
 	f := newCheckoutFixture(t, withCards(fakePayments{on: true}))
 	cookies, form := checkoutCart(t, f)
 	body := f.getWith(t, "/checkout", cookies).Body.String()
-	wantContains(t, body, `name="pay_method" value="cod" checked`, `name="pay_method" value="card"`, "بطاقة بنكية (أونلاين)", "لا نرى بيانات بطاقتك")
+	wantContains(t, body, `name="pay_method" value="cod" checked`, `name="pay_method" value="card"`,
+		"<strong>بطاقة بنكية</strong><small>Visa · Mastercard · ميزة — بدون رسوم إضافية</small>", "لا نرى بيانات بطاقتك",
+		// cash on delivery is chosen unless the shopper picks the card
+		`<span data-secure-text>تدفع للمندوب عند الاستلام</span>`)
 	if strings.Contains(body, "الدفع نقدًا عند الاستلام. سنتصل بك") {
 		t.Fatal("the COD-only note is shown with the choice")
 	}
@@ -89,7 +92,7 @@ func TestCardUnavailable(t *testing.T) {
 			}
 			cookies, form := checkoutCart(t, f)
 			body := f.getWith(t, "/checkout", cookies).Body.String()
-			if strings.Contains(body, `name="pay_method"`) || !strings.Contains(body, "الدفع نقدًا عند الاستلام") {
+			if strings.Contains(body, `name="pay_method"`) || !strings.Contains(body, `<p class="cod-only"><strong>الدفع عند الاستلام</strong>`) {
 				t.Fatal("card offered by a store that does not take cards")
 			}
 			// A form sent with card anyway (an old page) is refused, not
@@ -121,7 +124,7 @@ func TestCardThankYou(t *testing.T) {
 
 	set(web.OrderSummary{Card: true, PaymentStatus: "paid"})
 	body = f.get(t, "/thank-you/IFT-1001?pay=1").Body.String()
-	wantContains(t, body, "تم الدفع بنجاح")
+	wantContains(t, body, `<span class="paid-chip">تم الدفع بالبطاقة · 350 ج.م</span>`, "تم تلقائياً بعد الدفع")
 	if strings.Contains(body, "http-equiv") || strings.Contains(body, "ادفع الآن") {
 		t.Fatal("a paid order still sends the shopper to pay")
 	}

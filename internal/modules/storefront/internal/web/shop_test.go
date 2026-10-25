@@ -31,6 +31,10 @@ import (
 
 var gen = ulid.NewGenerator()
 
+// shirtM is the fixture shirt's size M, the variant the fake orders'
+// summary names.
+var shirtM = gen.New()
+
 func egp(minor int64) money.Money {
 	m, err := money.New(minor, money.EGP)
 	if err != nil {
@@ -117,7 +121,7 @@ func (c *fakeCatalog) SellableVariants(_ context.Context, ids []ulid.ID) ([]cata
 			for _, v := range pr.Variants {
 				if v.ID == id && v.Available {
 					out = append(out, catalog.SellableVariant{VariantID: v.ID, ProductID: pr.ID, ProductTitle: pr.Title,
-						ProductSlug: pr.Slug, OptionValues: v.OptionValues, Price: v.Price})
+						ProductSlug: pr.Slug, OptionValues: v.OptionValues, Price: v.Price, ImageKey: "img/" + pr.Slug})
 				}
 			}
 		}
@@ -234,7 +238,7 @@ func (c *fakeCarts) Cart(_ context.Context, tok authtoken.Token) (app.CartView, 
 		}
 		total, _ := variant.Price.MulInt(int64(qty))
 		v.Lines = append(v.Lines, app.CartLineView{SellableVariant: catalog.SellableVariant{VariantID: id, ProductTitle: pr.Title,
-			ProductSlug: pr.Slug, OptionValues: variant.OptionValues, Price: variant.Price}, Qty: qty, Total: total, Available: true})
+			ProductSlug: pr.Slug, OptionValues: variant.OptionValues, Price: variant.Price, ImageKey: "img/" + pr.Slug}, Qty: qty, Total: total, Available: true})
 		v.Units += qty
 		v.Subtotal = &total
 	}
@@ -297,8 +301,9 @@ func (f fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummar
 			return *f.log.summary, nil
 		}
 	}
-	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}},
-		Subtotal: egp(30000), Shipping: egp(5000), CODFee: egp(1000), Total: egp(36000)}, nil
+	return web.OrderSummary{Ref: ref, Code: ref, Lines: []web.OrderLine{{VariantID: shirtM, Title: "تيشيرت قطن", Qty: 2, Total: egp(30000)}},
+		Subtotal: egp(30000), Shipping: egp(5000), CODFee: egp(1000), Total: egp(36000),
+		FirstName: "منى", Governorate: "EG-C", City: "مدينة نصر", Days: &web.DeliveryDays{Min: 2, Max: 3}}, nil
 }
 
 // Quote delivers to Cairo (in 2–3 days) and elsewhere for 50, free from
@@ -371,7 +376,7 @@ func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	shirt.Options = []catalog.Option{{Name: "المقاس", Values: []string{"M", "L"}}}
 	m := egp(20000)
 	shirt.Variants = []catalog.StorefrontVariant{
-		{ID: gen.New(), OptionValues: []string{"M"}, Price: egp(15000), CompareAt: &m, Available: true},
+		{ID: shirtM, OptionValues: []string{"M"}, Price: egp(15000), CompareAt: &m, Available: true},
 		{ID: gen.New(), OptionValues: []string{"L"}, Price: egp(16000), Available: false},
 	}
 	cat2 := product("كاب", "cap", 9900, false)
@@ -722,13 +727,36 @@ func TestAssets(t *testing.T) {
 			t.Errorf("%s: headers %v, %d bytes", path, rec.Header(), rec.Body.Len())
 		}
 	}
+	// Asked for gzip, the script comes compressed (once, at start-up),
+	// and decompresses to the same bytes; caches keep the two apart.
+	plain := httptest.NewRecorder()
+	a.ServeHTTP(plain, httptest.NewRequestWithContext(context.Background(), http.MethodGet, m[1], nil))
+	rq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, m[1], nil)
+	rq.Header.Set("Accept-Encoding", "gzip, br")
+	zipped := httptest.NewRecorder()
+	a.ServeHTTP(zipped, rq)
+	if zipped.Header().Get("Content-Encoding") != "gzip" || zipped.Header().Get("Vary") != "Accept-Encoding" ||
+		plain.Header().Get("Vary") != "Accept-Encoding" || plain.Header().Get("Content-Encoding") != "" || zipped.Body.Len() >= plain.Body.Len() {
+		t.Fatalf("gzip: %v (%d bytes) vs %v (%d bytes)", zipped.Header(), zipped.Body.Len(), plain.Header(), plain.Body.Len())
+	}
+	zr, err := gzip.NewReader(zipped.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unzipped, err := io.ReadAll(zr)
+	if err != nil || string(unzipped) != plain.Body.String() {
+		t.Fatalf("the gzipped script differs: %v", err)
+	}
 	font := regexp.MustCompile(`url\((/assets/iftah-sans-arabic-arabic-400\.[0-9a-f]{8}\.woff2)\)`).FindStringSubmatch(f.get(t, "/").Body.String())
 	if font == nil {
 		t.Fatal("no font face for the default font")
 	}
 	rec := httptest.NewRecorder()
-	a.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, font[1], nil))
-	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/woff2" || !strings.HasPrefix(rec.Body.String(), "wOF2") {
+	frq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, font[1], nil)
+	frq.Header.Set("Accept-Encoding", "gzip")
+	a.ServeHTTP(rec, frq)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/woff2" || !strings.HasPrefix(rec.Body.String(), "wOF2") ||
+		rec.Header().Get("Content-Encoding") != "" { // already compressed: never gzipped again
 		t.Fatalf("font: %d %v", rec.Code, rec.Header())
 	}
 }

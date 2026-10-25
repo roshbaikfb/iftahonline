@@ -178,6 +178,37 @@ const (
 	MsgLess
 	MsgMore
 	MsgImageN
+	MsgShippingTo
+	MsgCODCash
+	MsgFee
+	MsgSecure
+	MsgPieces
+	MsgShow
+	MsgHide
+	MsgShippingLater
+	MsgDeliveryDetails
+	MsgAddressHint
+	MsgNotesExample
+	MsgCardNoFee
+	MsgPayCardShort
+	MsgSecureNoteCard
+	MsgSecureNoteCOD
+	MsgThanksName
+	MsgThanksPlain
+	MsgPaidCard
+	MsgWhatsNext
+	MsgStepConfirm
+	MsgStepConfirmCOD
+	MsgStepConfirmCard
+	MsgStepPrepare
+	MsgStepPrepareNote
+	MsgStepShip
+	MsgStepShipNote
+	MsgStepDeliver
+	MsgDeliverTo
+	MsgOrderQuestion
+	MsgOrderQuestionText
+	MsgListSep
 	msgCount
 )
 
@@ -313,6 +344,37 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgLess:               {"أقل", "Fewer"},
 	MsgMore:               {"أكثر", "More"},
 	MsgImageN:             {"صورة %d", "Image %d"},
+	MsgShippingTo:         {"الشحن إلى", "Shipping to"},
+	MsgCODCash:            {"نقداً للمندوب", "Cash to the courier"},
+	MsgFee:                {"رسوم", "fee"},
+	MsgSecure:             {"اتصال آمن", "Secure connection"},
+	MsgPieces:             {"قطعة", "items"},
+	MsgShow:               {"عرض", "show"},
+	MsgHide:               {"إخفاء", "hide"},
+	MsgShippingLater:      {"يُحسب بعد اختيار المحافظة", "After choosing the governorate"},
+	MsgDeliveryDetails:    {"بيانات التوصيل", "Delivery details"},
+	MsgAddressHint:        {"الشارع، رقم العمارة، الدور، علامة مميزة", "Street, building, floor, a landmark"},
+	MsgNotesExample:       {"مثلاً: اتصل قبل الوصول", "e.g. call before arriving"},
+	MsgCardNoFee:          {"بدون رسوم إضافية", "no extra fee"},
+	MsgPayCardShort:       {"بطاقة بنكية", "Bank card"},
+	MsgSecureNoteCard:     {"الدفع على صفحة آمنة · لا نرى بيانات بطاقتك", "You pay on a secure page · we never see your card"},
+	MsgSecureNoteCOD:      {"تدفع للمندوب عند الاستلام", "You pay the courier on delivery"},
+	MsgThanksName:         {"شكراً يا %s، طلبك وصلنا", "Thank you, %s — we have your order"},
+	MsgThanksPlain:        {"شكراً، طلبك وصلنا", "Thank you — we have your order"},
+	MsgPaidCard:           {"تم الدفع بالبطاقة", "Paid by card"},
+	MsgWhatsNext:          {"إيه اللي هيحصل بعد كده؟", "What happens next?"},
+	MsgStepConfirm:        {"تأكيد الطلب", "Confirmation"},
+	MsgStepConfirmCOD:     {"سنتصل بك لتأكيد الطلب", "We will call you to confirm"},
+	MsgStepConfirmCard:    {"تم تلقائياً بعد الدفع", "Done when you paid"},
+	MsgStepPrepare:        {"التجهيز", "Preparing"},
+	MsgStepPrepareNote:    {"نجهّز طلبك للشحن", "We get your order ready to ship"},
+	MsgStepShip:           {"الشحن", "Shipping"},
+	MsgStepShipNote:       {"نسلّمه لشركة الشحن", "We hand it to the courier"},
+	MsgStepDeliver:        {"التوصيل", "Delivery"},
+	MsgDeliverTo:          {"التوصيل إلى:", "Delivery to:"},
+	MsgOrderQuestion:      {"سؤال عن طلبك؟ واتساب", "A question about your order? WhatsApp"},
+	MsgOrderQuestionText:  {"مرحبًا، عندي سؤال عن طلبي رقم %s", "Hello, I have a question about my order %s"},
+	MsgListSep:            {"، ", ", "},
 }
 
 // T returns the message in l.

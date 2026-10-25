@@ -117,6 +117,39 @@ The product page (U2b, the approved mockup):
   4). The page carries their `p-` tags, not the listing tag, so a store's
   every edit does not purge every product page.
 
+Cart, checkout and thank-you (U2c, the approved mockups; the cart has
+no mockup and follows the same system):
+- **Layout.** White cards on a tinted background. The pages link
+  `checkout.css` (5 KB) besides the inlined base, so the pages shoppers
+  land on keep a small first paint.
+- **Cart.** Each line is a card: its picture (the product's first ready
+  image, from the same single `SellableVariants` query), the title, the
+  choice, the price, and a stepper of submit buttons (− to 0 removes
+  it). Then the subtotal with the item count, and checkout.
+- **Checkout (phones).** A short header: back to the cart, "إتمام الطلب"
+  and a lock.
+- **Checkout, top to bottom:**
+  - the summary, opened on demand, with pictures;
+  - the delivery details (address hint, notes example);
+  - the payment method as cards: the card first with the country's
+    brands, cash on delivery chosen by default;
+  - the totals card;
+  - the button and the note under it, which follow the method.
+- **The totals card.** It fills from `/order/quote`'s `amounts`
+  (subtotal, "الشحن إلى …", shipping or free, COD fee, total), and the
+  cash choice's note gets its fee.
+- **Thank-you.** The page's link may be shared, so it says:
+  - the first name only, and where the order goes as city and
+    governorate (never the street or the phone);
+  - the payment chip, or pay now;
+  - what happens next in honest words (no WhatsApp tracking promise
+    before messaging exists; delivery days when the zone has them,
+    asked through today's quote);
+  - the summary with pictures, and a WhatsApp question with the order
+    number when the store has a number.
+- **Static files.** The script and stylesheets are gzipped once at
+  start-up; fonts are already compressed.
+
 The cart:
 - **Redis and limits.** The cart is a Redis hash found by the SHA-256 of
   a token in the `__Host-cart` cookie (`sf:cart:<store>:<hash>`). It lives

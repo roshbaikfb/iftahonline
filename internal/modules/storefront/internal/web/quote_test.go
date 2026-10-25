@@ -112,6 +112,39 @@ func TestProductDeliveryLines(t *testing.T) {
 	}
 }
 
+// TestCheckoutAmounts: checkout's totals card gets each amount on its
+// own line, and the cash-on-delivery choice its fee.
+func TestCheckoutAmounts(t *testing.T) {
+	t.Parallel()
+	f := newCheckoutFixture(t)
+	add := f.post(t, "/cart", url.Values{"variant": {f.shirt.Variants[0].ID.String()}, "qty": {"2"}}, nil, nil)
+	cookies := []*http.Cookie{cookie(add, "__Host-cart")}
+	_, q := quoteOf(t, f, "/order/quote", url.Values{"governorate": {"EG-C"}}, cookies)
+	want := map[string]any{"subtotal": "300 ج.م", "ship_label": "الشحن إلى القاهرة", "shipping": "50 ج.م", "cod_fee": "10 ج.م",
+		"total": "360 ج.م", "cod_note": "نقداً للمندوب · رسوم 10 ج.م"}
+	got, _ := q["amounts"].(map[string]any)
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("amounts[%s] = %v, want %q", k, got[k], v)
+		}
+	}
+	// By card: no fee, and no cash note to change.
+	_, q = quoteOf(t, f, "/order/quote", url.Values{"governorate": {"EG-C"}, "pay_method": {"card"}}, cookies)
+	if got, _ = q["amounts"].(map[string]any); got["cod_fee"] != nil || got["total"] != "350 ج.م" || got["cod_note"] != nil {
+		t.Fatalf("by card: %v", got)
+	}
+	// Free shipping reads "مجاني".
+	big := f.post(t, "/cart", url.Values{"variant": {f.shirt.Variants[0].ID.String()}, "qty": {"7"}}, nil, nil)
+	_, q = quoteOf(t, f, "/order/quote", url.Values{"governorate": {"EG-C"}}, []*http.Cookie{cookie(big, "__Host-cart")})
+	if got, _ = q["amounts"].(map[string]any); got["shipping"] != "مجاني" {
+		t.Fatalf("free shipping: %v", got)
+	}
+	// Not delivered: no amounts.
+	if _, q = quoteOf(t, f, "/order/quote", url.Values{"governorate": {"EG-ASN"}}, cookies); q["amounts"] != nil {
+		t.Fatalf("not delivered: %v", q)
+	}
+}
+
 func TestDeliveryDaysWording(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -177,6 +210,7 @@ func TestThankYouShowsCharges(t *testing.T) {
 	t.Parallel()
 	f := newCheckoutFixture(t)
 	wantContains(t, f.get(t, "/thank-you/IFT-1001").Body.String(),
-		"المجموع: <strong>300 ج.م", "الشحن: <strong>50 ج.م", "رسوم الدفع عند الاستلام: <strong>10 ج.م", "الإجمالي: <strong>360 ج.م")
+		"<span>المجموع</span><span>300 ج.م</span>", "<span>الشحن</span><span>50 ج.م</span>",
+		"<span>رسوم الدفع عند الاستلام</span><span>10 ج.م</span>", "<span>الإجمالي</span><strong>360 ج.م</strong>")
 	wantContains(t, f.get(t, "/pages/offer").Body.String(), `data-quote="/order/quote"`, `aria-live="polite"`)
 }

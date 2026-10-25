@@ -24,6 +24,17 @@ type quoteResponse struct {
 	Deliverable bool   `json:"deliverable"`        // false: Text says the store does not deliver there
 	Delivery    string `json:"delivery,omitempty"` // "التوصيل إلى القاهرة خلال 2–3 أيام"
 	Shipping    string `json:"shipping,omitempty"` // "الشحن 50 ج.م · مجاني فوق 1,000 ج.م"
+	// Amounts are checkout's totals card, each on its own line.
+	Amounts *quoteAmounts `json:"amounts,omitempty"`
+}
+
+type quoteAmounts struct {
+	Subtotal  string `json:"subtotal"`
+	ShipLabel string `json:"ship_label"`         // "الشحن إلى القاهرة"
+	Shipping  string `json:"shipping"`           // "50 ج.م" or "مجاني"
+	CODFee    string `json:"cod_fee,omitempty"`  // absent: no fee (or paid by card)
+	Total     string `json:"total"`              //
+	CODNote   string `json:"cod_note,omitempty"` // the cash choice's note with its fee
 }
 
 // quoteOrder answers the order form's script (POST /order/quote) with
@@ -102,7 +113,28 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 		return
 	}
 	writeQuote(w, quoteResponse{Text: quoteText(p.l, q), Deliverable: true,
-		Delivery: deliveryLine(p.l, p.v.country, req.Governorate, q.Days), Shipping: shippingLine(p.l, q)})
+		Delivery: deliveryLine(p.l, p.v.country, req.Governorate, q.Days), Shipping: shippingLine(p.l, q),
+		Amounts: amounts(p.l, p.v.country, req, q)})
+}
+
+// amounts are the quote line by line, in the page's language.
+func amounts(l Locale, country geo.Country, req QuoteRequest, q QuoteView) *quoteAmounts {
+	a, _ := geo.Lookup(country, req.Governorate) // the quote accepted it
+	out := &quoteAmounts{Subtotal: l.Price(q.Subtotal), ShipLabel: l.T(MsgShippingTo) + " " + a.Name(string(l)),
+		Shipping: l.Price(q.Shipping), Total: l.Price(q.Total)}
+	if q.Shipping.IsZero() {
+		out.Shipping = l.T(MsgShippingFree)
+	}
+	if !q.CODFee.IsZero() {
+		out.CODFee = l.Price(q.CODFee)
+	}
+	if !req.Card {
+		out.CODNote = l.T(MsgCODCash)
+		if out.CODFee != "" {
+			out.CODNote += " · " + l.T(MsgFee) + " " + out.CODFee
+		}
+	}
+	return out
 }
 
 // deliveryLine is where the order goes and, when the store says, how
