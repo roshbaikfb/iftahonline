@@ -1,0 +1,34 @@
+// NavItem is one sidebar entry: a link to a screen, or (without `to`) a
+// screen still to come, shown greyed as "قريبًا".
+export interface NavItem {
+  label: string;
+  to?: string;
+}
+
+export interface NavGroup {
+  title?: string;
+  items: NavItem[];
+}
+
+// navGroups is the sidebar of the approved mockup. Screens not built yet
+// stay visible but inert, so merchants see what is coming.
+export function navGroups(storeId: string): NavGroup[] {
+  const at = (path: string) => `/stores/${storeId}/${path}`;
+  return [
+    { items: [{ label: 'الرئيسية' }] },
+    { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders') }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
+    { title: 'المنتجات', items: [{ label: 'المنتجات' }, { label: 'التصنيفات' }, { label: 'المخزون' }] },
+    {
+      title: 'الشحن',
+      items: [
+        { label: 'الشحنات', to: at('shipments') },
+        { label: 'مناطق الشحن', to: at('shipping') },
+        { label: 'شركات الشحن', to: at('carriers') },
+        { label: 'التحصيل', to: at('cod') },
+      ],
+    },
+    { title: 'المتجر', items: [{ label: 'التصميم' }, { label: 'الصفحات' }, { label: 'الدومينات' }] },
+    { title: 'الإعدادات', items: [{ label: 'الدفع بالبطاقة', to: at('gateways') }, { label: 'فريق العمل' }, { label: 'إعدادات المتجر' }] },
+  ];
+}
+

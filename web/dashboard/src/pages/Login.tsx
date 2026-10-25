@@ -46,31 +46,42 @@ export function Login() {
 
   return (
     <main className="login">
-      <h1>لوحة تحكم التاجر</h1>
-      <form onSubmit={(e) => void submit(e)}>
-        {challenge === null ? (
-          <>
+      <div className="card">
+        <div className="side-brand">
+          <span className="mark" aria-hidden="true">
+            ا
+          </span>
+          <div>
+            <strong>افتح أونلاين</strong>
+            <small>لوحة التاجر</small>
+          </div>
+        </div>
+        <h1>{challenge === null ? 'تسجيل الدخول' : 'رمز التحقق'}</h1>
+        <form onSubmit={(e) => void submit(e)}>
+          {challenge === null ? (
+            <>
+              <label>
+                البريد الإلكتروني
+                <input name="email" type="email" autoComplete="username" required dir="ltr" />
+              </label>
+              <label>
+                كلمة المرور
+                <input name="password" type="password" autoComplete="current-password" required dir="ltr" />
+              </label>
+            </>
+          ) : (
             <label>
-              البريد الإلكتروني
-              <input name="email" type="email" autoComplete="username" required dir="ltr" />
+              رمز التحقق
+              <input name="code" inputMode="numeric" autoComplete="one-time-code" required dir="ltr" />
             </label>
-            <label>
-              كلمة المرور
-              <input name="password" type="password" autoComplete="current-password" required dir="ltr" />
-            </label>
-          </>
-        ) : (
-          <label>
-            رمز التحقق
-            <input name="code" inputMode="numeric" autoComplete="one-time-code" required dir="ltr" />
-          </label>
-        )}
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={busy}>
-          {challenge === null ? 'تسجيل الدخول' : 'تأكيد'}
-        </button>
-      </form>
-      <BuildInfo />
+          )}
+          {error && <p role="alert">{error}</p>}
+          <button type="submit" disabled={busy}>
+            {challenge === null ? 'تسجيل الدخول' : 'تأكيد'}
+          </button>
+        </form>
+        <BuildInfo />
+      </div>
     </main>
   );
 }
