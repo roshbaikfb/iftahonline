@@ -301,6 +301,7 @@ How saves work:
 | Meta description | 300 characters |
 | Policy body | 20,000 characters |
 | Low-stock threshold (`low_stock`) | 0 (off) to 10, default 5; the catalog never reports more than 10 units left |
+| Look (`look`) | `classic`, `modern` or `soft`, chosen in the setup wizard ([ADR-0034](../adr/0034-setup-wizard-and-starter-templates.md)); absent is the original layout. The body carries `data-look`, and `site.css` does the rest: classic centres the logo on its own row, modern shows larger product cards (fewer to a row), soft draws categories as circles on phones too |
 
 ## Tests
 

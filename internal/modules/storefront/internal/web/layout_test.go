@@ -189,3 +189,26 @@ func TestNewSectionsRender(t *testing.T) {
 	}
 	checkCSP(t, rec)
 }
+
+// The look chosen in the setup wizard (ADR-0034) marks the page, for the
+// stylesheet; a store without one keeps the original layout.
+func TestLookMarksThePage(t *testing.T) {
+	t.Parallel()
+	// The inlined stylesheet names the looks too: read the body tag only.
+	bodyTag := func(f fixture) string {
+		page := f.get(t, "/").Body.String()
+		start := strings.Index(page, "<body")
+		end := strings.Index(page[start:], ">")
+		return page[start : start+end+1]
+	}
+	if tag := bodyTag(newFixture(t)); strings.Contains(tag, "data-look") {
+		t.Fatalf("a store without a look is marked: %s", tag)
+	}
+	f := newFixture(t)
+	f.content.mu.Lock()
+	f.content.shop.Theme.Look = domain.LookSoft
+	f.content.mu.Unlock()
+	if tag := bodyTag(f); !strings.Contains(tag, `data-look="soft"`) {
+		t.Fatalf("the soft look is not on the page: %s", tag)
+	}
+}

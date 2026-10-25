@@ -368,3 +368,20 @@ main { display: block; min-block-size: 50vh; }
 .order .pay small { display: block; opacity: .8; }
 .review figcaption { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
 .review blockquote { margin: 0; }
+
+/* Looks (ADR-0034): the layout chosen in the setup wizard. No look keeps
+   the original layout. */
+[data-look="classic"] .brand { order: -1; flex: 1 1 100%; justify-content: center; margin: 0; padding-block-start: .75rem; }
+[data-look="classic"] .tools { margin-inline-start: auto; }
+@media (min-width: 48rem) {
+  [data-look="modern"] .grid { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 1.5rem; }
+  [data-look="modern"] .grid.row .card { inline-size: 18rem; }
+}
+@media (max-width: 47.99rem) {
+  [data-look="soft"] .tiles a { flex-direction: column; gap: .375rem; inline-size: 4.75rem; min-block-size: 0; padding: 0; border: 0; border-radius: 0;
+    background: none; font-size: .8rem; text-align: center; }
+  [data-look="soft"] .tiles a[aria-current] { background: none; color: var(--c-primary); }
+  [data-look="soft"] .tiles a.all { display: none; }
+  [data-look="soft"] .tiles i { display: flex; align-items: center; justify-content: center; inline-size: 4.75rem; aspect-ratio: 1; border-radius: 50%;
+    background: var(--tint); color: var(--c-primary); font-style: normal; font-size: 1.75rem; font-weight: 700; }
+}

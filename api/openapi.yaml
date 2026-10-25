@@ -3470,6 +3470,15 @@ components:
         radius:
           type: string
           enum: [none, small, medium, large]
+        look:
+          type: string
+          enum: [classic, modern, soft]
+          description: |
+            The storefront's layout, chosen in the setup wizard (ADR-0034):
+            classic puts the logo on its own centred row; modern shows larger
+            product cards, fewer to a row; soft draws categories as circles on
+            every screen. Absent keeps the original layout; saving without it
+            returns to that.
         announcement:
           type: string
           maxLength: 120

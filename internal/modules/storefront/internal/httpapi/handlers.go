@@ -84,6 +84,9 @@ func (h *Handlers) UpdateStorefrontTheme(ctx context.Context, req UpdateStorefro
 		Font:   domain.Font(in.Font), Radius: domain.Radius(in.Radius),
 		Announcement: deref(in.Announcement), About: deref(in.About), LowStock: in.LowStock,
 	}
+	if in.Look != nil {
+		settings.Look = domain.Look(*in.Look)
+	}
 	if in.Contact != nil {
 		settings.Contact = domain.Contact{WhatsApp: deref(in.Contact.Whatsapp), Email: deref(in.Contact.Email)}
 	}
@@ -372,6 +375,10 @@ func toTheme(t domain.Theme) Theme {
 	out.Settings.Colors.Background, out.Settings.Colors.Text = c.Background, c.Text
 	out.Settings.Font = ThemeSettingsFont(t.Settings.Font)
 	out.Settings.Radius = ThemeSettingsRadius(t.Settings.Radius)
+	if t.Settings.Look != "" {
+		look := ThemeSettingsLook(t.Settings.Look)
+		out.Settings.Look = &look
+	}
 	out.Settings.Announcement, out.Settings.About = opt(t.Settings.Announcement), opt(t.Settings.About)
 	low := t.Settings.LowStockThreshold()
 	out.Settings.LowStock = &low

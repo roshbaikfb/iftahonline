@@ -309,12 +309,24 @@ func TestHappyPath(t *testing.T) {
 	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","contact":{"whatsapp":"01012345678"}}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "contact.whatsapp") {
 		t.Fatalf("a WhatsApp number without its country code = %d %v", bad, body)
 	}
+	// The look is kept; saving without one returns to the original layout.
+	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"large","look":"soft"}}`))
+	if code != http.StatusOK || th["settings"].(map[string]any)["look"] != "soft" {
+		t.Fatalf("look soft = %d %v", code, th)
+	}
+	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":3,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"large","look":"loud"}}`)); bad != http.StatusBadRequest && bad != http.StatusUnprocessableEntity {
+		t.Fatalf("an unknown look = %d %v", bad, body)
+	}
+	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":3,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium"}}`))
+	if code != http.StatusOK || th["settings"].(map[string]any)["look"] != nil {
+		t.Fatalf("theme without a look = %d %v", code, th)
+	}
 	// The low-stock message: 0 turns it off and is kept; above 10 is refused.
-	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":0}}`))
+	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":4,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":0}}`))
 	if code != http.StatusOK || th["settings"].(map[string]any)["low_stock"] != float64(0) {
 		t.Fatalf("low_stock 0 = %d %v", code, th)
 	}
-	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":3,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":11}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "low_stock") {
+	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":5,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":11}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "low_stock") {
 		t.Fatalf("low_stock 11 = %d %v", bad, body)
 	}
 
