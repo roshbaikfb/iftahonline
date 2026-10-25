@@ -289,8 +289,9 @@ func TestHappyPath(t *testing.T) {
 	a := f.storeA
 
 	code, th := f.do(t, req(t, http.MethodGet, storePath(a, "/theme"), tokOwnerA, ""))
-	if code != http.StatusOK || th["version"] != float64(0) || th["settings"].(map[string]any)["font"] != "ibm-plex-sans-arabic" || th["updated_at"] != nil {
-		t.Fatalf("getStorefrontTheme = %d %v", code, th)
+	if code != http.StatusOK || th["version"] != float64(0) || th["settings"].(map[string]any)["font"] != "ibm-plex-sans-arabic" || th["updated_at"] != nil ||
+		th["settings"].(map[string]any)["low_stock"] != float64(5) {
+		t.Fatalf("getStorefrontTheme = %d %v (the low-stock threshold in force is the default 5)", code, th)
 	}
 	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, fmt.Sprintf(themeBody, 0)))
 	colors := th["settings"].(map[string]any)["colors"].(map[string]any)
@@ -307,6 +308,14 @@ func TestHappyPath(t *testing.T) {
 	}
 	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","contact":{"whatsapp":"01012345678"}}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "contact.whatsapp") {
 		t.Fatalf("a WhatsApp number without its country code = %d %v", bad, body)
+	}
+	// The low-stock message: 0 turns it off and is kept; above 10 is refused.
+	code, th = f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":2,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":0}}`))
+	if code != http.StatusOK || th["settings"].(map[string]any)["low_stock"] != float64(0) {
+		t.Fatalf("low_stock 0 = %d %v", code, th)
+	}
+	if bad, body := f.do(t, req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, `{"version":3,"settings":{"colors":{"primary":"#0f2e52","accent":"#15803d","background":"#ffffff","text":"#0f172a"},"font":"cairo","radius":"medium","low_stock":11}}`)); bad != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["errors"]), "low_stock") {
+		t.Fatalf("low_stock 11 = %d %v", bad, body)
 	}
 
 	code, st := f.do(t, req(t, http.MethodGet, storePath(a, "/section-types"), tokOwnerA, ""))

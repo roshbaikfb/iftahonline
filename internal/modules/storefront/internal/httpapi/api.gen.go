@@ -466,8 +466,11 @@ type ThemeSettings struct {
 	} `json:"contact,omitempty"`
 
 	// Font Self-hosted fonts only; system uses the device's font.
-	Font   ThemeSettingsFont   `json:"font"`
-	Radius ThemeSettingsRadius `json:"radius"`
+	Font ThemeSettingsFont `json:"font"`
+
+	// LowStock The product page says "only N left" when a variant has this many units or fewer; 0 turns it off. Responses always carry the value in force; on save, absent keeps the default (5).
+	LowStock *int                `json:"low_stock,omitempty"`
+	Radius   ThemeSettingsRadius `json:"radius"`
 }
 
 // ThemeSettingsFont Self-hosted fonts only; system uses the device's font.

@@ -2882,6 +2882,8 @@ export interface components {
                 whatsapp?: string;
                 email?: string;
             };
+            /** @description The product page says "only N left" when a variant has this many units or fewer; 0 turns it off. Responses always carry the value in force; on save, absent keeps the default (5). */
+            low_stock?: number;
         };
         Theme: {
             settings: components["schemas"]["ThemeSettings"];

@@ -79,6 +79,26 @@ type ThemeSettings struct {
 	About string `json:"about,omitempty"`
 	// Contact is how shoppers reach the store (footer, product page).
 	Contact Contact `json:"contact"`
+	// LowStock is the most units left for which the product page says
+	// "only N left": 0 turns it off; nil (never chosen) means
+	// DefaultLowStock.
+	LowStock *int `json:"low_stock,omitempty"`
+}
+
+// The low-stock message's threshold. MaxLowStock must not exceed the
+// catalog's catalog.MaxShownLeft, the most it ever tells the storefront.
+const (
+	DefaultLowStock = 5
+	MaxLowStock     = 10
+)
+
+// LowStockThreshold is the most units left the product page announces;
+// 0 means never.
+func (t ThemeSettings) LowStockThreshold() int {
+	if t.LowStock == nil {
+		return DefaultLowStock
+	}
+	return *t.LowStock
 }
 
 // Contact is how shoppers reach the store; empty fields are not shown.
@@ -160,6 +180,13 @@ func ValidateTheme(in ThemeSettings) (ThemeSettings, error) {
 			fields = append(fields, errs.FieldError{Field: "contact.email", Code: "invalid", Message: "contact.email must be an email address"})
 		}
 		out.Contact.Email = n
+	}
+	if n := in.LowStock; n != nil {
+		if *n < 0 || *n > MaxLowStock {
+			fields = append(fields, errs.FieldError{Field: "low_stock", Code: "range", Message: "low_stock must be between 0 (off) and " + strconv.Itoa(MaxLowStock)})
+		}
+		v := *n
+		out.LowStock = &v
 	}
 	if !slices.Contains(Fonts(), out.Font) {
 		fields = append(fields, errs.FieldError{Field: "font", Code: "invalid", Message: "font must be one of the offered fonts"})

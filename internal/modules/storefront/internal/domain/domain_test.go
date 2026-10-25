@@ -58,6 +58,10 @@ func TestValidateTheme(t *testing.T) {
 		{"whatsapp without country code", func(s *domain.ThemeSettings) { s.Contact.WhatsApp = "01012345678" }, []string{"contact.whatsapp:invalid"}},
 		{"whatsapp not a number", func(s *domain.ThemeSettings) { s.Contact.WhatsApp = "+20 abc" }, []string{"contact.whatsapp:invalid"}},
 		{"bad email", func(s *domain.ThemeSettings) { s.Contact.Email = "not-an-email" }, []string{"contact.email:invalid"}},
+		{"low stock off", func(s *domain.ThemeSettings) { s.LowStock = ptr(0) }, nil},
+		{"low stock at most", func(s *domain.ThemeSettings) { s.LowStock = ptr(domain.MaxLowStock) }, nil},
+		{"low stock too high", func(s *domain.ThemeSettings) { s.LowStock = ptr(domain.MaxLowStock + 1) }, []string{"low_stock:range"}},
+		{"low stock negative", func(s *domain.ThemeSettings) { s.LowStock = ptr(-1) }, []string{"low_stock:range"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,6 +99,35 @@ func TestThemeTextsAreCleaned(t *testing.T) {
 	}
 	if def := domain.DefaultTheme(); def.Font != domain.FontPlexArabic || def.Colors.Primary != "#0f2e52" || def.Colors.Accent != "#15803d" {
 		t.Fatalf("default theme %+v", def)
+	}
+}
+
+// TestLowStockThreshold: a store that never chose one tells shoppers
+// about the last 5 units; 0 turns the message off.
+func TestLowStockThreshold(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		set  *int
+		want int
+	}{
+		{"never chosen", nil, domain.DefaultLowStock},
+		{"off", ptr(0), 0},
+		{"chosen", ptr(3), 3},
+	}
+	for _, tt := range tests {
+		th := domain.DefaultTheme()
+		th.LowStock = tt.set
+		if got := th.LowStockThreshold(); got != tt.want {
+			t.Errorf("%s: threshold %d, want %d", tt.name, got, tt.want)
+		}
+	}
+	if domain.DefaultLowStock != 5 || domain.DefaultTheme().LowStock != nil {
+		t.Fatal("the default is 5, and a new store has not chosen")
+	}
+	out, err := domain.ValidateTheme(domain.ThemeSettings{Colors: domain.DefaultTheme().Colors, Font: domain.FontCairo, Radius: domain.RadiusSmall, LowStock: ptr(7)})
+	if err != nil || out.LowStock == nil || *out.LowStock != 7 {
+		t.Fatalf("validated %+v, %v: the threshold must be kept", out.LowStock, err)
 	}
 }
 
@@ -289,3 +322,5 @@ func TestLogoUploadRules(t *testing.T) {
 		t.Errorf("jpeg master %q", got)
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
