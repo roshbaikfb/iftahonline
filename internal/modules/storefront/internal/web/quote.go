@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -16,10 +17,13 @@ import (
 // city a few times; a script asking for every price does not need us.
 var quotePerIP = ratelimit.Limit{Burst: 60, Period: time.Minute} //nolint:gochecknoglobals // constant policy
 
-// quoteResponse is what the order form's script shows under the form.
+// quoteResponse is what the order form's script shows under the form,
+// and the product page's delivery box its two lines.
 type quoteResponse struct {
-	Text        string `json:"text"`        // empty: show nothing
-	Deliverable bool   `json:"deliverable"` // false: Text says the store does not deliver there
+	Text        string `json:"text"`               // empty: show nothing
+	Deliverable bool   `json:"deliverable"`        // false: Text says the store does not deliver there
+	Delivery    string `json:"delivery,omitempty"` // "التوصيل إلى القاهرة خلال 2–3 أيام"
+	Shipping    string `json:"shipping,omitempty"` // "الشحن 50 ج.م · مجاني فوق 1,000 ج.م"
 }
 
 // quoteOrder answers the order form's script (POST /order/quote) with
@@ -94,10 +98,35 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 		s.unavailable(w, r, err)
 		return
 	case !q.Deliverable:
-		writeQuote(w, quoteResponse{Text: p.l.T(MsgErrNotDelivered)})
+		writeQuote(w, quoteResponse{Text: p.l.T(MsgErrNotDelivered), Delivery: p.l.T(MsgErrNotDelivered)})
 		return
 	}
-	writeQuote(w, quoteResponse{Text: quoteText(p.l, q), Deliverable: true})
+	writeQuote(w, quoteResponse{Text: quoteText(p.l, q), Deliverable: true,
+		Delivery: deliveryLine(p.l, p.v.country, req.Governorate, q.Days), Shipping: shippingLine(p.l, q)})
+}
+
+// deliveryLine is where the order goes and, when the store says, how
+// long it takes: "التوصيل إلى القاهرة خلال 2–3 أيام".
+func deliveryLine(l Locale, country geo.Country, governorate string, days *DeliveryDays) string {
+	a, _ := geo.Lookup(country, governorate) // the quote accepted it
+	line := l.T(MsgDeliveryTo) + " " + a.Name(string(l))
+	if days != nil {
+		line += " " + l.DeliveryDays(days.Min, days.Max)
+	}
+	return line
+}
+
+// shippingLine is what shipping costs and from when it is free: "الشحن
+// 50 ج.م · مجاني فوق 1,000 ج.م", or "الشحن مجاني".
+func shippingLine(l Locale, q QuoteView) string {
+	if q.Shipping.IsZero() {
+		return l.T(MsgShippingFreeLine)
+	}
+	line := l.T(MsgShippingCost) + " " + l.Price(q.Shipping)
+	if q.FreeOver != nil {
+		line += " · " + l.T(MsgFreeOver) + " " + l.Price(*q.FreeOver)
+	}
+	return line
 }
 
 // quoteText is the quote in one line: shipping, the COD fee when there

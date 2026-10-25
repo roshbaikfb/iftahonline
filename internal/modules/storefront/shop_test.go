@@ -463,7 +463,7 @@ func TestOrderWithShipping(t *testing.T) {
 	s := p.createStore(t, members, "ship-"+tag, "متجر الشحن", "ar", "EGP")
 	prod := p.call(t, s, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
 	variant := prod["variants"].([]any)[0].(map[string]any)["id"].(string)
-	p.call(t, s, http.MethodPost, "/shipping/zones", `{"name":"القاهرة","areas":["EG-C"],"rate_minor":5000,"cities":[{"name":"مدينة نصر","rate_minor":4000}]}`, http.StatusCreated)
+	p.call(t, s, http.MethodPost, "/shipping/zones", `{"name":"القاهرة","areas":["EG-C"],"rate_minor":5000,"free_over_minor":200000,"eta_min_days":2,"eta_max_days":3,"cities":[{"name":"مدينة نصر","rate_minor":4000}]}`, http.StatusCreated)
 	p.call(t, s, http.MethodPut, "/shipping/settings", `{"version":0,"cod_fee":{"fixed_minor":1000,"bp":0,"min_minor":0,"max_minor":0}}`, http.StatusOK)
 
 	post := func(path string, form url.Values, n int) *httptest.ResponseRecorder {
@@ -489,6 +489,11 @@ func TestOrderWithShipping(t *testing.T) {
 	}
 	if q := quote("EG-C", "الزمالك"); q["text"] != "الشحن: 50 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 960 ج.م" {
 		t.Fatalf("quote with the zone rate: %v", q)
+	}
+	// The product page's lines: the zone's days and threshold came from
+	// shipping through orders.
+	if q := quote("EG-C", ""); q["delivery"] != "التوصيل إلى القاهرة خلال 2–3 أيام" || q["shipping"] != "الشحن 50 ج.م · مجاني فوق 2,000 ج.م" {
+		t.Fatalf("delivery lines: %v", q)
 	}
 	if q := quote("EG-ALX", ""); q["deliverable"] != false || q["text"] != "لا نوصّل إلى هذه المحافظة حاليًا." {
 		t.Fatalf("quote outside the zones: %v", q)

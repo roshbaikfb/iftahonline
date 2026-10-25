@@ -342,6 +342,10 @@ type Quote struct {
 	Total        money.Money
 	Deliverable  bool // false: the store does not deliver there (amounts are the subtotal only)
 	FreeShipping bool
+	// FreeOverMinor is the free-shipping threshold in force, and Delivery
+	// how long delivery takes; nil when shipping has none to say.
+	FreeOverMinor *int64
+	Delivery      *shipping.DeliveryDays
 }
 
 // charges quotes delivering subtotal's order to governorate and city; a
@@ -365,6 +369,7 @@ func (s *Service) charges(ctx context.Context, governorate, city string, subtota
 		return q, nil
 	}
 	q.Shipping, q.FreeShipping = sq.Shipping, sq.FreeShipping
+	q.FreeOverMinor, q.Delivery = sq.FreeOverMinor, sq.Delivery
 	if method != domain.PaymentCard {
 		q.CODFee = sq.CODFee
 	}

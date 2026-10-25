@@ -80,6 +80,62 @@ func TestOrderQuote(t *testing.T) {
 	}
 }
 
+// TestProductDeliveryLines: the product page's delivery box asks the
+// same quote and shows two lines: where and how long, then what
+// shipping costs and from when it is free.
+func TestProductDeliveryLines(t *testing.T) {
+	t.Parallel()
+	f := newCheckoutFixture(t)
+	v := f.shirt.Variants[0].ID.String()
+	form := func(gov, qty string) url.Values {
+		return url.Values{"variant": {v}, "qty": {qty}, "governorate": {gov}}
+	}
+	tests := []struct {
+		name, path     string
+		form           url.Values
+		delivery, ship string
+	}{
+		{"days and threshold", "/order/quote", form("EG-C", "1"), "التوصيل إلى القاهرة خلال 2–3 أيام", "الشحن 50 ج.م · مجاني فوق 1,000 ج.م"},
+		{"free reached", "/order/quote", form("EG-C", "7"), "التوصيل إلى القاهرة خلال 2–3 أيام", "الشحن مجاني"},
+		{"no days said", "/order/quote", form("EG-GZ", "1"), "التوصيل إلى الجيزة", "الشحن 50 ج.م · مجاني فوق 1,000 ج.م"},
+		{"English", "/en/order/quote", form("EG-C", "1"), "Delivery to Cairo in 2–3 days", "Shipping EGP 50 · free over EGP 1,000"},
+		{"not delivered", "/order/quote", form("EG-ASN", "1"), "لا نوصّل إلى هذه المحافظة حاليًا.", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, q := quoteOf(t, f, tt.path, tt.form, nil)
+			if code != http.StatusOK || q["delivery"] != tt.delivery || (q["shipping"] != tt.ship && !(tt.ship == "" && q["shipping"] == nil)) {
+				t.Fatalf("%d %v; want %q / %q", code, q, tt.delivery, tt.ship)
+			}
+		})
+	}
+}
+
+func TestDeliveryDaysWording(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		min, max int
+		ar, en   string
+	}{
+		{0, 0, "في نفس اليوم", "the same day"},
+		{1, 1, "خلال يوم", "in 1 day"},
+		{2, 2, "خلال يومين", "in 2 days"},
+		{3, 3, "خلال 3 أيام", "in 3 days"},
+		{1, 2, "خلال 1–2 أيام", "in 1–2 days"},
+		{2, 3, "خلال 2–3 أيام", "in 2–3 days"},
+		{7, 14, "خلال 7–14 يومًا", "in 7–14 days"},
+		{11, 11, "خلال 11 يومًا", "in 11 days"},
+	}
+	for _, tt := range tests {
+		if got := web.Arabic.DeliveryDays(tt.min, tt.max); got != tt.ar {
+			t.Errorf("ar %d–%d = %q, want %q", tt.min, tt.max, got, tt.ar)
+		}
+		if got := web.English.DeliveryDays(tt.min, tt.max); got != tt.en {
+			t.Errorf("en %d–%d = %q, want %q", tt.min, tt.max, got, tt.en)
+		}
+	}
+}
+
 func TestOrderQuoteLimits(t *testing.T) {
 	t.Parallel()
 	f := newCheckoutFixture(t)
