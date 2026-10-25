@@ -507,8 +507,16 @@ func TestProductPage(t *testing.T) {
 	}
 	wantContains(t, body,
 		"<title>تيشيرت قطن | متجر منى</title>", `<h1>تيشيرت قطن</h1>`, `href="/c/tshirts"`,
-		`<select name="variant"`, "M — 150 ج.م", "L — 160 ج.م (نفدت الكمية)", ` disabled`,
-		`data-amount="160 ج.م"`, `action="/cart"`, "قطن مصري ١٠٠٪.", "<p>يغسل في الغسالة.</p>",
+		// the size as buttons: M chosen (the cheapest available), L sold out and not choosable
+		`<legend>المقاس: <strong data-chosen="0">M</strong></legend>`,
+		`<input type="radio" name="o0" value="M" checked data-opt="0" required>`,
+		`<label class="out"><input type="radio" name="o0" value="L" disabled data-opt="0" required>`,
+		`<input type="hidden" name="product" value="`+f.shirt.ID.String()+`">`, `<input type="hidden" name="variant" disabled data-variant>`,
+		// the price on sale, the saving, and the script's copy of each variant (L's price too)
+		`<span class="now sale" data-now>150 ج.م</span>`, `<s data-was>200 ج.م</s>`, `<span class="saving" data-save>وفّر 50 ج.م</span>`,
+		`<span class="tag" data-pct>خصم 25%</span>`, `&#34;price&#34;:&#34;160 ج.م&#34;`,
+		`action="/cart"`, `<button class="btn" type="submit" form="buy" data-add data-total>أضف إلى السلة · 150 ج.م</button>`,
+		"قطن مصري ١٠٠٪.", "<p>يغسل في الغسالة.</p>",
 		`<meta name="description" content="قطن مصري ١٠٠٪.">`, `property="og:image"`,
 	)
 	m := regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`).FindStringSubmatch(body)

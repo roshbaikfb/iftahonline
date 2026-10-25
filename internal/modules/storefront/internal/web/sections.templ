@@ -70,36 +70,6 @@ templ card(p *pageCtx, pr catalog.StorefrontProduct) {
 	</div>
 }
 
-// buyForm picks a variant and quantity. It posts to the cart; without
-// JavaScript the select shows every price, with it the price follows the
-// choice.
-templ buyForm(p *pageCtx, pr catalog.StorefrontProduct, cta string) {
-	<form class="buy" method="post" action={ p.URL("/cart") } data-buy>
-		@price(p.priceOf(pr.PriceFrom()))
-		if len(pr.Variants) > 1 {
-			<label for={ "v-" + pr.ID.String() }>{ optionsLabel(p.l, pr) }</label>
-			<select name="variant" id={ "v-" + pr.ID.String() }>
-				for _, v := range pr.Variants {
-					<option
-						value={ v.ID.String() }
-						data-amount={ p.priceOf(v).price }
-						data-compare={ p.priceOf(v).compare }
-						disabled?={ !v.Available }
-						selected?={ v.ID == pr.PriceFrom().ID }
-					>
-						{ variantLabel(p.l, pr, v) }
-					</option>
-				}
-			</select>
-		} else {
-			<input type="hidden" name="variant" value={ pr.Variants[0].ID.String() }/>
-		}
-		<label for={ "q-" + pr.ID.String() }>{ p.l.T(MsgQuantity) }</label>
-		<input type="number" name="qty" id={ "q-" + pr.ID.String() } min="1" max="20" value="1" inputmode="numeric"/>
-		<button class="btn btn-block" type="submit" disabled?={ !pr.Available() }>{ p.l.Or(cta, MsgAddToCart) }</button>
-	</form>
-}
-
 // sectionsPage lays sections out in a wrapping row: each takes the
 // full width, except that a hero and promo tiles after it share one
 // line on wide screens.

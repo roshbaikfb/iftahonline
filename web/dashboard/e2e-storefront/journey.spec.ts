@@ -31,13 +31,28 @@ test('home → product → landing page → one-step order, on a phone, in Arabi
   await cards.getByRole('link', { name: 'عطر العود الملكي' }).click();
   await expect(page).toHaveURL(/\/p\/royal-oud$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('عطر العود الملكي');
-  const price = page.locator('form[data-buy] [data-price]');
-  await expect(price).toContainText('450 ج.م');
-  await expect(price.locator('s')).toHaveText('600 ج.م');
-  // The variant picker updates the price without a reload (our script).
-  await page.getByLabel('الحجم').selectOption({ label: '100 مل — 750 ج.م' });
-  await expect(price).toHaveText('750 ج.م');
-  await expect(page.getByRole('button', { name: 'أضف إلى السلة' })).toBeEnabled();
+  const now = page.locator('[data-now]');
+  await expect(now).toHaveText('450 ج.م');
+  await expect(page.locator('[data-was]')).toHaveText('600 ج.م');
+  await expect(page.locator('[data-save]')).toHaveText('وفّر 150 ج.م');
+  const add = page.locator('[data-total]'); // the bar at the bottom of a phone's screen
+  await expect(add).toHaveText('أضف إلى السلة · 450 ج.م');
+  // Choosing the other size follows without a reload (our script): its
+  // price, no saving, and the few units left.
+  await page.getByText('100 مل', { exact: true }).click();
+  await expect(now).toHaveText('750 ج.م');
+  await expect(page.locator('[data-save]')).toBeHidden();
+  await expect(page.locator('[data-left]')).toHaveText('باقي 4 قطع فقط');
+  await expect(page.locator('[data-chosen="0"]')).toHaveText('100 مل');
+  await page.getByRole('button', { name: 'أكثر' }).click();
+  await expect(add).toHaveText('أضف إلى السلة · 1,500 ج.م');
+  // The delivery box asks nothing until the shopper names a governorate.
+  await expect(page.locator('[data-deliv-line]')).toBeHidden();
+  await page.getByLabel('اختر محافظتك لمعرفة الشحن وموعد التوصيل').selectOption({ label: 'القاهرة' });
+  await expect(page.locator('[data-deliv-line]')).toHaveText('التوصيل إلى القاهرة خلال 2–3 أيام');
+  await expect(page.locator('[data-ship-line]')).toHaveText('الشحن مجاني'); // 1,500 is over the free threshold
+  await page.getByRole('button', { name: 'أقل' }).click();
+  await expect(page.locator('[data-ship-line]')).toHaveText('الشحن 40 ج.م · مجاني فوق 1,000 ج.م');
   const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent()) ?? '[]') as { '@type': string }[];
   expect(ld[0]?.['@type']).toBe('Product');
 
@@ -79,7 +94,7 @@ test('home → product → landing page → one-step order, on a phone, in Arabi
 test('product → cart → checkout, on a phone, in Arabic', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/p/royal-oud');
-  await page.getByRole('button', { name: 'أضف إلى السلة' }).click();
+  await page.locator('[data-total]').click();
   await expect(page).toHaveURL(/\/cart$/);
   await expect(page.getByRole('link', { name: 'عطر العود الملكي' })).toBeVisible();
   await expect(page.locator('[data-cart-count]')).toHaveText('1');
@@ -105,7 +120,7 @@ test('the English store mirrors the Arabic one', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/en/p/royal-oud');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-  await expect(page.locator('form[data-buy] [data-price]')).toContainText('EGP 450');
+  await expect(page.locator('[data-now]')).toHaveText('EGP 450');
   await page.getByRole('link', { name: 'العربية' }).click();
   await expect(page).toHaveURL(/\/p\/royal-oud$/);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');

@@ -30,6 +30,8 @@ type pageCtx struct {
 	challenge bool   // the page shows a Turnstile challenge
 	refresh   int    // seconds before the page reloads itself (or goes to refreshTo); 0 never
 	refreshTo string // where the refresh goes; empty: the page itself
+	compact   bool   // phones get the short header (back, brand, share, cart): the product page
+	back      string // where the short header's back arrow goes
 }
 
 // eagerImages is how many of a page's first images load eagerly, at high
