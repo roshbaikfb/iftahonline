@@ -76,11 +76,22 @@ A store has exactly one owner, enforced by a partial unique index.
 - creates the store and its `<slug>.iftahonline.com` subdomain (through
   `tenancy.CreateStoreTx`);
 - adds the owner membership;
+- opens the store's setup wizard (through `onboarding.Starter.StartTx`,
+  [ADR-0034](../adr/0034-setup-wizard-and-starter-templates.md));
 - opens a session;
 - writes the `store.created` audit entry.
 
 If any step fails, nothing remains. Store field errors are reported as
 `store.<field>`. Sign-up is limited to 5 per hour per IP.
+
+### Store address check
+
+`GET /v1/auth/slug-availability?slug=` answers the sign-up form before
+the account exists: `{slug, available, reason}`, the slug normalized as
+sign-up saves it, `reason` one of `invalid`, `reserved`, `taken`. It asks
+`tenancy.Service.SlugAvailability`, which reads the hosts directly (not
+through the resolver's caches). Public, and limited to 60 per 10 minutes
+per IP. It is advisory: sign-up checks again (422 `store.slug` `taken`).
 
 ### Login
 

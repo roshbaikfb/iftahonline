@@ -112,6 +112,14 @@ tags:
       event id (a replay is 200 `duplicate`); processing re-queries the
       provider before any order or payment changes. Rate-limited per
       client IP and per connection.
+  - name: onboarding
+    description: |
+      The new store's setup wizard (ADR-0034). Signing up opens it; the
+      merchant picks an activity, a look and a colour, and a starter
+      template (theme, home page, categories, sample products, shipping
+      zones, draft policies) is applied in the background. Stores made
+      before the wizard have no wizard (`completed`). Permission:
+      store.read to read, store.update to change.
 paths:
   /livez:
     get:
@@ -309,6 +317,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AcceptInvitationResponse" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/slug-availability:
+    get:
+      tags: [identity]
+      operationId: checkSlugAvailability
+      summary: Check whether a store address is free
+      description: |
+        For the sign-up form, before the account exists. Rate-limited per
+        IP. Advisory: sign-up checks again and answers 422 `store.slug`
+        `taken` when the address went in between.
+      security: []
+      parameters:
+        - name: slug
+          in: query
+          required: true
+          schema: { type: string, maxLength: 100, example: beit-mona }
+      responses:
+        "200":
+          description: The verdict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlugAvailability" }
         default:
           $ref: "#/components/responses/Problem"
   /v1/auth/logout:
@@ -1519,6 +1550,64 @@ paths:
               schema: { $ref: "#/components/schemas/AdminAuditPage" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/onboarding:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [onboarding]
+      operationId: getOnboarding
+      summary: Get the setup wizard's state
+      description: "Permission: store.read."
+      responses:
+        "200":
+          description: The wizard's state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Onboarding" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/onboarding/template:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [onboarding]
+      operationId: chooseOnboardingTemplate
+      summary: Choose the starter template and apply it
+      description: |
+        Permission: store.update. Only while the wizard is open (409
+        onboarding_completed after). The template is applied in the
+        background; poll getOnboarding until `template.status` is `ready`
+        or `failed`. Choosing again applies the new choice; the last
+        choice wins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingTemplateInput" }
+      responses:
+        "202":
+          description: Accepted; the template is being applied.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Onboarding" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/onboarding/complete:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [onboarding]
+      operationId: completeOnboarding
+      summary: Close the setup wizard
+      description: "Permission: store.update. Idempotent."
+      responses:
+        "200":
+          description: The wizard is closed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Onboarding" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/customers:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -2528,6 +2617,16 @@ components:
       enum: [web, mobile]
       default: web
       description: "`mobile` returns the session token in the body instead of a cookie."
+    SlugAvailability:
+      type: object
+      required: [slug, available]
+      properties:
+        slug: { type: string, description: The address as it would be saved (lower case, trimmed). }
+        available: { type: boolean }
+        reason:
+          type: string
+          enum: [invalid, reserved, taken]
+          description: Why it is not available.
     AuthResponse:
       type: object
       required: [user, expires_at]
@@ -3313,6 +3412,41 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Category" }
+    OnboardingActivity:
+      type: string
+      enum: [clothing, electronics, beauty, perfume, kids, food, home, other]
+      description: What the store sells; picks the starter template.
+    OnboardingLook:
+      type: string
+      enum: [classic, modern, soft]
+    Onboarding:
+      type: object
+      required: [status, template]
+      properties:
+        status:
+          type: string
+          enum: [in_progress, completed]
+          description: Whether the wizard is still open.
+        activity: { $ref: "#/components/schemas/OnboardingActivity" }
+        look: { $ref: "#/components/schemas/OnboardingLook" }
+        color: { $ref: "#/components/schemas/Color" }
+        template:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [none, preparing, ready, failed]
+              description: "none: not chosen yet."
+            version: { type: integer, description: The template version applied. }
+        completed_at: { type: string, format: date-time }
+    OnboardingTemplateInput:
+      type: object
+      required: [activity, look, color]
+      properties:
+        activity: { $ref: "#/components/schemas/OnboardingActivity" }
+        look: { $ref: "#/components/schemas/OnboardingLook" }
+        color: { $ref: "#/components/schemas/Color" }
     Color:
       type: string
       pattern: "^#[0-9a-fA-F]{6}$"

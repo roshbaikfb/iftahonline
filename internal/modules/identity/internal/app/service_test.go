@@ -20,6 +20,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -58,6 +59,7 @@ type fixture struct {
 func testLimits() app.Limits {
 	return app.Limits{
 		SignupPerIP:      ratelimit.Limit{Burst: 3, Period: time.Hour},
+		SlugCheckPerIP:   ratelimit.Limit{Burst: 2, Period: time.Hour},
 		LoginPerIP:       ratelimit.Limit{Burst: 20, Period: time.Hour},
 		LoginFailPerUser: ratelimit.Limit{Burst: 3, Period: time.Hour},
 		OTPPerPhone:      ratelimit.Limit{Burst: 3, Period: time.Hour},
@@ -106,8 +108,12 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	onb, err := onboarding.New(onboarding.Deps{Pool: pool, Jobs: ins})
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := app.NewService(app.Deps{
-		DB: pool, Hasher: hasher, Limiter: limiter, Limits: testLimits(), Stores: ten.Service(), IDs: ids, Log: log,
+		DB: pool, Hasher: hasher, Limiter: limiter, Limits: testLimits(), Stores: ten.Service(), Onboarding: onb.Starter(), IDs: ids, Log: log,
 		Redis: rdb, Keyring: keyring, Pepper: []byte("dev-only-otp-pepper-not-a-secret"), Jobs: ins, OTPEnabled: true,
 	})
 	return fixture{svc: svc, app: pool, owner: owner, ids: ids, qc: qc, ten: ten, rdb: rdb, keyring: keyring, ins: ins, log: log}
@@ -610,4 +616,24 @@ func TestPartitionCreationDoesNotDeadlockWriters(t *testing.T) {
 		t.Errorf("sign-up during partition creation: %v", err)
 	}
 	testkit.AssertTenantTablesUseRLS(t, f.owner, "store_memberships.member_self_read")
+}
+
+// The address check is throttled per IP: it is public and reads across
+// stores.
+func TestCheckSlugIsThrottled(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.device(t)
+	for i := range 2 {
+		if a, err := f.svc.CheckSlug(ctx, f.unique("free-")); err != nil || !a.Available {
+			t.Fatalf("check %d = %+v, %v", i, a, err)
+		}
+	}
+	if _, err := f.svc.CheckSlug(ctx, f.unique("free-")); !errs.Is(err, errs.KindRateLimited) {
+		t.Fatalf("third check = %v; want rate limited", err)
+	}
+	// Another address is not held back.
+	if _, err := f.svc.CheckSlug(f.device(t), f.unique("free-")); err != nil {
+		t.Fatal(err)
+	}
 }

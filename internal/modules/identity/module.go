@@ -14,6 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -29,9 +30,11 @@ type Deps struct {
 	Pool    *pgxpool.Pool
 	Redis   *redis.Client
 	Tenancy tenancy.Service
-	IDs     *ulid.Generator
-	Log     *slog.Logger
-	Config  config.Identity
+	// Onboarding opens each new store's setup wizard at sign-up.
+	Onboarding onboarding.Starter
+	IDs        *ulid.Generator
+	Log        *slog.Logger
+	Config     config.Identity
 	// ClientIP is the server's RealIP lookup (middleware.ClientIP).
 	ClientIP httpapi.ClientIPFunc
 	// Limits overrides DefaultLimits (tests).
@@ -56,7 +59,7 @@ type Module struct {
 
 // New wires the module.
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Redis == nil || d.Tenancy == nil || d.IDs == nil || d.Log == nil ||
+	if d.Pool == nil || d.Redis == nil || d.Tenancy == nil || d.Onboarding == nil || d.IDs == nil || d.Log == nil ||
 		d.Jobs == nil || d.Secrets.Keyring == nil || len(d.Secrets.OTPPepper) < 32 {
 		return nil, errors.New("identity: missing dependency")
 	}
@@ -79,7 +82,7 @@ func New(d Deps) (*Module, error) {
 		return nil, fmt.Errorf("identity: %w", err)
 	}
 	svc := app.NewService(app.Deps{
-		DB: d.Pool, Hasher: hasher, Limiter: limiter, Limits: limits, Stores: d.Tenancy, IDs: d.IDs, Log: d.Log,
+		DB: d.Pool, Hasher: hasher, Limiter: limiter, Limits: limits, Stores: d.Tenancy, Onboarding: d.Onboarding, IDs: d.IDs, Log: d.Log,
 		Redis: d.Redis, Keyring: d.Secrets.Keyring, Pepper: d.Secrets.OTPPepper, Jobs: d.Jobs, OTPEnabled: OTPAvailable(d.Env),
 	})
 	return &Module{svc: svc, policy: policy, scope: httpapi.Scope(svc, problem.NewResponder(d.Log), d.ClientIP)}, nil

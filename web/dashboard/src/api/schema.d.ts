@@ -185,6 +185,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/slug-availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check whether a store address is free
+         * @description For the sign-up form, before the account exists. Rate-limited per
+         *     IP. Advisory: sign-up checks again and answers 422 `store.slug`
+         *     `taken` when the address went in between.
+         */
+        get: operations["checkSlugAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1301,6 +1323,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get the setup wizard's state
+         * @description Permission: store.read.
+         */
+        get: operations["getOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/onboarding/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose the starter template and apply it
+         * @description Permission: store.update. Only while the wizard is open (409
+         *     onboarding_completed after). The template is applied in the
+         *     background; poll getOnboarding until `template.status` is `ready`
+         *     or `failed`. Choosing again applies the new choice; the last
+         *     choice wins.
+         */
+        put: operations["chooseOnboardingTemplate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close the setup wizard
+         * @description Permission: store.update. Idempotent.
+         */
+        post: operations["completeOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/customers": {
         parameters: {
             query?: never;
@@ -2170,6 +2262,16 @@ export interface components {
          * @enum {string}
          */
         ClientKind: "web" | "mobile";
+        SlugAvailability: {
+            /** @description The address as it would be saved (lower case */
+            slug: string;
+            available: boolean;
+            /**
+             * @description Why it is not available.
+             * @enum {string}
+             */
+            reason?: "invalid" | "reserved" | "taken";
+        };
         AuthResponse: {
             user: components["schemas"]["User"];
             store_id?: components["schemas"]["ULID"];
@@ -2889,6 +2991,39 @@ export interface components {
         };
         CategoryList: {
             items: components["schemas"]["Category"][];
+        };
+        /**
+         * @description What the store sells; picks the starter template.
+         * @enum {string}
+         */
+        OnboardingActivity: "clothing" | "electronics" | "beauty" | "perfume" | "kids" | "food" | "home" | "other";
+        /** @enum {string} */
+        OnboardingLook: "classic" | "modern" | "soft";
+        Onboarding: {
+            /**
+             * @description Whether the wizard is still open.
+             * @enum {string}
+             */
+            status: "in_progress" | "completed";
+            activity?: components["schemas"]["OnboardingActivity"];
+            look?: components["schemas"]["OnboardingLook"];
+            color?: components["schemas"]["Color"];
+            template: {
+                /**
+                 * @description none: not chosen yet.
+                 * @enum {string}
+                 */
+                status: "none" | "preparing" | "ready" | "failed";
+                /** @description The template version applied. */
+                version?: number;
+            };
+            /** Format: date-time */
+            completed_at?: string;
+        };
+        OnboardingTemplateInput: {
+            activity: components["schemas"]["OnboardingActivity"];
+            look: components["schemas"]["OnboardingLook"];
+            color: components["schemas"]["Color"];
         };
         /** @example #0f766e */
         Color: string;
@@ -3697,6 +3832,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptInvitationResponse"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    checkSlugAvailability: {
+        parameters: {
+            query: {
+                slug: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The verdict. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlugAvailability"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -5337,6 +5495,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The wizard's state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    chooseOnboardingTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingTemplateInput"];
+            };
+        };
+        responses: {
+            /** @description Accepted; the template is being applied. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The wizard is closed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
                 };
             };
             default: components["responses"]["Problem"];
