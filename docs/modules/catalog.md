@@ -30,6 +30,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `Event*` | Events the module publishes (below) |
 | `CurrencySource`, `CurrencyFunc` | How the module learns the store currency (cmd/platform adapts tenancy) |
 | `Module.Mount`, `Module.RegisterWorkers` | HTTP routes (behind identity's membership middleware) and the expiry job |
+| `Module.Starter()` → `Starter`, `SampleProduct`, `CategoryInput`, `ProductInput`, `VariantInput` | What the setup wizard's starter template uses ([ADR-0034](../adr/0034-setup-wizard-and-starter-templates.md)): `EnsureCategory` and `EnsureSampleProduct`, idempotent by slug (a merchant's own category or product with that slug is left alone) |
 
 Every method acts on the store in `ctx`.
 
@@ -76,6 +77,7 @@ parent (`db/migrations/00015_catalog.sql`).
 |---|---|
 | `listProducts`, `getProduct`, `listCategories`, `searchProducts` | `catalog.read` |
 | `createProduct`, `updateProduct`, `deleteProduct` | `catalog.manage` |
+| `deleteSampleProducts` (`DELETE /products/samples`, returns `deleted`) | `catalog.manage` |
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
 | `createImageUpload`, `completeImageUpload`, `updateImage`, `deleteImage` | `catalog.manage` |
@@ -94,6 +96,16 @@ parent (`db/migrations/00015_catalog.sql`).
   `upload.fields`, file last as `file`); after the upload, call
   `completeImageUpload`. `ready` images carry signed imgproxy `urls` for
   four sizes in AVIF and WebP.
+
+### Sample products
+
+The setup wizard's starter template adds products marked `sample`
+(`products.is_sample`, ADR-0034). They are listed (`sample: true`) and
+shown on the storefront with a "تجريبي" tag and a note, but never sold:
+the sellable-variant reads and the stock reservation skip them, so a cart
+cannot hold one and an order cannot reserve one. Their pictures are
+written to the upload key and processed like a merchant's upload.
+`deleteSampleProducts` deletes them as `deleteProduct` deletes one.
 
 ## Imports
 

@@ -504,6 +504,11 @@ type Product struct {
 	Images  []ProductImage  `json:"images"`
 	Options []ProductOption `json:"options"`
 
+	// Sample Added by the setup wizard's starter template (ADR-0034): shown on
+	// the storefront marked as a sample, never sellable, deleted with
+	// deleteSampleProducts. Absent means false.
+	Sample *bool `json:"sample,omitempty"`
+
 	// Slug Example: تيشيرت-قطن
 	Slug      string        `json:"slug"`
 	Status    ProductStatus `json:"status"`
@@ -781,6 +786,9 @@ type ServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DeleteSampleProducts Delete the starter template's sample products
+	// (DELETE /v1/stores/{store_id}/products/samples)
+	DeleteSampleProducts(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// SearchProducts Search the store's products
 	// (GET /v1/stores/{store_id}/products/search)
 	SearchProducts(w http.ResponseWriter, r *http.Request, storeId StoreID, params SearchProductsParams)
@@ -1161,6 +1169,32 @@ func (siw *ServerInterfaceWrapper) CreateProduct(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProduct(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSampleProducts operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSampleProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSampleProducts(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1693,6 +1727,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.ListProducts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.CreateProduct)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/samples", wrapper.DeleteSampleProducts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/search", wrapper.SearchProducts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.DeleteProduct)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.GetProduct)
@@ -2109,6 +2144,47 @@ func (response CreateProductdefaultApplicationProblemPlusJSONResponse) VisitCrea
 	return err
 }
 
+type DeleteSampleProductsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type DeleteSampleProductsResponseObject interface {
+	VisitDeleteSampleProductsResponse(w http.ResponseWriter) error
+}
+
+type DeleteSampleProducts200JSONResponse struct {
+	Deleted int `json:"deleted"`
+}
+
+func (response DeleteSampleProducts200JSONResponse) VisitDeleteSampleProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSampleProductsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSampleProductsdefaultApplicationProblemPlusJSONResponse) VisitDeleteSampleProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SearchProductsRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Params  SearchProductsParams
@@ -2496,6 +2572,9 @@ type StrictServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
+	// DeleteSampleProducts Delete the starter template's sample products
+	// (DELETE /v1/stores/{store_id}/products/samples)
+	DeleteSampleProducts(ctx context.Context, request DeleteSampleProductsRequestObject) (DeleteSampleProductsResponseObject, error)
 	// SearchProducts Search the store's products
 	// (GET /v1/stores/{store_id}/products/search)
 	SearchProducts(ctx context.Context, request SearchProductsRequestObject) (SearchProductsResponseObject, error)
@@ -2850,6 +2929,32 @@ func (sh *strictHandler) CreateProduct(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateProductResponseObject); ok {
 		if err := validResponse.VisitCreateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSampleProducts operation middleware
+func (sh *strictHandler) DeleteSampleProducts(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request DeleteSampleProductsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSampleProducts(ctx, request.(DeleteSampleProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSampleProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSampleProductsResponseObject); ok {
+		if err := validResponse.VisitDeleteSampleProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

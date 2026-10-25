@@ -212,3 +212,27 @@ func TestLookMarksThePage(t *testing.T) {
 		t.Fatalf("the soft look is not on the page: %s", tag)
 	}
 }
+
+// A sample from the setup wizard's template (ADR-0034) is shown marked,
+// and never offered for sale.
+func TestSampleProduct(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sample := product("تيشيرت تجريبي", "sample-tee", 15000, false, f.cat.ID)
+	sample.Sample = true
+	f.catalog.mu.Lock()
+	f.catalog.products = append(f.catalog.products, sample)
+	f.catalog.mu.Unlock()
+
+	home := f.get(t, "/").Body.String()
+	wantContains(t, home, "تيشيرت تجريبي", `<span class="tag">تجريبي</span>`)
+
+	page := f.get(t, "/p/sample-tee").Body.String()
+	wantContains(t, page, `<span class="tag">تجريبي</span>`, "منتج تجريبي من قالب المتجر، غير متاح للطلب.",
+		`data-sold-label="منتج تجريبي"`)
+	if strings.Contains(page, ">نفد<") || strings.Contains(page, "أضف للسلة · ") {
+		t.Fatal("a sample reads as sold out, or is offered for sale")
+	}
+	en := f.get(t, "/en/p/sample-tee").Body.String()
+	wantContains(t, en, `<span class="tag">Sample</span>`, "A sample from the store&#39;s template; it cannot be ordered.")
+}

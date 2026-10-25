@@ -125,8 +125,11 @@ type Product struct {
 	Variants    []Variant
 	CategoryIDs []ulid.ID
 	Images      []Image
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Sample marks a product the setup wizard's template added (ADR-0034):
+	// shown, never sellable, deleted with the store's other samples.
+	Sample    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ProductInput creates or replaces a product. On update, variants with an

@@ -144,6 +144,9 @@ const (
 	MsgAll
 	MsgSalePercent
 	MsgSoldOutShort
+	MsgSample
+	MsgSampleProduct
+	MsgSampleNote
 	MsgViewAll
 	MsgHelp
 	MsgContactUs
@@ -335,6 +338,9 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgAll:                {"الكل", "All"},
 	MsgSalePercent:        {"خصم %d%%", "%d%% off"},
 	MsgSoldOutShort:       {"نفد", "Sold out"},
+	MsgSample:             {"تجريبي", "Sample"},
+	MsgSampleProduct:      {"منتج تجريبي", "Sample product"},
+	MsgSampleNote:         {"منتج تجريبي من قالب المتجر، غير متاح للطلب.", "A sample from the store's template; it cannot be ordered."},
 	MsgViewAll:            {"عرض الكل", "View all"},
 	MsgHelp:               {"المساعدة", "Help"},
 	MsgContactUs:          {"تواصل معنا", "Contact us"},

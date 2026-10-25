@@ -136,7 +136,10 @@ type StorefrontProduct struct {
 	Variants    []StorefrontVariant // at least one, by position
 	CategoryIDs []ulid.ID
 	Images      []StorefrontImage // ready images only, by position
-	UpdatedAt   time.Time
+	// Sample is a product from the setup wizard's template (ADR-0034):
+	// shown, marked, and never sellable (no variant is available).
+	Sample    bool
+	UpdatedAt time.Time
 }
 
 // StorefrontVariant is a variant as a shopper sees it. Stock levels stay
@@ -296,14 +299,16 @@ func (s *Storefront) views(ps []domain.Product) []StorefrontProduct {
 func (s *Storefront) view(p domain.Product) StorefrontProduct {
 	v := StorefrontProduct{
 		ID: p.ID, Slug: p.Slug, Title: p.Title, Description: p.Description, Options: p.Options,
-		CategoryIDs: p.CategoryIDs, UpdatedAt: p.UpdatedAt,
+		CategoryIDs: p.CategoryIDs, Sample: p.Sample, UpdatedAt: p.UpdatedAt,
 		Variants: make([]StorefrontVariant, len(p.Variants)),
 		Images:   make([]StorefrontImage, 0, len(p.Images)),
 	}
 	for i, pv := range p.Variants {
 		v.Variants[i] = StorefrontVariant{
-			ID: pv.ID, OptionValues: pv.OptionValues, Price: pv.Price, CompareAt: pv.CompareAt, Available: pv.Stock.CanSell(1),
-			Left: pv.Stock.Left(),
+			ID: pv.ID, OptionValues: pv.OptionValues, Price: pv.Price, CompareAt: pv.CompareAt, Available: pv.Stock.CanSell(1) && !p.Sample,
+		}
+		if !p.Sample {
+			v.Variants[i].Left = pv.Stock.Left()
 		}
 	}
 	for _, img := range p.Images {

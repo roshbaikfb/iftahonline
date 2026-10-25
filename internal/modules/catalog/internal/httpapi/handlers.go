@@ -174,6 +174,18 @@ func replace[B, In, Out any](ctx context.Context, auth authz.Authorizer, perm au
 	return call(ctx, id, in)
 }
 
+// DeleteSampleProducts implements StrictServerInterface.
+func (h *Handlers) DeleteSampleProducts(ctx context.Context, _ DeleteSampleProductsRequestObject) (DeleteSampleProductsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	n, err := h.svc.DeleteSamples(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return DeleteSampleProducts200JSONResponse{Deleted: n}, nil
+}
+
 // DeleteProduct implements StrictServerInterface.
 func (h *Handlers) DeleteProduct(ctx context.Context, req DeleteProductRequestObject) (DeleteProductResponseObject, error) {
 	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
@@ -333,6 +345,10 @@ func (h *Handlers) toProduct(p domain.Product) Product {
 		Options: make([]ProductOption, len(p.Options)), Variants: make([]Variant, len(p.Variants)),
 		CategoryIds: make([]ULID, len(p.CategoryIDs)), Images: make([]ProductImage, len(p.Images)),
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+	}
+	if p.Sample {
+		sample := true
+		out.Sample = &sample
 	}
 	for i, img := range p.Images {
 		out.Images[i] = h.toImage(img)

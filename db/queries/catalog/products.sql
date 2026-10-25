@@ -87,3 +87,15 @@ CROSS JOIN LATERAL (
   SELECT * FROM products pr
   WHERE pr.id = ids.id AND pr.store_id = @store_id AND pr.deleted_at IS NULL AND pr.status = 'active') p
 ORDER BY ids.ord;
+
+-- name: MarkSample :execrows
+-- The setup wizard's template marks the sample products it adds.
+UPDATE products SET is_sample = true, updated_at = now()
+WHERE store_id = @store_id AND id = @id AND deleted_at IS NULL;
+
+-- name: ListSampleIDs :many
+-- The store's sample products, for deleting them all (products_samples).
+SELECT id FROM products
+WHERE store_id = @store_id AND is_sample AND deleted_at IS NULL
+ORDER BY id
+LIMIT 200;

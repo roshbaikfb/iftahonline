@@ -139,6 +139,9 @@ func (m *Module) Queues() map[string]river.QueueConfig {
 // Catalog returns the use cases other modules call.
 func (m *Module) Catalog() Catalog { return m.svc }
 
+// Starter is what the setup wizard's starter template uses.
+func (m *Module) Starter() Starter { return m.svc }
+
 // RegisterWorkers adds the module's job workers.
 func (m *Module) RegisterWorkers(w *river.Workers) error {
 	events := app.Events{Pub: m.deps.Events, IDs: m.deps.IDs}

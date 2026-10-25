@@ -54,6 +54,13 @@ type (
 	Option = domain.Option
 	// Category is a node of the store's category tree.
 	Category = domain.Category
+	// CategoryInput creates a category.
+	CategoryInput = domain.CategoryInput
+	// ProductInput creates a product; VariantInput is one of its variants.
+	ProductInput = domain.ProductInput
+	VariantInput = domain.VariantInput
+	// SampleProduct is a starter template's product and picture.
+	SampleProduct = app.SampleProduct
 
 	// ProductChanged is the catalog.product.changed event.
 	ProductChanged = domain.ProductChanged
@@ -151,6 +158,19 @@ type Catalog interface {
 // Storefront is the read side the storefront renders: active, live
 // products only, with signed image URLs and no stock levels. Every method
 // acts on the store in ctx and runs a constant number of queries.
+// Starter is what the setup wizard's starter template uses (ADR-0034).
+// Every method acts on the store in ctx and is idempotent by slug: the
+// template may run twice, and a merchant's own category or product with
+// the same slug is left as it is.
+type Starter interface {
+	EnsureCategory(ctx context.Context, in CategoryInput) (ulid.ID, error)
+	// EnsureSampleProduct adds a product marked as a sample: shown,
+	// marked, never sellable, deleted with the store's other samples.
+	EnsureSampleProduct(ctx context.Context, in SampleProduct) (ulid.ID, error)
+}
+
+var _ Starter = (*app.Service)(nil)
+
 type Storefront interface {
 	// ProductBySlug returns the active product at slug, or
 	// ErrProductNotFound.

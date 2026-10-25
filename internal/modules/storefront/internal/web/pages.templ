@@ -45,7 +45,7 @@ templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 					{ p.l.Left(v.left) }
 				}
 			</p>
-			<form id="buy" class="pd-buy" method="post" action={ p.URL("/cart") } data-product data-variants={ v.variants } data-money={ v.money } data-add-label={ p.l.T(MsgAddToCart) } data-sold-label={ p.l.T(MsgSoldOut) }>
+			<form id="buy" class="pd-buy" method="post" action={ p.URL("/cart") } data-product data-variants={ v.variants } data-money={ v.money } data-add-label={ p.l.T(MsgAddToCart) } data-sold-label={ p.unavailable(v.pr) }>
 				<input type="hidden" name="product" value={ v.pr.ID.String() }/>
 				<input type="hidden" name="variant" disabled data-variant/>
 				for _, o := range v.options {
@@ -77,9 +77,12 @@ templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 					if v.pr.Available() {
 						{ p.l.T(MsgAddToCart) }
 					} else {
-						{ p.l.T(MsgSoldOut) }
+						{ p.unavailable(v.pr) }
 					}
 				</button>
+				if v.pr.Sample {
+					<p class="note">{ p.l.T(MsgSampleNote) }</p>
+				}
 			</form>
 			@infoBox(p, v)
 			if desc := paragraphs(v.pr.Description); len(desc) > 0 {
@@ -112,7 +115,7 @@ templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 			if v.pr.Available() {
 				{ p.l.T(MsgAddToCart) } · { v.price.price }
 			} else {
-				{ p.l.T(MsgSoldOut) }
+				{ p.unavailable(v.pr) }
 			}
 		</button>
 	</div>
@@ -135,7 +138,9 @@ templ gallery(p *pageCtx, v productView) {
 				<div class="slide empty-pic"></div>
 			}
 		</div>
-		if !v.pr.Available() {
+		if v.pr.Sample {
+			<span class="tag">{ p.l.T(MsgSample) }</span>
+		} else if !v.pr.Available() {
 			<span class="tag out">{ p.l.T(MsgSoldOutShort) }</span>
 		} else if v.pct > 0 {
 			<span class="tag" data-pct>{ fmt.Sprintf(p.l.T(MsgSalePercent), v.pct) }</span>
