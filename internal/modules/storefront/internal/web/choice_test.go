@@ -81,7 +81,7 @@ func FuzzChoice(f *testing.F) {
 	f.Add(pr.ID.String(), "M", "كحلي", "")
 	f.Add(pr.ID.String(), "L", "أبيض", "x")
 	f.Add("nope", "", "", "")
-	f.Add(pr.ID.String(), "\x00", "‮", "M")
+	f.Add(pr.ID.String(), "\x00", "\u202e", "M")
 	f.Fuzz(func(t *testing.T, product, o0, o1, o2 string) {
 		form := url.Values{"product": {product}}
 		for i, v := range []string{o0, o1, o2} {
