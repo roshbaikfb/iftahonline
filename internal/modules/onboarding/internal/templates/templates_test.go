@@ -56,7 +56,7 @@ func TestParseRefusesBrokenTemplates(t *testing.T) {
 		"unknown field":    strings.Replace(string(good), `"version"`, `"colour": 1, "version"`, 1),
 		"trailing data":    string(good) + "{}",
 		"unknown category": strings.Replace(string(good), `"category": "pants"`, `"category": "hats"`, 1),
-		"missing picture":  strings.Replace(string(good), `"image": "clothing-1"`, `"image": "nope"`, 1),
+		"missing picture":  strings.Replace(string(good), `"image": "clothing-tshirts"`, `"image": "nope"`, 1),
 		"slug not sample-": strings.Replace(string(good), `"sample-basic-tee"`, `"basic-tee"`, 1),
 		"no price":         strings.Replace(string(good), `"SAR": 4900`, `"SAR": 0`, 1),
 	}

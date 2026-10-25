@@ -11,17 +11,17 @@
     {
       "slug": "men",
       "name": "عطور رجالي",
-      "image": "perfume-1"
+      "image": "perfume-men"
     },
     {
       "slug": "women",
       "name": "عطور حريمي",
-      "image": "perfume-2"
+      "image": "perfume-women"
     },
     {
       "slug": "incense",
       "name": "بخور ومعطرات",
-      "image": "perfume-3"
+      "image": "perfume-incense"
     }
   ],
   "products": [

@@ -11,17 +11,17 @@
     {
       "slug": "dates-nuts",
       "name": "تمور ومكسرات",
-      "image": "food-1"
+      "image": "food-dates-nuts"
     },
     {
       "slug": "honey",
       "name": "عسل ومربى",
-      "image": "food-2"
+      "image": "food-honey"
     },
     {
       "slug": "spices",
       "name": "توابل",
-      "image": "food-3"
+      "image": "food-spices"
     }
   ],
   "products": [
