@@ -472,6 +472,8 @@ type ShippingZone struct {
 	Version       int32
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	EtaMinDays    pgtype.Int2
+	EtaMaxDays    pgtype.Int2
 }
 
 type ShippingZoneArea struct {

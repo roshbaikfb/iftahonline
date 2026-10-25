@@ -537,10 +537,12 @@ func (q *Queries) InsertShipmentEvent(ctx context.Context, arg InsertShipmentEve
 
 const insertZone = `-- name: InsertZone :one
 INSERT INTO shipping_zones (id, store_id, name, rate_minor, free_over_minor,
-                            cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position)
+                            cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor,
+                            eta_min_days, eta_max_days, position)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10)
-RETURNING id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at
+        $6, $7, $8, $9,
+        $10, $11, $12)
+RETURNING id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at, eta_min_days, eta_max_days
 `
 
 type InsertZoneParams struct {
@@ -553,6 +555,8 @@ type InsertZoneParams struct {
 	CodBp         *int32
 	CodMinMinor   *int64
 	CodMaxMinor   *int64
+	EtaMinDays    *int16
+	EtaMaxDays    *int16
 	Position      int32
 }
 
@@ -567,6 +571,8 @@ func (q *Queries) InsertZone(ctx context.Context, arg InsertZoneParams) (Shippin
 		arg.CodBp,
 		arg.CodMinMinor,
 		arg.CodMaxMinor,
+		arg.EtaMinDays,
+		arg.EtaMaxDays,
 		arg.Position,
 	)
 	var i ShippingZone
@@ -584,6 +590,8 @@ func (q *Queries) InsertZone(ctx context.Context, arg InsertZoneParams) (Shippin
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EtaMinDays,
+		&i.EtaMaxDays,
 	)
 	return i, err
 }
@@ -812,7 +820,7 @@ func (q *Queries) ListZoneAreas(ctx context.Context, storeID ulid.ID) ([]ListZon
 }
 
 const listZones = `-- name: ListZones :many
-SELECT id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at FROM shipping_zones WHERE store_id = $1 ORDER BY position, id LIMIT 100
+SELECT id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at, eta_min_days, eta_max_days FROM shipping_zones WHERE store_id = $1 ORDER BY position, id LIMIT 100
 `
 
 // A zone holds at least one governorate and a governorate one zone, so a
@@ -840,6 +848,8 @@ func (q *Queries) ListZones(ctx context.Context, storeID ulid.ID) ([]ShippingZon
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EtaMinDays,
+			&i.EtaMaxDays,
 		); err != nil {
 			return nil, err
 		}
@@ -1136,9 +1146,10 @@ UPDATE shipping_zones
 SET name = $1, rate_minor = $2, free_over_minor = $3,
     cod_fixed_minor = $4, cod_bp = $5,
     cod_min_minor = $6, cod_max_minor = $7,
+    eta_min_days = $8, eta_max_days = $9,
     version = version + 1, updated_at = now()
-WHERE store_id = $8 AND id = $9 AND version = $10
-RETURNING id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at
+WHERE store_id = $10 AND id = $11 AND version = $12
+RETURNING id, store_id, name, rate_minor, free_over_minor, cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position, version, created_at, updated_at, eta_min_days, eta_max_days
 `
 
 type UpdateZoneParams struct {
@@ -1149,6 +1160,8 @@ type UpdateZoneParams struct {
 	CodBp         *int32
 	CodMinMinor   *int64
 	CodMaxMinor   *int64
+	EtaMinDays    *int16
+	EtaMaxDays    *int16
 	StoreID       ulid.ID
 	ID            ulid.ID
 	Version       int32
@@ -1164,6 +1177,8 @@ func (q *Queries) UpdateZone(ctx context.Context, arg UpdateZoneParams) (Shippin
 		arg.CodBp,
 		arg.CodMinMinor,
 		arg.CodMaxMinor,
+		arg.EtaMinDays,
+		arg.EtaMaxDays,
 		arg.StoreID,
 		arg.ID,
 		arg.Version,
@@ -1183,6 +1198,8 @@ func (q *Queries) UpdateZone(ctx context.Context, arg UpdateZoneParams) (Shippin
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EtaMinDays,
+		&i.EtaMaxDays,
 	)
 	return i, err
 }

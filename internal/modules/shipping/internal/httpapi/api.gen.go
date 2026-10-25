@@ -394,9 +394,16 @@ type ShippingConfig struct {
 
 // ShippingQuote defines model for ShippingQuote.
 type ShippingQuote struct {
-	CodFeeMinor   int64  `json:"cod_fee_minor"`
-	Currency      string `json:"currency"`
-	Deliverable   bool   `json:"deliverable"`
+	CodFeeMinor int64  `json:"cod_fee_minor"`
+	Currency    string `json:"currency"`
+	Deliverable bool   `json:"deliverable"`
+	EtaMaxDays  *int   `json:"eta_max_days,omitempty"`
+
+	// EtaMinDays How long delivery takes to the zone; absent when the merchant did not say.
+	EtaMinDays *int `json:"eta_min_days,omitempty"`
+
+	// FreeOverMinor The free-shipping threshold in force (the zone's
+	FreeOverMinor *int64 `json:"free_over_minor,omitempty"`
 	FreeShipping  bool   `json:"free_shipping"`
 	ShippingMinor int64  `json:"shipping_minor"`
 
@@ -437,6 +444,12 @@ type ShippingZone struct {
 	Cities []ShippingCity `json:"cities"`
 	CodFee *CODFee        `json:"cod_fee,omitempty"`
 
+	// EtaMaxDays Most days delivery takes.
+	EtaMaxDays *int `json:"eta_max_days,omitempty"`
+
+	// EtaMinDays Fewest days delivery takes; with eta_max_days, or neither.
+	EtaMinDays *int `json:"eta_min_days,omitempty"`
+
 	// FreeOverMinor Overrides the store's threshold.
 	FreeOverMinor *int64 `json:"free_over_minor,omitempty"`
 
@@ -450,12 +463,18 @@ type ShippingZone struct {
 
 // ShippingZoneInput defines model for ShippingZoneInput.
 type ShippingZoneInput struct {
-	Areas         []string        `json:"areas"`
-	Cities        *[]ShippingCity `json:"cities,omitempty"`
-	CodFee        *CODFee         `json:"cod_fee,omitempty"`
-	FreeOverMinor *int64          `json:"free_over_minor,omitempty"`
-	Name          string          `json:"name"`
-	RateMinor     int64           `json:"rate_minor"`
+	Areas  []string        `json:"areas"`
+	Cities *[]ShippingCity `json:"cities,omitempty"`
+	CodFee *CODFee         `json:"cod_fee,omitempty"`
+
+	// EtaMaxDays Most days delivery takes; at least eta_min_days.
+	EtaMaxDays *int `json:"eta_max_days,omitempty"`
+
+	// EtaMinDays Fewest days delivery takes (0: the same day). Set with eta_max_days, or neither.
+	EtaMinDays    *int   `json:"eta_min_days,omitempty"`
+	FreeOverMinor *int64 `json:"free_over_minor,omitempty"`
+	Name          string `json:"name"`
+	RateMinor     int64  `json:"rate_minor"`
 
 	// Version Required when updating.
 	Version *int `json:"version,omitempty"`

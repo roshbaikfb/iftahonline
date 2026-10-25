@@ -119,14 +119,36 @@ type CityRate struct {
 // CityKey is a city name in the form cities are matched in.
 func CityKey(name string) string { return arabic.NormalizeSearch(name) }
 
+// MaxDeliveryDays is the most days a zone may say delivery takes.
+const MaxDeliveryDays = 30
+
+// DeliveryDays is how long delivery to a zone takes, in days: "2–3
+// days"; Min = Max for one figure, 0 for the same day.
+type DeliveryDays struct {
+	Min int
+	Max int
+}
+
+func (d DeliveryDays) validate() []errs.FieldError {
+	var fields []errs.FieldError
+	if d.Min < 0 || d.Min > MaxDeliveryDays || d.Min > d.Max {
+		fields = append(fields, errs.FieldError{Field: "eta_min_days", Code: "range", Message: fmt.Sprintf("must be between 0 and %d, and not above eta_max_days", MaxDeliveryDays)})
+	}
+	if d.Max < 0 || d.Max > MaxDeliveryDays {
+		fields = append(fields, errs.FieldError{Field: "eta_max_days", Code: "range", Message: fmt.Sprintf("must be between 0 and %d", MaxDeliveryDays)})
+	}
+	return fields
+}
+
 // Zone is a set of governorates sharing a rate.
 type Zone struct {
 	ID            ulid.ID
 	Name          string
 	Areas         []string // ISO 3166-2 codes, sorted; each in one zone only
 	RateMinor     int64
-	FreeOverMinor *int64  // overrides Settings.FreeOverMinor
-	CODFee        *CODFee // overrides Settings.CODFee
+	FreeOverMinor *int64        // overrides Settings.FreeOverMinor
+	CODFee        *CODFee       // overrides Settings.CODFee
+	Delivery      *DeliveryDays // nil: the merchant did not say
 	Cities        []CityRate
 	Position      int // display order, from 0
 	Version       int
@@ -139,6 +161,7 @@ type ZoneInput struct {
 	RateMinor     int64
 	FreeOverMinor *int64
 	CODFee        *CODFee
+	Delivery      *DeliveryDays
 	Cities        []CityInput
 }
 
@@ -161,6 +184,11 @@ func ValidateZone(in ZoneInput, country geo.Country) (Zone, error) {
 	fields = append(fields, validateFreeOver("free_over_minor", in.FreeOverMinor)...)
 	if in.CODFee != nil {
 		fields = append(fields, in.CODFee.validate("cod_fee")...)
+	}
+	if in.Delivery != nil {
+		fields = append(fields, in.Delivery.validate()...)
+		d := *in.Delivery
+		z.Delivery = &d
 	}
 
 	if len(in.Areas) == 0 {
@@ -236,6 +264,12 @@ type Quote struct {
 	Shipping     money.Money
 	FreeShipping bool // the free-shipping threshold applied
 	CODFee       money.Money
+	// FreeOverMinor is the free-shipping threshold in force (the zone's,
+	// else the store's); nil when there is none.
+	FreeOverMinor *int64
+	// Delivery is how long delivery takes to the zone; nil when the
+	// merchant did not say (or the store has no zones).
+	Delivery *DeliveryDays
 }
 
 // Quote prices delivering req:
@@ -277,6 +311,7 @@ func (c Config) Quote(req QuoteRequest) (Quote, error) {
 		if z.CODFee != nil {
 			fee = *z.CODFee
 		}
+		q.Delivery = z.Delivery
 		if freeOver != nil && req.Subtotal.Amount() >= *freeOver {
 			q.FreeShipping = true
 		} else if q.Shipping, err = money.New(rate, c.Currency); err != nil {
@@ -285,6 +320,7 @@ func (c Config) Quote(req QuoteRequest) (Quote, error) {
 	} else if freeOver != nil && req.Subtotal.Amount() >= *freeOver {
 		q.FreeShipping = true
 	}
+	q.FreeOverMinor = freeOver
 	collected, err := req.Subtotal.Add(q.Shipping)
 	if err != nil {
 		return Quote{}, err

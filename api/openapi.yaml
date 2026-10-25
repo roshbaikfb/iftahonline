@@ -3528,6 +3528,8 @@ components:
         rate_minor: { type: integer, format: int64 }
         free_over_minor: { type: integer, format: int64, description: "Overrides the store's threshold." }
         cod_fee: { $ref: "#/components/schemas/CODFee" }
+        eta_min_days: { type: integer, description: "Fewest days delivery takes; with eta_max_days, or neither." }
+        eta_max_days: { type: integer, description: "Most days delivery takes." }
         cities:
           type: array
           items: { $ref: "#/components/schemas/ShippingCity" }
@@ -3545,6 +3547,8 @@ components:
         rate_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         free_over_minor: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         cod_fee: { $ref: "#/components/schemas/CODFee" }
+        eta_min_days: { type: integer, minimum: 0, maximum: 30, description: "Fewest days delivery takes (0: the same day). Set with eta_max_days, or neither." }
+        eta_max_days: { type: integer, minimum: 0, maximum: 30, description: "Most days delivery takes; at least eta_min_days." }
         cities:
           type: array
           maxItems: 200
@@ -3580,6 +3584,9 @@ components:
         free_shipping: { type: boolean }
         cod_fee_minor: { type: integer, format: int64 }
         currency: { type: string }
+        free_over_minor: { type: integer, format: int64, description: The free-shipping threshold in force (the zone's, else the store's); absent when there is none. }
+        eta_min_days: { type: integer, description: How long delivery takes to the zone; absent when the merchant did not say. }
+        eta_max_days: { type: integer }
     CarrierConnection:
       type: object
       required: [id, carrier, status, created_at]

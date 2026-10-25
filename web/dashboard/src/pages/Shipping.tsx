@@ -179,6 +179,7 @@ export function Shipping() {
                 <li key={z.id}>
                   <strong>{z.name}</strong> — {money(z.rate_minor, cfg.currency)}
                   {z.cities.length > 0 && <small> · {z.cities.length} مدينة بسعر خاص</small>}
+                  {z.eta_min_days !== undefined && z.eta_max_days !== undefined && <small> · {deliveryText(z.eta_min_days, z.eta_max_days)}</small>}
                   <div className="areas">{z.areas.map((a) => names.get(a) ?? a).join('، ')}</div>
                   <div className="actions">
                     <button
@@ -271,6 +272,11 @@ function ZoneEditor({
       setError('اختر محافظة واحدة على الأقل');
       return;
     }
+    const days = readDays(field(form, 'eta_min'), field(form, 'eta_max'));
+    if (typeof days === 'string') {
+      setError(days);
+      return;
+    }
     const body: ZoneInput = {
       name: field(form, 'name').trim(),
       areas,
@@ -287,6 +293,10 @@ function ZoneEditor({
       body.cities?.push({ name: c.name.trim(), rate_minor: r });
     }
     if (free !== undefined) body.free_over_minor = free;
+    if (days) {
+      body.eta_min_days = days.min;
+      body.eta_max_days = days.max;
+    }
     if (ownFee) {
       const fee = readFee(form, 'zone');
       if (typeof fee === 'string') {
@@ -387,6 +397,19 @@ function ZoneEditor({
           defaultValue={zone?.free_over_minor === undefined ? '' : toMajor(zone.free_over_minor)}
         />
       </label>
+      <fieldset>
+        <legend>مدة التوصيل (اختياري؛ تظهر للعميل في صفحة المنتج)</legend>
+        <div className="days">
+          <label>
+            من (أيام)
+            <input name="eta_min" inputMode="numeric" defaultValue={zone?.eta_min_days ?? ''} />
+          </label>
+          <label>
+            إلى (أيام)
+            <input name="eta_max" inputMode="numeric" defaultValue={zone?.eta_max_days ?? ''} />
+          </label>
+        </div>
+      </fieldset>
       <label className="inline">
         <input
           type="checkbox"
@@ -406,4 +429,40 @@ function ZoneEditor({
       </div>
     </form>
   );
+}
+
+const maxDeliveryDays = 30;
+
+// readDays reads the zone's delivery days: both empty is none; otherwise
+// both whole numbers from 0 to 30, the fewer first.
+function readDays(fromText: string, toText: string): { min: number; max: number } | undefined | string {
+  const from = fromText.trim();
+  const to = toText.trim();
+  if (from === '' && to === '') return undefined;
+  if (from === '' || to === '') return 'مدة التوصيل: اكتب أقل وأكثر عدد أيام معًا';
+  const min = wholeNumber(from);
+  const max = wholeNumber(to);
+  if (min === undefined || max === undefined || min > max || max > maxDeliveryDays) {
+    return `مدة التوصيل: الأقل لا يزيد عن الأكثر، من 0 إلى ${String(maxDeliveryDays)} يومًا`;
+  }
+  return { min, max };
+}
+
+// wholeNumber reads Western or Arabic-Indic digits.
+function wholeNumber(s: string): number | undefined {
+  const western = s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  return /^\d{1,3}$/.test(western) ? Number(western) : undefined;
+}
+
+function deliveryText(min: number, max: number): string {
+  if (max === 0) return 'التوصيل في نفس اليوم';
+  if (min === max) return `التوصيل خلال ${days(max)}`;
+  return `التوصيل خلال ${String(min)}–${String(max)} ${max <= 10 ? 'أيام' : 'يومًا'}`;
+}
+
+// days counts days the Arabic way: يوم، يومين، 3 أيام، 11 يومًا.
+function days(n: number): string {
+  if (n === 1) return 'يوم';
+  if (n === 2) return 'يومين';
+  return `${String(n)} ${n <= 10 ? 'أيام' : 'يومًا'}`;
 }

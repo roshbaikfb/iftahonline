@@ -142,10 +142,10 @@ func InsertZone(ctx context.Context, tx Tx, z domain.Zone) (domain.Zone, error) 
 	if err != nil {
 		return domain.Zone{}, err
 	}
-	fee := codColumns(z.CODFee)
+	fee, days := codColumns(z.CODFee), dayColumns(z.Delivery)
 	row, err := shippingdb.New(tx).InsertZone(ctx, shippingdb.InsertZoneParams{ID: z.ID, StoreID: store, Name: z.Name,
 		RateMinor: z.RateMinor, FreeOverMinor: z.FreeOverMinor, CodFixedMinor: fee.fixed, CodBp: fee.bp, CodMinMinor: fee.min,
-		CodMaxMinor: fee.max, Position: int32(z.Position)}) //nolint:gosec // < MaxZones
+		CodMaxMinor: fee.max, EtaMinDays: days.min, EtaMaxDays: days.max, Position: int32(z.Position)}) //nolint:gosec // < MaxZones
 	if err != nil {
 		return domain.Zone{}, fmt.Errorf("shipping store: insert zone: %w", err)
 	}
@@ -160,9 +160,10 @@ func UpdateZone(ctx context.Context, tx Tx, z domain.Zone, version int) (domain.
 		return domain.Zone{}, err
 	}
 	q := shippingdb.New(tx)
-	fee := codColumns(z.CODFee)
+	fee, days := codColumns(z.CODFee), dayColumns(z.Delivery)
 	row, err := q.UpdateZone(ctx, shippingdb.UpdateZoneParams{StoreID: store, ID: z.ID, Version: int32(version), Name: z.Name, //nolint:gosec // a version read from the database
-		RateMinor: z.RateMinor, FreeOverMinor: z.FreeOverMinor, CodFixedMinor: fee.fixed, CodBp: fee.bp, CodMinMinor: fee.min, CodMaxMinor: fee.max})
+		RateMinor: z.RateMinor, FreeOverMinor: z.FreeOverMinor, CodFixedMinor: fee.fixed, CodBp: fee.bp, CodMinMinor: fee.min, CodMaxMinor: fee.max,
+		EtaMinDays: days.min, EtaMaxDays: days.max})
 	if errors.Is(err, pgx.ErrNoRows) {
 		found, existsErr := q.ZoneExists(ctx, shippingdb.ZoneExistsParams{StoreID: store, ID: z.ID})
 		switch {
@@ -235,7 +236,20 @@ func toZone(r shippingdb.ShippingZone) domain.Zone {
 	if r.CodFixedMinor != nil && r.CodBp != nil && r.CodMinMinor != nil && r.CodMaxMinor != nil {
 		z.CODFee = &domain.CODFee{FixedMinor: *r.CodFixedMinor, BP: int64(*r.CodBp), MinMinor: *r.CodMinMinor, MaxMinor: *r.CodMaxMinor}
 	}
+	if r.EtaMinDays != nil && r.EtaMaxDays != nil {
+		z.Delivery = &domain.DeliveryDays{Min: int(*r.EtaMinDays), Max: int(*r.EtaMaxDays)}
+	}
 	return z
+}
+
+type dayCols struct{ min, max *int16 }
+
+func dayColumns(d *domain.DeliveryDays) dayCols {
+	if d == nil {
+		return dayCols{}
+	}
+	lo, hi := int16(d.Min), int16(d.Max) //nolint:gosec // ≤ domain.MaxDeliveryDays
+	return dayCols{min: &lo, max: &hi}
 }
 
 type codCols struct {
