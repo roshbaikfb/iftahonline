@@ -17,6 +17,8 @@ type (
 	QuoteRequest = domain.QuoteRequest
 	// Quote is what delivering it costs.
 	Quote = domain.Quote
+	// DeliveryDays is how long delivery to a zone takes.
+	DeliveryDays = domain.DeliveryDays
 	// RatesChanged is the shipping.rates.changed event.
 	RatesChanged = domain.RatesChanged
 

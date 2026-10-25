@@ -13,7 +13,8 @@ import (
 )
 
 // fakeShipping delivers to Alexandria for 60 (free from 500) with a 15
-// COD fee, not to Aswan; Luxor's quote fails. It keeps the last request.
+// COD fee, in 2–4 days; not to Aswan; Luxor's quote fails. It keeps the
+// last request.
 type fakeShipping struct{ last *shipping.QuoteRequest }
 
 func (f fakeShipping) Quote(_ context.Context, req shipping.QuoteRequest) (shipping.Quote, error) {
@@ -37,7 +38,9 @@ func (f fakeShipping) Quote(_ context.Context, req shipping.QuoteRequest) (shipp
 		ship = zero
 	}
 	cod, err := money.New(1500, req.Subtotal.Currency())
-	return shipping.Quote{Deliverable: true, Shipping: ship, CODFee: cod, FreeShipping: free}, err
+	freeOver := int64(50000)
+	return shipping.Quote{Deliverable: true, Shipping: ship, CODFee: cod, FreeShipping: free, FreeOverMinor: &freeOver,
+		Delivery: &shipping.DeliveryDays{Min: 2, Max: 4}}, err
 }
 
 func withShipping(t *testing.T) (fixture, *shipping.QuoteRequest) {
@@ -111,6 +114,9 @@ func TestQuote(t *testing.T) {
 	}
 	if last.City != "سموحة" {
 		t.Fatalf("city sent %q, want it cleaned", last.City)
+	}
+	if q.Delivery == nil || *q.Delivery != (shipping.DeliveryDays{Min: 2, Max: 4}) || q.FreeOverMinor == nil || *q.FreeOverMinor != 50000 {
+		t.Fatalf("quote days %+v and threshold %v: shipping's must pass through", q.Delivery, q.FreeOverMinor)
 	}
 	q, err = f.svc.Quote(f.shopperA, domain.QuoteInput{Governorate: "EG-ASN", Lines: []domain.LineInput{{VariantID: tee, Qty: 2}}})
 	if err != nil || q.Deliverable || q.Total.Amount() != 30000 {

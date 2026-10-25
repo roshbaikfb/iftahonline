@@ -89,6 +89,13 @@ type QuoteView struct {
 	Shipping     money.Money
 	CODFee       money.Money
 	Total        money.Money
+	FreeOver     *money.Money  // the free-shipping threshold in force; nil: none
+	Days         *DeliveryDays // how long delivery takes; nil: the store did not say
+}
+
+// DeliveryDays is how long delivery takes, in days.
+type DeliveryDays struct {
+	Min, Max int
 }
 
 // OrderRequest is the one-step form as submitted.

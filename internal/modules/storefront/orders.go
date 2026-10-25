@@ -10,6 +10,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -104,8 +105,17 @@ func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteV
 	var e *errs.Error
 	switch {
 	case err == nil:
-		return web.QuoteView{Deliverable: q.Deliverable, FreeShipping: q.FreeShipping, Subtotal: q.Subtotal, Shipping: q.Shipping,
-			CODFee: q.CODFee, Total: q.Total}, nil
+		v := web.QuoteView{Deliverable: q.Deliverable, FreeShipping: q.FreeShipping, Subtotal: q.Subtotal, Shipping: q.Shipping,
+			CODFee: q.CODFee, Total: q.Total}
+		if q.FreeOverMinor != nil {
+			if m, mErr := money.New(*q.FreeOverMinor, q.Subtotal.Currency()); mErr == nil {
+				v.FreeOver = &m
+			}
+		}
+		if d := q.Delivery; d != nil {
+			v.Days = &web.DeliveryDays{Min: d.Min, Max: d.Max}
+		}
+		return v, nil
 	case errors.Is(err, catalog.ErrVariantNotSellable):
 		return web.QuoteView{}, web.ErrOrderUnavailable
 	case errors.As(err, &e) && e.Kind == errs.KindValidation:

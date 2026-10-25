@@ -301,9 +301,9 @@ func (f fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummar
 		Subtotal: egp(30000), Shipping: egp(5000), CODFee: egp(1000), Total: egp(36000)}, nil
 }
 
-// Quote delivers to Cairo for 50, free from 1,000, with a 10 COD fee
-// (none by card), and not to Aswan; "EG-XX" is invalid and "EG-LX"
-// fails.
+// Quote delivers to Cairo (in 2–3 days) and elsewhere for 50, free from
+// 1,000, with a 10 COD fee (none by card), and not to Aswan; "EG-XX" is
+// invalid and "EG-LX" fails.
 func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView, error) {
 	sub := int64(0)
 	for _, l := range req.Lines {
@@ -325,8 +325,13 @@ func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView,
 	if req.Card {
 		fee = 0
 	}
-	return web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(fee),
-		Total: egp(sub + ship + fee)}, nil
+	freeOver := egp(100000)
+	q := web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(fee),
+		Total: egp(sub + ship + fee), FreeOver: &freeOver}
+	if req.Governorate == "EG-C" {
+		q.Days = &web.DeliveryDays{Min: 2, Max: 3}
+	}
+	return q, nil
 }
 
 type fakeSigner struct{}

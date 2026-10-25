@@ -151,6 +151,10 @@ const (
 	MsgContact
 	MsgWhatsApp
 	MsgEmail
+	MsgDeliveryTo
+	MsgShippingCost
+	MsgShippingFreeLine
+	MsgFreeOver
 	msgCount
 )
 
@@ -261,6 +265,10 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgContact:            {"تواصل", "Chat"},
 	MsgWhatsApp:           {"واتساب", "WhatsApp"},
 	MsgEmail:              {"البريد", "Email"},
+	MsgDeliveryTo:         {"التوصيل إلى", "Delivery to"},
+	MsgShippingCost:       {"الشحن", "Shipping"},
+	MsgShippingFreeLine:   {"الشحن مجاني", "Free shipping"},
+	MsgFreeOver:           {"مجاني فوق", "free over"},
 }
 
 // T returns the message in l.
@@ -333,6 +341,38 @@ func (l Locale) Price(m money.Money) string {
 		return s + " " + sym
 	}
 	return sym + " " + s
+}
+
+// DeliveryDays says how long delivery takes: "خلال 2–3 أيام", "in 2–3
+// days", "في نفس اليوم". Arabic counts the way it is said: يوم، يومين،
+// 3 أيام، 11 يومًا.
+func (l Locale) DeliveryDays(minDays, maxDays int) string {
+	if l == English {
+		switch {
+		case maxDays == 0:
+			return "the same day"
+		case minDays == maxDays && maxDays == 1:
+			return "in 1 day"
+		case minDays == maxDays:
+			return "in " + strconv.Itoa(maxDays) + " days"
+		}
+		return "in " + strconv.Itoa(minDays) + "–" + strconv.Itoa(maxDays) + " days"
+	}
+	unit := "أيام"
+	if maxDays > 10 {
+		unit = "يومًا"
+	}
+	switch {
+	case maxDays == 0:
+		return "في نفس اليوم"
+	case minDays == maxDays && maxDays == 1:
+		return "خلال يوم"
+	case minDays == maxDays && maxDays == 2:
+		return "خلال يومين"
+	case minDays == maxDays:
+		return "خلال " + strconv.Itoa(maxDays) + " " + unit
+	}
+	return "خلال " + strconv.Itoa(minDays) + "–" + strconv.Itoa(maxDays) + " " + unit
 }
 
 // group inserts thousands separators into a run of digits.
