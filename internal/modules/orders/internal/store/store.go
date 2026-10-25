@@ -383,3 +383,21 @@ func toLines(rows []ordersdb.OrderItem, cur money.Currency) ([]domain.Line, erro
 	}
 	return out, nil
 }
+
+// CountByStatus returns the store's number of orders per status that has
+// any, in one query (orders_store_status).
+func CountByStatus(ctx context.Context, tx Tx) (map[domain.Status]int, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := ordersdb.New(tx).CountOrdersByStatus(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("orders store: count by status: %w", err)
+	}
+	out := make(map[domain.Status]int, len(rows))
+	for _, r := range rows {
+		out[domain.Status(r.Status)] = int(r.N)
+	}
+	return out, nil
+}

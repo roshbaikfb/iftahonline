@@ -12,6 +12,36 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const countOrdersByStatus = `-- name: CountOrdersByStatus :many
+SELECT status, count(*)::bigint AS n FROM orders WHERE store_id = $1 GROUP BY status
+`
+
+type CountOrdersByStatusRow struct {
+	Status string
+	N      int64
+}
+
+// Every status's number of orders, from orders_store_status alone.
+func (q *Queries) CountOrdersByStatus(ctx context.Context, storeID ulid.ID) ([]CountOrdersByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countOrdersByStatus, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountOrdersByStatusRow{}
+	for rows.Next() {
+		var i CountOrdersByStatusRow
+		if err := rows.Scan(&i.Status, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrders = `-- name: ListOrders :many
 
 SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status FROM orders

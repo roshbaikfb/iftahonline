@@ -1716,6 +1716,25 @@ paths:
               schema: { $ref: "#/components/schemas/OrderDetail" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/counts:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [orders]
+      operationId: countOrders
+      summary: Count orders by status
+      description: |
+        Permission: orders.read. Every status with its number of orders
+        (0 when none), in one query: the dashboard's status tabs and the
+        sidebar's pending badge.
+      responses:
+        "200":
+          description: The counts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderCounts" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/orders/transitions:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -3165,6 +3184,18 @@ components:
           type: array
           description: The timeline, oldest first.
           items: { $ref: "#/components/schemas/OrderEvent" }
+    OrderCounts:
+      type: object
+      required: [pending, confirmed, ready_to_ship, shipped, delivered, cancelled, failed_delivery, returned]
+      properties:
+        pending: { type: integer }
+        confirmed: { type: integer }
+        ready_to_ship: { type: integer }
+        shipped: { type: integer }
+        delivered: { type: integer }
+        cancelled: { type: integer }
+        failed_delivery: { type: integer }
+        returned: { type: integer }
     OrderPage:
       type: object
       required: [items]

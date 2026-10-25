@@ -52,6 +52,20 @@ func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope fu
 	})
 }
 
+// CountOrders implements StrictServerInterface.
+func (h *Handlers) CountOrders(ctx context.Context, _ CountOrdersRequestObject) (CountOrdersResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermOrdersRead); err != nil {
+		return nil, err
+	}
+	c, err := h.svc.Counts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return CountOrders200JSONResponse{Pending: c[domain.StatusPending], Confirmed: c[domain.StatusConfirmed], ReadyToShip: c[domain.StatusReadyToShip],
+		Shipped: c[domain.StatusShipped], Delivered: c[domain.StatusDelivered], Cancelled: c[domain.StatusCancelled],
+		FailedDelivery: c[domain.StatusFailedDelivery], Returned: c[domain.StatusReturned]}, nil
+}
+
 // ListOrders implements StrictServerInterface.
 func (h *Handlers) ListOrders(ctx context.Context, req ListOrdersRequestObject) (ListOrdersResponseObject, error) {
 	if err := h.auth.Authorize(ctx, authz.PermOrdersRead); err != nil {

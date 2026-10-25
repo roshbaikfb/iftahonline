@@ -235,6 +235,18 @@ type OrderPaymentStatus string
 // OrderSource defines model for Order.Source.
 type OrderSource string
 
+// OrderCounts defines model for OrderCounts.
+type OrderCounts struct {
+	Cancelled      int `json:"cancelled"`
+	Confirmed      int `json:"confirmed"`
+	Delivered      int `json:"delivered"`
+	FailedDelivery int `json:"failed_delivery"`
+	Pending        int `json:"pending"`
+	ReadyToShip    int `json:"ready_to_ship"`
+	Returned       int `json:"returned"`
+	Shipped        int `json:"shipped"`
+}
+
 // OrderDetail defines model for OrderDetail.
 type OrderDetail struct {
 	// Events The timeline, oldest first.
@@ -422,6 +434,9 @@ type ServerInterface interface {
 	// CreateOrder Enter an order (a phone order)
 	// (POST /v1/stores/{store_id}/orders)
 	CreateOrder(w http.ResponseWriter, r *http.Request, storeId StoreID, params CreateOrderParams)
+	// CountOrders Count orders by status
+	// (GET /v1/stores/{store_id}/orders/counts)
+	CountOrders(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// ExportOrders Export orders as CSV
 	// (GET /v1/stores/{store_id}/orders/export)
 	ExportOrders(w http.ResponseWriter, r *http.Request, storeId StoreID, params ExportOrdersParams)
@@ -619,6 +634,32 @@ func (siw *ServerInterfaceWrapper) CreateOrder(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateOrder(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CountOrders operation middleware
+func (siw *ServerInterfaceWrapper) CountOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CountOrders(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -927,6 +968,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders", wrapper.ListOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders", wrapper.CreateOrder)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/counts", wrapper.CountOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders/transitions", wrapper.BulkTransitionOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/export", wrapper.ExportOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}", wrapper.GetOrder)
@@ -1031,6 +1073,45 @@ type CreateOrderdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateOrderdefaultApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CountOrdersRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type CountOrdersResponseObject interface {
+	VisitCountOrdersResponse(w http.ResponseWriter) error
+}
+
+type CountOrders200JSONResponse OrderCounts
+
+func (response CountOrders200JSONResponse) VisitCountOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CountOrdersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CountOrdersdefaultApplicationProblemPlusJSONResponse) VisitCountOrdersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1225,6 +1306,9 @@ type StrictServerInterface interface {
 	// CreateOrder Enter an order (a phone order)
 	// (POST /v1/stores/{store_id}/orders)
 	CreateOrder(ctx context.Context, request CreateOrderRequestObject) (CreateOrderResponseObject, error)
+	// CountOrders Count orders by status
+	// (GET /v1/stores/{store_id}/orders/counts)
+	CountOrders(ctx context.Context, request CountOrdersRequestObject) (CountOrdersResponseObject, error)
 	// ExportOrders Export orders as CSV
 	// (GET /v1/stores/{store_id}/orders/export)
 	ExportOrders(ctx context.Context, request ExportOrdersRequestObject) (ExportOrdersResponseObject, error)
@@ -1332,6 +1416,32 @@ func (sh *strictHandler) CreateOrder(w http.ResponseWriter, r *http.Request, sto
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateOrderResponseObject); ok {
 		if err := validResponse.VisitCreateOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CountOrders operation middleware
+func (sh *strictHandler) CountOrders(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CountOrdersRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CountOrders(ctx, request.(CountOrdersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CountOrders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CountOrdersResponseObject); ok {
+		if err := validResponse.VisitCountOrdersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
