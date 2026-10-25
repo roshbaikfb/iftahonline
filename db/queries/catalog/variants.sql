@@ -64,11 +64,19 @@ WHERE v.store_id = @store_id AND v.id = @id AND v.deleted_at IS NULL
 -- name: ListSellableVariants :many
 -- GetSellableVariant for many IDs (a cart), one primary-key lookup per
 -- ID in the order given; IDs that are not sellable are skipped.
+-- With the product's first ready picture, for the cart's thumbnails
+-- (product_images_store_product serves the lateral lookup).
 SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
-       v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved
+       v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved,
+       img.object_key AS image_key
 FROM unnest(@ids::uuid[]) WITH ORDINALITY AS ids(id, ord)
 JOIN variants v ON v.id = ids.id AND v.store_id = @store_id AND v.deleted_at IS NULL
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
+LEFT JOIN LATERAL (
+  SELECT pi.object_key FROM product_images pi
+  WHERE pi.store_id = v.store_id AND pi.product_id = v.product_id AND pi.status = 'ready'
+  ORDER BY pi.position, pi.id LIMIT 1
+) img ON true
 WHERE p.deleted_at IS NULL AND p.status = 'active'
 ORDER BY ids.ord;

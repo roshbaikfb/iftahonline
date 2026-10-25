@@ -85,6 +85,7 @@ type SellableVariant struct {
 	Price        money.Money
 	CompareAt    *money.Money
 	Stock        Stock
+	ImageKey     string // the product's first ready picture (its master's object key); "" without one
 }
 
 // ValidateReserve checks a reservation request and returns it with lines

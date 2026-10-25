@@ -173,7 +173,10 @@ func GetSellableVariant(ctx context.Context, tx Tx, variantID ulid.ID) (domain.S
 	if err != nil {
 		return domain.SellableVariant{}, fmt.Errorf("catalog store: get sellable variant: %w", err)
 	}
-	return toSellable(catalogdb.ListSellableVariantsRow(r))
+	return toSellable(catalogdb.ListSellableVariantsRow{ID: r.ID, ProductID: r.ProductID, ProductTitle: r.ProductTitle, ProductSlug: r.ProductSlug,
+		Sku: r.Sku, OptionValues: r.OptionValues, PriceMinor: r.PriceMinor, CompareAtMinor: r.CompareAtMinor, Currency: r.Currency,
+		Tracked: r.Tracked, OnHand: r.OnHand, Reserved: r.Reserved}) // one variant needs no picture
+
 }
 
 // ListSellableVariants returns the sellable variants among ids, in the
@@ -206,6 +209,7 @@ func toSellable(r catalogdb.ListSellableVariantsRow) (domain.SellableVariant, er
 	return domain.SellableVariant{
 		VariantID: r.ID, ProductID: r.ProductID, ProductTitle: r.ProductTitle, ProductSlug: r.ProductSlug,
 		SKU: deref(r.Sku), OptionValues: r.OptionValues, Price: price, CompareAt: compareAt,
-		Stock: domain.Stock{Tracked: r.Tracked, OnHand: int(r.OnHand), Reserved: int(r.Reserved)},
+		Stock:    domain.Stock{Tracked: r.Tracked, OnHand: int(r.OnHand), Reserved: int(r.Reserved)},
+		ImageKey: deref(r.ImageKey),
 	}, nil
 }

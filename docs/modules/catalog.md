@@ -24,6 +24,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
 | `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
 | `Storefront.Categories(ctx)` | The category tree, by position |
+| `Storefront.SellableVariants(ctx, ids)` | A cart's variants in one query, with the product's first ready picture (`ImageKey`) for thumbnails |
 | `NewStorefront(StorefrontDeps)` | The read side alone (pool + image delivery settings), for the storefront role |
 | `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `Event*` | Events the module publishes (below) |
 | `CurrencySource`, `CurrencyFunc` | How the module learns the store currency (cmd/platform adapts tenancy) |
