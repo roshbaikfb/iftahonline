@@ -80,6 +80,28 @@ func (s Stock) Available() int { return max(s.OnHand-s.Reserved, 0) }
 // CanSell reports whether qty more units can be reserved.
 func (s Stock) CanSell(qty int) bool { return !s.Tracked || s.Available() >= qty }
 
+// MaxShownLeft is the most units left a shopper may be told about
+// ("only 3 left"); above it, stock levels stay private.
+const MaxShownLeft = 10
+
+// Left is how many units are left, for a shop's "only N left": tracked
+// stock with 1 to MaxShownLeft units; 0 otherwise (plenty, untracked or
+// sold out).
+func (s Stock) Left() int {
+	if n := s.Available(); s.Tracked && n <= MaxShownLeft {
+		return n
+	}
+	return 0
+}
+
+// ShownStockChanged reports whether tracked stock going from before to
+// after available units changes what a shop shows: sold out, back in
+// stock, or the "only N left" count. Changes among plenty show nothing,
+// so they need no event (and purge no cached page).
+func ShownStockChanged(before, after int) bool {
+	return before != after && min(before, after) <= MaxShownLeft
+}
+
 // Variant is one sellable combination of a product's option values.
 type Variant struct {
 	ID           ulid.ID

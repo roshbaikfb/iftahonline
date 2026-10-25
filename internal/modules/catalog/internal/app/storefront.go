@@ -55,13 +55,15 @@ type StorefrontProduct struct {
 }
 
 // StorefrontVariant is a variant as a shopper sees it. Stock levels stay
-// private; only whether one unit can be bought is shown.
+// private: only whether one unit can be bought, and how many are left
+// when they are few (domain.MaxShownLeft at most).
 type StorefrontVariant struct {
 	ID           ulid.ID
 	OptionValues []string
 	Price        money.Money
 	CompareAt    *money.Money
 	Available    bool
+	Left         int // units left when 1 to domain.MaxShownLeft; 0 otherwise
 }
 
 // StorefrontImage is a ready image with its renditions.
@@ -216,6 +218,7 @@ func (s *Storefront) view(p domain.Product) StorefrontProduct {
 	for i, pv := range p.Variants {
 		v.Variants[i] = StorefrontVariant{
 			ID: pv.ID, OptionValues: pv.OptionValues, Price: pv.Price, CompareAt: pv.CompareAt, Available: pv.Stock.CanSell(1),
+			Left: pv.Stock.Left(),
 		}
 	}
 	for _, img := range p.Images {

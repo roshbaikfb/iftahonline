@@ -20,7 +20,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `Catalog.ReleaseStock(ctx, ref)` | Gives the held stock back; idempotent; unknown ref is `ErrReservationNotFound` |
 | `ErrInsufficientStock`, `ErrVariantNotSellable` | Wrapped in a `*StockError` that names the variant |
 | `ErrReservationRefUsed` | The ref already holds a different set of lines |
-| `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with variants (`Available`, no stock numbers) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
+| `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with variants (`Available`, and `Left`: the units left only when there are 1 to `MaxShownLeft` (10), never higher counts) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
 | `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
 | `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
 | `Storefront.Categories(ctx)` | The category tree, by position |
@@ -38,7 +38,7 @@ the change. Payloads carry IDs; subscribers read current state.
 
 | Event | Published when |
 |---|---|
-| `catalog.product.changed` (`reason`) | `created`, `updated` (fields, variants, prices, categories), `images` (ready, updated, deleted), `stock` (on-hand set, or a reservation/release/expiry made a variant sell out or come back) |
+| `catalog.product.changed` (`reason`) | `created`, `updated` (fields, variants, prices, categories), `images` (ready, updated, deleted), `stock` (on-hand set, or a reservation/release/expiry changed what shops show: a variant sold out, came back, or its "only N left" count, i.e. 10 or fewer available before or after; changes among plenty publish nothing) |
 | `catalog.product.deleted` | A product is deleted |
 | `catalog.category.changed` (`reason`) | A category is created, updated or deleted |
 
@@ -143,7 +143,8 @@ like the documents (`arabic.NormalizeSearch`, in platform/arabic since P4).
   `FuzzProcess`, `FuzzJPEGOrientation`; an integration test against real
   SeaweedFS and imgproxy (presigned POST policy, signed and tampered URLs).
 - `app` events: each write publishes the right event and reason; stock
-  events only on sell-out/back-in-stock; nothing on failed writes.
+  events only when shown stock changes (sell-out, back in stock, a count of
+  10 or fewer), none among plenty; nothing on failed writes.
 - `app` storefront: active-only, order kept, repeats and foreign IDs
   skipped, constant queries, renditions, cross-tenant, slug plan under RLS.
 - `app` (real PostgreSQL): lifecycle, uniqueness, constant query count,

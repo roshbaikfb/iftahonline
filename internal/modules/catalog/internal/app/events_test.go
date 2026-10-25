@@ -130,14 +130,27 @@ func TestStockTransitionEvents(t *testing.T) {
 	ctx := f.ctxA
 	p := mustCreate(ctx, t, f, tee("Cap", 2))
 	untracked := mustCreate(ctx, t, f, single("Gift card", 0, false))
+	plenty := mustCreate(ctx, t, f, single("Socks", domain.MaxShownLeft+5, true))
 	f.events.take()
 	v := p.Variants[0]
 	line := func(id ulid.ID, qty int) []domain.ReserveLine { return []domain.ReserveLine{{VariantID: id, Qty: qty}} }
 
+	// Plenty left: nothing a shopper sees changes, so no event (and no
+	// purge of cached pages on every order).
+	if _, err := f.svc.ReserveStock(ctx, domain.ReserveRequest{Ref: "p", Lines: line(plenty.Variants[0].ID, 4)}); err != nil {
+		t.Fatal(err)
+	}
+	wantEvents(t, f)
+	// Down to "only 10 left": shoppers now see a count.
+	if _, err := f.svc.ReserveStock(ctx, domain.ReserveRequest{Ref: "p2", Lines: line(plenty.Variants[0].ID, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	wantEvents(t, f, changed(plenty.ID, domain.ReasonStock))
+
 	if _, err := f.svc.ReserveStock(ctx, domain.ReserveRequest{Ref: "a", Lines: line(v.ID, 1)}); err != nil {
 		t.Fatal(err)
 	}
-	wantEvents(t, f) // one left
+	wantEvents(t, f, changed(p.ID, domain.ReasonStock)) // "only 2 left" became "only 1 left"
 	// Both variants of one product sell out in one reservation: one event.
 	if _, err := f.svc.ReserveStock(ctx, domain.ReserveRequest{Ref: "b", Lines: []domain.ReserveLine{
 		{VariantID: v.ID, Qty: 1}, {VariantID: p.Variants[1].ID, Qty: 2},

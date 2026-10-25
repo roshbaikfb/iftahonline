@@ -116,7 +116,7 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 		return domain.Reservation{}, err
 	}
 	lines := make([]store.ReservedLine, len(req.Lines))
-	var soldOut []ulid.ID
+	var shown []ulid.ID // products whose sold-out state or "only N left" changed
 	for i, l := range req.Lines {
 		var r store.Reserved
 		if r, err = store.Reserve(ctx, tx, l.VariantID, l.Qty); err != nil {
@@ -125,8 +125,8 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 		if !r.OK {
 			return domain.Reservation{}, s.whyNotReserved(ctx, tx, l)
 		}
-		if r.SoldOut {
-			soldOut = append(soldOut, r.ProductID)
+		if r.Counted && domain.ShownStockChanged(r.Available+l.Qty, r.Available) {
+			shown = append(shown, r.ProductID)
 		}
 		lines[i] = store.ReservedLine{ID: s.ids.New(), Line: l, Counted: r.Counted}
 	}
@@ -147,7 +147,7 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, req domain.ReserveRe
 			return domain.Reservation{}, err
 		}
 	}
-	if err = s.events.stockChanged(ctx, tx, soldOut); err != nil {
+	if err = s.events.stockChanged(ctx, tx, shown); err != nil {
 		return domain.Reservation{}, err
 	}
 	return domain.Reservation{Ref: req.Ref, Lines: req.Lines, Status: domain.ReservationActive, Held: req.Hold, ExpiresAt: expires}, nil
@@ -234,7 +234,8 @@ func restock() move {
 
 // moveReservation applies mv to ref's lines and their counted units, in
 // variant ID order (no deadlocks), publishing a stock change for products
-// that come back in stock. It returns the number of lines moved.
+// whose shown stock changed (back in stock, or the "only N left" count).
+// It returns the number of lines moved.
 func moveReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, mv move, onlyExpired bool) (int, error) {
 	lines, err := store.MoveReservation(ctx, tx, ref, mv.from, mv.to, onlyExpired)
 	if err != nil {
@@ -243,7 +244,7 @@ func moveReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, mv m
 	slices.SortFunc(lines, func(a, b store.ReservedLine) int {
 		return bytes.Compare(a.Line.VariantID[:], b.Line.VariantID[:])
 	})
-	var restocked []ulid.ID
+	var shown []ulid.ID
 	for _, l := range lines {
 		if !l.Counted {
 			continue
@@ -252,13 +253,14 @@ func moveReservation(ctx context.Context, tx pgx.Tx, ev Events, ref string, mv m
 		if err != nil {
 			return 0, err
 		}
-		// Availability rose by qty only when units came back; if it is
-		// exactly qty now, the variant was sold out before.
-		if mv.onHandSign-mv.holdSign > 0 && available == l.Line.Qty {
-			restocked = append(restocked, productID)
+		// Availability moves by (onHand - hold) × qty: a commit moves both
+		// and changes nothing a shopper sees.
+		before := available - (mv.onHandSign-mv.holdSign)*l.Line.Qty
+		if domain.ShownStockChanged(before, available) {
+			shown = append(shown, productID)
 		}
 	}
-	return len(lines), ev.stockChanged(ctx, tx, restocked)
+	return len(lines), ev.stockChanged(ctx, tx, shown)
 }
 
 // ExpireReservationArgs releases a reservation once its TTL has passed.
