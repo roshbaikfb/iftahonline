@@ -104,6 +104,24 @@ func (s *Service) List(ctx context.Context, q domain.Query) (Page, error) {
 	return p, nil
 }
 
+// Counts returns every status with its number of orders (0 when none),
+// for the dashboard's tabs and badge, in one query.
+func (s *Service) Counts(ctx context.Context) (map[domain.Status]int, error) {
+	var got map[domain.Status]int
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		got, txErr = store.CountByStatus(ctx, tx)
+		return txErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[domain.Status]int, len(domain.Statuses()))
+	for _, st := range domain.Statuses() {
+		out[st] = got[st]
+	}
+	return out, nil
+}
+
 // maxTrackedOrders is how far back one phone's orders are searched for a
 // code: a shopper tracks a recent order.
 const maxTrackedOrders = domain.MaxListLimit

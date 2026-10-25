@@ -34,3 +34,7 @@ WHERE store_id = @store_id AND customer_id = @customer_id AND created_at >= @fro
   AND (sqlc.narg(governorate)::text IS NULL OR governorate = sqlc.narg(governorate)::text)
 ORDER BY created_at DESC, id DESC
 LIMIT @lim;
+
+-- name: CountOrdersByStatus :many
+-- Every status's number of orders, from orders_store_status alone.
+SELECT status, count(*)::bigint AS n FROM orders WHERE store_id = @store_id GROUP BY status;

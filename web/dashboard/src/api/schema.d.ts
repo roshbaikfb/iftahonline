@@ -1452,6 +1452,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/orders/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Count orders by status
+         * @description Permission: orders.read. Every status with its number of orders
+         *     (0 when none), in one query: the dashboard's status tabs and the
+         *     sidebar's pending badge.
+         */
+        get: operations["countOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/orders/transitions": {
         parameters: {
             query?: never;
@@ -2761,6 +2785,16 @@ export interface components {
             lines: components["schemas"]["OrderLine"][];
             /** @description The timeline, oldest first. */
             events: components["schemas"]["OrderEvent"][];
+        };
+        OrderCounts: {
+            pending: number;
+            confirmed: number;
+            ready_to_ship: number;
+            shipped: number;
+            delivered: number;
+            cancelled: number;
+            failed_delivery: number;
+            returned: number;
         };
         OrderPage: {
             items: components["schemas"]["Order"][];
@@ -5509,6 +5543,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    countOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderCounts"];
                 };
             };
             default: components["responses"]["Problem"];

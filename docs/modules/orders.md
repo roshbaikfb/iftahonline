@@ -75,6 +75,7 @@ month on the order's creation time, which its ULID encodes.
 | `transitionOrder` (optional `version`) | the move's permission |
 | `bulkTransitionOrders` (≤ 100; one result per order) | the move's permission, per order |
 | `exportOrders` (CSV) | orders.export |
+| `countOrders` (every status with its count, zeros included; one query on `orders_store_status`) | orders.read |
 
 Roles:
 

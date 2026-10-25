@@ -273,6 +273,8 @@ func TestAuthorization(t *testing.T) {
 		{support, http.MethodPost, "/" + id + "/transitions", `{"status":"ready_to_ship"}`, 403},
 		{shipping, http.MethodPost, "/" + id + "/transitions", `{"status":"ready_to_ship"}`, 200},
 		{"", http.MethodGet, "", "", 401},
+		{"", http.MethodGet, "/counts", "", 401},
+		{shipping, http.MethodGet, "/counts", "", 200},
 	}
 	for _, tt := range tests {
 		if code, body, _ := f.do(t, req(t, tt.method, path(a, tt.p), tt.token, tt.body)); code != tt.want {
@@ -313,6 +315,7 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "transitionOrder", Request: req(t, http.MethodPost, path(b, "/"+oid+"/transitions"), owner, move), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "bulkTransitionOrders", Request: req(t, http.MethodPost, path(b, "/transitions"), owner, bulk), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "exportOrders", Request: req(t, http.MethodGet, path(b, "/export"), owner, ""), Leaks: leaks},
+		{OperationID: "countOrders", Request: req(t, http.MethodGet, path(b, "/counts"), owner, ""), Leaks: leaks},
 		// A's store in the path, B's order.
 		{OperationID: "getOrder", Request: req(t, http.MethodGet, path(a, "/"+oid), owner, ""), Leaks: leaks},
 		{OperationID: "transitionOrder", Request: req(t, http.MethodPost, path(a, "/"+oid+"/transitions"), owner, move), Leaks: leaks, Unchanged: unchanged},
@@ -341,4 +344,29 @@ func TestCrossTenant(t *testing.T) {
 		}
 	}
 	unchanged(t)
+}
+
+// TestCountOrders: every status with its count, zeros included, for the
+// store in the path only.
+func TestCountOrders(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, owner := f.storeA, f.tok[authz.RoleOwner]
+	ctx := ordertest.As(tenant.WithStore(t.Context(), a), t, authz.RoleOwner)
+	for i := range 3 {
+		p, err := f.env.Svc.PlaceOrder(ctx, domain.NewOrder{Source: domain.SourceMerchant, Name: "nn", Phone: fmt.Sprintf("0101234567%d", i),
+			Governorate: "EG-C", City: "cc", Address: "aaaaa", Lines: []domain.LineInput{{VariantID: f.variantA, Qty: 1}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if _, err = f.env.Svc.Transition(ctx, p.Order.ID, domain.StatusConfirmed, "", 0); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	code, counts, _ := f.do(t, req(t, http.MethodGet, path(a, "/counts"), owner, ""))
+	if code != http.StatusOK || counts["pending"] != float64(2) || counts["confirmed"] != float64(1) || counts["delivered"] != float64(0) || len(counts) != 8 {
+		t.Fatalf("countOrders = %d %v (store B's pending order must not count)", code, counts)
+	}
 }
