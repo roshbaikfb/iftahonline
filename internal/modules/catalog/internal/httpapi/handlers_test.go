@@ -672,8 +672,8 @@ func TestDeleteSampleProducts(t *testing.T) {
 		t.Fatalf("listProducts = %d, %d marked", code, marked)
 	}
 
-	if code, body := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/samples"), tokSupportA, "")); code != http.StatusForbidden {
-		t.Fatalf("support deletes samples = %d %v", code, body)
+	if denied, body := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/samples"), tokSupportA, "")); denied != http.StatusForbidden {
+		t.Fatalf("support deletes samples = %d %v", denied, body)
 	}
 	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "deleteSampleProducts",
 		Request: req(t, http.MethodDelete, storePath(b, "/products/samples"), tokOwnerA, ""), Unchanged: bSamples})

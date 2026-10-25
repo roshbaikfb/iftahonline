@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "activity": "clothing",
+  "accent": "#b45309",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "ملابس مريحة لكل يوم",
+    "subheading": "قطن مصري وخامات تعيش معاك"
+  },
+  "categories": [
+    {
+      "slug": "tshirts",
+      "name": "تيشيرتات",
+      "image": "clothing-1"
+    },
+    {
+      "slug": "pants",
+      "name": "بناطيل",
+      "image": "clothing-2"
+    },
+    {
+      "slug": "jackets",
+      "name": "جواكت",
+      "image": "clothing-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-basic-tee",
+      "title": "تيشيرت قطن أساسي",
+      "description": "قطن مصري 100٪، قصة مريحة تناسب كل يوم.",
+      "category": "tshirts",
+      "prices": {
+        "EGP": 34900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    },
+    {
+      "slug": "sample-oversized-tee",
+      "title": "تيشيرت أوفر سايز",
+      "description": "قصة واسعة وخامة ثقيلة لا تفقد شكلها بعد الغسيل.",
+      "category": "tshirts",
+      "prices": {
+        "EGP": 42900,
+        "SAR": 5900,
+        "AED": 5900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    },
+    {
+      "slug": "sample-straight-jeans",
+      "title": "بنطلون جينز مستقيم",
+      "description": "جينز متين بقصة مستقيمة ولون لا يبهت.",
+      "category": "pants",
+      "prices": {
+        "EGP": 79900,
+        "SAR": 11900,
+        "AED": 11900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    },
+    {
+      "slug": "sample-wide-trousers",
+      "title": "بنطلون قماش واسع",
+      "description": "قماش خفيف بوسط مطاطي، مريح في الحر.",
+      "category": "pants",
+      "prices": {
+        "EGP": 59900,
+        "SAR": 8900,
+        "AED": 8900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    },
+    {
+      "slug": "sample-denim-jacket",
+      "title": "جاكيت جينز",
+      "description": "جاكيت جينز كلاسيكي بجيوب أمامية.",
+      "category": "jackets",
+      "prices": {
+        "EGP": 109900,
+        "SAR": 15900,
+        "AED": 15900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    },
+    {
+      "slug": "sample-light-jacket",
+      "title": "جاكيت خفيف بسوستة",
+      "description": "خفيف وضد الهواء، يتطوى في الشنطة.",
+      "category": "jackets",
+      "prices": {
+        "EGP": 89900,
+        "SAR": 12900,
+        "AED": 12900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      }
+    }
+  ]
+}

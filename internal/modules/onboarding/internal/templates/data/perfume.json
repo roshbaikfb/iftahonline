@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "activity": "perfume",
+  "accent": "#7c2d12",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "عطور تدوم معاك",
+    "subheading": "تركيبات مختارة للرجال والنساء، وبخور للبيت"
+  },
+  "categories": [
+    {
+      "slug": "men",
+      "name": "عطور رجالي",
+      "image": "perfume-1"
+    },
+    {
+      "slug": "women",
+      "name": "عطور حريمي",
+      "image": "perfume-2"
+    },
+    {
+      "slug": "incense",
+      "name": "بخور ومعطرات",
+      "image": "perfume-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-woody-men",
+      "title": "عطر خشبي للرجال",
+      "description": "نفحات خشبية دافئة بثبات طويل.",
+      "category": "men",
+      "prices": {
+        "EGP": 69900,
+        "SAR": 9900,
+        "AED": 9900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-fresh-men",
+      "title": "عطر منعش للرجال",
+      "description": "حمضيات منعشة تناسب النهار.",
+      "category": "men",
+      "prices": {
+        "EGP": 59900,
+        "SAR": 8900,
+        "AED": 8900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-floral-women",
+      "title": "عطر زهري للنساء",
+      "description": "باقة ورد وياسمين ناعمة.",
+      "category": "women",
+      "prices": {
+        "EGP": 74900,
+        "SAR": 10900,
+        "AED": 10900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-vanilla-women",
+      "title": "عطر فانيليا للنساء",
+      "description": "فانيليا دافئة مع لمسة مسك.",
+      "category": "women",
+      "prices": {
+        "EGP": 69900,
+        "SAR": 9900,
+        "AED": 9900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-oud-incense",
+      "title": "بخور عود",
+      "description": "عود فاخر لرائحة بيت تدوم.",
+      "category": "incense",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-linen-spray",
+      "title": "معطر مفارش",
+      "description": "رائحة نظيفة للمفارش والستائر.",
+      "category": "incense",
+      "prices": {
+        "EGP": 14900,
+        "SAR": 2900,
+        "AED": 2900
+      },
+      "stock": 20
+    }
+  ]
+}

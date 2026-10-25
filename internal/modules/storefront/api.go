@@ -35,16 +35,18 @@ const (
 	KindPolicy  = domain.KindPolicy
 )
 
-// What the setup wizard's starter template sets (ADR-0034).
+// The setup wizard's starter template sets these (ADR-0034).
 type (
 	// StarterLook is the theme's look and the home page's sections.
 	StarterLook = app.StarterLook
 	// Colors is the theme's palette (#rrggbb).
 	Colors = domain.Colors
-	// Font, Radius and Look are theme choices.
-	Font   = domain.Font
+	// Font is the theme's typeface.
+	Font = domain.Font
+	// Radius is the corner rounding of buttons, cards and inputs.
 	Radius = domain.Radius
-	Look   = domain.Look
+	// Look is the storefront's layout.
+	Look = domain.Look
 	// Section is one block of a page; its settings follow its type's
 	// schema.
 	Section = domain.Section

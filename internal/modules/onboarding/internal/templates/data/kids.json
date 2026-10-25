@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "activity": "kids",
+  "accent": "#0e7490",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "كل ما يحتاجه طفلك",
+    "subheading": "ملابس مريحة وألعاب آمنة ومستلزمات للرضع"
+  },
+  "categories": [
+    {
+      "slug": "kids-clothes",
+      "name": "ملابس أطفال",
+      "image": "kids-1"
+    },
+    {
+      "slug": "toys",
+      "name": "ألعاب",
+      "image": "kids-2"
+    },
+    {
+      "slug": "baby",
+      "name": "مستلزمات الرضع",
+      "image": "kids-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-kids-set",
+      "title": "طقم قطن للأطفال",
+      "description": "قطن ناعم على الجلد، تيشيرت وبنطلون.",
+      "category": "kids-clothes",
+      "prices": {
+        "EGP": 34900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20,
+      "option": {
+        "name": "السن",
+        "values": [
+          "2-3",
+          "4-5",
+          "6-7"
+        ]
+      }
+    },
+    {
+      "slug": "sample-kids-pajamas",
+      "title": "بيجامة أطفال",
+      "description": "بيجامة قطن مريحة لنوم هادئ.",
+      "category": "kids-clothes",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4500,
+        "AED": 4500
+      },
+      "stock": 20,
+      "option": {
+        "name": "السن",
+        "values": [
+          "2-3",
+          "4-5",
+          "6-7"
+        ]
+      }
+    },
+    {
+      "slug": "sample-wooden-blocks",
+      "title": "مكعبات تركيب خشبية",
+      "description": "مكعبات خشب طبيعي بألوان آمنة.",
+      "category": "toys",
+      "prices": {
+        "EGP": 39900,
+        "SAR": 5900,
+        "AED": 5900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-letters-game",
+      "title": "لعبة تعليمية للحروف",
+      "description": "يتعلم الحروف العربية وهو بيلعب.",
+      "category": "toys",
+      "prices": {
+        "EGP": 24900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-feeding-bottle",
+      "title": "زجاجة رضاعة",
+      "description": "خالية من BPA وسهلة التنظيف.",
+      "category": "baby",
+      "prices": {
+        "EGP": 17900,
+        "SAR": 2900,
+        "AED": 2900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-soft-blanket",
+      "title": "بطانية أطفال ناعمة",
+      "description": "خفيفة ودافية ومناسبة لكل المواسم.",
+      "category": "baby",
+      "prices": {
+        "EGP": 27900,
+        "SAR": 4500,
+        "AED": 4500
+      },
+      "stock": 20
+    }
+  ]
+}

@@ -35,8 +35,8 @@ func TestStarterSamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again, err := f.svc.EnsureCategory(ctx, domain.CategoryInput{Slug: "tshirts", Name: "تيشيرتات"}); err != nil || again != cat {
-		t.Fatalf("second EnsureCategory = %s, %v; want %s", again, err, cat)
+	if again, againErr := f.svc.EnsureCategory(ctx, domain.CategoryInput{Slug: "tshirts", Name: "تيشيرتات"}); againErr != nil || again != cat {
+		t.Fatalf("second EnsureCategory = %s, %v; want %s", again, againErr, cat)
 	}
 
 	in := sampleTee(t, "sample-tee")
@@ -53,8 +53,8 @@ func TestStarterSamples(t *testing.T) {
 	}
 	// Running the template again adds nothing and stores no picture.
 	stored := f.objects.count()
-	if again, err := f.svc.EnsureSampleProduct(ctx, sampleTee(t, "sample-tee")); err != nil || again != id || f.objects.count() != stored {
-		t.Fatalf("second EnsureSampleProduct = %s, %v (objects %d -> %d)", again, err, stored, f.objects.count())
+	if again, againErr := f.svc.EnsureSampleProduct(ctx, sampleTee(t, "sample-tee")); againErr != nil || again != id || f.objects.count() != stored {
+		t.Fatalf("second EnsureSampleProduct = %s, %v (objects %d -> %d)", again, againErr, stored, f.objects.count())
 	}
 
 	// Shown but never sold.
@@ -87,7 +87,8 @@ func TestStarterSamples(t *testing.T) {
 	if err != nil || n != 1 {
 		t.Fatalf("DeleteSamples = %d, %v", n, err)
 	}
-	wantKind(t, func() error { _, err := f.svc.GetProduct(ctx, id); return err }(), errs.KindNotFound)
+	_, gone := f.svc.GetProduct(ctx, id)
+	wantKind(t, gone, errs.KindNotFound)
 	if _, err = f.svc.GetProduct(ctx, own.ID); err != nil {
 		t.Fatalf("the merchant's product was deleted: %v", err)
 	}

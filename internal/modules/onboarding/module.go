@@ -8,11 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding/internal/templates"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 )
 
@@ -21,9 +25,12 @@ type Deps struct {
 	Pool *pgxpool.Pool
 	// Jobs enqueues the apply job in the choice's transaction.
 	Jobs jobs.Inserter
-	// Templates applies starter templates (the worker); nil applies
-	// nothing, which is all the api role needs.
-	Templates Templates
+	// The worker applies starter templates through the catalog and
+	// storefront modules, pricing by the store's Currency. Without them
+	// (the api role, which only enqueues) nothing is applied.
+	Catalog    catalog.Starter
+	Storefront storefront.Starter
+	Currency   func(ctx context.Context) (money.Currency, error)
 	// Audit records merchant actions (identity's audit log); nil discards.
 	Audit audit.Recorder
 }
@@ -38,14 +45,22 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil || d.Jobs == nil {
 		return nil, errors.New("onboarding: missing dependency")
 	}
-	if d.Templates == nil {
-		d.Templates = noTemplates{}
+	var tpl app.Templates = noTemplates{}
+	if d.Catalog != nil || d.Storefront != nil || d.Currency != nil {
+		if d.Catalog == nil || d.Storefront == nil || d.Currency == nil {
+			return nil, errors.New("onboarding: templates need the catalog, the storefront and the currency")
+		}
+		a, err := templates.NewApplier(d.Catalog, d.Storefront, d.Currency)
+		if err != nil {
+			return nil, err
+		}
+		tpl = a
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Jobs: d.Jobs, Templates: d.Templates, Audit: d.Audit})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Jobs: d.Jobs, Templates: tpl, Audit: d.Audit})}, nil
 }
 
-// noTemplates applies nothing. The api role only enqueues apply jobs;
-// the worker runs them with the real templates.
+// noTemplates applies nothing: the api role only enqueues apply jobs,
+// which the worker runs with the real templates.
 type noTemplates struct{}
 
 func (noTemplates) Apply(context.Context, Choice) (int, error) { return 0, nil }

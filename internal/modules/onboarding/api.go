@@ -31,8 +31,4 @@ type Activity = domain.Activity
 // Look is the storefront's layout.
 type Look = domain.Look
 
-// Templates applies a starter template to the store in ctx and returns
-// its version. It must be idempotent: a job may run it twice.
-type Templates = app.Templates
-
 var _ Starter = (*app.Service)(nil)

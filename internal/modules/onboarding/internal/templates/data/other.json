@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "activity": "other",
+  "accent": "#6d28d9",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "اختيارات مميزة",
+    "subheading": "منتجات منتقاة بعناية، وتوصيل لحد باب البيت"
+  },
+  "categories": [
+    {
+      "slug": "featured",
+      "name": "مختارات",
+      "image": "other-1"
+    },
+    {
+      "slug": "gifts",
+      "name": "هدايا",
+      "image": "other-2"
+    },
+    {
+      "slug": "new-arrivals",
+      "name": "وصل حديثًا",
+      "image": "other-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-featured-1",
+      "title": "منتج مميز",
+      "description": "اكتب هنا وصفًا قصيرًا لمنتجك: الخامة والمقاس وأهم ميزة.",
+      "category": "featured",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-featured-2",
+      "title": "منتج الأكثر طلبًا",
+      "description": "اكتب هنا لماذا يحب العملاء هذا المنتج.",
+      "category": "featured",
+      "prices": {
+        "EGP": 39900,
+        "SAR": 5900,
+        "AED": 5900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-gift-box",
+      "title": "صندوق هدية",
+      "description": "تغليف أنيق جاهز للإهداء.",
+      "category": "gifts",
+      "prices": {
+        "EGP": 49900,
+        "SAR": 7900,
+        "AED": 7900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-gift-card",
+      "title": "بطاقة هدية",
+      "description": "هدية يختار بها صاحبها ما يحب.",
+      "category": "gifts",
+      "prices": {
+        "EGP": 20000,
+        "SAR": 3000,
+        "AED": 3000
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-new-1",
+      "title": "منتج جديد",
+      "description": "أضف صورك وسعرك ووصفك بدل هذا المنتج.",
+      "category": "new-arrivals",
+      "prices": {
+        "EGP": 24900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-new-2",
+      "title": "منتج جديد آخر",
+      "description": "المنتجات التجريبية تُحذف بضغطة واحدة.",
+      "category": "new-arrivals",
+      "prices": {
+        "EGP": 19900,
+        "SAR": 3500,
+        "AED": 3500
+      },
+      "stock": 20
+    }
+  ]
+}
