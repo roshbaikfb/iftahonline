@@ -63,6 +63,14 @@ type Shipment struct {
 	Version           int
 }
 
+// Parcel is what a shopper may see of a shipment: who carries it, its
+// tracking number and where it stands; never the address or the COD.
+type Parcel struct {
+	Carrier        string
+	TrackingNumber string
+	Status         ShipmentStatus
+}
+
 // ShipmentEvent is one entry of a shipment's timeline.
 type ShipmentEvent struct {
 	ID       ulid.ID

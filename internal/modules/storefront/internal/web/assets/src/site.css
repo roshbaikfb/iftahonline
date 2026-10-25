@@ -35,6 +35,8 @@ p { margin-block: 0 1em; }
 .brand img { block-size: 2.5rem; inline-size: auto; }
 .tools { display: flex; align-items: center; gap: .25rem; }
 .lang { font-size: .9rem; color: var(--c-text); padding: .6rem; }
+.track-link { display: none; color: var(--c-text); font-weight: 700; padding: .6rem .75rem; }
+@media (min-width: 48rem) { .track-link { display: inline-block; } }
 .cartlink { position: relative; display: inline-flex; align-items: center; gap: .5rem; min-block-size: 2.75rem; min-inline-size: 2.75rem;
   justify-content: center; border-radius: .75rem; color: var(--c-text); font-weight: 700; }
 .cartlink .lbl { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }

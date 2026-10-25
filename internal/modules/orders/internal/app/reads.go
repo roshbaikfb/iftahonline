@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -101,6 +102,36 @@ func (s *Service) List(ctx context.Context, q domain.Query) (Page, error) {
 		p.Next = &next
 	}
 	return p, nil
+}
+
+// maxTrackedOrders is how far back one phone's orders are searched for a
+// code: a shopper tracks a recent order.
+const maxTrackedOrders = domain.MaxListLimit
+
+// Track finds the order a shopper names by its code and the phone it was
+// placed with, in any usual format (the storefront's order tracking).
+// It reads that phone's recent orders through their index and matches
+// the code. Anything else (a bad code or phone, no such order) is
+// ErrOrderNotFound, so a caller cannot tell which part was wrong. The
+// order comes without its lines.
+func (s *Service) Track(ctx context.Context, code, rawPhone string) (domain.Order, error) {
+	want, ok := domain.NormalizeCode(code)
+	if !ok || strings.TrimSpace(rawPhone) == "" {
+		return domain.Order{}, ErrOrderNotFound
+	}
+	page, err := s.List(ctx, domain.Query{Phone: rawPhone, Limit: maxTrackedOrders})
+	if errs.KindOf(err) == errs.KindValidation {
+		return domain.Order{}, ErrOrderNotFound
+	}
+	if err != nil {
+		return domain.Order{}, err
+	}
+	for _, o := range page.Items {
+		if o.Code() == want {
+			return o, nil
+		}
+	}
+	return domain.Order{}, ErrOrderNotFound
 }
 
 // BulkResult is one order's outcome in a bulk transition.

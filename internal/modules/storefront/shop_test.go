@@ -532,6 +532,25 @@ func TestOrderWithShipping(t *testing.T) {
 		}
 	}
 
+	// Tracking finds it by its code and phone (typed another way), and
+	// only on this store's host.
+	ref := strings.TrimPrefix(loc, "/thank-you/")
+	code := ref[len(ref)-8:]
+	track := post("/track", url.Values{"order": {strings.ToLower(code)}, "phone": {"010 1234 5678"}}, 4)
+	if tb := track.Body.String(); track.Code != http.StatusOK || !strings.Contains(tb, "#"+code) || !strings.Contains(tb, "تم استلام الطلب") {
+		t.Fatalf("track: %d", track.Code)
+	}
+	other := p.createStore(t, members, "track-"+tag, "متجر آخر", "ar", "EGP")
+	rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/track", strings.NewReader(url.Values{"order": {code}, "phone": {"01012345678"}}.Encode()))
+	rq.Host, rq.RemoteAddr = other.host, "203.0.113.5:40000"
+	rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rq.Header.Set("Origin", "https://"+other.host)
+	crossRec := httptest.NewRecorder()
+	p.shop.ServeHTTP(crossRec, rq)
+	if crossRec.Code != http.StatusNotFound || strings.Contains(crossRec.Body.String(), "طلب رقم") { // the form shows the typed code back; no order card
+		t.Fatalf("another store tracks the order: %d", crossRec.Code)
+	}
+
 	// The merchant changes the rate: the next quote follows at once.
 	cfg := p.call(t, s, http.MethodGet, "/shipping", "", http.StatusOK)
 	zone := cfg["zones"].([]any)[0].(map[string]any)

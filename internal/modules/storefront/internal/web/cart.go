@@ -79,6 +79,29 @@ type Orders interface {
 	// Quote prices an order before it is placed: shipping and COD fee to
 	// an address. Errors: *OrderInvalidError, ErrOrderUnavailable.
 	Quote(ctx context.Context, req QuoteRequest) (QuoteView, error)
+	// Track finds the order a shopper names by its code and phone;
+	// ErrOrderNotFound whichever part was wrong.
+	Track(ctx context.Context, code, phone string) (Tracking, error)
+}
+
+// Tracking is what order tracking shows of an order: where it stands and
+// its parcel, never the address, the name or the lines.
+type Tracking struct {
+	Code          string
+	Status        string // the order's status (pending, confirmed, ready_to_ship, shipped, delivered, cancelled, failed_delivery, returned)
+	PlacedAt      time.Time
+	Card          bool
+	PaymentStatus string
+	Items         int
+	Total         money.Money
+	Parcel        *Parcel // nil until a courier has it
+}
+
+// Parcel is an order's shipment as a shopper sees it.
+type Parcel struct {
+	Carrier string // the carrier's code (bosta, fake)
+	Number  string // the tracking number
+	Status  string // created, in_transit, out_for_delivery, delivered, failed_attempt, returned
 }
 
 // QuoteRequest is the part of the order form a quote needs.
@@ -267,6 +290,8 @@ func (s *Shop) cartRoute(w http.ResponseWriter, r *http.Request, store tenant.St
 		})
 	case rest == "/cart" && isRead(r):
 		s.cartPage(w, r, p, http.StatusOK, 0)
+	case rest == "/track":
+		s.trackRoute(w, r, store, p)
 	case len(rest) > len("/thank-you/") && rest[:len("/thank-you/")] == "/thank-you/" && isRead(r):
 		s.thankYou(w, r, p, rest[len("/thank-you/"):])
 	default:

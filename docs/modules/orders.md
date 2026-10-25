@@ -15,6 +15,7 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `TransitionError`, `ErrInvalidTransition`, `ErrOrderNotFound`, `ErrIdempotencyKeyReused`, `ErrVersionConflict` | Errors |
 | `OrderPlaced`, `OrderStatusChanged`, `EventOrderPlaced`, `EventOrderStatusChanged` | Events the module publishes |
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
+| `Shop.Track(ctx, code, phone)` | Order tracking: the order a shopper names by its 8-character code and phone (any usual format), read through that phone's recent orders (`orders_store_phone`) and matched by code; anything else is `ErrOrderNotFound`, whichever part was wrong |
 | `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)) |
 
 The module uses these other modules, each through its `api.go`:

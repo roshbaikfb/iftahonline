@@ -174,6 +174,22 @@ func (s *Service) Shipment(ctx context.Context, id ulid.ID) (domain.Shipment, []
 	return sh, evs, shipmentNotFound(err)
 }
 
+// Parcel is what order tracking shows of an order's shipment: the newest
+// that has a tracking number and was neither cancelled nor refused. ok
+// is false when there is none (yet).
+func (s *Service) Parcel(ctx context.Context, orderID ulid.ID) (domain.Parcel, bool, error) {
+	page, err := s.Shipments(ctx, domain.ShipmentQuery{OrderID: &orderID, Limit: 5})
+	if err != nil {
+		return domain.Parcel{}, false, err
+	}
+	for _, sh := range page.Items { // newest first
+		if sh.TrackingNumber != "" && sh.Status != domain.ShipmentCancelled && sh.Status != domain.ShipmentFailed {
+			return domain.Parcel{Carrier: sh.Carrier, TrackingNumber: sh.TrackingNumber, Status: sh.Status}, true, nil
+		}
+	}
+	return domain.Parcel{}, false, nil
+}
+
 // Shipments returns a page of the store's shipments, newest first.
 func (s *Service) Shipments(ctx context.Context, q domain.ShipmentQuery) (domain.ShipmentPage, error) {
 	if q.Limit == 0 {

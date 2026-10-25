@@ -219,3 +219,47 @@ func FuzzValidateNewOrder(f *testing.F) {
 		}
 	})
 }
+
+func TestNormalizeCode(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in, want string
+		ok       bool
+	}{
+		{"P0R1S2T3", "P0R1S2T3", true},
+		{" #p0r1 s2t3 ", "P0R1S2T3", true},
+		{"P0R1S2T", "", false},   // short
+		{"P0R1S2T34", "", false}, // long
+		{"P0R1S2TU", "", false},  // U is not Crockford
+		{"P0R1S2T!", "", false},
+		{"", "", false},
+		{"٠١٢٣٤٥٦٧", "", false}, // Arabic digits are not a code
+	}
+	for _, tt := range tests {
+		got, ok := domain.NormalizeCode(tt.in)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("NormalizeCode(%q) = %q %v, want %q %v", tt.in, got, ok, tt.want, tt.ok)
+		}
+	}
+	id := ulid.NewGenerator().New()
+	if got, ok := domain.NormalizeCode(strings.ToLower(domain.CodeOf(id))); !ok || got != domain.CodeOf(id) {
+		t.Fatalf("an order's own code, lower-cased: %q %v", got, ok)
+	}
+}
+
+// FuzzNormalizeCode: whatever a shopper types, a code that comes out is
+// eight Crockford characters.
+func FuzzNormalizeCode(f *testing.F) {
+	for _, s := range []string{"P0R1S2T3", " #p0r1 s2t3", "\x00‮", "IIIIIIII"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		code, ok := domain.NormalizeCode(s)
+		if !ok {
+			return
+		}
+		if len(code) != 8 || strings.Trim(code, "0123456789ABCDEFGHJKMNPQRSTVWXYZ") != "" {
+			t.Fatalf("code %q from %q", code, s)
+		}
+	})
+}

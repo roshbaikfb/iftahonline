@@ -35,6 +35,7 @@ type pageCtx struct {
 	back      string // where the short header's back arrow goes
 	soft      bool   // the page sits on a tinted background with white cards (checkout, thank-you)
 	search    bool   // the header shows the search box
+	track     bool   // the store takes orders: order tracking is linked
 	q         string // the search shown in it
 }
 
