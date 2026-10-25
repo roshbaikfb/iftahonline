@@ -321,6 +321,31 @@ func TestSellableVariants(t *testing.T) {
 		got[0].ProductTitle != "Sellable" || got[0].Price != egp(t, 16000) || got[0].Stock.OnHand != 3 {
 		t.Fatalf("got %+v", got)
 	}
+	if got[0].ImageKey != "" {
+		t.Fatalf("a product without a ready image has image %q", got[0].ImageKey)
+	}
+
+	// A cart's thumbnails come with the same single lookup: the first
+	// ready picture by position.
+	img, _, err := f.svc.CreateImageUpload(ctx, a.ID, "image/jpeg", domain.ImageInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.objects.Put(ctx, img.UploadKey, "image/jpeg", photo(t, 400, 400)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.CompleteImageUpload(ctx, a.ID, img.ID); err != nil {
+		t.Fatal(err)
+	}
+	runJobs(ctx, t, f)
+	n = countQueries(t, f, func() (e error) { got, e = f.svc.SellableVariants(ctx, ids); return e })
+	full, err := f.svc.GetProduct(ctx, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 4 || len(got) != 2 || got[0].ImageKey == "" || got[0].ImageKey != full.Images[0].ObjectKey || got[1].ImageKey != got[0].ImageKey {
+		t.Fatalf("%d queries; images %q %q, want %q", n, got[0].ImageKey, got[1].ImageKey, full.Images[0].ObjectKey)
+	}
 	if empty, err := f.svc.SellableVariants(ctx, nil); err != nil || len(empty) != 0 {
 		t.Fatalf("no IDs: %v %v", empty, err)
 	}
