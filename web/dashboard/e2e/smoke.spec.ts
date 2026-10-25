@@ -103,14 +103,14 @@ test('a merchant sets up a shipping zone and connects a carrier', async ({ page 
   await zone.getByLabel('سعرها').fill('45');
   await zone.getByRole('button', { name: 'حفظ المنطقة' }).click();
   await expect(page.getByText('أُضيفت المنطقة')).toBeVisible();
-  await expect(page.locator('.zones li').filter({ hasText: 'الإسكندرية' })).toContainText('60 ج.م');
+  await expect(page.locator('.zones-table tbody tr').filter({ hasText: 'الإسكندرية' })).toContainText('60 ج.م');
 
   await page.getByRole('link', { name: 'شركات الشحن' }).click();
   await page.getByRole('combobox', { name: 'الشركة' }).selectOption({ label: 'شركة شحن تجريبية' });
   await page.getByLabel('مفتاح API من لوحة الشركة').fill('demo-carrier-key');
   await page.getByRole('button', { name: 'ربط' }).click();
   await expect(page.locator('.secret')).toContainText('/v1/webhooks/fake/');
-  await expect(page.getByRole('cell', { name: 'مربوط' })).toBeVisible();
+  await expect(page.locator('.rows li').filter({ hasText: 'شركة شحن تجريبية' })).toContainText('مربوط');
   expect(errors, 'no console errors').toEqual([]);
 });
 
@@ -130,7 +130,7 @@ test('a merchant connects a card gateway and reads the COD report', async ({ pag
   await page.getByLabel('سر الإشعارات').fill('demo-webhook-secret');
   await page.getByRole('button', { name: 'ربط' }).click();
   await expect(page.getByText(/تم الربط/)).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'مربوطة' })).toBeVisible();
+  await expect(page.locator('.rows li').filter({ hasText: 'بوابة دفع تجريبية' })).toContainText('مربوطة');
 
   await page.getByRole('link', { name: 'التحصيل' }).click();
   await expect(page.getByRole('heading', { name: 'تحصيل الدفع عند الاستلام' })).toBeVisible();

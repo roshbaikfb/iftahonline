@@ -178,7 +178,7 @@ describe('Shipping', () => {
     });
     renderAt(`/stores/${store}/shipping`);
     const user = userEvent.setup();
-    expect(await screen.findByText('· التوصيل خلال 2–3 أيام')).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: '2–3 أيام' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'تعديل' }));
     const from = screen.getByLabelText('من (أيام)');
     const to = screen.getByLabelText('إلى (أيام)');
@@ -278,8 +278,10 @@ describe('Shipments', () => {
     const user = userEvent.setup();
     expect(await screen.findByRole('link', { name: '7788' })).toHaveAttribute('href', `/stores/${store}/shipments/S1`);
     expect(screen.getByText('بوسطة')).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('الحالة'), 'delivered');
-    expect(await screen.findByText(/لا توجد شحنات/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'الكل' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('tab', { name: 'سُلّمت' }));
+    expect(await screen.findByText('لا توجد شحنات بهذه الحالة.')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'سُلّمت' })).toHaveAttribute('aria-selected', 'true');
     expect(calls.at(-1)?.search.get('status')).toBe('delivered');
   });
 

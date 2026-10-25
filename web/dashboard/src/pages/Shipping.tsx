@@ -148,65 +148,81 @@ export function Shipping() {
   const names = new Map(cfg?.areas.map((a) => [a.code, a.name_ar]));
   return (
     <Layout storeId={storeId}>
-      <h1>الشحن</h1>
+      <div className="page-head">
+        <h1>مناطق الشحن</h1>
+      </div>
       {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status" className="ok-note">
+          {notice}
+        </p>
+      )}
       {cfg && (
-        <>
-          <section>
-            <h2>الإعدادات العامة</h2>
-            <form className="panel" onSubmit={(e) => void saveSettings(e)} key={`s-${String(cfg.settings.version)}`}>
-              <label>
-                شحن مجاني للطلبات من (اتركه فارغًا لعدم وجوده)
-                <input
-                  name="free_over"
-                  inputMode="decimal"
-                  defaultValue={cfg.settings.free_over_minor === undefined ? '' : toMajor(cfg.settings.free_over_minor)}
-                />
-              </label>
-              <fieldset>
-                <legend>رسوم الدفع عند الاستلام</legend>
-                <FeeFields prefix="store" fee={cfg.settings.cod_fee} />
-              </fieldset>
-              <button type="submit">حفظ الإعدادات</button>
-            </form>
-          </section>
-          <section>
-            <h2>مناطق التوصيل</h2>
-            {cfg.zones.length === 0 && <p className="empty">لا توجد مناطق: المتجر يوصّل لكل المحافظات مجانًا. أضف منطقة لتحديد الأسعار.</p>}
-            <ul className="zones">
-              {cfg.zones.map((z) => (
-                <li key={z.id}>
-                  <strong>{z.name}</strong> — {money(z.rate_minor, cfg.currency)}
-                  {z.cities.length > 0 && <small> · {z.cities.length} مدينة بسعر خاص</small>}
-                  {z.eta_min_days !== undefined && z.eta_max_days !== undefined && <small> · {deliveryText(z.eta_min_days, z.eta_max_days)}</small>}
-                  <div className="areas">{z.areas.map((a) => names.get(a) ?? a).join('، ')}</div>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(z);
-                      }}
-                    >
-                      تعديل
-                    </button>
-                    <button type="button" className="danger" onClick={() => void removeZone(z)}>
-                      حذف
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {editing === null && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing('new');
-                }}
-              >
-                منطقة جديدة
-              </button>
-            )}
+        <div className="split">
+          <div className="od-main">
+            <section className="table-card">
+              <div className="card-head">
+                <h2>مناطق التوصيل</h2>
+                {editing === null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing('new');
+                    }}
+                  >
+                    منطقة جديدة
+                  </button>
+                )}
+              </div>
+              {cfg.zones.length === 0 ? (
+                <p className="empty flat">لا توجد مناطق: المتجر يوصّل لكل المحافظات مجانًا. أضف منطقة لتحديد الأسعار.</p>
+              ) : (
+                <div className="scroll">
+                  <table className="orders zones-table">
+                    <thead>
+                      <tr>
+                        <th>المنطقة</th>
+                        <th>سعر الشحن</th>
+                        <th>مدة التوصيل</th>
+                        <th>مدن بسعر خاص</th>
+                        <th>
+                          <span className="visually-hidden">إجراءات</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cfg.zones.map((z) => (
+                        <tr key={z.id}>
+                          <td>
+                            <strong>{z.name}</strong>
+                            <small className="sub areas">{z.areas.map((a) => names.get(a) ?? a).join('، ')}</small>
+                          </td>
+                          <td className="num">{money(z.rate_minor, cfg.currency)}</td>
+                          <td>{z.eta_min_days !== undefined && z.eta_max_days !== undefined ? deliveryText(z.eta_min_days, z.eta_max_days) : '—'}</td>
+                          <td>{z.cities.length > 0 ? z.cities.length : '—'}</td>
+                          <td>
+                            <div className="actions">
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => {
+                                  setEditing(z);
+                                }}
+                              >
+                                تعديل
+                              </button>
+                              <button type="button" className="danger" onClick={() => void removeZone(z)}>
+                                حذف
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
             {editing !== null && (
               <ZoneEditor
                 key={editing === 'new' ? 'new' : editing.id}
@@ -221,8 +237,24 @@ export function Shipping() {
                 }}
               />
             )}
-          </section>
-        </>
+          </div>
+          <form className="panel" onSubmit={(e) => void saveSettings(e)} key={`s-${String(cfg.settings.version)}`}>
+            <h2>الإعدادات العامة</h2>
+            <label>
+              شحن مجاني للطلبات من (اتركه فارغًا لعدم وجوده)
+              <input
+                name="free_over"
+                inputMode="decimal"
+                defaultValue={cfg.settings.free_over_minor === undefined ? '' : toMajor(cfg.settings.free_over_minor)}
+              />
+            </label>
+            <fieldset>
+              <legend>رسوم الدفع عند الاستلام</legend>
+              <FeeFields prefix="store" fee={cfg.settings.cod_fee} />
+            </fieldset>
+            <button type="submit">حفظ الإعدادات</button>
+          </form>
+        </div>
       )}
     </Layout>
   );
@@ -320,7 +352,7 @@ function ZoneEditor({
 
   return (
     <form className="panel zone" onSubmit={(e) => void save(e)}>
-      <h3>{zone ? `تعديل «${zone.name}»` : 'منطقة جديدة'}</h3>
+      <h2>{zone ? `تعديل «${zone.name}»` : 'منطقة جديدة'}</h2>
       {error && <p role="alert">{error}</p>}
       <label>
         اسم المنطقة
@@ -423,7 +455,7 @@ function ZoneEditor({
       {ownFee && <FeeFields prefix="zone" fee={zone?.cod_fee ?? noFee} />}
       <div className="actions">
         <button type="submit">حفظ المنطقة</button>
-        <button type="button" className="link" onClick={onCancel}>
+        <button type="button" className="secondary" onClick={onCancel}>
           إلغاء
         </button>
       </div>
@@ -455,9 +487,9 @@ function wholeNumber(s: string): number | undefined {
 }
 
 function deliveryText(min: number, max: number): string {
-  if (max === 0) return 'التوصيل في نفس اليوم';
-  if (min === max) return `التوصيل خلال ${days(max)}`;
-  return `التوصيل خلال ${String(min)}–${String(max)} ${max <= 10 ? 'أيام' : 'يومًا'}`;
+  if (max === 0) return 'نفس اليوم';
+  if (min === max) return days(max);
+  return `${String(min)}–${String(max)} ${max <= 10 ? 'أيام' : 'يومًا'}`;
 }
 
 // days counts days the Arabic way: يوم، يومين، 3 أيام، 11 يومًا.
