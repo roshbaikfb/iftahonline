@@ -9,6 +9,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
@@ -21,7 +22,8 @@ import (
 // customer and a reused idempotency key both read as a refusal; field
 // errors name only the form's fields.
 type shopOrders struct {
-	shop orders.Shop
+	shop    orders.Shop
+	parcels shipping.Tracker // nil: tracking shows no parcel
 }
 
 var _ web.Orders = shopOrders{}
@@ -123,6 +125,28 @@ func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteV
 		return web.QuoteView{}, invalidOrder(e)
 	}
 	return web.QuoteView{}, err
+}
+
+func (o shopOrders) Track(ctx context.Context, code, phone string) (web.Tracking, error) {
+	ord, err := o.shop.Track(ctx, code, phone)
+	if errors.Is(err, orders.ErrOrderNotFound) {
+		return web.Tracking{}, web.ErrOrderNotFound
+	}
+	if err != nil {
+		return web.Tracking{}, err
+	}
+	t := web.Tracking{Code: ord.Code(), Status: string(ord.Status), PlacedAt: ord.CreatedAt, Card: ord.PaymentMethod == orders.PaymentCard,
+		PaymentStatus: string(ord.PaymentStatus), Items: ord.ItemCount, Total: ord.Total}
+	if o.parcels != nil {
+		p, ok, pErr := o.parcels.Parcel(ctx, ord.ID)
+		if pErr != nil {
+			return web.Tracking{}, pErr
+		}
+		if ok {
+			t.Parcel = &web.Parcel{Carrier: p.Carrier, Number: p.TrackingNumber, Status: string(p.Status)}
+		}
+	}
+	return t, nil
 }
 
 func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSummary, error) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // DTOs.
@@ -19,6 +20,8 @@ type (
 	Quote = domain.Quote
 	// DeliveryDays is how long delivery to a zone takes.
 	DeliveryDays = domain.DeliveryDays
+	// Parcel is what a shopper may see of an order's shipment.
+	Parcel = domain.Parcel
 	// RatesChanged is the shipping.rates.changed event.
 	RatesChanged = domain.RatesChanged
 
@@ -77,3 +80,22 @@ type Quoter interface {
 }
 
 var _ Quoter = (*app.Service)(nil)
+
+// Tracker tells order tracking about an order's shipment in the store in
+// ctx: the newest with a tracking number that was neither cancelled nor
+// refused; ok is false when there is none.
+type Tracker interface {
+	Parcel(ctx context.Context, orderID ulid.ID) (p Parcel, ok bool, err error)
+}
+
+var _ Tracker = (*app.Service)(nil)
+
+// Shipment statuses a Parcel can be in.
+const (
+	ShipmentCreated        = domain.ShipmentCreated
+	ShipmentInTransit      = domain.ShipmentInTransit
+	ShipmentOutForDelivery = domain.ShipmentOutForDelivery
+	ShipmentDelivered      = domain.ShipmentDelivered
+	ShipmentFailedAttempt  = domain.ShipmentFailedAttempt
+	ShipmentReturned       = domain.ShipmentReturned
+)

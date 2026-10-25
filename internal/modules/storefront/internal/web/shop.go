@@ -138,7 +138,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l),
-		search: s.searchOn}
+		search: s.searchOn, track: s.orders != nil}
 	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
 		return
 	}

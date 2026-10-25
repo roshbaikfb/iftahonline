@@ -215,6 +215,24 @@ const (
 	MsgNoResults
 	MsgNoResultsHint
 	MsgSearchPrompt
+	MsgTrack
+	MsgTrackIntro
+	MsgOrderNumber
+	MsgTrackButton
+	MsgTrackNotFound
+	MsgStepPlaced
+	MsgStepConfirmed
+	MsgStepShipped
+	MsgStepOut
+	MsgStepDelivered
+	MsgTrackCancelled
+	MsgTrackFailed
+	MsgTrackReturned
+	MsgCarrierWith
+	MsgTrackingNumber
+	MsgCourier
+	MsgOrderNo
+	MsgKeepNumber
 	msgCount
 )
 
@@ -387,6 +405,24 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgNoResults:          {"لم نجد نتائج لـ «%s»", "Nothing found for “%s”"},
 	MsgNoResultsHint:      {"جرّب كلمة أخرى أو تصفّح التصنيفات", "Try another word or browse the categories"},
 	MsgSearchPrompt:       {"اكتب ما تبحث عنه", "Type what you are looking for"},
+	MsgTrack:              {"تتبّع طلبك", "Track your order"},
+	MsgTrackIntro:         {"اكتب رقم الطلب ورقم الموبايل الذي طلبت به.", "Enter the order number and the mobile number you ordered with."},
+	MsgOrderNumber:        {"رقم الطلب", "Order number"},
+	MsgTrackButton:        {"تتبّع الطلب", "Track order"},
+	MsgTrackNotFound:      {"لم نجد طلبًا بهذه البيانات. تأكد من رقم الطلب ورقم الموبايل.", "We found no order with these details. Check the order number and the mobile number."},
+	MsgStepPlaced:         {"تم استلام الطلب", "Order received"},
+	MsgStepConfirmed:      {"تأكيد الطلب", "Confirmed"},
+	MsgStepShipped:        {"تم الشحن", "Shipped"},
+	MsgStepOut:            {"خرج للتوصيل", "Out for delivery"},
+	MsgStepDelivered:      {"تم التوصيل", "Delivered"},
+	MsgTrackCancelled:     {"أُلغي هذا الطلب.", "This order was cancelled."},
+	MsgTrackFailed:        {"تعذّر توصيل الطلب، وسنتواصل معك.", "We could not deliver the order; we will contact you."},
+	MsgTrackReturned:      {"أُعيد الطلب إلى المتجر.", "The order went back to the store."},
+	MsgCarrierWith:        {"مع %s", "With %s"},
+	MsgTrackingNumber:     {"رقم التتبع", "Tracking number"},
+	MsgCourier:            {"شركة الشحن", "The courier"},
+	MsgOrderNo:            {"طلب رقم", "Order"},
+	MsgKeepNumber:         {"احتفظ برقم الطلب لتتبّعه في أي وقت.", "Keep the order number to track it any time."},
 }
 
 // T returns the message in l.

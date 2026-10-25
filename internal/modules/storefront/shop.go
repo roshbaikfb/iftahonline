@@ -14,6 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/captcha"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/store"
@@ -122,6 +123,8 @@ type ShopDeps struct {
 	// Orders places shoppers' orders (checkout and landing pages' one-step
 	// form) and backs the thank-you page; nil disables them (404).
 	Orders orders.Shop
+	// Parcels tells order tracking about shipments; nil shows none.
+	Parcels shipping.Tracker
 	// Captcha is Cloudflare Turnstile, shown to risky order submissions
 	// (ADR-0022); empty keys disable it.
 	Captcha config.Captcha
@@ -161,7 +164,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 	content := app.NewService(app.Deps{DB: d.Pool, IDs: ulid.NewGenerator(), Variants: d.Catalog, Carts: store.NewCarts(d.Redis)})
 	var ords web.Orders
 	if d.Orders != nil {
-		ords = shopOrders{shop: d.Orders}
+		ords = shopOrders{shop: d.Orders, parcels: d.Parcels}
 	}
 	var pays web.Payments
 	if d.Cards != nil && d.Orders != nil {

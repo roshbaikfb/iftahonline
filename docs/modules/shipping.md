@@ -14,6 +14,7 @@ reconciliation).
 | Symbol | Purpose |
 |---|---|
 | `New(Deps)`, `Module.Mount` | Wiring, and the merchant HTTP API (behind identity's membership middleware) |
+| `Module.Tracker() Tracker` | `Parcel(ctx, orderID)`: an order's newest shipment with a tracking number, neither cancelled nor refused (carrier, number, status; never the address or COD), for order tracking |
 | `Module.Quoter() Quoter` | `Quote(ctx, QuoteRequest) (Quote, error)` for the store in ctx; the orders module prices orders with it |
 | `Module.Listen(ctx)` | Applies cache invalidations from Redis; run it in every role that quotes |
 | `InvalidateHandler`, `InvalidateSubscriber`, `InvalidateChannel` | Subscribe the handler to `EventRatesChanged` on every role's bus |

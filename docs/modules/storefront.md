@@ -54,6 +54,7 @@ every footer lists the payment methods).
 | `/pages/{slug}` | A published landing page's sections |
 | `/policies/{slug}` | A published policy |
 | `/search?q=&page=` | Shoppers' search (only with `MEILI_SEARCH_KEY`): cards, the count, the next page; nothing found lists the categories; `noindex` |
+| `/track` (GET, POST) | Order tracking. The form asks the order number and the phone; POST shows where the order stands (five steps, or cancelled, not delivered, returned) and its parcel. It is private and never cached, and never shows back the phone, the name or the address. It is limited to 10 tries per IP and 300 per store every 10 minutes; a limiter outage refuses. It is linked from the desktop header, the footer and the thank-you page. |
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
 | `/order` (POST) | A landing page's one-step order form |

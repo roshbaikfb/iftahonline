@@ -107,6 +107,10 @@ type Shop interface {
 	// shopper the shipping and COD fee before they submit. Errors: a
 	// validation error, as PlaceOrder's.
 	Quote(ctx context.Context, in QuoteInput) (Quote, error)
+	// Track finds the order a shopper names by its code and phone (any
+	// usual format), without its lines; anything else is
+	// ErrOrderNotFound, whichever part was wrong.
+	Track(ctx context.Context, code, phone string) (Order, error)
 }
 
 var _ Shop = (*app.Service)(nil)

@@ -97,6 +97,9 @@ templ layout(p *pageCtx, body templ.Component) {
 						@searchForm(p, "q")
 					}
 					<div class="tools">
+						if p.track {
+							<a class="track-link" href={ p.URL("/track") }>{ p.l.T(MsgTrack) }</a>
+						}
 						<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
 							{ p.l.Other().T(MsgLanguageName) }
 						</a>
@@ -143,12 +146,15 @@ templ footer(p *pageCtx) {
 					<p>{ p.v.theme.About }</p>
 				}
 			</div>
-			if len(p.v.policies) > 0 {
+			if len(p.v.policies) > 0 || p.track {
 				<div>
 					<h2>{ p.l.T(MsgHelp) }</h2>
 					<ul>
 						for _, pol := range p.v.policies {
 							<li><a href={ p.URL("/policies/" + pol.Slug) }>{ p.policyTitle(pol.Title, pol.Slug) }</a></li>
+						}
+						if p.track {
+							<li><a href={ p.URL("/track") }>{ p.l.T(MsgTrack) }</a></li>
 						}
 					</ul>
 				</div>

@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 )
@@ -297,4 +298,49 @@ templ searchForm(p *pageCtx, id string) {
 		<label class="sr" for={ id }>{ p.l.T(MsgSearchLabel) }</label>
 		<input type="search" id={ id } name="q" value={ p.q } placeholder={ p.l.T(MsgSearchPlaceholder) } maxlength="100" autocomplete="off" enterkeyhint="search"/>
 	</form>
+}
+
+// trackPage is /track: the order number and phone, then where the order
+// stands in steps and its parcel. The phone is never shown back.
+templ trackPage(p *pageCtx, v trackView) {
+	<section class="checkout track">
+		<h1>{ p.l.T(MsgTrack) }</h1>
+		if v.t == nil {
+			<p class="muted">{ p.l.T(MsgTrackIntro) }</p>
+		}
+		if v.problem != 0 {
+			<p class="alert" role="alert">{ p.l.T(v.problem) }</p>
+		}
+		<form class="card-box order" method="post" action={ p.URL("/track") }>
+			<div class="fld">
+				<label for="t-order">{ p.l.T(MsgOrderNumber) }</label>
+				<input type="text" id="t-order" name="order" value={ v.code } required maxlength="20" autocomplete="off" dir="ltr" autocapitalize="characters" placeholder="P0R1S2T3"/>
+			</div>
+			<div class="fld">
+				<label for="t-phone">{ p.l.T(MsgPhone) }</label>
+				<input type="tel" id="t-phone" name="phone" required maxlength="32" autocomplete="tel" inputmode="tel" dir="ltr"/>
+			</div>
+			<button class="btn btn-block" type="submit">{ p.l.T(MsgTrackButton) }</button>
+		</form>
+		if v.t != nil {
+			<section class="card-box">
+				<h2>{ p.l.T(MsgOrderNo) } <bdi dir="ltr">#{ v.t.Code }</bdi></h2>
+				<p class="muted">{ p.l.Pieces(v.t.Items) } · { p.l.Price(v.t.Total) }</p>
+				if v.alert != 0 {
+					<p class="alert" role="status">{ p.l.T(v.alert) }</p>
+				}
+				<ol class="steps">
+					for i, st := range v.steps {
+						<li class={ templ.KV("done", st.state == "done"), templ.KV("now", st.state == "now") }>
+							<span class="n">{ strconv.Itoa(i + 1) }</span>
+							<div><strong>{ p.l.T(st.label) }</strong></div>
+						</li>
+					}
+				</ol>
+				if v.t.Parcel != nil {
+					<p class="parcel">{ fmt.Sprintf(p.l.T(MsgCarrierWith), p.l.carrierName(v.t.Parcel.Carrier)) } · { p.l.T(MsgTrackingNumber) }: <bdi dir="ltr">{ v.t.Parcel.Number }</bdi></p>
+				}
+			</section>
+		}
+	</section>
 }

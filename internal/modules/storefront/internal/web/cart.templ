@@ -169,6 +169,10 @@ templ thankYouPage(p *pageCtx, v thanksView) {
 		</section>
 		<div class="thanks-actions">
 			<a class="btn btn-block" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a>
+			if p.track {
+				<a class="btn-ghost" href={ p.URL("/track") }>{ p.l.T(MsgTrack) }</a>
+				<small class="muted keep">{ p.l.T(MsgKeepNumber) }</small>
+			}
 			if v.whatsApp != "" {
 				<a class="wa-ask" href={ v.whatsApp } rel="noopener" target="_blank">
 					@icon("chat")

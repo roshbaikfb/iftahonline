@@ -309,6 +309,20 @@ func CodeOf(id ulid.ID) string {
 	return s[len(s)-8:]
 }
 
+// crockford is the alphabet of ULID strings, so of order codes.
+const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+// NormalizeCode reads an order code as a shopper types it: spaces and a
+// leading "#" dropped, any case. ok is false unless eight characters of
+// the alphabet remain.
+func NormalizeCode(s string) (string, bool) {
+	s = strings.ToUpper(strings.TrimPrefix(strings.Join(strings.Fields(s), ""), "#"))
+	if len(s) != 8 || strings.Trim(s, crockford) != "" {
+		return "", false
+	}
+	return s, true
+}
+
 // CreatedAtOf is the creation time an order ID encodes. Orders are
 // partitioned by it, so a lookup by ID reaches one partition.
 func CreatedAtOf(id ulid.ID) time.Time { return id.Time().UTC() }

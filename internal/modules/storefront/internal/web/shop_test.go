@@ -280,10 +280,35 @@ type fakeOrders struct {
 }
 
 type orderLog struct {
-	mu      sync.Mutex
-	reqs    []web.OrderRequest
-	err     error             // returned by the next PlaceOrder
-	summary *web.OrderSummary // what the thank-you page shows, when set
+	mu       sync.Mutex
+	reqs     []web.OrderRequest
+	err      error             // returned by the next PlaceOrder
+	summary  *web.OrderSummary // what the thank-you page shows, when set
+	tracking *web.Tracking     // what tracking finds, when set
+}
+
+// trackCode and trackPhone find the fake order on the tracking page.
+const (
+	trackCode  = "P0R1S2T3"
+	trackPhone = "01012345678"
+)
+
+// Track finds order P0R1S2T3 for 01012345678: shipped, its parcel out
+// for delivery with Bosta, unless the log says otherwise.
+func (f fakeOrders) Track(_ context.Context, code, phone string) (web.Tracking, error) {
+	if strings.TrimPrefix(code, "#") != trackCode || phone != trackPhone {
+		return web.Tracking{}, web.ErrOrderNotFound
+	}
+	t := web.Tracking{Code: trackCode, Status: "shipped", Items: 2, Total: egp(36000),
+		Parcel: &web.Parcel{Carrier: "bosta", Number: "7788123", Status: "out_for_delivery"}}
+	if f.log != nil {
+		f.log.mu.Lock()
+		defer f.log.mu.Unlock()
+		if f.log.tracking != nil {
+			t = *f.log.tracking
+		}
+	}
+	return t, nil
 }
 
 func (f fakeOrders) PlaceOrder(_ context.Context, req web.OrderRequest) (string, error) {
