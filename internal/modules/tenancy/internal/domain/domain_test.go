@@ -263,3 +263,23 @@ func TestVerification(t *testing.T) {
 		t.Fatal("subdomain host")
 	}
 }
+
+func TestCheckSlug(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, slug, reason string }{
+		{"beit-mona", "beit-mona", ""},
+		{"  Beit-Mona ", "beit-mona", ""},
+		{"ab", "ab", "invalid"},
+		{"-mona", "-mona", "invalid"},
+		{"mona--shop", "mona--shop", "invalid"},
+		{"متجر", "متجر", "invalid"},
+		{"admin", "admin", "reserved"},
+		{"SHOP", "shop", "reserved"},
+	}
+	for _, c := range cases {
+		slug, reason := domain.CheckSlug(c.in)
+		if slug != c.slug || reason != c.reason {
+			t.Errorf("CheckSlug(%q) = %q, %q; want %q, %q", c.in, slug, reason, c.slug, c.reason)
+		}
+	}
+}

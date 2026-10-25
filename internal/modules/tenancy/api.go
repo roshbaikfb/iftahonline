@@ -29,6 +29,8 @@ type (
 	Domain = domain.Domain
 	// Resolution is the store and status a host resolves to.
 	Resolution = domain.Resolution
+	// SlugAvailability says whether a new store could take an address.
+	SlugAvailability = domain.SlugAvailability
 )
 
 // Store statuses.
@@ -55,6 +57,9 @@ type Service interface {
 	VerifyDomain(ctx context.Context, id ulid.ID) (Domain, error)
 	RemoveDomain(ctx context.Context, id ulid.ID) error
 	SetPrimaryDomain(ctx context.Context, id ulid.ID) (Domain, error)
+	// SlugAvailability says whether a new store could take slug. Unlike
+	// the rest, it needs no store in ctx (sign-up asks before one exists).
+	SlugAvailability(ctx context.Context, slug string) (SlugAvailability, error)
 }
 
 // DirectoryEntry is a store as the super-admin console lists it.

@@ -549,3 +549,29 @@ func TestStoreDirectory(t *testing.T) {
 		t.Fatalf("missing store: %v", err)
 	}
 }
+
+func TestSlugAvailability(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	taken := f.slug("taken")
+	f.createStore(t, taken)
+	free := f.slug("free")
+	// No tenant: sign-up asks before the store exists.
+	ctx := t.Context()
+	cases := []struct {
+		in        string
+		available bool
+		reason    string
+	}{
+		{free, true, ""},
+		{strings.ToUpper(taken), false, "taken"},
+		{"admin", false, "reserved"},
+		{"x", false, "invalid"},
+	}
+	for _, c := range cases {
+		got, err := f.svc.SlugAvailability(ctx, c.in)
+		if err != nil || got.Available != c.available || got.Reason != c.reason || got.Slug != strings.ToLower(c.in) {
+			t.Errorf("SlugAvailability(%q) = %+v, %v; want available=%v reason=%q", c.in, got, err, c.available, c.reason)
+		}
+	}
+}
