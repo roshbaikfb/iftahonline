@@ -24,6 +24,7 @@ type Catalog interface {
 	ListProducts(ctx context.Context, q catalog.StorefrontQuery) (catalog.StorefrontPage, error)
 	Categories(ctx context.Context) ([]catalog.Category, error)
 	SellableVariants(ctx context.Context, ids []ulid.ID) ([]catalog.SellableVariant, error)
+	Search(ctx context.Context, q catalog.StorefrontSearch) (catalog.StorefrontSearchResult, error)
 }
 
 // Stores reads the store in ctx (tenancy.Service).

@@ -82,12 +82,17 @@ func New(d Deps) (*Module, error) {
 	}, nil
 }
 
-// StorefrontDeps are what the storefront reader needs: the database and
-// the image delivery settings, not object storage credentials or search.
+// StorefrontDeps are what the storefront reader needs: the database, the
+// image delivery settings and, for shoppers' search, the index with a
+// search-only key; never object storage credentials or a write key.
 type StorefrontDeps struct {
-	Pool  *pgxpool.Pool
-	Media config.Media
+	Pool   *pgxpool.Pool
+	Media  config.Media
+	Search config.Search // empty URL: no search
 }
+
+// shopSearchTimeout bounds a shopper's search: a page waits on it.
+const shopSearchTimeout = 2 * time.Second
 
 // NewStorefront builds the storefront's read side for roles that do not
 // run the whole module.
@@ -95,7 +100,11 @@ func NewStorefront(d StorefrontDeps) (Storefront, error) {
 	if d.Pool == nil {
 		return nil, errors.New("catalog: missing dependency")
 	}
-	return app.NewStorefront(d.Pool, media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt)), nil
+	sf := app.NewStorefront(d.Pool, media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt))
+	if d.Search.URL != "" {
+		sf.WithSearch(search.New(d.Search.URL, d.Search.APIKey, d.Search.Index, shopSearchTimeout))
+	}
+	return sf, nil
 }
 
 // StockDeps are what selling needs: prices and stock, no object storage,

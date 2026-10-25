@@ -53,6 +53,7 @@ every footer lists the payment methods).
 | `/c/{slug}` | Category: 24 products per page, `?after=` cursor |
 | `/pages/{slug}` | A published landing page's sections |
 | `/policies/{slug}` | A published policy |
+| `/search?q=&page=` | Shoppers' search (only with `MEILI_SEARCH_KEY`): cards, the count, the next page; nothing found lists the categories; `noindex` |
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
 | `/order` (POST) | A landing page's one-step order form |
@@ -81,6 +82,10 @@ Every page (the approved U1 design):
   (hidden until the store has a number).
 - **Not shown yet.** Search and order tracking are in the mockups but
   come with U2d. No control is rendered before it works.
+- **Search.**
+  - **Where the box is.** Under the bar on phones, in it on wide screens; a plain GET form.
+  - **Cache key.** It holds the normalized text and the page, so spellings and junk parameters share one entry, cached like other public pages.
+  - **Limits.** A miss asks the index under limits (30 a minute per IP, 600 per store); a cached search is never limited.
 - **Language.** The footer links the other language on every page (the
   product page's short header on phones has no switch).
 

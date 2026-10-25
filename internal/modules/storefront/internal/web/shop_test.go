@@ -129,6 +129,22 @@ func (c *fakeCatalog) SellableVariants(_ context.Context, ids []ulid.ID) ([]cata
 	return out, nil
 }
 
+// Search matches titles holding the text, a page of
+// catalog.ShopSearchPageSize at a time.
+func (c *fakeCatalog) Search(_ context.Context, q catalog.StorefrontSearch) (catalog.StorefrontSearchResult, error) {
+	c.count("search")
+	var hits []catalog.StorefrontProduct
+	for _, p := range c.products {
+		if strings.Contains(p.Title, strings.TrimSpace(q.Text)) {
+			hits = append(hits, p)
+		}
+	}
+	total := len(hits)
+	from := min((q.Page-1)*catalog.ShopSearchPageSize, total)
+	hits = hits[from:min(from+catalog.ShopSearchPageSize, total)]
+	return catalog.StorefrontSearchResult{Items: hits, Total: int64(total), More: from+len(hits) < total}, nil
+}
+
 func (c *fakeCatalog) Categories(context.Context) ([]catalog.Category, error) {
 	c.count("categories")
 	return c.cats, nil

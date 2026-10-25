@@ -209,6 +209,12 @@ const (
 	MsgOrderQuestion
 	MsgOrderQuestionText
 	MsgListSep
+	MsgSearchLabel
+	MsgSearchPlaceholder
+	MsgSearchFor
+	MsgNoResults
+	MsgNoResultsHint
+	MsgSearchPrompt
 	msgCount
 )
 
@@ -375,6 +381,12 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgOrderQuestion:      {"سؤال عن طلبك؟ واتساب", "A question about your order? WhatsApp"},
 	MsgOrderQuestionText:  {"مرحبًا، عندي سؤال عن طلبي رقم %s", "Hello, I have a question about my order %s"},
 	MsgListSep:            {"، ", ", "},
+	MsgSearchLabel:        {"ابحث في المتجر", "Search the store"},
+	MsgSearchPlaceholder:  {"ابحث عن منتج…", "Search for a product…"},
+	MsgSearchFor:          {"نتائج البحث عن «%s»", "Results for “%s”"},
+	MsgNoResults:          {"لم نجد نتائج لـ «%s»", "Nothing found for “%s”"},
+	MsgNoResultsHint:      {"جرّب كلمة أخرى أو تصفّح التصنيفات", "Try another word or browse the categories"},
+	MsgSearchPrompt:       {"اكتب ما تبحث عنه", "Type what you are looking for"},
 }
 
 // T returns the message in l.

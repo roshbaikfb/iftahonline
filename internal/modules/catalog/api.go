@@ -38,6 +38,10 @@ type (
 	StorefrontProduct = app.StorefrontProduct
 	// StorefrontVariant is a variant with its price and availability.
 	StorefrontVariant = app.StorefrontVariant
+	// StorefrontSearch is a shopper's search; StorefrontSearchResult a
+	// page of it.
+	StorefrontSearch       = app.StorefrontSearch
+	StorefrontSearchResult = app.StorefrontSearchResult
 	// StorefrontImage is a ready image with its delivery renditions.
 	StorefrontImage = app.StorefrontImage
 	// Rendition is one signed image URL with its served size.
@@ -73,7 +77,14 @@ const (
 	MaxStorefrontIDs   = app.MaxStorefrontIDs
 	// MaxShownLeft is the most units left StorefrontVariant.Left reports.
 	MaxShownLeft = domain.MaxShownLeft
+	// ShopSearchPageSize and MaxShopSearchLen bound a shopper's search.
+	ShopSearchPageSize = app.ShopSearchPageSize
+	MaxShopSearchLen   = app.MaxShopSearchLen
+	MaxShopSearchPage  = app.MaxShopSearchPage
 )
+
+// ErrSearchUnavailable means the storefront has no search configured.
+var ErrSearchUnavailable = app.ErrSearchUnavailable
 
 // Reservation statuses.
 const (
@@ -153,6 +164,9 @@ type Storefront interface {
 	Categories(ctx context.Context) ([]Category, error)
 	// SellableVariants is Catalog.SellableVariants, for the cart.
 	SellableVariants(ctx context.Context, ids []ulid.ID) ([]SellableVariant, error)
+	// Search finds active products for shoppers, a page at a time;
+	// ErrSearchUnavailable when the storefront has no search configured.
+	Search(ctx context.Context, q StorefrontSearch) (StorefrontSearchResult, error)
 }
 
 // CurrencySource returns the currency of the store in ctx. cmd/platform

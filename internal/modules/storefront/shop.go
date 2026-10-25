@@ -130,6 +130,9 @@ type ShopDeps struct {
 	// nil Cards offers cash on delivery only.
 	Cards       payments.CardCheck
 	CheckoutURL string
+	// Search is true when Catalog can search (a search key is configured):
+	// pages then show the search box.
+	Search bool
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -175,7 +178,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search,
 	})
 	if err != nil {
 		return nil, err

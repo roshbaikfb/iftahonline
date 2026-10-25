@@ -146,6 +146,23 @@ func TestPayments(t *testing.T) {
 	}
 }
 
+// TestStorefrontSearchConfig: the storefront searches with its own
+// search-only key, never the api's; without one it offers no search.
+func TestStorefrontSearchConfig(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleStorefront, env(base()))
+	if err != nil || c.Search != (config.Search{}) {
+		t.Fatalf("no search key: %+v %v (the api's MEILI_API_KEY must not be used)", c.Search, err)
+	}
+	c, err = config.Load(config.RoleStorefront, env(with("MEILI_SEARCH_KEY", "search-only-key")))
+	if err != nil || c.Search.APIKey != "search-only-key" || c.Search.URL == "" || c.Search.Index != "products" {
+		t.Fatalf("search key: %+v %v", c.Search, err)
+	}
+	if _, err = config.Load(config.RoleStorefront, env(with("MEILI_SEARCH_KEY", "k", "MEILI_URL", "<unset>"))); err == nil {
+		t.Fatal("a search key without MEILI_URL accepted")
+	}
+}
+
 func TestSecretsAndMail(t *testing.T) {
 	t.Parallel()
 	for _, role := range []config.Role{config.RoleAPI, config.RoleWorker} {

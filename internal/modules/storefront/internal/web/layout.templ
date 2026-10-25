@@ -93,6 +93,9 @@ templ layout(p *pageCtx, body templ.Component) {
 							{ p.v.name }
 						}
 					</a>
+					if p.search {
+						@searchForm(p, "q")
+					}
 					<div class="tools">
 						<a class="lang" href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>
 							{ p.l.Other().T(MsgLanguageName) }
