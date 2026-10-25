@@ -17,7 +17,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
-	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Deps are the shop's dependencies.
@@ -53,6 +52,8 @@ type Deps struct {
 	ClientIP func(*http.Request) string
 	// Now is the clock (tests); nil means time.Now.
 	Now func() time.Time
+	// Search is true when Catalog.Search works: pages show the search box.
+	Search bool
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
@@ -75,6 +76,7 @@ type Shop struct {
 	siteKey  string
 	clientIP func(*http.Request) string
 	now      func() time.Time
+	searchOn bool // Catalog.Search works: pages show the search box
 }
 
 // New builds the shop.
@@ -101,7 +103,7 @@ func New(d Deps) (*Shop, error) {
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders,
-		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now}, nil
+		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -135,7 +137,8 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rest = "/"
 		}
 	}
-	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l)}
+	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, font: s.assets.fontPreload(v.theme, l),
+		search: s.searchOn}
 	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
 		return
 	}
@@ -144,16 +147,20 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
-	after := r.URL.Query().Get("after")
-	if _, perr := ulid.Parse(after); perr != nil {
-		after = "" // only a valid cursor is part of the page (and its cache key)
-	}
-	key := string(l) + " " + rest + "?" + after
+	q := parseQuery(rest, r.URL.Query())
+	key := q.cacheKey(l, rest)
 	if c, ok := s.caches.page(prefix, key); ok {
 		s.write(w, r, c)
 		return
 	}
-	res, err := s.route(ctx, p, rest, after)
+	if rest == "/search" && q.key != "" {
+		if ok, retry := s.allowSearch(r, store); !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
+	}
+	res, err := s.route(ctx, p, rest, q)
 	if err != nil {
 		s.unavailable(w, r, err)
 		return
@@ -181,15 +188,17 @@ func (s *Shop) view(ctx context.Context, store tenant.StoreID) (*storeView, stri
 }
 
 // route renders the page at rest (the path without its language prefix).
-func (s *Shop) route(ctx context.Context, p *pageCtx, rest, after string) (result, error) {
+func (s *Shop) route(ctx context.Context, p *pageCtx, rest string, q query) (result, error) {
 	seg := strings.Split(strings.Trim(rest, "/"), "/")
 	switch {
 	case rest == "/":
 		return s.home(ctx, p)
+	case rest == "/search":
+		return s.search(ctx, p, q)
 	case len(seg) == 2 && seg[0] == "p":
 		return s.slugged(p, seg[1], productPath, func(slug string) (result, error) { return s.product(ctx, p, slug) })
 	case len(seg) == 2 && seg[0] == "c":
-		return s.slugged(p, seg[1], categoryPath, func(slug string) (result, error) { return s.category(ctx, p, slug, after) })
+		return s.slugged(p, seg[1], categoryPath, func(slug string) (result, error) { return s.category(ctx, p, slug, q.after) })
 	case len(seg) == 2 && seg[0] == "pages":
 		return s.slugged(p, seg[1], func(slug string) string { return "/pages/" + slug }, func(slug string) (result, error) { return s.landing(ctx, p, slug) })
 	case len(seg) == 2 && seg[0] == "policies":

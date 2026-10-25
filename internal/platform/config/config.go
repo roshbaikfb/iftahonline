@@ -123,9 +123,10 @@ type Edge struct {
 // Purges reports whether the worker purges the edge cache.
 func (e Edge) Purges() bool { return e.CloudflareZoneID != "" }
 
-// Search configures Meilisearch (api and worker). Use a key limited to
-// the index's search and document actions in production, never the
-// master key.
+// Search configures Meilisearch. The api and worker use MEILI_API_KEY,
+// limited to the index's search and document actions in production
+// (never the master key); the storefront uses MEILI_SEARCH_KEY, limited
+// to searching it.
 type Search struct {
 	URL    string
 	APIKey string
@@ -361,6 +362,11 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		c.Payments.CheckoutURL = r.url("CHECKOUT_URL", false, "https", "http")
 		if c.Payments.CheckoutURL == "" {
 			c.Payments.CheckoutURL = "https://app." + c.Tenancy.BaseDomain
+		}
+		// Shoppers' search: Meilisearch with a key limited to searching the
+		// index; without MEILI_SEARCH_KEY the storefront offers no search.
+		if key := r.secretOptional("MEILI_SEARCH_KEY"); key != "" {
+			c.Search = Search{URL: r.url("MEILI_URL", true, "http", "https"), APIKey: key, Index: r.str("MEILI_INDEX", "products")}
 		}
 		c.Captcha.SiteKey = r.str("TURNSTILE_SITE_KEY", "")
 		c.Captcha.SecretKey = r.secretOptional("TURNSTILE_SECRET_KEY")

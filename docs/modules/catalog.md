@@ -24,6 +24,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
 | `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
 | `Storefront.Categories(ctx)` | The category tree, by position |
+| `Storefront.Search(ctx, q)` | Shoppers' search: active products matching the text (≤ 100 characters, normalized), 24 a page, ≤ 20 pages, in the index's order, read from the database in one query; `ErrSearchUnavailable` without a search key (ADR-0033) |
 | `Storefront.SellableVariants(ctx, ids)` | A cart's variants in one query, with the product's first ready picture (`ImageKey`) for thumbnails |
 | `NewStorefront(StorefrontDeps)` | The read side alone (pool + image delivery settings), for the storefront role |
 | `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `Event*` | Events the module publishes (below) |

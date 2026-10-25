@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -67,10 +68,25 @@ func (m *memIndex) Search(ctx context.Context, q search.Query) (search.Result, e
 	if m.fail != nil {
 		return search.Result{}, m.fail
 	}
-	if _, err := tenant.FromContext(ctx); err != nil {
+	id, err := tenant.FromContext(ctx)
+	if err != nil {
 		return search.Result{}, err
 	}
-	return search.Result{Hits: []search.Doc{}}, nil
+	// The store's documents whose title holds the text, newest first, like
+	// the real index's filter (the store, then status) and ranking.
+	hits := []search.Doc{}
+	for _, d := range m.docs[id.String()] {
+		if (q.Status == "" || d.Status == q.Status) && strings.Contains(d.SearchTitle, q.Text) {
+			hits = append(hits, d)
+		}
+	}
+	slices.SortFunc(hits, func(a, b search.Doc) int { return strings.Compare(b.ID, a.ID) })
+	total := int64(len(hits))
+	hits = hits[min(q.Offset, len(hits)):]
+	if q.Limit > 0 && len(hits) > q.Limit {
+		hits = hits[:q.Limit]
+	}
+	return search.Result{Hits: hits, EstimatedTotal: total}, nil
 }
 
 func (m *memIndex) doc(ctx context.Context, t *testing.T, id ulid.ID) (search.Doc, bool) {
@@ -202,5 +218,60 @@ func TestToDocTruncatesSafely(t *testing.T) {
 	d := app.ToDoc(tenant.StoreID{ID: p.ID}, p)
 	if len(d.SearchText) > 4000 || !strings.HasPrefix(d.SearchText, "ب") || strings.ContainsRune(d.SearchText, '�') {
 		t.Fatalf("search text: %d bytes", len(d.SearchText))
+	}
+}
+
+// TestStorefrontSearch: shoppers search the store's active products only;
+// the hits come back as storefront products in the index's order, in one
+// database read.
+func TestStorefrontSearch(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.ctxA
+	oud := mustCreate(ctx, t, f, single("عطر العود", 3, true))
+	jasmine := mustCreate(ctx, t, f, single("عطر الياسمين", 3, true))
+	draft := single("عطر تجريبي", 3, true)
+	draft.Status = "draft"
+	mustCreate(ctx, t, f, draft)
+	mustCreate(ctx, t, f, single("قميص", 3, true))
+	mustCreate(f.ctxB, t, f, single("عطر متجر آخر", 3, true))
+	runIndexJobs(ctx, t, f)
+	runIndexJobs(f.ctxB, t, f)
+
+	sf := newStorefront(f).WithSearch(f.index)
+	var res app.StorefrontSearchResult
+	n := countQueries(t, f, func() (e error) {
+		res, e = sf.Search(ctx, app.StorefrontSearch{Text: "  عطرٌ ", Page: 1})
+		return e
+	})
+	if n != 6 { // the products by ID, as ProductsByIDs reads them
+		t.Fatalf("%d queries, want 6", n)
+	}
+	if len(res.Items) != 2 || res.Items[0].ID != jasmine.ID || res.Items[1].ID != oud.ID || res.Total != 2 || res.More {
+		t.Fatalf("result %+v (want the two active perfumes of this store, the index's order)", res)
+	}
+	if q := f.index.queries[len(f.index.queries)-1]; q.Status != "active" || q.Text != "عطر" || q.Limit != app.ShopSearchPageSize || q.Offset != 0 {
+		t.Fatalf("query passed down = %+v", q)
+	}
+	if _, err := sf.Search(ctx, app.StorefrontSearch{Text: "عطر", Page: 2}); err != nil || f.index.queries[len(f.index.queries)-1].Offset != app.ShopSearchPageSize {
+		t.Fatalf("page 2: %v %+v", err, f.index.queries[len(f.index.queries)-1])
+	}
+	for name, q := range map[string]app.StorefrontSearch{
+		"no text":      {Text: "   ", Page: 1},
+		"too long":     {Text: strings.Repeat("ع", app.MaxShopSearchLen+1), Page: 1},
+		"page 0":       {Text: "عطر", Page: 0},
+		"page too far": {Text: "عطر", Page: app.MaxShopSearchPage + 1},
+	} {
+		if _, err := sf.Search(ctx, q); errs.KindOf(err) != errs.KindValidation {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	f.index.fail = errors.New("meili down")
+	if _, err := sf.Search(ctx, app.StorefrontSearch{Text: "عطر", Page: 1}); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("index down: %v", err)
+	}
+	f.index.fail = nil
+	if _, err := newStorefront(f).Search(ctx, app.StorefrontSearch{Text: "عطر", Page: 1}); !errors.Is(err, app.ErrSearchUnavailable) {
+		t.Fatalf("no index: %v", err)
 	}
 }

@@ -254,3 +254,47 @@ templ notFoundPage(p *pageCtx) {
 		<a class="btn" href={ p.URL("/") }>{ p.l.T(MsgBackHome) }</a>
 	</section>
 }
+
+// searchPage is /search: what matched as cards, the count and the next
+// page; nothing matched, the categories to browse; no text yet, a prompt.
+templ searchPage(p *pageCtx, v searchView) {
+	<section class="sec search-page">
+		if v.q == "" {
+			<h1>{ p.l.T(MsgSearchLabel) }</h1>
+			<p class="muted">{ p.l.T(MsgSearchPrompt) }</p>
+			@searchForm(p, "search-page-q")
+		} else if len(v.items) == 0 {
+			<h1>{ fmt.Sprintf(p.l.T(MsgNoResults), v.q) }</h1>
+			<p class="muted">{ p.l.T(MsgNoResultsHint) }</p>
+			if cats := p.v.topCategories(); len(cats) > 0 {
+				<nav class="tiles chips" aria-label={ p.l.T(MsgShopByCategory) }>
+					for _, c := range cats {
+						<a href={ p.URL(categoryPath(c.Slug)) }>{ c.Name }</a>
+					}
+				</nav>
+			}
+		} else {
+			<div class="lead">
+				<h1>{ fmt.Sprintf(p.l.T(MsgSearchFor), v.q) }</h1>
+				<small>{ p.l.Results(v.total) }</small>
+			</div>
+			<div class="grid">
+				for _, pr := range v.items {
+					@card(p, pr)
+				}
+			</div>
+			if v.more != "" {
+				<p class="more"><a class="btn" href={ templ.SafeURL(v.more) }>{ p.l.T(MsgShowMore) }</a></p>
+			}
+		}
+	</section>
+}
+
+// searchForm is the search box: a plain GET form, so it works without
+// script.
+templ searchForm(p *pageCtx, id string) {
+	<form class="search" action={ p.URL("/search") } method="get" role="search">
+		<label class="sr" for={ id }>{ p.l.T(MsgSearchLabel) }</label>
+		<input type="search" id={ id } name="q" value={ p.q } placeholder={ p.l.T(MsgSearchPlaceholder) } maxlength="100" autocomplete="off" enterkeyhint="search"/>
+	</form>
+}

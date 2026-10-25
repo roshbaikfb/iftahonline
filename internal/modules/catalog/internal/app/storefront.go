@@ -2,17 +2,24 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/search"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/arabic"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/slug"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -34,6 +41,84 @@ type ImageSigner interface {
 type Storefront struct {
 	db     postgres.Beginner
 	signer ImageSigner
+	index  SearchReader // nil: the storefront offers no search
+}
+
+// SearchReader is the index's read side (search.Client with a
+// search-only key): the store filter is added by the client from ctx.
+type SearchReader interface {
+	Search(ctx context.Context, q search.Query) (search.Result, error)
+}
+
+// WithSearch lets shoppers search through index.
+func (s *Storefront) WithSearch(index SearchReader) *Storefront {
+	s.index = index
+	return s
+}
+
+// Shoppers' search limits: one page of a grid, a few pages deep.
+const (
+	ShopSearchPageSize = 24
+	MaxShopSearchPage  = 20
+	MaxShopSearchLen   = 100
+)
+
+// ErrSearchUnavailable means the storefront has no search configured.
+var ErrSearchUnavailable = errors.New("catalog: search is not available")
+
+// StorefrontSearch is a shopper's search: some text and a page from 1.
+type StorefrontSearch struct {
+	Text string
+	Page int
+}
+
+// StorefrontSearchResult is one page of matching active products.
+type StorefrontSearchResult struct {
+	Items []StorefrontProduct
+	Total int64 // the index's estimate
+	More  bool  // another page follows
+}
+
+// Search finds the store's active products matching q's text (normalized
+// like the documents: Arabic forms, diacritics, digits), in the index's
+// order. The index gives IDs; the products come from the database in one
+// read, so a stale document never shows a product that is gone or no
+// longer active.
+func (s *Storefront) Search(ctx context.Context, q StorefrontSearch) (StorefrontSearchResult, error) {
+	if s.index == nil {
+		return StorefrontSearchResult{}, ErrSearchUnavailable
+	}
+	text := arabic.NormalizeSearch(q.Text)
+	var fields []errs.FieldError
+	if text == "" || utf8.RuneCountInString(q.Text) > MaxShopSearchLen || !utf8.ValidString(q.Text) {
+		fields = append(fields, errs.FieldError{Field: "q", Code: "length", Message: fmt.Sprintf("q must be 1 to %d characters", MaxShopSearchLen)})
+	}
+	if q.Page < 1 || q.Page > MaxShopSearchPage {
+		fields = append(fields, errs.FieldError{Field: "page", Code: "range", Message: fmt.Sprintf("page must be between 1 and %d", MaxShopSearchPage)})
+	}
+	if len(fields) > 0 {
+		return StorefrontSearchResult{}, errs.Validation(fields...)
+	}
+	res, err := s.index.Search(ctx, search.Query{Text: text, Status: string(domain.StatusActive), Limit: ShopSearchPageSize,
+		Offset: (q.Page - 1) * ShopSearchPageSize})
+	if err != nil {
+		if errors.Is(err, tenant.ErrNoTenant) {
+			return StorefrontSearchResult{}, err
+		}
+		return StorefrontSearchResult{}, errs.Unavailable(time.Second, err)
+	}
+	ids := make([]ulid.ID, 0, len(res.Hits))
+	for _, h := range res.Hits {
+		if id, perr := ulid.Parse(h.ID); perr == nil {
+			ids = append(ids, id)
+		}
+	}
+	items, err := s.ProductsByIDs(ctx, ids)
+	if err != nil {
+		return StorefrontSearchResult{}, err
+	}
+	return StorefrontSearchResult{Items: items, Total: res.EstimatedTotal,
+		More: int64(q.Page*ShopSearchPageSize) < res.EstimatedTotal && q.Page < MaxShopSearchPage}, nil
 }
 
 // NewStorefront builds the storefront reader.

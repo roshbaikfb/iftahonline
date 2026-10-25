@@ -41,6 +41,17 @@ p { margin-block: 0 1em; }
 .count { position: absolute; inset-block-start: .25rem; inset-inline-end: .25rem; min-inline-size: 1.15rem; block-size: 1.15rem; padding-inline: .25rem;
   border-radius: .6rem; background: var(--c-accent); color: var(--c-on-accent); font-size: .7rem; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; }
+.bar { flex-wrap: wrap; }
+.search { order: 9; flex: 1 1 100%; padding-block-end: .75rem; }
+.search input { inline-size: 100%; block-size: 2.875rem; border: 1px solid #cbd5e1; border-radius: .75rem; padding-inline: .875rem;
+  font: inherit; background: var(--soft); color: var(--c-text); }
+.search-page .search { padding: .5rem 0 0; max-inline-size: 32rem; }
+.chips { margin-block-start: 1rem; }
+.chips a { display: inline-flex; }
+@media (min-width: 48rem) {
+  .bar { flex-wrap: nowrap; }
+  .search { order: 0; flex: 1 1 20rem; padding: 0; max-inline-size: 36rem; }
+}
 .menu summary { list-style: none; cursor: pointer; inline-size: 2.75rem; block-size: 2.75rem; display: flex; align-items: center; justify-content: center; }
 .menu summary::-webkit-details-marker { display: none; }
 .menu nav { position: absolute; inset-inline: 0; inset-block-start: 100%; z-index: 10; background: var(--c-bg);
