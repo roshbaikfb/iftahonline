@@ -83,6 +83,9 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 	return nil
 }
 
+// Starter is what the setup wizard's starter template uses.
+func (m *Module) Starter() Starter { return m.svc }
+
 // Mount registers the merchant API. scope is identity's membership
 // middleware.
 func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {

@@ -27,6 +27,7 @@ form's shipping and COD-fee line (`POST /order/quote`):
 | `PurgeSubscriber`, `PurgeHandler`, `PurgeTags` | The edge purge on the same events (`platform/cdn`; Cloudflare when configured) |
 | `ShopDeps.Orders` (`orders.Shop`), `ShopDeps.Captcha` | Shoppers' orders through the orders module (adapted inside the module: shoppers only ever read a generic refusal), and Turnstile for risky submissions |
 | `AssetsPrefix`, `CacheConfig`, `DefaultCacheConfig` | Shop wiring |
+| `Module.Starter()` → `Starter`, `StarterLook`, `Colors`, `Font`, `Radius`, `Look`, `Section` | What the setup wizard's starter template uses ([ADR-0034](../adr/0034-setup-wizard-and-starter-templates.md)): `ApplyLook` sets the theme's look and the home page, keeping what the merchant wrote; `EnsureDraftPolicy` saves a draft policy unless the merchant saved that one |
 
 ## Events
 
