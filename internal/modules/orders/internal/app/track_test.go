@@ -16,12 +16,12 @@ func TestTrack(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	tee := f.product(t, f.storeA, "تيشيرت قطن", 15000, 10)
-	p, err := f.svc.PlaceOrder(f.shopperA, newOrder("track-1", domain.LineInput{VariantID: tee, Qty: 2}))
+	p, err := f.svc.PlaceOrder(f.shopperA, newOrder("lookup-a", domain.LineInput{VariantID: tee, Qty: 2}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	code := domain.CodeOf(p.Order.ID)
-	other := newOrder("track-2", domain.LineInput{VariantID: tee, Qty: 1})
+	other := newOrder("lookup-b", domain.LineInput{VariantID: tee, Qty: 1})
 	other.Phone = "01099998888"
 	if _, err = f.svc.PlaceOrder(f.shopperA, other); err != nil {
 		t.Fatal(err)
