@@ -104,7 +104,8 @@ func TestProductDeliveryLines(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			code, q := quoteOf(t, f, tt.path, tt.form, nil)
-			if code != http.StatusOK || q["delivery"] != tt.delivery || (q["shipping"] != tt.ship && !(tt.ship == "" && q["shipping"] == nil)) {
+			ship, _ := q["shipping"].(string) // absent reads as ""
+			if code != http.StatusOK || q["delivery"] != tt.delivery || ship != tt.ship {
 				t.Fatalf("%d %v; want %q / %q", code, q, tt.delivery, tt.ship)
 			}
 		})
