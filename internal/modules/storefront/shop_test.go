@@ -296,12 +296,14 @@ func TestTwoStoresTwoHosts(t *testing.T) {
 			t.Errorf("store B lacks %q", want)
 		}
 	}
-	for _, leak := range []string{"Oud Perfume", "#7c3aed", "Dubai Goods"} {
+	// The base stylesheet is the same for every store (it may hold any
+	// color, e.g. a swatch); a store's own colors are its theme variables.
+	for _, leak := range []string{"Oud Perfume", "--c-primary:#7c3aed", "--c-accent:#eab308", "Dubai Goods"} {
 		if strings.Contains(bodyA, leak) {
 			t.Errorf("store A shows B's %q", leak)
 		}
 	}
-	for _, leak := range []string{"قميص كتان", "#0f766e", "متجر منى"} {
+	for _, leak := range []string{"قميص كتان", "--c-primary:#0f766e", "--c-accent:#f59e0b", "متجر منى"} {
 		if strings.Contains(bodyB, leak) {
 			t.Errorf("store B shows A's %q", leak)
 		}
