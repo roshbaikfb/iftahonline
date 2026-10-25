@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,7 +61,7 @@ func (s *Service) CountSales(ctx context.Context, orderID ulid.ID) error {
 		}
 		return store.PruneSales(ctx, tx, s.now().Add(-salesRetention))
 	})
-	if notFound(err) == ErrOrderNotFound {
+	if errors.Is(err, domain.ErrNotFound) {
 		return nil // gone (another store's event cannot reach here: RLS)
 	}
 	return err

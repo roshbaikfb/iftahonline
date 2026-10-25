@@ -64,8 +64,8 @@ func TestBestsellers(t *testing.T) {
 	if err != nil || len(top) != 2 || top[0] != productOf[tee] || top[1] != productOf[mug] {
 		t.Fatalf("bestsellers %v %v: want the tee (3) then the mug (2); the pending caps do not count", top, err)
 	}
-	if other, err := f.svc.Bestsellers(f.ctxB, 10); err != nil || len(other) != 0 {
-		t.Fatalf("another store's bestsellers: %v %v", other, err)
+	if other, otherErr := f.svc.Bestsellers(f.ctxB, 10); otherErr != nil || len(other) != 0 {
+		t.Fatalf("another store's bestsellers: %v %v", other, otherErr)
 	}
 	if _, err = f.svc.Transition(f.ctxA, a, domain.StatusCancelled, "", 0); err != nil {
 		t.Fatal(err)

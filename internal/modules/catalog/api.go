@@ -38,9 +38,9 @@ type (
 	StorefrontProduct = app.StorefrontProduct
 	// StorefrontVariant is a variant with its price and availability.
 	StorefrontVariant = app.StorefrontVariant
-	// StorefrontSearch is a shopper's search; StorefrontSearchResult a
-	// page of it.
-	StorefrontSearch       = app.StorefrontSearch
+	// StorefrontSearch is a shopper's search: text and a page.
+	StorefrontSearch = app.StorefrontSearch
+	// StorefrontSearchResult is a page of a shopper's search.
 	StorefrontSearchResult = app.StorefrontSearchResult
 	// StorefrontImage is a ready image with its delivery renditions.
 	StorefrontImage = app.StorefrontImage
