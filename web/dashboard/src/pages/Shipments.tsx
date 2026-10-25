@@ -62,63 +62,82 @@ export function Shipments() {
     setLoading(false);
   }
 
+  const tabs: { status: ShipmentStatus | undefined; label: string }[] = [
+    { status: undefined, label: 'الكل' },
+    ...shipmentStatuses.map((st) => ({ status: st, label: shipmentLabel[st] })),
+  ];
+
   return (
     <Layout storeId={storeId}>
-      <h1>الشحنات</h1>
-      <div className="filters">
-        <label>
-          الحالة
-          <select
-            value={status ?? ''}
-            onChange={(e) => {
+      <div className="page-head">
+        <h1>الشحنات</h1>
+      </div>
+      <div className="tabs" role="tablist" aria-label="حالة الشحنة">
+        {tabs.map((t) => (
+          <button
+            key={t.status ?? 'all'}
+            type="button"
+            role="tab"
+            aria-selected={status === t.status}
+            onClick={() => {
+              if (status === t.status) return;
               setLoading(true);
-              setParams(e.target.value ? { status: e.target.value } : {});
+              setParams(t.status ? { status: t.status } : {});
             }}
           >
-            <option value="">الكل</option>
-            {shipmentStatuses.map((s) => (
-              <option key={s} value={s}>
-                {shipmentLabel[s]}
-              </option>
-            ))}
-          </select>
-        </label>
+            {t.label}
+          </button>
+        ))}
       </div>
       {error && <p role="alert">{error}</p>}
-      {!loading && items.length === 0 && !error && <p className="empty">لا توجد شحنات. أنشئ شحنة من صفحة طلب جاهز للشحن.</p>}
-      {items.length > 0 && (
-        <table className="orders">
-          <thead>
-            <tr>
-              <th>رقم التتبع</th>
-              <th>الشركة</th>
-              <th>الحالة</th>
-              <th>التحصيل</th>
-              <th>آخر تحديث</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((s) => (
-              <tr key={s.id}>
-                <td dir="ltr">
-                  <Link to={`/stores/${storeId}/shipments/${s.id}`}>{s.tracking_number ?? '—'}</Link>
-                </td>
-                <td>{carrierLabel(s.carrier)}</td>
-                <td>
-                  <span className={`status sh-${s.status}`}>{shipmentLabel[s.status]}</span>
-                </td>
-                <td>{money(s.cod_minor, s.currency)}</td>
-                <td>{dateTime(s.status_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {next && (
-        <button type="button" disabled={loading} onClick={() => void loadMore()}>
-          المزيد
-        </button>
-      )}
+      <section className="table-card">
+        {items.length > 0 && (
+          <div className="scroll">
+            <table className="orders">
+              <thead>
+                <tr>
+                  <th>رقم التتبع</th>
+                  <th>الشركة</th>
+                  <th>التحصيل</th>
+                  <th>الحالة</th>
+                  <th>آخر تحديث</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <Link to={`/stores/${storeId}/shipments/${s.id}`} dir="ltr" className="code">
+                        {s.tracking_number ?? '—'}
+                      </Link>
+                    </td>
+                    <td>{carrierLabel(s.carrier)}</td>
+                    <td className="num">{s.cod_minor > 0 ? money(s.cod_minor, s.currency) : '—'}</td>
+                    <td>
+                      <span className={`status sh-${s.status}`}>{shipmentLabel[s.status]}</span>
+                    </td>
+                    <td className="muted">{dateTime(s.status_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {loading && <p role="status" className="foot">جارٍ التحميل…</p>}
+        {!loading && items.length === 0 && !error && (
+          <p className="empty flat">{status ? 'لا توجد شحنات بهذه الحالة.' : 'لا توجد شحنات بعد. أنشئ شحنة من صفحة طلب جاهز للشحن.'}</p>
+        )}
+        {!loading && items.length > 0 && (
+          <div className="foot">
+            <span>عرض {items.length} شحنة</span>
+            {next && (
+              <button type="button" className="secondary" onClick={() => void loadMore()}>
+                تحميل المزيد
+              </button>
+            )}
+          </div>
+        )}
+      </section>
     </Layout>
   );
 }

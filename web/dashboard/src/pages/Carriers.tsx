@@ -75,7 +75,9 @@ export function Carriers() {
   const free = list?.carriers.filter((c) => !active.some((a) => a.carrier === c)) ?? [];
   return (
     <Layout storeId={storeId}>
-      <h1>شركات الشحن</h1>
+      <div className="page-head">
+        <h1>شركات الشحن</h1>
+      </div>
       {error && <p role="alert">{error}</p>}
       {connected && (
         <div className="panel secret" role="status">
@@ -105,26 +107,30 @@ export function Carriers() {
         </div>
       )}
       {list && (
-        <>
-          {list.connections.length === 0 && <p className="empty">لم تربط أي شركة شحن بعد.</p>}
-          <table>
-            <tbody>
-              {list.connections.map((c) => (
-                <tr key={c.id}>
-                  <td>{carrierLabel(c.carrier)}</td>
-                  <td>{c.status === 'active' ? 'مربوط' : 'مفصول'}</td>
-                  <td>{dateTime(c.created_at)}</td>
-                  <td>
+        <div className={free.length > 0 ? 'split' : undefined}>
+          <section className="card">
+            <h2>الحسابات المربوطة</h2>
+            {list.connections.length === 0 ? (
+              <p className="hint">لم تربط أي شركة شحن بعد. اربط حسابك لتُنشئ الشحنات من صفحة الطلب وتتابعها هنا.</p>
+            ) : (
+              <ul className="rows">
+                {list.connections.map((c) => (
+                  <li key={c.id}>
+                    <div className="what">
+                      <strong>{carrierLabel(c.carrier)}</strong>
+                      <small>رُبط في {dateTime(c.created_at)}</small>
+                    </div>
+                    <span className={c.status === 'active' ? 'status st-on' : 'status'}>{c.status === 'active' ? 'مربوط' : 'مفصول'}</span>
                     {c.status === 'active' && (
                       <button type="button" className="danger" onClick={() => void disconnect(c.id)}>
                         فصل
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           {free.length > 0 && (
             <form className="panel" onSubmit={(e) => void connect(e)}>
               <h2>ربط حساب</h2>
@@ -142,12 +148,13 @@ export function Carriers() {
                 مفتاح API من لوحة الشركة
                 <input name="api_key" type="password" required maxLength={512} autoComplete="off" />
               </label>
+              <p className="hint">نتحقق من المفتاح مع الشركة ثم نحفظه مشفّرًا.</p>
               <button type="submit" disabled={busy}>
                 {busy ? 'جارٍ التحقق…' : 'ربط'}
               </button>
             </form>
           )}
-        </>
+        </div>
       )}
     </Layout>
   );

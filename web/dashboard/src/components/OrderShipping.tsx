@@ -79,13 +79,15 @@ export function OrderShipping({
       {error && <p role="alert">{error}</p>}
       {shipments.length === 0 && early && <p className="muted">تُنشأ الشحنة بعد أن يصبح الطلب جاهزًا للشحن.</p>}
       {shipments.length > 0 && (
-        <ul>
+        <ul className="rows">
           {shipments.map((s) => (
             <li key={s.id}>
-              <Link to={`/stores/${storeId}/shipments/${s.id}`}>
-                {carrierLabel(s.carrier)} <span dir="ltr">{s.tracking_number ?? ''}</span>
-              </Link>{' '}
-              — <span className={`status sh-${s.status}`}>{shipmentLabel[s.status]}</span>
+              <div className="what">
+                <Link to={`/stores/${storeId}/shipments/${s.id}`}>
+                  {carrierLabel(s.carrier)} <span dir="ltr">{s.tracking_number ?? ''}</span>
+                </Link>
+              </div>
+              <span className={`status sh-${s.status}`}>{shipmentLabel[s.status]}</span>
             </li>
           ))}
         </ul>

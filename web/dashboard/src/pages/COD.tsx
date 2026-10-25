@@ -122,8 +122,10 @@ export function COD() {
 
   return (
     <Layout storeId={storeId}>
-      <h1>تحصيل الدفع عند الاستلام</h1>
-      <form className="filters" onSubmit={applyRange}>
+      <div className="page-head">
+        <h1>تحصيل الدفع عند الاستلام</h1>
+      </div>
+      <form className="filters" onSubmit={applyRange} aria-label="الفترة">
         <label>
           من
           <input type="date" name="from" defaultValue={from} />
@@ -132,131 +134,150 @@ export function COD() {
           إلى
           <input type="date" name="to" defaultValue={to} />
         </label>
-        <button type="submit">عرض</button>
+        <button type="submit" className="secondary">
+          عرض
+        </button>
       </form>
       {error && <p role="alert">{error}</p>}
       {report && (
-        <section>
-          <p>
+        <>
+          <p className="hint">
             الطرود المسلّمة من {dateTime(report.from)} إلى {dateTime(report.to)}
           </p>
           {report.carriers.length === 0 && <p className="empty">لا توجد طرود مسلّمة بالدفع عند الاستلام في هذه الفترة.</p>}
           {report.carriers.map((c) => (
-            <div className="panel cod" key={c.connection_id}>
+            <section className="card" key={c.connection_id}>
               <h2>{carrierLabel(c.carrier)}</h2>
-              <dl>
-                <dt>طرود مسلّمة</dt>
-                <dd>{c.delivered}</dd>
-                <dt>المفترض تحصيله</dt>
-                <dd>{money(c.expected_minor, c.currency)}</dd>
-                <dt>ما حوّلته الشركة</dt>
-                <dd>{money(c.settled_minor, c.currency)}</dd>
-                <dt>ما زال لدى الشركة</dt>
-                <dd>
+              <div className="stats">
+                <div>
+                  <small>طرود مسلّمة</small>
+                  <strong>{c.delivered}</strong>
+                </div>
+                <div>
+                  <small>المفترض تحصيله</small>
+                  <strong>{money(c.expected_minor, c.currency)}</strong>
+                </div>
+                <div>
+                  <small>ما حوّلته الشركة</small>
+                  <strong>{money(c.settled_minor, c.currency)}</strong>
+                </div>
+                <div className="key">
+                  <small>ما زال لدى الشركة</small>
                   <strong>{money(c.held_minor, c.currency)}</strong>
-                </dd>
-              </dl>
-              <table>
-                <thead>
-                  <tr>
-                    <th>0–7 أيام</th>
-                    <th>8–14 يومًا</th>
-                    <th>أكثر من 15 يومًا</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{money(c.held_0_7_minor, c.currency)}</td>
-                    <td>{money(c.held_8_14_minor, c.currency)}</td>
-                    <td className={c.held_15_plus_minor > 0 ? 'late' : ''}>{money(c.held_15_plus_minor, c.currency)}</td>
-                  </tr>
-                </tbody>
-              </table>
-              {c.over_settled > 0 && <p role="note">{c.over_settled} طرد حُوِّل عنه أكثر من قيمته — راجع الكشف.</p>}
-            </div>
+                </div>
+              </div>
+              <div className="stats aging" role="group" aria-label="عمر المبالغ المتبقية">
+                <div>
+                  <small>0–7 أيام</small>
+                  <strong>{money(c.held_0_7_minor, c.currency)}</strong>
+                </div>
+                <div>
+                  <small>8–14 يومًا</small>
+                  <strong>{money(c.held_8_14_minor, c.currency)}</strong>
+                </div>
+                <div className={c.held_15_plus_minor > 0 ? 'late' : undefined}>
+                  <small>أكثر من 15 يومًا</small>
+                  <strong>{money(c.held_15_plus_minor, c.currency)}</strong>
+                </div>
+              </div>
+              {c.over_settled > 0 && (
+                <p className="notice" role="note">
+                  {c.over_settled} طرد حُوِّل عنه أكثر من قيمته — راجع الكشف.
+                </p>
+              )}
+            </section>
           ))}
           {report.unmatched_lines > 0 && (
-            <p role="note">
+            <p className="notice" role="note">
               {report.unmatched_lines} سطر في الكشوف لا يطابق أي طرد ({money(report.unmatched_minor, report.carriers[0]?.currency ?? 'EGP')}
               ).
             </p>
           )}
-        </section>
+        </>
       )}
-      <section>
-        <h2>طرود لم تُحوَّل قيمتها بعد</h2>
-        {held.length === 0 ? (
-          <p className="empty">لا شيء: كل الطرود المسلّمة حُوِّلت قيمتها.</p>
-        ) : (
-          <table className="orders">
-            <thead>
-              <tr>
-                <th>رقم التتبع</th>
-                <th>الشركة</th>
-                <th>سُلّم</th>
-                <th>المتبقي</th>
-              </tr>
-            </thead>
-            <tbody>
-              {held.map((h) => (
-                <tr key={h.shipment_id}>
-                  <td dir="ltr">
-                    <Link to={`/stores/${storeId}/shipments/${h.shipment_id}`}>{h.tracking_number}</Link>
-                  </td>
-                  <td>{carrierLabel(h.carrier)}</td>
-                  <td>{dateTime(h.delivered_at)}</td>
-                  <td>{money(h.held_minor, h.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {next && (
-          <button type="button" onClick={() => void moreHeld()}>
-            المزيد
-          </button>
-        )}
-      </section>
-      {connections.length > 0 && (
-        <form className="panel" onSubmit={(e) => void importStatement(e)}>
-          <h2>استيراد كشف تحويلات (CSV)</h2>
-          <p>صدّر الكشف من لوحة شركة الشحن. يجب أن يحتوي على عمودي رقم التتبع والمبلغ. استيراد الكشف نفسه مرة أخرى لا يضيف شيئًا.</p>
-          <label>
-            الحساب
-            <select name="connection_id">
-              {connections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {carrierLabel(c.carrier)}
-                  {c.status === 'active' ? '' : ' (مفصول)'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            الملف
-            <input type="file" name="statement" accept=".csv,text/csv" />
-          </label>
-          <button type="submit" disabled={busy}>
-            {busy ? 'جارٍ الاستيراد…' : 'استيراد'}
-          </button>
-          {imported && (
-            <div role="status">
-              <p>
-                قُرئ {imported.lines} سطر: أُضيف {imported.imported} (طابق {imported.matched} طردًا)، و{imported.duplicates} مستورد من قبل.
-              </p>
-              {imported.errors.length > 0 && (
-                <ul>
-                  {imported.errors.map((er) => (
-                    <li key={er.line}>
-                      سطر {er.line}: {er.message}
-                    </li>
+      <div className={connections.length > 0 ? 'split' : undefined}>
+        <section className="table-card">
+          <h2 className="card-title">طرود لم تُحوَّل قيمتها بعد</h2>
+          {held.length === 0 ? (
+            <p className="empty flat">لا شيء: كل الطرود المسلّمة حُوِّلت قيمتها.</p>
+          ) : (
+            <div className="scroll">
+              <table className="orders narrow">
+                <thead>
+                  <tr>
+                    <th>رقم التتبع</th>
+                    <th>الشركة</th>
+                    <th>سُلّم</th>
+                    <th>المتبقي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {held.map((h) => (
+                    <tr key={h.shipment_id}>
+                      <td>
+                        <Link to={`/stores/${storeId}/shipments/${h.shipment_id}`} dir="ltr" className="code">
+                          {h.tracking_number}
+                        </Link>
+                      </td>
+                      <td>{carrierLabel(h.carrier)}</td>
+                      <td className="muted">{dateTime(h.delivered_at)}</td>
+                      <td className="num">{money(h.held_minor, h.currency)}</td>
+                    </tr>
                   ))}
-                </ul>
-              )}
+                </tbody>
+              </table>
             </div>
           )}
-        </form>
-      )}
+          {next && (
+            <div className="foot">
+              <span />
+              <button type="button" className="secondary" onClick={() => void moreHeld()}>
+                تحميل المزيد
+              </button>
+            </div>
+          )}
+        </section>
+        {connections.length > 0 && (
+          <form className="panel" onSubmit={(e) => void importStatement(e)}>
+            <h2>استيراد كشف تحويلات (CSV)</h2>
+            <p className="hint">صدّر الكشف من لوحة شركة الشحن. يجب أن يحتوي على عمودي رقم التتبع والمبلغ. استيراد الكشف نفسه مرة أخرى لا يضيف شيئًا.</p>
+            <label>
+              الحساب
+              <select name="connection_id">
+                {connections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {carrierLabel(c.carrier)}
+                    {c.status === 'active' ? '' : ' (مفصول)'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              الملف
+              <input type="file" name="statement" accept=".csv,text/csv" />
+            </label>
+            <button type="submit" disabled={busy}>
+              {busy ? 'جارٍ الاستيراد…' : 'استيراد'}
+            </button>
+            {imported && (
+              <div role="status">
+                <p>
+                  قُرئ {imported.lines} سطر: أُضيف {imported.imported} (طابق {imported.matched} طردًا)، و{imported.duplicates} مستورد من قبل.
+                </p>
+                {imported.errors.length > 0 && (
+                  <ul>
+                    {imported.errors.map((er) => (
+                      <li key={er.line}>
+                        سطر {er.line}: {er.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </form>
+        )}
+      </div>
     </Layout>
   );
 }

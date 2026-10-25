@@ -85,34 +85,44 @@ export function Gateways() {
   const active = list?.connections.some((c) => c.status === 'active') ?? false;
   return (
     <Layout storeId={storeId}>
-      <h1>الدفع بالبطاقة</h1>
+      <div className="page-head">
+        <h1>الدفع بالبطاقة</h1>
+      </div>
       {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status" className="ok-note">
+          {notice}
+        </p>
+      )}
       {list && (
-        <>
-          {list.connections.length === 0 && <p className="empty">لم تربط بوابة دفع بعد: متجرك يقبل الدفع عند الاستلام فقط.</p>}
-          <table>
-            <tbody>
-              {list.connections.map((c) => (
-                <tr key={c.id}>
-                  <td>{gatewayLabel(c.gateway)}</td>
-                  <td>{c.status === 'active' ? 'مربوطة' : 'مفصولة'}</td>
-                  <td>{dateTime(c.created_at)}</td>
-                  <td>
+        <div className={!active && list.gateways.length > 0 ? 'split' : undefined}>
+          <section className="card">
+            <h2>بوابة الدفع</h2>
+            {list.connections.length === 0 ? (
+              <p className="hint">لم تربط بوابة دفع بعد: متجرك يقبل الدفع عند الاستلام فقط.</p>
+            ) : (
+              <ul className="rows">
+                {list.connections.map((c) => (
+                  <li key={c.id}>
+                    <div className="what">
+                      <strong>{gatewayLabel(c.gateway)}</strong>
+                      <small>رُبطت في {dateTime(c.created_at)}</small>
+                    </div>
+                    <span className={c.status === 'active' ? 'status st-on' : 'status'}>{c.status === 'active' ? 'مربوطة' : 'مفصولة'}</span>
                     {c.status === 'active' && (
                       <button type="button" className="danger" onClick={() => void disconnect(c.id)}>
                         فصل
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           {!active && list.gateways.length > 0 && (
             <form className="panel" onSubmit={(e) => void connect(e)}>
               <h2>ربط حسابك في بوابة الدفع</h2>
-              <p>انسخ المفاتيح من لوحة البوابة. أموال المبيعات تذهب إلى حسابك أنت مباشرة؛ لا نرى بيانات البطاقات أبدًا.</p>
+              <p className="hint">انسخ المفاتيح من لوحة البوابة. أموال المبيعات تذهب إلى حسابك أنت مباشرة؛ لا نرى بيانات البطاقات أبدًا.</p>
               <label>
                 البوابة
                 <select
@@ -159,7 +169,7 @@ export function Gateways() {
               </button>
             </form>
           )}
-        </>
+        </div>
       )}
     </Layout>
   );

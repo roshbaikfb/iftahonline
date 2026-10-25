@@ -53,44 +53,59 @@ export function Payments() {
 
   return (
     <Layout storeId={storeId}>
-      <h1>مدفوعات البطاقات</h1>
+      <div className="page-head">
+        <h1>المدفوعات</h1>
+        <Link className="button" to={`/stores/${storeId}/gateways`}>
+          إعدادات الدفع بالبطاقة
+        </Link>
+      </div>
       {error && <p role="alert">{error}</p>}
-      {!loading && items.length === 0 && !error && <p className="empty">لا توجد مدفوعات بالبطاقة بعد.</p>}
-      {items.length > 0 && (
-        <table className="orders">
-          <thead>
-            <tr>
-              <th>التاريخ</th>
-              <th>البوابة</th>
-              <th>المبلغ</th>
-              <th>المسترد</th>
-              <th>الحالة</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((p) => (
-              <tr key={p.id}>
-                <td>{dateTime(p.created_at)}</td>
-                <td>{gatewayLabel(p.gateway)}</td>
-                <td>{money(p.amount_minor, p.currency)}</td>
-                <td>{p.refunded_minor > 0 ? money(p.refunded_minor, p.currency) : '—'}</td>
-                <td>
-                  <span className={`status pay-${p.status}`}>{paymentLabel[p.status]}</span>
-                </td>
-                <td>
-                  <Link to={`/stores/${storeId}/orders/${p.order_id}`}>الطلب</Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {next && (
-        <button type="button" disabled={loading} onClick={() => void loadMore()}>
-          المزيد
-        </button>
-      )}
+      <section className="table-card">
+        {items.length > 0 && (
+          <div className="scroll">
+            <table className="orders">
+              <thead>
+                <tr>
+                  <th>الطلب</th>
+                  <th>البوابة</th>
+                  <th>المبلغ</th>
+                  <th>المسترد</th>
+                  <th>الحالة</th>
+                  <th>التاريخ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <Link to={`/stores/${storeId}/orders/${p.order_id}`}>الطلب</Link>
+                    </td>
+                    <td>{gatewayLabel(p.gateway)}</td>
+                    <td className="num">{money(p.amount_minor, p.currency)}</td>
+                    <td className="num">{p.refunded_minor > 0 ? money(p.refunded_minor, p.currency) : '—'}</td>
+                    <td>
+                      <span className={`status pay-${p.status}`}>{paymentLabel[p.status]}</span>
+                    </td>
+                    <td className="muted">{dateTime(p.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {loading && <p role="status" className="foot">جارٍ التحميل…</p>}
+        {!loading && items.length === 0 && !error && <p className="empty flat">لا توجد مدفوعات بالبطاقة بعد.</p>}
+        {!loading && items.length > 0 && (
+          <div className="foot">
+            <span>عرض {items.length} دفعة</span>
+            {next && (
+              <button type="button" className="secondary" onClick={() => void loadMore()}>
+                تحميل المزيد
+              </button>
+            )}
+          </div>
+        )}
+      </section>
     </Layout>
   );
 }
