@@ -40,6 +40,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
@@ -243,16 +244,26 @@ func newTenancy(c clients) (*tenancy.Module, error) {
 	})
 }
 
-func newIdentity(c clients, ten *tenancy.Module) (*identity.Module, error) {
+func newIdentity(c clients, ten *tenancy.Module, onb *onboarding.Module) (*identity.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
 		return nil, err
 	}
 	return identity.New(identity.Deps{
-		Pool: c.pool, Redis: c.rdb, Tenancy: ten.Service(), IDs: c.ids, Log: c.log,
+		Pool: c.pool, Redis: c.rdb, Tenancy: ten.Service(), Onboarding: onb.Starter(), IDs: c.ids, Log: c.log,
 		Config: c.cfg.Identity, ClientIP: middleware.ClientIP,
 		Secrets: c.cfg.Secrets, Jobs: inserter, Env: c.cfg.Env,
 	})
+}
+
+// newOnboarding builds the setup wizard module. The starter templates it
+// applies arrive with ADR-0034's second step; until then it applies none.
+func newOnboarding(c clients) (*onboarding.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	return onboarding.New(onboarding.Deps{Pool: c.pool, Jobs: inserter, Audit: identity.NewAuditRecorder(c.ids)})
 }
 
 func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
@@ -410,7 +421,11 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	id, err := newIdentity(c, ten)
+	onb, err := newOnboarding(c)
+	if err != nil {
+		return nil, err
+	}
+	id, err := newIdentity(c, ten, onb)
 	if err != nil {
 		return nil, err
 	}
@@ -465,6 +480,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	return func(rt server.Routes) {
 		id.Mount(rt.Mux, rt.Problems)
 		ten.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		onb.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cat.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		shop.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		cust.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
@@ -646,6 +662,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	if err = ten.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	onb, err := newOnboarding(c)
+	if err != nil {
+		return err
+	}
+	if err = onb.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	cat, err := newCatalog(c, ten)

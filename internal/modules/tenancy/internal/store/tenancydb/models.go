@@ -576,6 +576,19 @@ type StoreMembership struct {
 	UpdatedAt time.Time
 }
 
+type StoreOnboarding struct {
+	StoreID         ulid.ID
+	Activity        pgtype.Text
+	Look            pgtype.Text
+	Color           pgtype.Text
+	TemplateStatus  string
+	TemplateSeq     int32
+	TemplateVersion pgtype.Int4
+	CompletedAt     *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type StorePage struct {
 	ID          ulid.ID
 	StoreID     ulid.ID

@@ -12,6 +12,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
@@ -31,6 +32,7 @@ import (
 // Limits are the throttles on public auth endpoints (ADR-0005 §4, §6).
 type Limits struct {
 	SignupPerIP      ratelimit.Limit // sign-up attempts per IP
+	SlugCheckPerIP   ratelimit.Limit // store address checks per IP (the sign-up form, as one types)
 	LoginPerIP       ratelimit.Limit // login attempts per IP
 	LoginFailPerUser ratelimit.Limit // failed logins per email, then locked until refill
 	OTPPerPhone      ratelimit.Limit // codes sent to one number (resend spacing)
@@ -43,6 +45,7 @@ type Limits struct {
 func DefaultLimits() Limits {
 	return Limits{
 		SignupPerIP:      ratelimit.Limit{Burst: 5, Period: time.Hour},
+		SlugCheckPerIP:   ratelimit.Limit{Burst: 60, Period: 10 * time.Minute},
 		LoginPerIP:       ratelimit.Limit{Burst: 30, Period: 15 * time.Minute},
 		LoginFailPerUser: ratelimit.Limit{Burst: 5, Period: 15 * time.Minute},
 		OTPPerPhone:      ratelimit.Limit{Burst: 1, Period: time.Minute},
@@ -66,12 +69,14 @@ type Deps struct {
 	Limiter *ratelimit.Limiter
 	Limits  Limits
 	Stores  tenancy.Service
-	IDs     *ulid.Generator
-	Log     *slog.Logger
-	Redis   *redis.Client      // pending challenges and code deliveries
-	Keyring *secretbox.Keyring // seals TOTP seeds and pending codes
-	Pepper  []byte             // OTP MAC key
-	Jobs    jobs.Inserter      // code delivery, invitation mail, device alerts
+	// Onboarding opens the setup wizard of each new store (ADR-0034).
+	Onboarding onboarding.Starter
+	IDs        *ulid.Generator
+	Log        *slog.Logger
+	Redis      *redis.Client      // pending challenges and code deliveries
+	Keyring    *secretbox.Keyring // seals TOTP seeds and pending codes
+	Pepper     []byte             // OTP MAC key
+	Jobs       jobs.Inserter      // code delivery, invitation mail, device alerts
 	// OTPEnabled is false while no SMS/WhatsApp provider is configured in
 	// production: phone OTP then answers 503.
 	OTPEnabled bool
@@ -84,6 +89,7 @@ type Service struct {
 	limiter    *ratelimit.Limiter
 	limits     Limits
 	stores     tenancy.Service
+	onboarding onboarding.Starter
 	ids        *ulid.Generator
 	audit      *Recorder
 	log        *slog.Logger
@@ -97,7 +103,7 @@ type Service struct {
 
 // NewService wires the service.
 func NewService(d Deps) *Service {
-	return &Service{db: d.DB, hasher: d.Hasher, limiter: d.Limiter, limits: d.Limits, stores: d.Stores, ids: d.IDs,
+	return &Service{db: d.DB, hasher: d.Hasher, limiter: d.Limiter, limits: d.Limits, stores: d.Stores, onboarding: d.Onboarding, ids: d.IDs,
 		audit: NewRecorder(d.IDs), log: d.Log, rdb: d.Redis, keyring: d.Keyring, pepper: d.Pepper, jobs: d.Jobs,
 		otpEnabled: d.OTPEnabled, now: time.Now}
 }
@@ -167,6 +173,9 @@ func (s *Service) Signup(ctx context.Context, in SignupInput) (AuthResult, error
 		if txErr = store.InsertMembership(ctx, tx, userID, authz.RoleOwner); txErr != nil {
 			return txErr
 		}
+		if txErr = s.onboarding.StartTx(ctx, tx); txErr != nil {
+			return txErr
+		}
 		sess, txErr := s.insertSession(ctx, tx, userID, token)
 		if txErr != nil {
 			return txErr
@@ -179,6 +188,15 @@ func (s *Service) Signup(ctx context.Context, in SignupInput) (AuthResult, error
 		return nil
 	})
 	return res, err
+}
+
+// CheckSlug says whether a new store could take slug, for the sign-up
+// form. It is throttled per IP like sign-up itself.
+func (s *Service) CheckSlug(ctx context.Context, slug string) (tenancy.SlugAvailability, error) {
+	if err := s.throttle(ctx, "slug:ip:"+ipKey(ctx), s.limits.SlugCheckPerIP); err != nil {
+		return tenancy.SlugAvailability{}, err
+	}
+	return s.stores.SlugAvailability(ctx, slug)
 }
 
 func validateSignup(in SignupInput) (email, name string, err error) {

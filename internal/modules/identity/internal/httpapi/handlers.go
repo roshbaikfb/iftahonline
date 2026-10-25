@@ -75,6 +75,20 @@ func (h *Handlers) Signup(ctx context.Context, req SignupRequestObject) (SignupR
 	return Signup201JSONResponse{Body: body, Headers: Signup201ResponseHeaders{SetCookie: cookie}}, nil
 }
 
+// CheckSlugAvailability implements StrictServerInterface.
+func (h *Handlers) CheckSlugAvailability(ctx context.Context, req CheckSlugAvailabilityRequestObject) (CheckSlugAvailabilityResponseObject, error) {
+	a, err := h.svc.CheckSlug(ctx, req.Params.Slug)
+	if err != nil {
+		return nil, err
+	}
+	out := CheckSlugAvailability200JSONResponse{Slug: a.Slug, Available: a.Available}
+	if a.Reason != "" {
+		r := SlugAvailabilityReason(a.Reason)
+		out.Reason = &r
+	}
+	return out, nil
+}
+
 // Login implements StrictServerInterface.
 func (h *Handlers) Login(ctx context.Context, req LoginRequestObject) (LoginResponseObject, error) {
 	if req.Body == nil {

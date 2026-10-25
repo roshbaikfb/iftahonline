@@ -39,3 +39,4 @@ supersedes it.
 | [0031](0031-p5-review-money-safety.md) | Money safety after the P5 review | Accepted |
 | [0032](0032-extensible-section-types.md) | Section types are an extensible list | Accepted |
 | [0033](0033-shop-search-and-bestsellers.md) | Shoppers' search key, and how bestsellers are counted | Accepted |
+| [0034](0034-setup-wizard-and-starter-templates.md) | The setup wizard and starter templates | Accepted |

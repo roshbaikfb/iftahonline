@@ -188,6 +188,27 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for SlugAvailabilityReason.
+const (
+	Invalid  SlugAvailabilityReason = "invalid"
+	Reserved SlugAvailabilityReason = "reserved"
+	Taken    SlugAvailabilityReason = "taken"
+)
+
+// Valid indicates whether the value is a known member of the SlugAvailabilityReason enum.
+func (e SlugAvailabilityReason) Valid() bool {
+	switch e {
+	case Invalid:
+		return true
+	case Reserved:
+		return true
+	case Taken:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicySlug.
 const (
 	PolicySlugPrivacy  PolicySlug = "privacy"
@@ -496,6 +517,20 @@ type SignupRequest struct {
 	Store    NewStore `json:"store"`
 }
 
+// SlugAvailability defines model for SlugAvailability.
+type SlugAvailability struct {
+	Available bool `json:"available"`
+
+	// Reason Why it is not available.
+	Reason *SlugAvailabilityReason `json:"reason,omitempty"`
+
+	// Slug The address as it would be saved (lower case
+	Slug string `json:"slug"`
+}
+
+// SlugAvailabilityReason Why it is not available.
+type SlugAvailabilityReason string
+
 // TOTPCode defines model for TOTPCode.
 type TOTPCode struct {
 	Code string `json:"code"`
@@ -565,6 +600,11 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// CheckSlugAvailabilityParams defines parameters for CheckSlugAvailability.
+type CheckSlugAvailabilityParams struct {
+	Slug string `form:"slug" json:"slug"`
+}
+
 // ListAuditLogParams defines parameters for ListAuditLog.
 type ListAuditLogParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -627,6 +667,9 @@ type ServerInterface interface {
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(w http.ResponseWriter, r *http.Request)
+	// CheckSlugAvailability Check whether a store address is free
+	// (GET /v1/auth/slug-availability)
+	CheckSlugAvailability(w http.ResponseWriter, r *http.Request, params CheckSlugAvailabilityParams)
 	// AcceptInvitation Join a store from an invitation link
 	// (POST /v1/invitations/accept)
 	AcceptInvitation(w http.ResponseWriter, r *http.Request)
@@ -761,6 +804,39 @@ func (siw *ServerInterfaceWrapper) Signup(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Signup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckSlugAvailability operation middleware
+func (siw *ServerInterfaceWrapper) CheckSlugAvailability(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CheckSlugAvailabilityParams
+
+	// ------------- Required query parameter "slug" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "slug", r.URL.Query(), &params.Slug, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "slug"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckSlugAvailability(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1272,6 +1348,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/start", wrapper.StartOTPLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/verify", wrapper.VerifyOTPLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invitations/accept", wrapper.AcceptInvitation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auth/slug-availability", wrapper.CheckSlugAvailability)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone", wrapper.StartPhoneVerification)
@@ -1586,6 +1663,45 @@ type SignupdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SignupdefaultApplicationProblemPlusJSONResponse) VisitSignupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckSlugAvailabilityRequestObject struct {
+	Params CheckSlugAvailabilityParams
+}
+
+type CheckSlugAvailabilityResponseObject interface {
+	VisitCheckSlugAvailabilityResponse(w http.ResponseWriter) error
+}
+
+type CheckSlugAvailability200JSONResponse SlugAvailability
+
+func (response CheckSlugAvailability200JSONResponse) VisitCheckSlugAvailabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckSlugAvailabilitydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CheckSlugAvailabilitydefaultApplicationProblemPlusJSONResponse) VisitCheckSlugAvailabilityResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2218,6 +2334,9 @@ type StrictServerInterface interface {
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
+	// CheckSlugAvailability Check whether a store address is free
+	// (GET /v1/auth/slug-availability)
+	CheckSlugAvailability(ctx context.Context, request CheckSlugAvailabilityRequestObject) (CheckSlugAvailabilityResponseObject, error)
 	// AcceptInvitation Join a store from an invitation link
 	// (POST /v1/invitations/accept)
 	AcceptInvitation(ctx context.Context, request AcceptInvitationRequestObject) (AcceptInvitationResponseObject, error)
@@ -2479,6 +2598,32 @@ func (sh *strictHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SignupResponseObject); ok {
 		if err := validResponse.VisitSignupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckSlugAvailability operation middleware
+func (sh *strictHandler) CheckSlugAvailability(w http.ResponseWriter, r *http.Request, params CheckSlugAvailabilityParams) {
+	var request CheckSlugAvailabilityRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckSlugAvailability(ctx, request.(CheckSlugAvailabilityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckSlugAvailability")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckSlugAvailabilityResponseObject); ok {
+		if err := validResponse.VisitCheckSlugAvailabilityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

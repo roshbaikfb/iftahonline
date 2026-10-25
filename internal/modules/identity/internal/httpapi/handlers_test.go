@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,12 +30,15 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -116,6 +120,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	limits := app.Limits{
 		SignupPerIP:      ratelimit.Limit{Burst: 50, Period: time.Hour},
+		SlugCheckPerIP:   ratelimit.Limit{Burst: 50, Period: time.Hour},
 		LoginPerIP:       ratelimit.Limit{Burst: 50, Period: time.Hour},
 		LoginFailPerUser: ratelimit.Limit{Burst: 2, Period: time.Hour},
 		OTPPerPhone:      ratelimit.Limit{Burst: 5, Period: time.Minute},
@@ -127,8 +132,12 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	onb, err := onboarding.New(onboarding.Deps{Pool: pool, Jobs: ins})
+	if err != nil {
+		t.Fatal(err)
+	}
 	id, err := identity.New(identity.Deps{
-		Pool: pool, Redis: rdb, Tenancy: ten.Service(), IDs: ids, Log: log, Limits: &limits,
+		Pool: pool, Redis: rdb, Tenancy: ten.Service(), Onboarding: onb.Starter(), IDs: ids, Log: log, Limits: &limits,
 		Jobs: ins, Env: config.EnvTest,
 		Secrets: config.Secrets{Keyring: keyring, OTPPepper: []byte("dev-only-otp-pepper-not-a-secret")},
 		Config:  config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 4},
@@ -641,4 +650,63 @@ func hotp(key []byte, counter int64) string {
 	sum := mac.Sum(nil)
 	off := sum[len(sum)-1] & 0x0f
 	return fmt.Sprintf("%06d", (binary.BigEndian.Uint32(sum[off:off+4])&0x7fffffff)%1_000_000)
+}
+
+// Sign-up opens the new store's setup wizard in its own transaction
+// (ADR-0034).
+func TestSignupOpensTheWizard(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	acc := f.signup(t, "web")
+	var status string
+	var completed *time.Time
+	// The table forces RLS even on its owner: read as the store.
+	ctx := tenant.WithStore(t.Context(), tenant.StoreID{ID: mustULID(t, acc.storeID)})
+	if err := postgres.InTenantTx(ctx, f.owner, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT template_status, completed_at FROM store_onboarding`).Scan(&status, &completed)
+	}); err != nil || status != "none" || completed != nil {
+		t.Fatalf("store_onboarding = %q %v, %v", status, completed, err)
+	}
+}
+
+func TestCheckSlugAvailability(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	taken := f.unique("taken-")
+	email := f.unique("t") + "@example.com"
+	if res, m := f.do(t, newReq(t, http.MethodPost, "/v1/auth/signup", fmt.Sprintf(`{"email":%q,"password":"correct horse battery","name":"T",
+		"store":{"name":"S","slug":%q,"currency":"EGP","locale":"ar","timezone":"Africa/Cairo"}}`, email, taken))); res.StatusCode != http.StatusCreated {
+		t.Fatalf("signup = %d %v", res.StatusCode, m)
+	}
+	free := f.unique("free-")
+	cases := []struct {
+		slug      string
+		want      string
+		available bool
+		reason    any
+	}{
+		{free, free, true, nil},
+		{"  " + strings.ToUpper(taken), taken, false, "taken"},
+		{"admin", "admin", false, "reserved"},
+		{"a", "a", false, "invalid"},
+	}
+	for _, c := range cases {
+		// Anonymous: the form asks before the account exists.
+		res, m := f.do(t, newReq(t, http.MethodGet, "/v1/auth/slug-availability?slug="+url.QueryEscape(c.slug), ""))
+		if res.StatusCode != http.StatusOK || m["slug"] != c.want || m["available"] != c.available || m["reason"] != c.reason {
+			t.Errorf("slug %q = %d %v", c.slug, res.StatusCode, m)
+		}
+	}
+	if res, m := f.do(t, newReq(t, http.MethodGet, "/v1/auth/slug-availability", "")); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no slug = %d %v", res.StatusCode, m)
+	}
+}
+
+func mustULID(t *testing.T, s string) ulid.ID {
+	t.Helper()
+	id, err := ulid.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
