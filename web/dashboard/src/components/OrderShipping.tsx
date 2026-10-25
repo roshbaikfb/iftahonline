@@ -71,11 +71,13 @@ export function OrderShipping({
   }
 
   const canShip = status === 'ready_to_ship' && !shipments.some(live);
-  if (shipments.length === 0 && !canShip) return null;
+  const early = status === 'pending' || status === 'confirmed';
+  if (shipments.length === 0 && !canShip && !early) return null;
   return (
-    <section>
+    <section className="card">
       <h2>الشحن</h2>
       {error && <p role="alert">{error}</p>}
+      {shipments.length === 0 && early && <p className="muted">تُنشأ الشحنة بعد أن يصبح الطلب جاهزًا للشحن.</p>}
       {shipments.length > 0 && (
         <ul>
           {shipments.map((s) => (

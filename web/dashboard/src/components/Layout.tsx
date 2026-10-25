@@ -15,6 +15,7 @@ export function Layout({ storeId, children }: { storeId: string; children: React
   const { pathname } = useLocation();
   const [store, setStore] = useState<{ name: string; slug: string } | null>(null);
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(0);
   const me = state.kind === 'signed-in' ? state.me : null;
   const memberships = me?.memberships ?? [];
 
@@ -27,6 +28,17 @@ export function Layout({ storeId, children }: { storeId: string; children: React
       live = false;
     };
   }, [storeId]);
+
+  // The orders waiting to be confirmed, read again on every screen.
+  useEffect(() => {
+    let live = true;
+    void api.GET('/v1/stores/{store_id}/orders/counts', { params: { path: { store_id: storeId } } }).then(({ data }) => {
+      if (live && data) setPending(data.pending);
+    });
+    return () => {
+      live = false;
+    };
+  }, [storeId, pathname]);
 
   // The drawer closes on Escape, and when a link in it is followed.
   useEffect(() => {
@@ -70,6 +82,11 @@ export function Layout({ storeId, children }: { storeId: string; children: React
                     }}
                   >
                     <span>{it.label}</span>
+                    {it.pendingBadge && pending > 0 && (
+                      <span className="count" aria-label={`${String(pending)} بانتظار التأكيد`}>
+                        {pending}
+                      </span>
+                    )}
                   </Link>
                 ) : (
                   <span key={it.label} className="item soon" aria-disabled="true">

@@ -3,6 +3,7 @@
 export interface NavItem {
   label: string;
   to?: string;
+  pendingBadge?: boolean; // shows the number of orders waiting to be confirmed
 }
 
 export interface NavGroup {
@@ -16,7 +17,7 @@ export function navGroups(storeId: string): NavGroup[] {
   const at = (path: string) => `/stores/${storeId}/${path}`;
   return [
     { items: [{ label: 'الرئيسية' }] },
-    { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders') }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
+    { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders'), pendingBadge: true }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
     { title: 'المنتجات', items: [{ label: 'المنتجات' }, { label: 'التصنيفات' }, { label: 'المخزون' }] },
     {
       title: 'الشحن',
