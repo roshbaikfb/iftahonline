@@ -11,17 +11,17 @@
     {
       "slug": "headphones",
       "name": "سماعات",
-      "image": "electronics-1"
+      "image": "electronics-headphones"
     },
     {
       "slug": "chargers",
       "name": "شواحن وكابلات",
-      "image": "electronics-2"
+      "image": "electronics-chargers"
     },
     {
       "slug": "phone-accessories",
       "name": "إكسسوارات الموبايل",
-      "image": "electronics-3"
+      "image": "electronics-phone-accessories"
     }
   ],
   "products": [

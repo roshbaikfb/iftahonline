@@ -374,6 +374,7 @@ main { display: block; min-block-size: 50vh; }
 
 /* Looks (ADR-0034): the layout chosen in the setup wizard. No look keeps
    the original layout. */
+[data-look="classic"] .bar { flex-wrap: wrap; }
 [data-look="classic"] .brand { order: -1; flex: 1 1 100%; justify-content: center; margin: 0; padding-block-start: .75rem; }
 [data-look="classic"] .tools { margin-inline-start: auto; }
 @media (min-width: 48rem) {
