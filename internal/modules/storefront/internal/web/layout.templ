@@ -41,8 +41,11 @@ templ layout(p *pageCtx, body templ.Component) {
 				<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 			}
 		</head>
-		<body>
+		<body class={ templ.KV("compact", p.compact) }>
 			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>
+			if p.compact {
+				@compactHeader(p)
+			}
 			if p.v.theme.Announcement != "" {
 				<div class="announce">{ p.v.theme.Announcement }</div>
 			}
@@ -152,11 +155,35 @@ templ footer(p *pageCtx) {
 				</ul>
 			</div>
 		</div>
-		<p class="copy">© { p.v.name } · { p.l.T(MsgPoweredBy) }</p>
+		<p class="copy">
+			© { p.v.name } · { p.l.T(MsgPoweredBy) } ·
+			<a href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>{ p.l.Other().T(MsgLanguageName) }</a>
+		</p>
 	</footer>
 }
 
 // icon is one of our own line icons.
 templ icon(name string) {
 	@templ.Raw(iconSVG(name))
+}
+
+// compactHeader is the product page's header on phones (the mockup):
+// back to the product's category, the brand, share and the cart. Wide
+// screens keep the full header.
+templ compactHeader(p *pageCtx) {
+	<header class="top-p">
+		<a class="back" href={ p.URL(p.back) } aria-label={ p.l.T(MsgBack) }>
+			@icon("back")
+		</a>
+		<a class="brand" href={ p.URL("/") }>{ p.v.name }</a>
+		<div class="tools">
+			<button type="button" class="share" data-share={ p.abs(p.l, p.path) } data-title={ p.title } aria-label={ p.l.T(MsgShare) } hidden>
+				@icon("share")
+			</button>
+			<a class="cartlink" href={ p.URL("/cart") } aria-label={ p.l.T(MsgCart) }>
+				@icon("bag")
+				<span class="count" data-cart-count hidden></span>
+			</a>
+		</div>
+	</header>
 }

@@ -1,6 +1,8 @@
 package web
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -155,6 +157,27 @@ const (
 	MsgShippingCost
 	MsgShippingFreeLine
 	MsgFreeOver
+	MsgBack
+	MsgShare
+	MsgLinkCopied
+	MsgYouMayLike
+	MsgSave
+	MsgLeftOne
+	MsgLeftTwo
+	MsgLeftMany
+	MsgDeliveryPrompt
+	MsgShippingAtCheckout
+	MsgPayCODOrCard
+	MsgPayCardSecure
+	MsgPayCODOnly
+	MsgPayCODNote
+	MsgReturns
+	MsgReadPolicy
+	MsgOrderViaWhatsApp
+	MsgWhatsAppOrder
+	MsgLess
+	MsgMore
+	MsgImageN
 	msgCount
 )
 
@@ -269,6 +292,27 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgShippingCost:       {"الشحن", "Shipping"},
 	MsgShippingFreeLine:   {"الشحن مجاني", "Free shipping"},
 	MsgFreeOver:           {"مجاني فوق", "free over"},
+	MsgBack:               {"رجوع", "Back"},
+	MsgShare:              {"مشاركة", "Share"},
+	MsgLinkCopied:         {"تم نسخ الرابط", "Link copied"},
+	MsgYouMayLike:         {"قد يعجبك أيضاً", "You may also like"},
+	MsgSave:               {"وفّر %s", "Save %s"},
+	MsgLeftOne:            {"باقي قطعة واحدة فقط", "Only 1 left"},
+	MsgLeftTwo:            {"باقي قطعتان فقط", "Only 2 left"},
+	MsgLeftMany:           {"باقي %d قطع فقط", "Only %d left"},
+	MsgDeliveryPrompt:     {"اختر محافظتك لمعرفة الشحن وموعد التوصيل", "Choose your governorate to see shipping and delivery time"},
+	MsgShippingAtCheckout: {"تظهر تكلفة الشحن عند إتمام الطلب.", "Shipping is shown at checkout."},
+	MsgPayCODOrCard:       {"ادفع عند الاستلام أو بالبطاقة", "Pay on delivery or by card"},
+	MsgPayCardSecure:      {"الدفع بالبطاقة على صفحة دفع آمنة", "Card payments on a secure payment page"},
+	MsgPayCODOnly:         {"الدفع عند الاستلام", "Cash on delivery"},
+	MsgPayCODNote:         {"تدفع نقدًا للمندوب عند استلام طلبك", "Pay the courier in cash when your order arrives"},
+	MsgReturns:            {"الاستبدال والاسترجاع", "Exchanges and returns"},
+	MsgReadPolicy:         {"اقرأ السياسة", "Read the policy"},
+	MsgOrderViaWhatsApp:   {"اطلب عبر واتساب", "Order on WhatsApp"},
+	MsgWhatsAppOrder:      {"مرحبًا، أريد طلب:", "Hello, I would like to order:"},
+	MsgLess:               {"أقل", "Fewer"},
+	MsgMore:               {"أكثر", "More"},
+	MsgImageN:             {"صورة %d", "Image %d"},
 }
 
 // T returns the message in l.
@@ -373,6 +417,33 @@ func (l Locale) DeliveryDays(minDays, maxDays int) string {
 		return "خلال " + strconv.Itoa(maxDays) + " " + unit
 	}
 	return "خلال " + strconv.Itoa(minDays) + "–" + strconv.Itoa(maxDays) + " " + unit
+}
+
+// Left is "only N left" for 1 to 10 units, the way each language says it.
+func (l Locale) Left(n int) string {
+	switch n {
+	case 1:
+		return l.T(MsgLeftOne)
+	case 2:
+		return l.T(MsgLeftTwo)
+	}
+	return fmt.Sprintf(l.T(MsgLeftMany), n)
+}
+
+// moneyFormat is how the page's script writes amounts it computes (a
+// total for a quantity) exactly as Price does: the symbol, its side and
+// the currency's minor units.
+func (l Locale) moneyFormat(c money.Currency) string {
+	sym := currencySymbols[l][c]
+	if sym == "" {
+		sym = string(c)
+	}
+	b, _ := json.Marshal(struct { //nolint:errcheck,errchkjson // fixed types always encode
+		Sym   string `json:"sym"`
+		After bool   `json:"after"`
+		Units int    `json:"units"`
+	}{sym, l == Arabic, c.MinorUnits()})
+	return string(b)
 }
 
 // group inserts thousands separators into a run of digits.

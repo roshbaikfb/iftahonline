@@ -49,7 +49,7 @@ every footer lists the payment methods).
 | Path | Page |
 |---|---|
 | `/` | Home: the home page's sections |
-| `/p/{slug}` | Product: gallery, variant picker, description, schema.org `Product` + `BreadcrumbList` |
+| `/p/{slug}` | Product (U2b): gallery, choices, delivery/payment/returns box, description, related products, sticky bar; schema.org `Product` + `BreadcrumbList` |
 | `/c/{slug}` | Category: 24 products per page, `?after=` cursor |
 | `/pages/{slug}` | A published landing page's sections |
 | `/policies/{slug}` | A published policy |
@@ -81,6 +81,41 @@ Every page (the approved U1 design):
   (hidden until the store has a number).
 - **Not shown yet.** Search and order tracking are in the mockups but
   come with U2d. No control is rendered before it works.
+- **Language.** The footer links the other language on every page (the
+  product page's short header on phones has no switch).
+
+The product page (U2b, the approved mockup):
+- **Phones.** A short header: back to the product's category (or home),
+  the brand, share and the cart. A bar fixed at the bottom holds the
+  WhatsApp order button (only with a number; the message carries the
+  product, choice, quantity and link) and "add to cart · total". Wide
+  screens keep the full header, in two columns, with the button in the
+  form.
+- **Gallery.** It scrolls sideways and snaps; the dots and thumbnails
+  are anchors, so they work without script. At most 9 pictures.
+- **Price and stock.** The price is red on sale, with the old price and
+  "وفّر X". "باقي N قطع فقط" shows within the store's `low_stock`
+  threshold: the catalog never reports above 10, and the variants'
+  JSON carries only the counts the page would show.
+- **Choices.** Each option is a group of radio buttons. Colour options
+  (اللون، color…) show swatches for 21 common colour names: classes in
+  site.css, since the CSP forbids inline styles; an unknown name is a
+  text button. A value no available variant has is disabled; the script
+  strikes the ones the other choices rule out.
+- **The form.** It posts the product and its values (`o0`–`o2`), and
+  the cart resolves the variant, so it works without script. With
+  script, it follows the choice: price, saving, stock line, total and
+  WhatsApp text.
+- **The box.**
+  - Delivery: the governorate list ("اختر محافظتك لمعرفة الشحن وموعد
+    التوصيل"; no governorate is assumed); choosing one asks
+    `/order/quote` for the delivery and shipping lines.
+  - Payment: COD, and cards only when they are on.
+  - Returns: only when the refund policy is published, with its link.
+- **Not shown.** The size chart, until products get one (U5).
+- **Related products.** The first category's newest (one query, at most
+  4). The page carries their `p-` tags, not the listing tag, so a store's
+  every edit does not purge every product page.
 
 The cart:
 - **Redis and limits.** The cart is a Redis hash found by the SHA-256 of

@@ -243,6 +243,20 @@ func (s *Shop) product(ctx context.Context, p *pageCtx, slug string) (result, er
 			break
 		}
 	}
+	// "You may also like": the first category's newest, in one query.
+	var related []catalog.StorefrontProduct
+	if crumb != nil {
+		page, listErr := s.catalog.ListProducts(ctx, catalog.StorefrontQuery{CategoryID: &crumb.ID, Limit: maxRelated + 1})
+		if listErr != nil {
+			return result{}, listErr
+		}
+		related = page.Items
+		p.tagProducts(related) // a related product's edit renews the page; a new one shows within the cache's TTL
+	}
+	p.compact, p.back = true, "/"
+	if crumb != nil {
+		p.back = categoryPath(crumb.Slug)
+	}
 	p.title, p.tags = pr.Title+" | "+p.v.name, append(p.tags, "p-"+pr.ID.String())
 	if d := paragraphs(pr.Description); len(d) > 0 {
 		p.desc = truncate(d[0], 300)
@@ -251,7 +265,7 @@ func (s *Shop) product(ctx context.Context, p *pageCtx, slug string) (result, er
 		p.image = img.src
 	}
 	p.jsonLD = productLD(p, pr, crumb)
-	return s.render(p, http.StatusOK, productPage(p, pr, crumb))
+	return s.render(p, http.StatusOK, productPage(p, crumb, s.productView(p, pr, related)))
 }
 
 func (s *Shop) category(ctx context.Context, p *pageCtx, slug, after string) (result, error) {

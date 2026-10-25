@@ -1,43 +1,216 @@
 package web
 
-import "github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+import (
+	"fmt"
 
-templ productPage(p *pageCtx, pr catalog.StorefrontProduct, crumb *catalog.Category) {
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+)
+
+// productPage is the approved mockup: gallery, title and price, the
+// choices, quantity, the delivery, payment and returns box, the
+// description, related products, and on phones a bar that stays at the
+// bottom. The form posts the product and its choices, so it works
+// without JavaScript; the script follows the choice (price, stock line,
+// total, WhatsApp text) and asks the delivery quote.
+templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 	<nav class="crumbs" aria-label="breadcrumb">
 		<a href={ p.URL("/") }>{ p.l.T(MsgHome) }</a>
 		if crumb != nil {
 			› <a href={ p.URL(categoryPath(crumb.Slug)) }>{ crumb.Name }</a>
 		}
-		› <span aria-current="page">{ pr.Title }</span>
+		› <span aria-current="page">{ v.pr.Title }</span>
 	</nav>
-	<div class="prod">
-		<div class="gallery">
-			if len(pr.Images) > 0 {
-				@picture(pictureOf(pr.Images[0], pr.Title), "(min-width: 48rem) 50vw, 100vw", p.eager())
-			}
-			if len(pr.Images) > 1 {
-				<div class="thumbs">
-					for i, img := range pr.Images {
-						if i > 0 && i < 9 {
-							@picture(pictureOf(img, pr.Title), "25vw", false)
+	<div class="pd">
+		@gallery(p, v)
+		<div class="pd-info">
+			if len(v.cats) > 0 {
+				<p class="pd-cats">
+					for i, c := range v.cats {
+						if i > 0 {
+							{ " · " }
 						}
+						<a href={ p.URL(categoryPath(c.Slug)) }>{ c.Name }</a>
 					}
-				</div>
+				</p>
 			}
-		</div>
-		<div>
-			<h1>{ pr.Title }</h1>
-			@buyForm(p, pr, "")
-			if desc := paragraphs(pr.Description); len(desc) > 0 {
-				<div class="desc">
-					<h2>{ p.l.T(MsgDescription) }</h2>
+			<h1>{ v.pr.Title }</h1>
+			<p class="pd-price" data-pd-price>
+				<span class={ "now", templ.KV("sale", v.price.compare != "") } data-now>{ v.price.price }</span>
+				<s data-was hidden?={ v.price.compare == "" }>{ v.price.compare }</s>
+				<span class="saving" data-save hidden?={ v.save == "" }>{ v.save }</span>
+			</p>
+			<p class="left" data-left hidden?={ v.left == 0 }>
+				if v.left > 0 {
+					{ p.l.Left(v.left) }
+				}
+			</p>
+			<form id="buy" class="pd-buy" method="post" action={ p.URL("/cart") } data-product data-variants={ v.variants } data-money={ v.money } data-add-label={ p.l.T(MsgAddToCart) } data-sold-label={ p.l.T(MsgSoldOut) }>
+				<input type="hidden" name="product" value={ v.pr.ID.String() }/>
+				<input type="hidden" name="variant" disabled data-variant/>
+				for _, o := range v.options {
+					<fieldset class={ "opt", templ.KV("colors", o.color) }>
+						<legend>{ o.name }: <strong data-chosen={ fmt.Sprint(o.index) }>{ o.chosen }</strong></legend>
+						<div>
+							for _, val := range o.values {
+								<label class={ templ.KV("out", val.out), templ.KV("sw", val.swatch != ""), templ.KV(val.swatch, val.swatch != "") }>
+									<input type="radio" name={ fmt.Sprintf("o%d", o.index) } value={ val.value } checked?={ val.checked } disabled?={ val.out } data-opt={ fmt.Sprint(o.index) } required/>
+									if val.swatch != "" {
+										<span class="sr">{ val.value }</span>
+									} else {
+										<span>{ val.value }</span>
+									}
+								</label>
+							}
+						</div>
+					</fieldset>
+				}
+				<div class="qty">
+					<label for="qty">{ p.l.T(MsgQuantity) }</label>
+					<div class="stepper">
+						<button type="button" data-step="-1" aria-label={ p.l.T(MsgLess) } hidden>−</button>
+						<input type="number" id="qty" name="qty" min="1" max="20" value="1" inputmode="numeric"/>
+						<button type="button" data-step="1" aria-label={ p.l.T(MsgMore) } hidden>+</button>
+					</div>
+				</div>
+				<button class="btn btn-block add-inline" type="submit" disabled?={ !v.pr.Available() } data-add>
+					if v.pr.Available() {
+						{ p.l.T(MsgAddToCart) }
+					} else {
+						{ p.l.T(MsgSoldOut) }
+					}
+				</button>
+			</form>
+			@infoBox(p, v)
+			if desc := paragraphs(v.pr.Description); len(desc) > 0 {
+				<details class="pd-desc" open>
+					<summary>{ p.l.T(MsgDescription) }</summary>
 					for _, para := range desc {
 						<p>{ para }</p>
 					}
-				</div>
+				</details>
 			}
 		</div>
 	</div>
+	if len(v.related) > 0 {
+		<section class="sec">
+			<div class="head"><h2>{ p.l.T(MsgYouMayLike) }</h2></div>
+			<div class="grid row">
+				for _, rp := range v.related {
+					@card(p, rp)
+				}
+			</div>
+		</section>
+	}
+	<div class="sticky">
+		if v.whatsApp != "" {
+			<a class="wa-order" href={ v.whatsApp } rel="noopener" target="_blank" aria-label={ p.l.T(MsgOrderViaWhatsApp) } data-wa>
+				@icon("chat")
+			</a>
+		}
+		<button class="btn" type="submit" form="buy" disabled?={ !v.pr.Available() } data-add data-total>
+			if v.pr.Available() {
+				{ p.l.T(MsgAddToCart) } · { v.price.price }
+			} else {
+				{ p.l.T(MsgSoldOut) }
+			}
+		</button>
+	</div>
+	<p class="toast" role="status" data-toast hidden>{ p.l.T(MsgLinkCopied) }</p>
+}
+
+// gallery scrolls sideways (snapping to each picture); the dots and the
+// thumbnails are anchors to the pictures, so they work without script.
+templ gallery(p *pageCtx, v productView) {
+	<div class="pd-gallery">
+		<div class="track" data-track>
+			for i, img := range v.pr.Images {
+				if i < maxGallery {
+					<div class="slide" id={ fmt.Sprintf("g-%d", i+1) }>
+						@picture(pictureOf(img, v.pr.Title), "(min-width: 48rem) 50vw, 100vw", i == 0 && p.eager())
+					</div>
+				}
+			}
+			if len(v.pr.Images) == 0 {
+				<div class="slide empty-pic"></div>
+			}
+		</div>
+		if !v.pr.Available() {
+			<span class="tag out">{ p.l.T(MsgSoldOutShort) }</span>
+		} else if v.pct > 0 {
+			<span class="tag" data-pct>{ fmt.Sprintf(p.l.T(MsgSalePercent), v.pct) }</span>
+		}
+		if n := min(len(v.pr.Images), maxGallery); n > 1 {
+			<div class="dots" aria-hidden="true">
+				for i := range n {
+					<span class={ templ.KV("on", i == 0) }></span>
+				}
+			</div>
+			<div class="thumbs">
+				for i, img := range v.pr.Images {
+					if i < maxGallery {
+						<a href={ templ.SafeURL(fmt.Sprintf("#g-%d", i+1)) } aria-label={ fmt.Sprintf(p.l.T(MsgImageN), i+1) } class={ templ.KV("on", i == 0) }>
+							@picture(pictureOf(img, ""), "4rem", false)
+						</a>
+					}
+				}
+			</div>
+		}
+	</div>
+}
+
+// infoBox: delivery (the quote once a governorate is chosen), payment,
+// and returns when the store published its policy.
+templ infoBox(p *pageCtx, v productView) {
+	<div class="pd-box">
+		<div class="row">
+			@infoIcon("shipping")
+			<div>
+				if v.quote {
+					<form class="deliv" data-delivery={ string(p.URL("/order/quote")) }>
+						<label for="deliv-gov">{ p.l.T(MsgDeliveryPrompt) }</label>
+						<select id="deliv-gov" name="governorate">
+							<option value="">{ p.l.T(MsgChooseGovernorate) }</option>
+							for _, a := range v.areas {
+								<option value={ a.Code }>{ a.Name(string(p.l)) }</option>
+							}
+						</select>
+						<strong data-deliv-line hidden></strong>
+						<small data-ship-line hidden></small>
+					</form>
+				} else {
+					<strong>{ p.l.T(MsgShipping) }</strong>
+					<small>{ p.l.T(MsgShippingAtCheckout) }</small>
+				}
+			</div>
+		</div>
+		<div class="row">
+			@infoIcon("card")
+			<div>
+				if p.v.cards {
+					<strong>{ p.l.T(MsgPayCODOrCard) }</strong>
+					<small>{ p.l.T(MsgPayCardSecure) }</small>
+				} else {
+					<strong>{ p.l.T(MsgPayCODOnly) }</strong>
+					<small>{ p.l.T(MsgPayCODNote) }</small>
+				}
+			</div>
+		</div>
+		if v.refund != nil {
+			<div class="row">
+				@infoIcon("returns")
+				<div>
+					<strong>{ p.l.T(MsgReturns) }</strong>
+					<small><a href={ p.URL("/policies/" + v.refund.Slug) }>{ p.l.T(MsgReadPolicy) }</a></small>
+				</div>
+			</div>
+		}
+	</div>
+}
+
+templ infoIcon(name string) {
+	<span class="ico">
+		@templ.Raw(iconSVG(name))
+	</span>
 }
 
 templ categoryPage(p *pageCtx, c catalog.Category, products []catalog.StorefrontProduct, more string) {

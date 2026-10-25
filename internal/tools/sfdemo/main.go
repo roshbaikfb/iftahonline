@@ -299,9 +299,9 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, 
 			{"type":"countdown","settings":{"ends_at":"` + ends + `"}},
 			{"type":"reviews","settings":{"items":[{"name":"منى","location":"القاهرة","rating":5,"text":"رائحة رائعة ووصل بسرعة."},{"name":"أحمد","location":"الإسكندرية","rating":4,"text":"جودة ممتازة."}]}},
 			{"type":"faq","settings":{"items":[{"question":"متى يصل الطلب؟","answer":"خلال ٢ إلى ٤ أيام عمل."},{"question":"هل يمكن الاسترجاع؟","answer":"نعم، خلال ١٤ يومًا."}]}}]}`},
-		// Shipping (ADR-0025): Cairo and Giza 40, elsewhere 60, free from
-		// 1,000, and a 10 cash-on-delivery fee.
-		{http.MethodPost, "/shipping/zones", `{"name":"القاهرة والجيزة","areas":["EG-C","EG-GZ"],"rate_minor":4000}`},
+		// Shipping (ADR-0025): Cairo and Giza 40 in 2–3 days, elsewhere 60,
+		// free from 1,000, and a 10 cash-on-delivery fee.
+		{http.MethodPost, "/shipping/zones", `{"name":"القاهرة والجيزة","areas":["EG-C","EG-GZ"],"rate_minor":4000,"eta_min_days":2,"eta_max_days":3}`},
 		{http.MethodPost, "/shipping/zones", `{"name":"باقي المحافظات","areas":` + otherAreas("EG-C", "EG-GZ") + `,"rate_minor":6000}`},
 		{http.MethodPut, "/shipping/settings", `{"version":0,"cod_fee":{"fixed_minor":1000,"bp":0,"min_minor":0,"max_minor":0},"free_over_minor":100000}`},
 		{http.MethodPut, "/storefront/policies/refund", `{"title":"سياسة الاسترجاع","body":"يمكنك استرجاع المنتج خلال ١٤ يومًا من الاستلام.\n\nيجب أن يكون المنتج بحالته الأصلية.","status":"published"}`},

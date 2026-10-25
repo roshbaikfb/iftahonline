@@ -54,11 +54,12 @@ function variantPickers() {
 // so the count cannot be in them, and asking the origin on every view
 // would undo the edge cache.
 function cartBadge() {
-  const badge = document.querySelector("[data-cart-count]");
   const m = document.cookie.match(/(?:^|; )cart_n=(\d+)/);
-  if (!badge || !m || m[1] === "0") return;
-  badge.textContent = m[1];
-  badge.hidden = false;
+  if (!m || m[1] === "0") return;
+  for (const badge of document.querySelectorAll("[data-cart-count]")) {
+    badge.textContent = m[1];
+    badge.hidden = false;
+  }
 }
 
 // orderForms gives each one-step order form an idempotency key, so a
@@ -112,8 +113,207 @@ function orderQuotes() {
   }
 }
 
+// formatMoney writes minor units the way the server's Locale.Price does:
+// Western digits, thousands separators, decimals only when there are any,
+// the symbol after the amount in Arabic and before it in English.
+function formatMoney(minor, f) {
+  const div = 10 ** f.units;
+  const neg = minor < 0;
+  const abs = Math.abs(minor);
+  let s = String(Math.floor(abs / div)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const frac = abs % div;
+  if (frac) s += "." + String(frac).padStart(f.units, "0");
+  if (neg) s = "-" + s;
+  return f.after ? `${s} ${f.sym}` : `${f.sym} ${s}`;
+}
+
+// productForms follows the shopper's choice on the product page: the
+// chosen value beside each option, which values cannot be bought with the
+// others chosen, the price, saving and "only N left" lines, the buttons
+// and their total, and the WhatsApp message. The form itself posts the
+// product and its choices, so all of this is a convenience.
+function productForms() {
+  for (const form of document.querySelectorAll("form[data-product]")) {
+    let variants, money;
+    try {
+      variants = JSON.parse(form.dataset.variants);
+      money = JSON.parse(form.dataset.money);
+    } catch {
+      continue;
+    }
+    const n = form.querySelectorAll("fieldset.opt").length;
+    const qty = form.querySelector("[name=qty]");
+    const hidden = form.querySelector("[data-variant]");
+    const adds = document.querySelectorAll("[data-add]");
+    const total = document.querySelector("[data-total]");
+    const wa = document.querySelector("[data-wa]");
+    const addLabel = form.dataset.addLabel;
+    const soldLabel = form.dataset.soldLabel;
+    const chosen = () => {
+      const vals = [];
+      for (let i = 0; i < n; i++) {
+        const el = form.querySelector(`[name="o${i}"]:checked`);
+        vals.push(el ? el.value : null);
+      }
+      return vals;
+    };
+    const find = (vals) => variants.find((v) => v.values.length === vals.length && v.values.every((x, i) => x === vals[i]));
+    const setLine = (sel, text) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.textContent = text || "";
+      el.hidden = !text;
+    };
+    const update = () => {
+      const vals = chosen();
+      const v = n === 0 ? variants[0] : find(vals);
+      for (let i = 0; i < n; i++) {
+        const out = form.querySelector(`[data-chosen="${i}"]`);
+        if (out) out.textContent = vals[i] || "";
+      }
+      for (const input of form.querySelectorAll("[data-opt]")) {
+        const test = vals.slice();
+        test[Number(input.dataset.opt)] = input.value;
+        const m = find(test);
+        input.closest("label").classList.toggle("out", !m || !m.available);
+      }
+      const q = Math.max(1, Math.min(20, Number(qty.value) || 1));
+      const ok = !!v && v.available;
+      if (v) {
+        const now = document.querySelector("[data-now]");
+        if (now) {
+          now.textContent = v.price;
+          now.classList.toggle("sale", !!v.compare);
+        }
+        setLine("[data-was]", v.compare);
+        setLine("[data-save]", v.save);
+        setLine("[data-left]", v.left);
+        const pct = document.querySelector("[data-pct]");
+        if (pct) pct.hidden = !v.pct;
+      }
+      if (hidden) {
+        hidden.value = v ? v.id : "";
+        hidden.disabled = !v;
+      }
+      for (const b of adds) {
+        b.disabled = !ok;
+        if (b !== total) b.textContent = ok ? addLabel : soldLabel;
+      }
+      if (total) total.textContent = ok ? `${addLabel} · ${formatMoney(v.amount * q, money)}` : soldLabel;
+      if (wa && v) {
+        const url = new URL(wa.href);
+        const lines = (url.searchParams.get("text") || "").split("\n");
+        const what = form.closest(".pd-info").querySelector("h1").textContent + (v.values.length ? ` (${v.values.join(" / ")})` : "");
+        lines[0] = lines[0].replace(/:.*$/, `: ${what} × ${q}`);
+        url.searchParams.set("text", lines.join("\n"));
+        wa.href = url.toString();
+      }
+      document.dispatchEvent(new CustomEvent("product:choice", { detail: { variant: v ? v.id : "", qty: q } }));
+    };
+    for (const b of form.querySelectorAll("[data-step]")) {
+      b.hidden = false;
+      b.addEventListener("click", () => {
+        qty.value = String(Math.max(1, Math.min(20, (Number(qty.value) || 1) + Number(b.dataset.step))));
+        update();
+      });
+    }
+    form.addEventListener("change", update);
+    qty.addEventListener("input", update);
+    update();
+  }
+}
+
+// deliveryQuote fills the product page's delivery box once the shopper
+// picks a governorate: the same quote checkout uses, for the variant and
+// quantity chosen. Only the governorate and the choice are sent.
+function deliveryQuote() {
+  const form = document.querySelector("form[data-delivery]");
+  if (!form) return;
+  const select = form.querySelector("select");
+  const line = form.querySelector("[data-deliv-line]");
+  const ship = form.querySelector("[data-ship-line]");
+  let choice = { variant: "", qty: 1 };
+  let seq = 0;
+  const update = async () => {
+    if (!select.value || !choice.variant) {
+      line.hidden = ship.hidden = true;
+      return;
+    }
+    const body = new URLSearchParams({ governorate: select.value, variant: choice.variant, qty: String(choice.qty) });
+    const mine = ++seq;
+    try {
+      const res = await fetch(form.dataset.delivery, { method: "POST", body, credentials: "same-origin" });
+      if (!res.ok || mine !== seq) return;
+      const q = await res.json();
+      line.textContent = q.delivery || "";
+      line.hidden = !q.delivery;
+      line.classList.toggle("bad", !q.deliverable);
+      ship.textContent = q.shipping || "";
+      ship.hidden = !q.shipping;
+    } catch {
+      // offline or busy: checkout still shows the charges
+    }
+  };
+  form.addEventListener("submit", (e) => e.preventDefault());
+  select.addEventListener("change", update);
+  document.addEventListener("product:choice", (e) => {
+    choice = e.detail;
+    update();
+  });
+}
+
+// share opens the phone's share sheet, or copies the link where there is
+// none (desktop browsers) and says so.
+function share() {
+  const toast = document.querySelector("[data-toast]");
+  for (const b of document.querySelectorAll("[data-share]")) {
+    if (!navigator.share && !navigator.clipboard) continue;
+    b.hidden = false;
+    b.addEventListener("click", async () => {
+      const url = b.dataset.share;
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: b.dataset.title, url });
+          return;
+        }
+        await navigator.clipboard.writeText(url);
+        if (toast) {
+          toast.hidden = false;
+          setTimeout(() => { toast.hidden = true; }, 2500);
+        }
+      } catch {
+        // the shopper closed the sheet
+      }
+    });
+  }
+}
+
+// galleries keep the dots and thumbnails on the picture in view as the
+// shopper swipes.
+function galleries() {
+  for (const track of document.querySelectorAll("[data-track]")) {
+    const root = track.parentElement;
+    const marks = [...root.querySelectorAll(".dots span")];
+    const thumbs = [...root.querySelectorAll(".thumbs a")];
+    if (!marks.length || !("IntersectionObserver" in window)) continue;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const i = [...track.children].indexOf(e.target);
+        marks.forEach((m, j) => m.classList.toggle("on", i === j));
+        thumbs.forEach((t, j) => t.classList.toggle("on", i === j));
+      }
+    }, { root: track, threshold: 0.6 });
+    for (const slide of track.children) io.observe(slide);
+  }
+}
+
 countdowns();
 variantPickers();
 cartBadge();
 orderForms();
 orderQuotes();
+productForms();
+deliveryQuote();
+share();
+galleries();
