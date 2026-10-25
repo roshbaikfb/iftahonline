@@ -3041,6 +3041,15 @@ export interface components {
             font: "cairo" | "tajawal" | "ibm-plex-sans-arabic" | "noto-kufi-arabic" | "system";
             /** @enum {string} */
             radius: "none" | "small" | "medium" | "large";
+            /**
+             * @description The storefront's layout, chosen in the setup wizard (ADR-0034):
+             *     classic puts the logo on its own centred row; modern shows larger
+             *     product cards, fewer to a row; soft draws categories as circles on
+             *     every screen. Absent keeps the original layout; saving without it
+             *     returns to that.
+             * @enum {string}
+             */
+            look?: "classic" | "modern" | "soft";
             /** @description The bar above the header (one line, e.g. free shipping over 1,000); empty shows none. */
             announcement?: string;
             /** @description A few words on the store, in the footer. */

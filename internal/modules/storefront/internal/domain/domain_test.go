@@ -49,6 +49,8 @@ func TestValidateTheme(t *testing.T) {
 		{"low contrast", func(s *domain.ThemeSettings) { s.Colors.Text, s.Colors.Background = "#777777", "#888888" }, []string{"colors.text:low_contrast"}},
 		{"dark theme", func(s *domain.ThemeSettings) { s.Colors.Text, s.Colors.Background = "#f9fafb", "#111827" }, nil},
 		{"bad font and radius", func(s *domain.ThemeSettings) { s.Font, s.Radius = "comic-sans", "huge" }, []string{"font:invalid", "radius:invalid"}},
+		{"every look", func(s *domain.ThemeSettings) { s.Look = domain.LookModern }, nil},
+		{"unknown look", func(s *domain.ThemeSettings) { s.Look = "loud" }, []string{"look:invalid"}},
 		{"announcement, about and contact", func(s *domain.ThemeSettings) {
 			s.Announcement, s.About = "  شحن مجاني فوق 1,000 ج.م  ", "قطن مصري 100%"
 			s.Contact = domain.Contact{WhatsApp: "+20 101 234 5678", Email: " Shop@Example.com "}
