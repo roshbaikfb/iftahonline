@@ -339,6 +339,7 @@ type Product struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 }
 
 type ProductCategory struct {

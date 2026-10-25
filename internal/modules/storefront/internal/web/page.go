@@ -55,6 +55,15 @@ const (
 // cards) is the LCP element.
 const eagerImages = 2
 
+// unavailable is what the buy button says when a product cannot be
+// bought: a sample (ADR-0034) says so; anything else is sold out.
+func (p *pageCtx) unavailable(pr catalog.StorefrontProduct) string {
+	if pr.Sample {
+		return p.l.T(MsgSampleProduct)
+	}
+	return p.l.T(MsgSoldOut)
+}
+
 // eager reports whether the next image is one of the page's first.
 func (p *pageCtx) eager() bool {
 	if p.eagerN < eagerImages {

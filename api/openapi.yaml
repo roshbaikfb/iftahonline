@@ -767,6 +767,29 @@ paths:
               schema: { $ref: "#/components/schemas/Product" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/samples:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    delete:
+      tags: [catalog]
+      operationId: deleteSampleProducts
+      summary: Delete the starter template's sample products
+      description: |
+        Permission: catalog.manage. Deletes every product marked `sample`,
+        as deleteProduct deletes one; the merchant's own products are left
+        alone. Idempotent: with none left it deletes 0.
+      responses:
+        "200":
+          description: How many were deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: integer }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/products/search:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -3029,6 +3052,12 @@ components:
           type: array
           description: In position order; only `ready` images have `urls`.
           items: { $ref: "#/components/schemas/ProductImage" }
+        sample:
+          type: boolean
+          description: |
+            Added by the setup wizard's starter template (ADR-0034): shown on
+            the storefront marked as a sample, never sellable, deleted with
+            deleteSampleProducts. Absent means false.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ImportRequest:

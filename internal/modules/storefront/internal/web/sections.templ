@@ -50,7 +50,9 @@ templ card(p *pageCtx, pr catalog.StorefrontProduct) {
 			if img := imageOf(pr); img != nil {
 				@picture(*img, "(min-width: 48rem) 25vw, 50vw", p.eager())
 			}
-			if !pr.Available() {
+			if pr.Sample {
+				<span class="tag">{ p.l.T(MsgSample) }</span>
+			} else if !pr.Available() {
 				<span class="tag out">{ p.l.T(MsgSoldOutShort) }</span>
 			} else if pct := salePercent(pr.PriceFrom()); pct > 0 {
 				<span class="tag">{ fmt.Sprintf(p.l.T(MsgSalePercent), pct) }</span>

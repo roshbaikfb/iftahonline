@@ -357,7 +357,7 @@ func toProduct(r catalogdb.ListProductsRow) (domain.Product, error) {
 	}
 	return domain.Product{
 		ID: r.ID, Slug: r.Slug, Title: r.Title, Description: r.Description, Status: domain.ProductStatus(r.Status),
-		Options: opts, Variants: []domain.Variant{}, Images: []domain.Image{}, CategoryIDs: r.CategoryIds, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Options: opts, Variants: []domain.Variant{}, Images: []domain.Image{}, CategoryIDs: r.CategoryIds, Sample: r.IsSample, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }
 
@@ -393,4 +393,33 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// MarkSample marks a product the setup wizard's template added.
+func MarkSample(ctx context.Context, tx Tx, id ulid.ID) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := catalogdb.New(tx).MarkSample(ctx, catalogdb.MarkSampleParams{StoreID: store, ID: id})
+	if err != nil {
+		return fmt.Errorf("catalog store: mark sample: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+// SampleIDs lists up to 200 of the store's sample products.
+func SampleIDs(ctx context.Context, tx Tx) ([]ulid.ID, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := catalogdb.New(tx).ListSampleIDs(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("catalog store: sample ids: %w", err)
+	}
+	return ids, nil
 }

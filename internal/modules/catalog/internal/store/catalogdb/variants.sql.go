@@ -18,7 +18,7 @@ FROM variants v
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
 WHERE v.store_id = $1 AND v.id = $2 AND v.deleted_at IS NULL
-  AND p.deleted_at IS NULL AND p.status = 'active'
+  AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
 `
 
 type GetSellableVariantParams struct {
@@ -41,6 +41,7 @@ type GetSellableVariantRow struct {
 	Reserved       int32
 }
 
+// Sample products (ADR-0034) are shown but never sellable.
 func (q *Queries) GetSellableVariant(ctx context.Context, arg GetSellableVariantParams) (GetSellableVariantRow, error) {
 	row := q.db.QueryRow(ctx, getSellableVariant, arg.StoreID, arg.ID)
 	var i GetSellableVariantRow
@@ -168,7 +169,7 @@ LEFT JOIN LATERAL (
   WHERE pi.store_id = v.store_id AND pi.product_id = v.product_id AND pi.status = 'ready'
   ORDER BY pi.position, pi.id LIMIT 1
 ) img ON true
-WHERE p.deleted_at IS NULL AND p.status = 'active'
+WHERE p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
 ORDER BY ids.ord
 `
 

@@ -28,7 +28,7 @@ func (q *Queries) DeleteProductCategories(ctx context.Context, arg DeleteProduct
 
 const getActiveProductBySlug = `-- name: GetActiveProductBySlug :one
 
-SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, p.is_sample, ARRAY(
     SELECT pc.category_id FROM product_categories pc
     WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
 FROM products p
@@ -51,6 +51,7 @@ type GetActiveProductBySlugRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 	CategoryIds []ulid.ID
 }
 
@@ -69,6 +70,7 @@ func (q *Queries) GetActiveProductBySlug(ctx context.Context, arg GetActiveProdu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.IsSample,
 		&i.CategoryIds,
 	)
 	return i, err
@@ -76,7 +78,7 @@ func (q *Queries) GetActiveProductBySlug(ctx context.Context, arg GetActiveProdu
 
 const getProduct = `-- name: GetProduct :one
 
-SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, p.is_sample, ARRAY(
     SELECT pc.category_id FROM product_categories pc
     WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
 FROM products p
@@ -99,6 +101,7 @@ type GetProductRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 	CategoryIds []ulid.ID
 }
 
@@ -119,6 +122,7 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (GetProd
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.IsSample,
 		&i.CategoryIds,
 	)
 	return i, err
@@ -143,7 +147,7 @@ func (q *Queries) GetProductIDBySlug(ctx context.Context, arg GetProductIDBySlug
 const insertProduct = `-- name: InsertProduct :one
 INSERT INTO products (id, store_id, slug, title, description, status, options)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at
+RETURNING id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at, is_sample
 `
 
 type InsertProductParams struct {
@@ -178,6 +182,7 @@ func (q *Queries) InsertProduct(ctx context.Context, arg InsertProductParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.IsSample,
 	)
 	return i, err
 }
@@ -199,12 +204,12 @@ func (q *Queries) InsertProductCategories(ctx context.Context, arg InsertProduct
 }
 
 const listActiveProductsByIDs = `-- name: ListActiveProductsByIDs :many
-SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, p.is_sample, ARRAY(
     SELECT pc.category_id FROM product_categories pc
     WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
 FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(id, ord)
 CROSS JOIN LATERAL (
-  SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at FROM products pr
+  SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at, is_sample FROM products pr
   WHERE pr.id = ids.id AND pr.store_id = $2 AND pr.deleted_at IS NULL AND pr.status = 'active') p
 ORDER BY ids.ord
 `
@@ -225,6 +230,7 @@ type ListActiveProductsByIDsRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 	CategoryIds []ulid.ID
 }
 
@@ -251,6 +257,7 @@ func (q *Queries) ListActiveProductsByIDs(ctx context.Context, arg ListActivePro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.IsSample,
 			&i.CategoryIds,
 		); err != nil {
 			return nil, err
@@ -264,7 +271,7 @@ func (q *Queries) ListActiveProductsByIDs(ctx context.Context, arg ListActivePro
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, p.is_sample, ARRAY(
     SELECT pc.category_id FROM product_categories pc
     WHERE pc.store_id = p.store_id AND pc.product_id = p.id ORDER BY pc.category_id)::uuid[] AS category_ids
 FROM products p
@@ -293,6 +300,7 @@ type ListProductsRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 	CategoryIds []ulid.ID
 }
 
@@ -322,6 +330,7 @@ func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.IsSample,
 			&i.CategoryIds,
 		); err != nil {
 			return nil, err
@@ -335,7 +344,7 @@ func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]L
 }
 
 const listProductsInCategory = `-- name: ListProductsInCategory :many
-SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, ARRAY(
+SELECT p.id, p.store_id, p.slug, p.title, p.description, p.status, p.options, p.created_at, p.updated_at, p.deleted_at, p.is_sample, ARRAY(
     SELECT c.category_id FROM product_categories c
     WHERE c.store_id = p.store_id AND c.product_id = p.id ORDER BY c.category_id)::uuid[] AS category_ids
 FROM product_categories pc
@@ -366,6 +375,7 @@ type ListProductsInCategoryRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	IsSample    bool
 	CategoryIds []ulid.ID
 }
 
@@ -397,6 +407,7 @@ func (q *Queries) ListProductsInCategory(ctx context.Context, arg ListProductsIn
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.IsSample,
 			&i.CategoryIds,
 		); err != nil {
 			return nil, err
@@ -409,8 +420,36 @@ func (q *Queries) ListProductsInCategory(ctx context.Context, arg ListProductsIn
 	return items, nil
 }
 
+const listSampleIDs = `-- name: ListSampleIDs :many
+SELECT id FROM products
+WHERE store_id = $1 AND is_sample AND deleted_at IS NULL
+ORDER BY id
+LIMIT 200
+`
+
+// The store's sample products, for deleting them all (products_samples).
+func (q *Queries) ListSampleIDs(ctx context.Context, storeID ulid.ID) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, listSampleIDs, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var id ulid.ID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockProduct = `-- name: LockProduct :one
-SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at FROM products
+SELECT id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at, is_sample FROM products
 WHERE store_id = $1 AND id = $2 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -434,8 +473,28 @@ func (q *Queries) LockProduct(ctx context.Context, arg LockProductParams) (Produ
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.IsSample,
 	)
 	return i, err
+}
+
+const markSample = `-- name: MarkSample :execrows
+UPDATE products SET is_sample = true, updated_at = now()
+WHERE store_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type MarkSampleParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+// The setup wizard's template marks the sample products it adds.
+func (q *Queries) MarkSample(ctx context.Context, arg MarkSampleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markSample, arg.StoreID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const softDeleteProduct = `-- name: SoftDeleteProduct :execrows
@@ -461,7 +520,7 @@ UPDATE products
 SET slug = $1, title = $2, description = $3, status = $4,
     options = $5, updated_at = now()
 WHERE store_id = $6 AND id = $7 AND deleted_at IS NULL
-RETURNING id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at
+RETURNING id, store_id, slug, title, description, status, options, created_at, updated_at, deleted_at, is_sample
 `
 
 type UpdateProductParams struct {
@@ -496,6 +555,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.IsSample,
 	)
 	return i, err
 }
