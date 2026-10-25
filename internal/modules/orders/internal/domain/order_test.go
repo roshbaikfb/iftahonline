@@ -250,7 +250,7 @@ func TestNormalizeCode(t *testing.T) {
 // FuzzNormalizeCode: whatever a shopper types, a code that comes out is
 // eight Crockford characters.
 func FuzzNormalizeCode(f *testing.F) {
-	for _, s := range []string{"P0R1S2T3", " #p0r1 s2t3", "\x00‮", "IIIIIIII"} {
+	for _, s := range []string{"P0R1S2T3", " #p0r1 s2t3", "\x00\u202e", "IIIIIIII"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
