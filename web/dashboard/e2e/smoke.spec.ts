@@ -72,7 +72,8 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   expect(csv.split('\n').filter(Boolean)).toHaveLength(4);
   expect(csv).toContain('أحمد حسن');
 
-  // Sign out: back to the login page.
+  // Sign out from the account menu: back to the login page.
+  await page.getByLabel(/^حسابي/).click();
   await page.getByRole('button', { name: 'تسجيل الخروج' }).click();
   await expect(page.getByRole('button', { name: 'تسجيل الدخول' })).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
