@@ -14,7 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 )
 
-//go:embed assets/dist/site.css assets/dist/app.js assets/fonts/*.woff2
+//go:embed assets/dist/site.css assets/dist/checkout.css assets/dist/app.js assets/fonts/*.woff2
 var assetFiles embed.FS
 
 // AssetsPrefix is where static files are served, on every store host.
@@ -24,17 +24,20 @@ const AssetsPrefix = "/assets/"
 // be cached forever (a new build gets a new name).
 type asset struct {
 	data        []byte
+	gz          []byte // the script and stylesheets gzipped once at start-up; nil for fonts (already compressed)
 	contentType string
 }
 
-// Assets are the storefront's embedded static files: the script and the
-// fonts, served from our origin (CSP 'self'), and the base stylesheet,
-// which is inlined into pages.
+// Assets are the storefront's embedded static files: the script, the
+// fonts and the cart and checkout pages' stylesheet, served from our
+// origin (CSP 'self'), and the base stylesheet, which is inlined into
+// pages.
 type Assets struct {
-	baseCSS string
-	jsURL   string
-	fonts   map[string]string // "cairo-arabic-400" → URL
-	files   map[string]asset  // "app.3f2a9c1b.js" → file
+	baseCSS     string
+	jsURL       string
+	checkoutURL string            // checkout.css: the cart, checkout and thank-you pages only
+	fonts       map[string]string // "cairo-arabic-400" → URL
+	files       map[string]asset  // "app.3f2a9c1b.js" → file
 }
 
 // LoadAssets reads the embedded files and names them by content hash.
@@ -49,6 +52,11 @@ func LoadAssets() (*Assets, error) {
 		return nil, fmt.Errorf("web: %w", err)
 	}
 	a.jsURL = a.add("app", ".js", "text/javascript; charset=utf-8", js)
+	checkout, err := assetFiles.ReadFile("assets/dist/checkout.css")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	a.checkoutURL = a.add("checkout", ".css", "text/css; charset=utf-8", checkout)
 	fonts, err := fs.Glob(assetFiles, "assets/fonts/*.woff2")
 	if err != nil {
 		return nil, fmt.Errorf("web: %w", err)
@@ -67,7 +75,11 @@ func LoadAssets() (*Assets, error) {
 func (a *Assets) add(name, ext, contentType string, data []byte) string {
 	sum := sha256.Sum256(data)
 	file := name + "." + hex.EncodeToString(sum[:4]) + ext
-	a.files[file] = asset{data: data, contentType: contentType}
+	f := asset{data: data, contentType: contentType}
+	if strings.HasPrefix(contentType, "text/") {
+		f.gz = compress(data)
+	}
+	a.files[file] = f
 	return AssetsPrefix + file
 }
 
@@ -82,7 +94,15 @@ func (a *Assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", f.contentType)
 	h.Set("Cache-Control", "public, max-age=31536000, immutable")
 	h.Set("Cross-Origin-Resource-Policy", "same-origin")
-	if _, err := w.Write(f.data); err != nil {
+	body := f.data
+	if f.gz != nil {
+		h.Set("Vary", "Accept-Encoding")
+		if acceptsGzip(r) {
+			h.Set("Content-Encoding", "gzip")
+			body = f.gz
+		}
+	}
+	if _, err := w.Write(body); err != nil {
 		return // the client went away
 	}
 }

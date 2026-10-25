@@ -49,13 +49,20 @@ type OrderSummary struct {
 	Shipping      money.Money
 	CODFee        money.Money
 	Total         money.Money
+	// What the thank-you page says to the shopper: the first name only and
+	// where it goes, never the street (the page's link may be shared).
+	FirstName   string
+	Governorate string // ISO 3166-2
+	City        string
+	Days        *DeliveryDays // how long delivery takes, when the store says
 }
 
 // OrderLine is one line of an OrderSummary.
 type OrderLine struct {
-	Title string
-	Qty   int
-	Total money.Money
+	VariantID ulid.ID // for the line's picture
+	Title     string
+	Qty       int
+	Total     money.Money
 }
 
 // Orders places shoppers' orders and finds them again for the thank-you
@@ -363,7 +370,8 @@ func (s *Shop) cartPage(w http.ResponseWriter, r *http.Request, p *pageCtx, stat
 	if problem != 0 {
 		msg = p.l.T(problem)
 	}
-	s.writePrivate(w, r, p, status, cartPage(p, view, msg))
+	p.soft, p.cssURL = true, s.assets.checkoutURL
+	s.writePrivate(w, r, p, status, cartPage(p, view, s.cartLines(view), msg))
 }
 
 func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref string) {
@@ -391,7 +399,8 @@ func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref 
 			p.refresh, p.refreshTo = 1, payURL
 		}
 	}
-	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, o, payURL))
+	p.head, p.soft, p.cssURL = headThanks, true, s.assets.checkoutURL
+	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, s.thanksView(r.Context(), p, o, payURL)))
 }
 
 func (s *Shop) writeNotFoundPrivate(w http.ResponseWriter, r *http.Request, p *pageCtx) {

@@ -19,6 +19,7 @@ type pageCtx struct {
 	base      string // scheme://host
 	path      string // without the language prefix, e.g. /p/shirt
 	jsURL     string
+	cssURL    string // a stylesheet the page links besides the inlined one
 	font      string // preload
 	title     string
 	desc      string
@@ -30,9 +31,21 @@ type pageCtx struct {
 	challenge bool   // the page shows a Turnstile challenge
 	refresh   int    // seconds before the page reloads itself (or goes to refreshTo); 0 never
 	refreshTo string // where the refresh goes; empty: the page itself
-	compact   bool   // phones get the short header (back, brand, share, cart): the product page
+	head      head   // the short header phones get, if any
 	back      string // where the short header's back arrow goes
+	soft      bool   // the page sits on a tinted background with white cards (checkout, thank-you)
 }
+
+// head is the short header a page shows on phones instead of the full
+// one (the mockups).
+type head int
+
+const (
+	headFull     head = iota
+	headProduct       // back, brand, share, cart
+	headCheckout      // back, "checkout", a lock
+	headThanks        // the brand alone
+)
 
 // eagerImages is how many of a page's first images load eagerly, at high
 // priority: what a phone shows above the fold (a hero, or a row of two

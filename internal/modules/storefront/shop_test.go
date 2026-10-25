@@ -504,7 +504,7 @@ func TestOrderWithShipping(t *testing.T) {
 		t.Fatalf("quote without a governorate: %v", q)
 	}
 
-	form := url.Values{"variant": {variant}, "qty": {"2"}, "key": {"ship-1"}, "name": {"منى"}, "phone": {"01012345678"},
+	form := url.Values{"variant": {variant}, "qty": {"2"}, "key": {"ship-1"}, "name": {"منى أحمد"}, "phone": {"01012345678"},
 		"governorate": {"EG-ALX"}, "city": {"سموحة"}, "address": {"14 شارع فوزي معاذ"}}
 	if rec := post("/order", form, 2); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "لا نوصّل إلى هذه المحافظة حاليًا.") {
 		t.Fatalf("order outside the zones: %d", rec.Code)
@@ -518,9 +518,17 @@ func TestOrderWithShipping(t *testing.T) {
 		t.Fatalf("order: %d %s", rec.Code, rec.Body)
 	}
 	body := p.visit(t, s.host, loc).Body.String()
-	for _, want := range []string{"المجموع: <strong>900 ج.م", "الشحن: <strong>40 ج.م", "رسوم الدفع عند الاستلام: <strong>10 ج.م", "الإجمالي: <strong>950 ج.م"} {
+	for _, want := range []string{"<span>المجموع</span><span>900 ج.م</span>", "<span>الشحن</span><span>40 ج.م</span>",
+		"<span>رسوم الدفع عند الاستلام</span><span>10 ج.م</span>", "<span>الإجمالي</span><strong>950 ج.م</strong>",
+		// the first name only, the city and governorate, the zone's days
+		"شكراً يا منى، طلبك وصلنا", "التوصيل إلى: مدينة نصر، القاهرة", "خلال 2–3 أيام · مدينة نصر، القاهرة"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("thank-you lacks %q", want)
+		}
+	}
+	for _, private := range []string{"أحمد", "فوزي معاذ", "01012345678"} {
+		if strings.Contains(body, private) {
+			t.Fatalf("thank-you shows %q: its link may be shared", private)
 		}
 	}
 

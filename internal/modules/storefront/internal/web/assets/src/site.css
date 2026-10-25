@@ -333,35 +333,25 @@ main { display: block; min-block-size: 50vh; }
 .policy { max-inline-size: 48rem; margin-block: 2rem; }
 .policy p { white-space: pre-line; }
 
-/* Cart */
-.order .fld { display: grid; gap: .3rem; }
+/* Forms shared by checkout and landing pages; the cart, checkout and
+   thank-you pages load checkout.css for the rest */
+.hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.alert { padding: .75rem 1rem; border-radius: .75rem; background: #fef3c7; color: #78350f; margin-block: 0 1rem; }
+.link { background: none; border: 0; padding: 0; font: inherit; color: var(--c-primary); cursor: pointer; text-decoration: underline; }
+.order .fld { display: grid; gap: .3rem; margin-block-end: .75rem; }
+.order .fld label { font-size: .9rem; font-weight: 700; }
 .order textarea, .order input[type=text], .order input[type=tel], .order select {
-  font: inherit; padding: .6rem .7rem; border: 1px solid color-mix(in srgb, var(--c-text) 25%, transparent);
-  border-radius: var(--radius); background: var(--c-bg); color: var(--c-text); width: 100%;
+  font: inherit; padding: .6rem .75rem; min-block-size: 3rem; border: 1px solid #cbd5e1;
+  border-radius: .625rem; background: #fff; color: var(--c-text); inline-size: 100%;
 }
-.order .bad input, .order .bad select, .order .bad textarea { border-color: #b42318; }
-.order .err { color: #b42318; }
+.order .hint { font-size: .8rem; color: var(--muted); }
+.order .bad input, .order .bad select, .order .bad textarea { border: 2px solid var(--sale); }
+.order .err { color: var(--sale); font-size: .85rem; }
+.order .quote { font-weight: 600; margin: .5rem 0; }
+.order .quote.bad { color: var(--sale); }
 .order .cod { font-size: .9rem; opacity: .85; }
 .order .pay { border: 1px solid currentColor; border-radius: .5rem; padding: .5rem .75rem; margin: .75rem 0; }
 .order .pay label { display: block; padding: .25rem 0; }
 .order .pay small { display: block; opacity: .8; }
-.paid { color: #146c2e; font-weight: 600; }
-.order .quote { font-weight: 600; margin: .5rem 0; }
-.order .quote.bad { color: #b42318; }
-.hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }
-.alert { padding: .75rem 1rem; border-radius: var(--radius); background: color-mix(in srgb, var(--c-accent) 25%, transparent); }
-.lines { list-style: none; padding: 0; margin: 0 0 1rem; }
-.line { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; align-items: center; padding-block: 1rem;
-  border-block-end: 1px solid color-mix(in srgb, var(--c-text) 12%, transparent); }
-.line .what { display: grid; gap: .15rem; grid-column: 1 / -1; }
-.line .qty { display: flex; gap: .5rem; }
-.line .qty input { inline-size: 5rem; font: inherit; padding: .4rem; border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, var(--c-text) 25%, transparent); background: var(--c-bg); color: var(--c-text); }
-.line .qty .btn { padding: .4rem .9rem; }
-.line .total { justify-self: end; }
-.link { background: none; border: 0; padding: 0; font: inherit; color: var(--c-primary); cursor: pointer; text-decoration: underline; }
-.subtotal, .shipping, .cod-fee { text-align: end; margin: .25rem 0; }
-.subtotal, .order-total { font-size: 1.15rem; }
-.order-total { text-align: end; font-weight: 600; }
 .review figcaption { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
 .review blockquote { margin: 0; }

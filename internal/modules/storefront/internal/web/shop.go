@@ -253,7 +253,7 @@ func (s *Shop) product(ctx context.Context, p *pageCtx, slug string) (result, er
 		related = page.Items
 		p.tagProducts(related) // a related product's edit renews the page; a new one shows within the cache's TTL
 	}
-	p.compact, p.back = true, "/"
+	p.head, p.back = headProduct, "/"
 	if crumb != nil {
 		p.back = categoryPath(crumb.Slug)
 	}

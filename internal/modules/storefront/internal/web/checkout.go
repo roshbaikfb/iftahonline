@@ -71,12 +71,14 @@ func (f *orderForm) bad(name string) bool {
 type orderSummary struct {
 	lines    []summaryLine
 	subtotal *money.Money
+	units    int
 }
 
 type summaryLine struct {
 	title, options string
 	qty            int
 	total          money.Money
+	thumb          *thumb
 }
 
 // risk is what the limits say about a submission.
@@ -121,7 +123,7 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 		http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
 		return
 	}
-	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: cartSummary(view), card: s.cardOffered(r.Context(), false)}
+	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: s.cartSummary(view), card: s.cardOffered(r.Context(), false)}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }
 
@@ -163,7 +165,7 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 			http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
 			return
 		}
-		f.summary = cartSummary(view)
+		f.summary = s.cartSummary(view)
 		f.card = s.cardOffered(ctx, true) // placing the order decides: never from the cache
 		if f.value("pay_method") == "card" && !f.card {
 			f.problem = p.l.T(MsgErrCardUnavailable)
@@ -371,14 +373,6 @@ func phoneKey(raw string) string {
 	return d
 }
 
-func cartSummary(v app.CartView) *orderSummary {
-	sum := &orderSummary{subtotal: v.Subtotal}
-	for _, l := range v.Lines {
-		sum.lines = append(sum.lines, summaryLine{title: l.ProductTitle, options: joinOptions(l.OptionValues), qty: l.Qty, total: l.Total})
-	}
-	return sum
-}
-
 // lineSummary describes a landing page order's one line, or nothing if
 // the variant is no longer for sale (the order then says so).
 func (s *Shop) lineSummary(ctx context.Context, id ulid.ID, qty int) *orderSummary {
@@ -391,7 +385,8 @@ func (s *Shop) lineSummary(ctx context.Context, id ulid.ID, qty int) *orderSumma
 	if err != nil {
 		return nil
 	}
-	return &orderSummary{lines: []summaryLine{{title: v.ProductTitle, options: joinOptions(v.OptionValues), qty: qty, total: total}}, subtotal: &total}
+	return &orderSummary{lines: []summaryLine{{title: v.ProductTitle, options: joinOptions(v.OptionValues), qty: qty, total: total,
+		thumb: s.thumbOf(v.ImageKey)}}, subtotal: &total, units: qty}
 }
 
 // renderOrder renders the form page; with a challenge, its response
@@ -402,5 +397,6 @@ func (s *Shop) renderOrder(w http.ResponseWriter, r *http.Request, p *pageCtx, s
 	}
 	p.title, p.noindex = p.l.T(MsgCheckout)+" | "+p.v.name, true
 	p.challenge = f.challenge != ""
+	p.head, p.back, p.soft, p.cssURL = headCheckout, "/cart", true, s.assets.checkoutURL
 	s.writePrivate(w, r, p, status, orderPage(p, f))
 }

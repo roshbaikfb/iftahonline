@@ -82,7 +82,10 @@ test('home → product → landing page → one-step order, on a phone, in Arabi
   await form.getByLabel('العنوان بالتفصيل').fill('14 شارع فوزي معاذ، الدور الثالث');
   await page.getByRole('button', { name: 'اطلب الآن' }).click();
   await expect(page).toHaveURL(/\/thank-you\/[0-9A-Z]{26}$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('شكرًا لطلبك!');
+  // The first name only (its link may be shared), and where it goes.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('شكراً يا منى، طلبك وصلنا');
+  await expect(page.locator('main')).not.toContainText('أحمد');
+  await expect(page.locator('.where')).toHaveText('التوصيل إلى: سموحة، الإسكندرية');
   await expect(page.locator('.subtotal')).toContainText('450 ج.م');
   await expect(page.locator('.shipping')).toContainText('60 ج.م');
   await expect(page.locator('.cod-fee')).toContainText('10 ج.م');
@@ -101,11 +104,21 @@ test('product → cart → checkout, on a phone, in Arabic', async ({ page }) =>
 
   await page.getByRole('link', { name: 'إتمام الطلب' }).click();
   await expect(page).toHaveURL(/\/checkout$/);
+  // The summary opens on demand.
+  await expect(page.getByText('عطر العود الملكي × 1')).toBeHidden();
+  await page.getByText('ملخص الطلب (قطعة واحدة)').click();
   await expect(page.getByText('عطر العود الملكي × 1')).toBeVisible();
   await page.getByLabel('الاسم').fill('سارة علي');
   await page.getByLabel('رقم الموبايل').fill('01122223333');
+  // The totals card waits for the governorate, then fills line by line.
+  const totals = page.locator('[data-totals]');
+  await expect(totals.locator('[data-amt="shipping"]')).toHaveText('يُحسب بعد اختيار المحافظة');
   await page.getByLabel('المحافظة').selectOption({ label: 'القاهرة' });
-  await expect(page.locator('[data-quote]')).toHaveText('الشحن: 40 ج.م · رسوم الدفع عند الاستلام: 10 ج.م · الإجمالي: 500 ج.م');
+  await expect(totals.locator('[data-amt="ship_label"]')).toHaveText('الشحن إلى القاهرة');
+  await expect(totals.locator('[data-amt="shipping"]')).toHaveText('40 ج.م');
+  await expect(totals.locator('[data-amt="cod_fee"]')).toHaveText('10 ج.م');
+  await expect(totals.locator('[data-amt="total"]')).toHaveText('500 ج.م');
+  await expect(page.locator('[data-sum-total]')).toHaveText('500 ج.م');
   await page.getByLabel('المدينة / المنطقة').fill('مدينة نصر');
   await page.getByLabel('العنوان بالتفصيل').fill('12 شارع عباس العقاد');
   await page.getByRole('button', { name: 'تأكيد الطلب' }).click();

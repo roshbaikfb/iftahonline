@@ -1,26 +1,32 @@
 package web
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 )
 
-// cartPage lists the shopper's cart with forms to change it; every form
-// works without JavaScript.
-templ cartPage(p *pageCtx, v app.CartView, problem string) {
+// cartPage lists the shopper's cart as cards (picture, title, choice,
+// price, a quantity stepper, remove), then the subtotal and checkout.
+// Every form works without JavaScript: − and + are submit buttons.
+templ cartPage(p *pageCtx, v app.CartView, lines []cartLine, problem string) {
 	<section class="sec cart">
 		<h1>{ p.l.T(MsgCart) }</h1>
 		if problem != "" {
 			<p class="alert" role="alert">{ problem }</p>
 		}
-		if len(v.Lines) == 0 {
-			<p class="empty">{ p.l.T(MsgCartEmpty) }</p>
-			<p class="more"><a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a></p>
+		if len(lines) == 0 {
+			<div class="card-box empty-cart">
+				@icon("bag")
+				<p>{ p.l.T(MsgCartEmpty) }</p>
+				<a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a>
+			</div>
 		} else {
 			<ul class="lines">
-				for _, l := range v.Lines {
-					<li class="line">
+				for _, l := range lines {
+					<li class="card-box line">
+						@lineThumb(l.thumb, l.ProductTitle)
 						<div class="what">
 							<a href={ p.URL(productPath(l.ProductSlug)) }>{ l.ProductTitle }</a>
 							if len(l.OptionValues) > 0 {
@@ -28,66 +34,147 @@ templ cartPage(p *pageCtx, v app.CartView, problem string) {
 							}
 							<span class="price">{ p.l.Price(l.Price) }</span>
 							if !l.Available {
-								<span class="badge">{ p.l.T(MsgLineUnavailable) }</span>
+								<span class="warn">{ p.l.T(MsgLineUnavailable) }</span>
 							}
 						</div>
-						<form method="post" action={ p.URL("/cart/update") } class="qty">
-							<input type="hidden" name="variant" value={ l.VariantID.String() }/>
-							<label class="sr" for={ "q-" + l.VariantID.String() }>{ p.l.T(MsgQuantity) }</label>
-							<input type="number" name="qty" id={ "q-" + l.VariantID.String() } min="1" max="20" value={ strconv.Itoa(l.Qty) } inputmode="numeric"/>
-							<button class="btn" type="submit">{ p.l.T(MsgUpdate) }</button>
-						</form>
-						<form method="post" action={ p.URL("/cart/update") }>
-							<input type="hidden" name="variant" value={ l.VariantID.String() }/>
-							<input type="hidden" name="qty" value="0"/>
-							<button class="link" type="submit">{ p.l.T(MsgRemove) }</button>
-						</form>
-						<strong class="total">{ p.l.Price(l.Total) }</strong>
+						<div class="act">
+							<form method="post" action={ p.URL("/cart/update") } class="stepper">
+								<input type="hidden" name="variant" value={ l.VariantID.String() }/>
+								<button type="submit" name="qty" value={ strconv.Itoa(l.Qty - 1) } aria-label={ p.l.T(MsgLess) }>−</button>
+								<span aria-label={ p.l.T(MsgQuantity) }>{ strconv.Itoa(l.Qty) }</span>
+								<button type="submit" name="qty" value={ strconv.Itoa(min(l.Qty+1, 20)) } aria-label={ p.l.T(MsgMore) } disabled?={ l.Qty >= 20 }>+</button>
+							</form>
+							<strong class="total">{ p.l.Price(l.Total) }</strong>
+							<form method="post" action={ p.URL("/cart/update") }>
+								<input type="hidden" name="variant" value={ l.VariantID.String() }/>
+								<input type="hidden" name="qty" value="0"/>
+								<button class="link" type="submit">{ p.l.T(MsgRemove) }</button>
+							</form>
+						</div>
 					</li>
 				}
 			</ul>
-			if v.Subtotal != nil {
-				<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(*v.Subtotal) }</strong></p>
-			}
-			<a class="btn btn-block" href={ p.URL("/checkout") }>{ p.l.T(MsgCheckout) }</a>
+			<div class="card-box sums">
+				if v.Subtotal != nil {
+					<p class="row"><span>{ p.l.T(MsgSubtotal) } ({ p.l.Pieces(v.Units) })</span><strong>{ p.l.Price(*v.Subtotal) }</strong></p>
+				}
+				<p class="row muted"><span>{ p.l.T(MsgShipping) }</span><span>{ p.l.T(MsgShippingAtCheckout) }</span></p>
+				<a class="btn btn-block" href={ p.URL("/checkout") }>{ p.l.T(MsgCheckout) }</a>
+				<a class="btn-ghost" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a>
+			</div>
 		}
 	</section>
 }
 
-templ thankYouPage(p *pageCtx, o OrderSummary, payURL string) {
-	<section class="sec cart">
-		<h1>{ p.l.T(MsgThankYou) }</h1>
-		<p>{ p.l.T(MsgThankYouText) }</p>
-		<p>{ p.l.T(MsgOrderRef) }: <strong dir="ltr">{ o.Code }</strong></p>
-		if o.Card {
-			switch {
-				case o.Cancelled:
-					<p class="alert" role="alert">{ p.l.T(MsgPaymentExpired) }</p>
-				case o.PaymentStatus != PaymentAwaiting:
-					<p class="paid">{ p.l.T(MsgPaid) }</p>
-				default:
-					<p class="alert" role="status">{ p.l.T(MsgPaymentPending) }</p>
-					if payURL != "" {
-						<p><a class="btn" href={ templ.URL(payURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a></p>
-					}
+// lineThumb is a line's picture, or an empty tile.
+templ lineThumb(t *thumb, alt string) {
+	if t != nil {
+		<picture class="thumb">
+			<source type="image/avif" srcset={ t.avif }/>
+			<img src={ t.webp } width="56" height="56" alt={ alt } loading="lazy" decoding="async"/>
+		</picture>
+	} else {
+		<span class="thumb" aria-hidden="true"></span>
+	}
+}
+
+// thankYouPage is the approved mockup: a check, the shopper's first name
+// and the order number, the payment, what happens next, the summary with
+// where it goes (city and governorate only), and the way back.
+templ thankYouPage(p *pageCtx, v thanksView) {
+	<section class="thanks">
+		<div class="hello">
+			<span class="ok">
+				@icon("check")
+			</span>
+			if v.o.FirstName != "" {
+				<h1>{ fmt.Sprintf(p.l.T(MsgThanksName), v.o.FirstName) }</h1>
+			} else {
+				<h1>{ p.l.T(MsgThanksPlain) }</h1>
 			}
-		}
-		<ul class="lines">
-			for _, l := range o.Lines {
-				<li class="line">
-					<div class="what">{ l.Title } × { strconv.Itoa(l.Qty) }</div>
-					<strong class="total">{ p.l.Price(l.Total) }</strong>
-				</li>
+			<p>{ p.l.T(MsgOrderRef) } <strong dir="ltr">#{ v.o.Code }</strong></p>
+			if v.o.Card {
+				switch {
+					case v.o.Cancelled:
+						<p class="alert" role="alert">{ p.l.T(MsgPaymentExpired) }</p>
+					case v.o.PaymentStatus != PaymentAwaiting:
+						<span class="paid-chip">{ p.l.T(MsgPaidCard) } · { p.l.Price(v.o.Total) }</span>
+					default:
+						<p class="alert" role="status">{ p.l.T(MsgPaymentPending) }</p>
+						if v.payURL != "" {
+							<a class="btn" href={ templ.URL(v.payURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a>
+						}
+				}
 			}
-		</ul>
-		<p class="subtotal">{ p.l.T(MsgSubtotal) }: <strong>{ p.l.Price(o.Subtotal) }</strong></p>
-		if !o.Shipping.IsZero() {
-			<p class="shipping">{ p.l.T(MsgShipping) }: <strong>{ p.l.Price(o.Shipping) }</strong></p>
+		</div>
+		if !v.o.Cancelled {
+			<section class="card-box">
+				<h2>{ p.l.T(MsgWhatsNext) }</h2>
+				<ol class="steps">
+					<li class={ templ.KV("done", v.o.Card && v.o.PaymentStatus != PaymentAwaiting) }>
+						<span class="n">1</span>
+						<div>
+							<strong>{ p.l.T(MsgStepConfirm) }</strong>
+							if v.o.Card {
+								<small>{ p.l.T(MsgStepConfirmCard) }</small>
+							} else {
+								<small>{ p.l.T(MsgStepConfirmCOD) }</small>
+							}
+						</div>
+					</li>
+					<li>
+						<span class="n">2</span>
+						<div><strong>{ p.l.T(MsgStepPrepare) }</strong><small>{ p.l.T(MsgStepPrepareNote) }</small></div>
+					</li>
+					<li>
+						<span class="n">3</span>
+						<div><strong>{ p.l.T(MsgStepShip) }</strong><small>{ p.l.T(MsgStepShipNote) }</small></div>
+					</li>
+					<li>
+						<span class="n">4</span>
+						<div>
+							<strong>{ p.l.T(MsgStepDeliver) }</strong>
+							if v.o.Days != nil && v.place != "" {
+								<small>{ p.l.DeliveryDays(v.o.Days.Min, v.o.Days.Max) } · { v.place }</small>
+							} else if v.place != "" {
+								<small>{ v.place }</small>
+							}
+						</div>
+					</li>
+				</ol>
+			</section>
 		}
-		if !o.CODFee.IsZero() {
-			<p class="cod-fee">{ p.l.T(MsgCODFee) }: <strong>{ p.l.Price(o.CODFee) }</strong></p>
-		}
-		<p class="order-total">{ p.l.T(MsgTotal) }: <strong>{ p.l.Price(o.Total) }</strong></p>
-		<p class="more"><a class="btn" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a></p>
+		<section class="card-box sums">
+			<h2>{ p.l.T(MsgOrderSummary) }</h2>
+			<ul class="mini">
+				for _, l := range v.o.Lines {
+					<li>
+						@lineThumb(v.thumbs[l.VariantID], l.Title)
+						<span class="t">{ l.Title } × { strconv.Itoa(l.Qty) }</span>
+						<span>{ p.l.Price(l.Total) }</span>
+					</li>
+				}
+			</ul>
+			<p class="row subtotal"><span>{ p.l.T(MsgSubtotal) }</span><span>{ p.l.Price(v.o.Subtotal) }</span></p>
+			if !v.o.Shipping.IsZero() {
+				<p class="row shipping muted"><span>{ p.l.T(MsgShipping) }</span><span>{ p.l.Price(v.o.Shipping) }</span></p>
+			}
+			if !v.o.CODFee.IsZero() {
+				<p class="row cod-fee muted"><span>{ p.l.T(MsgCODFee) }</span><span>{ p.l.Price(v.o.CODFee) }</span></p>
+			}
+			<p class="row order-total"><span>{ p.l.T(MsgTotal) }</span><strong>{ p.l.Price(v.o.Total) }</strong></p>
+			if v.place != "" {
+				<p class="where">{ p.l.T(MsgDeliverTo) } { v.place }</p>
+			}
+		</section>
+		<div class="thanks-actions">
+			<a class="btn btn-block" href={ p.URL("/") }>{ p.l.T(MsgContinueShopping) }</a>
+			if v.whatsApp != "" {
+				<a class="wa-ask" href={ v.whatsApp } rel="noopener" target="_blank">
+					@icon("chat")
+					<span>{ p.l.T(MsgOrderQuestion) }</span>
+				</a>
+			}
+		</div>
 	</section>
 }
