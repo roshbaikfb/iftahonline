@@ -11,6 +11,7 @@ RETURNING i.variant_id, i.tracked, i.on_hand, i.reserved, v.product_id;
 -- The race-safe step (ADR-0011): the row lock serializes concurrent
 -- reservations of one variant, and the WHERE re-checks availability on
 -- the locked row. No row means the variant is not sellable or short.
+-- Sample products (ADR-0034) are never sellable.
 UPDATE inventory_levels AS i
 SET reserved = i.reserved + CASE WHEN i.tracked THEN @qty::int ELSE 0 END, updated_at = now()
 WHERE i.store_id = @store_id AND i.variant_id = @variant_id
@@ -18,7 +19,7 @@ WHERE i.store_id = @store_id AND i.variant_id = @variant_id
   AND EXISTS (
     SELECT 1 FROM variants v JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
     WHERE v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
-      AND p.deleted_at IS NULL AND p.status = 'active')
+      AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample)
 RETURNING i.tracked, (i.on_hand - i.reserved)::int AS available,
   (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id;
 

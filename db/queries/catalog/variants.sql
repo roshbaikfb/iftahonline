@@ -53,13 +53,14 @@ CROSS JOIN LATERAL (
 ORDER BY ids.ord, v.position, v.id;
 
 -- name: GetSellableVariant :one
+-- Sample products (ADR-0034) are shown but never sellable.
 SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
        v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved
 FROM variants v
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
 WHERE v.store_id = @store_id AND v.id = @id AND v.deleted_at IS NULL
-  AND p.deleted_at IS NULL AND p.status = 'active';
+  AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample;
 
 -- name: ListSellableVariants :many
 -- GetSellableVariant for many IDs (a cart), one primary-key lookup per
@@ -78,5 +79,5 @@ LEFT JOIN LATERAL (
   WHERE pi.store_id = v.store_id AND pi.product_id = v.product_id AND pi.status = 'ready'
   ORDER BY pi.position, pi.id LIMIT 1
 ) img ON true
-WHERE p.deleted_at IS NULL AND p.status = 'active'
+WHERE p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
 ORDER BY ids.ord;

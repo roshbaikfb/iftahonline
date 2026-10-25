@@ -636,6 +636,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/products/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete the starter template's sample products
+         * @description Permission: catalog.manage. Deletes every product marked `sample`,
+         *     as deleteProduct deletes one; the merchant's own products are left
+         *     alone. Idempotent: with none left it deletes 0.
+         */
+        delete: operations["deleteSampleProducts"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/products/search": {
         parameters: {
             query?: never;
@@ -2629,6 +2653,12 @@ export interface components {
             category_ids: components["schemas"]["ULID"][];
             /** @description In position order; only `ready` images have `urls`. */
             images: components["schemas"]["ProductImage"][];
+            /**
+             * @description Added by the setup wizard's starter template (ADR-0034): shown on
+             *     the storefront marked as a sample, never sellable, deleted with
+             *     deleteSampleProducts. Absent means false.
+             */
+            sample?: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -4458,6 +4488,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSampleProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many were deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: number;
+                    };
                 };
             };
             default: components["responses"]["Problem"];

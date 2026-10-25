@@ -628,3 +628,62 @@ func TestCrossTenant(t *testing.T) {
 	}
 	unchanged(t)
 }
+
+// The starter template's samples (ADR-0034) are deleted in one go, only
+// the caller's, and only with catalog.manage.
+func TestDeleteSampleProducts(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, b := f.storeA, f.storeB
+	ctxA := tenant.WithStore(t.Context(), a)
+	sample := func(ctx context.Context, slug string) {
+		t.Helper()
+		if _, err := f.svc.EnsureSampleProduct(ctx, app.SampleProduct{Product: domain.ProductInput{Slug: slug, Title: "عينة", Status: "active",
+			Variants: []domain.VariantInput{{PriceMinor: 100}}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sample(ctxA, "sample-a1")
+	sample(ctxA, "sample-a2")
+	sample(f.ctxB, "sample-b")
+	bSamples := func(tb testing.TB) {
+		tb.Helper()
+		p, err := f.svc.ListProducts(f.ctxB, app.ProductQuery{})
+		n := 0
+		for _, it := range p.Items {
+			if it.Sample {
+				n++
+			}
+		}
+		if err != nil || n != 1 {
+			tb.Errorf("store B's samples = %d, %v", n, err)
+		}
+	}
+
+	// The list marks them.
+	code, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products"), tokOwnerA, ""))
+	marked := 0
+	for _, it := range page["items"].([]any) {
+		if it.(map[string]any)["sample"] == true {
+			marked++
+		}
+	}
+	if code != http.StatusOK || marked != 2 {
+		t.Fatalf("listProducts = %d, %d marked", code, marked)
+	}
+
+	if code, body := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/samples"), tokSupportA, "")); code != http.StatusForbidden {
+		t.Fatalf("support deletes samples = %d %v", code, body)
+	}
+	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "deleteSampleProducts",
+		Request: req(t, http.MethodDelete, storePath(b, "/products/samples"), tokOwnerA, ""), Unchanged: bSamples})
+
+	code, body := f.do(t, req(t, http.MethodDelete, storePath(a, "/products/samples"), tokOwnerA, ""))
+	if code != http.StatusOK || body["deleted"] != float64(2) {
+		t.Fatalf("deleteSampleProducts = %d %v", code, body)
+	}
+	if code, body = f.do(t, req(t, http.MethodDelete, storePath(a, "/products/samples"), tokOwnerA, "")); code != http.StatusOK || body["deleted"] != float64(0) {
+		t.Fatalf("again = %d %v", code, body)
+	}
+	bSamples(t)
+}

@@ -369,6 +369,9 @@ main { display: block; min-block-size: 50vh; }
 .review figcaption { font-size: .85rem; opacity: .75; margin-block-start: .5rem; }
 .review blockquote { margin: 0; }
 
+/* A sample product (ADR-0034) says it cannot be ordered. */
+.pd-buy .note { margin: .5rem 0 0; font-size: .9rem; opacity: .8; }
+
 /* Looks (ADR-0034): the layout chosen in the setup wizard. No look keeps
    the original layout. */
 [data-look="classic"] .brand { order: -1; flex: 1 1 100%; justify-content: center; margin: 0; padding-block-start: .75rem; }
