@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "activity": "home",
+  "accent": "#15803d",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "بيتك أجمل",
+    "subheading": "ديكور ومستلزمات مطبخ ومفارش بلمسة دافية"
+  },
+  "categories": [
+    {
+      "slug": "decor",
+      "name": "ديكور",
+      "image": "home-1"
+    },
+    {
+      "slug": "kitchen",
+      "name": "مطبخ",
+      "image": "home-2"
+    },
+    {
+      "slug": "bedding",
+      "name": "مفارش",
+      "image": "home-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-scented-candle",
+      "title": "شمعة معطرة",
+      "description": "شمعة صويا برائحة هادئة تدوم 40 ساعة.",
+      "category": "decor",
+      "prices": {
+        "EGP": 19900,
+        "SAR": 3500,
+        "AED": 3500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-ceramic-vase",
+      "title": "مزهرية سيراميك",
+      "description": "سيراميك مصنوع يدويًا بلون هادئ.",
+      "category": "decor",
+      "prices": {
+        "EGP": 34900,
+        "SAR": 5500,
+        "AED": 5500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-glass-cups",
+      "title": "طقم أكواب زجاج",
+      "description": "6 أكواب زجاج متين للاستخدام اليومي.",
+      "category": "kitchen",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-cutting-board",
+      "title": "لوح تقطيع خشب",
+      "description": "خشب زان متين وسهل التنظيف.",
+      "category": "kitchen",
+      "prices": {
+        "EGP": 24900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-cotton-sheets",
+      "title": "طقم ملاية سرير قطن",
+      "description": "قطن 100٪، ملاية وكيسين مخدة.",
+      "category": "bedding",
+      "prices": {
+        "EGP": 79900,
+        "SAR": 11900,
+        "AED": 11900
+      },
+      "stock": 20,
+      "option": {
+        "name": "المقاس",
+        "values": [
+          "سرير مفرد",
+          "سرير مزدوج"
+        ]
+      }
+    },
+    {
+      "slug": "sample-cushion",
+      "title": "وسادة ديكور",
+      "description": "قماش ناعم وحشو مريح.",
+      "category": "bedding",
+      "prices": {
+        "EGP": 17900,
+        "SAR": 2900,
+        "AED": 2900
+      },
+      "stock": 20
+    }
+  ]
+}

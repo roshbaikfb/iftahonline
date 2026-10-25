@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "activity": "beauty",
+  "accent": "#be185d",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "جمالك يبدأ من هنا",
+    "subheading": "عناية بالبشرة والشعر ومكياج بمكونات لطيفة"
+  },
+  "categories": [
+    {
+      "slug": "skincare",
+      "name": "العناية بالبشرة",
+      "image": "beauty-1"
+    },
+    {
+      "slug": "makeup",
+      "name": "مكياج",
+      "image": "beauty-2"
+    },
+    {
+      "slug": "haircare",
+      "name": "العناية بالشعر",
+      "image": "beauty-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-gentle-cleanser",
+      "title": "غسول وجه لطيف",
+      "description": "ينظف البشرة من غير ما يجففها، مناسب للاستخدام اليومي.",
+      "category": "skincare",
+      "prices": {
+        "EGP": 24900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-daily-moisturizer",
+      "title": "كريم ترطيب يومي",
+      "description": "ترطيب خفيف يمتص بسرعة ولا يترك لمعة.",
+      "category": "skincare",
+      "prices": {
+        "EGP": 32900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-matte-lipstick",
+      "title": "أحمر شفاه مطفي",
+      "description": "لون ثابت لساعات وملمس ناعم.",
+      "category": "makeup",
+      "prices": {
+        "EGP": 19900,
+        "SAR": 3500,
+        "AED": 3500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-volume-mascara",
+      "title": "ماسكارا لتكثيف الرموش",
+      "description": "تكثيف وتطويل من غير تكتل.",
+      "category": "makeup",
+      "prices": {
+        "EGP": 22900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-argan-shampoo",
+      "title": "شامبو بزيت الأرجان",
+      "description": "يغذي الشعر ويقلل التقصف.",
+      "category": "haircare",
+      "prices": {
+        "EGP": 27900,
+        "SAR": 4500,
+        "AED": 4500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-hair-oil",
+      "title": "زيت شعر طبيعي",
+      "description": "خلطة زيوت طبيعية لشعر لامع وصحي.",
+      "category": "haircare",
+      "prices": {
+        "EGP": 21900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    }
+  ]
+}

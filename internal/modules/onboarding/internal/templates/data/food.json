@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "activity": "food",
+  "accent": "#b45309",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "طعم البيت الأصلي",
+    "subheading": "تمور ومكسرات وعسل وتوابل مختارة بعناية"
+  },
+  "categories": [
+    {
+      "slug": "dates-nuts",
+      "name": "تمور ومكسرات",
+      "image": "food-1"
+    },
+    {
+      "slug": "honey",
+      "name": "عسل ومربى",
+      "image": "food-2"
+    },
+    {
+      "slug": "spices",
+      "name": "توابل",
+      "image": "food-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-sukkari-dates",
+      "title": "تمر سكري فاخر",
+      "description": "تمر طري وحلو، علبة نص كيلو.",
+      "category": "dates-nuts",
+      "prices": {
+        "EGP": 24900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-mixed-nuts",
+      "title": "مكسرات مشكلة محمصة",
+      "description": "تحميص طازج كل أسبوع، علبة 250 جرام.",
+      "category": "dates-nuts",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-natural-honey",
+      "title": "عسل نحل طبيعي",
+      "description": "عسل صافي من مناحل مختارة، برطمان نص كيلو.",
+      "category": "honey",
+      "prices": {
+        "EGP": 34900,
+        "SAR": 5500,
+        "AED": 5500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-strawberry-jam",
+      "title": "مربى فراولة منزلي",
+      "description": "فراولة طازجة وسكر أقل.",
+      "category": "honey",
+      "prices": {
+        "EGP": 11900,
+        "SAR": 1900,
+        "AED": 1900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-grill-spices",
+      "title": "خلطة توابل للمشويات",
+      "description": "خلطة متوازنة للفراخ واللحوم.",
+      "category": "spices",
+      "prices": {
+        "EGP": 8900,
+        "SAR": 1500,
+        "AED": 1500
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-ground-cumin",
+      "title": "كمون مطحون",
+      "description": "كمون نقي مطحون طازج.",
+      "category": "spices",
+      "prices": {
+        "EGP": 6900,
+        "SAR": 1200,
+        "AED": 1200
+      },
+      "stock": 20
+    }
+  ]
+}

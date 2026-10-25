@@ -72,10 +72,12 @@ the theme, catalog and shipping belong to others (CLAUDE.md rule 2)?
 
 ## Consequences
 
-- The first step ships the module, the endpoints and the job with a
-  no-op `Templates`: a choice becomes `ready` with no version. The
-  templates themselves, the sample flag on products and their deletion
-  come in the second step; the dashboard's wizard in the third.
+- The work ships in three steps: the module, endpoints and job (with no
+  templates yet); the templates, the looks and sample products; the
+  dashboard's wizard.
+- Sample pictures are drawings rendered to JPEG and embedded (about
+  400 KB for 24). They go through the media pipeline like any upload,
+  so SVG never reaches it.
 - Identity depends on the onboarding module's `Starter`, as it depends
   on tenancy's `Service`; onboarding depends on neither.
 - One more public, unauthenticated endpoint. It reveals only whether an

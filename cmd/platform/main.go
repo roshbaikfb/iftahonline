@@ -256,14 +256,24 @@ func newIdentity(c clients, ten *tenancy.Module, onb *onboarding.Module) (*ident
 	})
 }
 
-// newOnboarding builds the setup wizard module. The starter templates it
-// applies arrive with ADR-0034's second step; until then it applies none.
-func newOnboarding(c clients) (*onboarding.Module, error) {
+// newOnboarding builds the setup wizard module (ADR-0034). The worker
+// passes the catalog and storefront, through which it applies starter
+// templates; the api role, which only enqueues them, passes nil.
+func newOnboarding(c clients, ten *tenancy.Module, cat *catalog.Module, shop *storefront.Module) (*onboarding.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
 		return nil, err
 	}
-	return onboarding.New(onboarding.Deps{Pool: c.pool, Jobs: inserter, Audit: identity.NewAuditRecorder(c.ids)})
+	d := onboarding.Deps{Pool: c.pool, Jobs: inserter, Audit: identity.NewAuditRecorder(c.ids)}
+	if cat != nil && shop != nil && ten != nil {
+		stores := ten.Service()
+		d.Catalog, d.Storefront = cat.Starter(), shop.Starter()
+		d.Currency = func(ctx context.Context) (money.Currency, error) {
+			st, err := stores.GetStore(ctx)
+			return st.Currency, err
+		}
+	}
+	return onboarding.New(d)
 }
 
 func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
@@ -421,7 +431,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	onb, err := newOnboarding(c)
+	onb, err := newOnboarding(c, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -664,13 +674,6 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err = ten.RegisterWorkers(workers); err != nil {
 		return err
 	}
-	onb, err := newOnboarding(c)
-	if err != nil {
-		return err
-	}
-	if err = onb.RegisterWorkers(workers); err != nil {
-		return err
-	}
 	cat, err := newCatalog(c, ten)
 	if err != nil {
 		return err
@@ -683,6 +686,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	if err = shop.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	onb, err := newOnboarding(c, ten, cat, shop)
+	if err != nil {
+		return err
+	}
+	if err = onb.RegisterWorkers(workers); err != nil {
 		return err
 	}
 	hooks, err := newWebhooks(c)
