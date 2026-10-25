@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
@@ -97,6 +98,27 @@ func NewFulfilment(d ShopDeps) (Payments, error) {
 		return nil, err
 	}
 	return svc, nil
+}
+
+// SalesSubscriber is the event bus subscriber name of the bestsellers
+// counter (NewSalesCounter).
+const SalesSubscriber = "orders.count_sales"
+
+// NewSalesCounter builds the bestsellers' counter (ADR-0033): subscribe it
+// to EventOrderStatusChanged. It brings the counts in line with the
+// order's current status, so retries and late deliveries are harmless.
+func NewSalesCounter(d ShopDeps) (eventbus.Handler, error) {
+	svc, err := withoutPermissions(d)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context, del eventbus.Delivery) error {
+		ev, err := eventbus.Decode[OrderStatusChanged](del)
+		if err != nil {
+			return river.JobCancel(err) // retrying cannot fix a payload that does not decode
+		}
+		return svc.CountSales(ctx, ev.OrderID)
+	}, nil
 }
 
 // withoutPermissions builds the service for roles that act for shoppers

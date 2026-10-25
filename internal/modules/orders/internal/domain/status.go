@@ -116,3 +116,14 @@ func Transition(from, to Status) (Step, error) {
 
 // Final reports whether no transition leaves s.
 func (s Status) Final() bool { return len(transitions()[s]) == 0 }
+
+// CountsAsSale reports whether an order in status s counts towards the
+// store's bestsellers (ADR-0033): from its confirmation until it is
+// cancelled, fails delivery or comes back.
+func CountsAsSale(s Status) bool {
+	switch s {
+	case StatusConfirmed, StatusReadyToShip, StatusShipped, StatusDelivered:
+		return true
+	}
+	return false
+}

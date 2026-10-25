@@ -177,6 +177,7 @@ type clients struct {
 	// watchOrders handles orders.order.placed for payments; the worker
 	// sets it once the payments module is built.
 	watchOrders *lateHandler
+	countSales  *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -219,7 +220,12 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderPlaced, payments.WatchOrdersSubscriber, watch.Handle); err != nil {
 		return clients{}, err
 	}
-	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch}, nil
+	// Bestsellers follow orders' statuses (ADR-0033).
+	sales := &lateHandler{}
+	if err = bus.Subscribe(orders.EventOrderStatusChanged, orders.SalesSubscriber, sales.Handle); err != nil {
+		return clients{}, err
+	}
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -685,6 +691,11 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.watchOrders.Set(pay.OrderPlacedHandler())
+	counter, err := orders.NewSalesCounter(orderDeps)
+	if err != nil {
+		return err
+	}
+	c.countSales.Set(counter)
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
 		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
 	}); err != nil {

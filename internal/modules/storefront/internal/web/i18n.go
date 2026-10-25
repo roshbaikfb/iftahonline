@@ -233,6 +233,7 @@ const (
 	MsgCourier
 	MsgOrderNo
 	MsgKeepNumber
+	MsgBestsellers
 	msgCount
 )
 
@@ -423,6 +424,7 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgCourier:            {"شركة الشحن", "The courier"},
 	MsgOrderNo:            {"طلب رقم", "Order"},
 	MsgKeepNumber:         {"احتفظ برقم الطلب لتتبّعه في أي وقت.", "Keep the order number to track it any time."},
+	MsgBestsellers:        {"الأكثر مبيعاً", "Bestsellers"},
 }
 
 // T returns the message in l.

@@ -111,7 +111,14 @@ type Shop interface {
 	// usual format), without its lines; anything else is
 	// ErrOrderNotFound, whichever part was wrong.
 	Track(ctx context.Context, code, phone string) (Order, error)
+	// Bestsellers returns the store's products by units sold in
+	// confirmed orders over the last 30 days, most first, at most limit
+	// (≤ MaxBestsellers).
+	Bestsellers(ctx context.Context, limit int) ([]ulid.ID, error)
 }
+
+// MaxBestsellers is the most products Bestsellers returns.
+const MaxBestsellers = app.MaxBestsellers
 
 var _ Shop = (*app.Service)(nil)
 
