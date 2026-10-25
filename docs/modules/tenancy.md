@@ -9,9 +9,9 @@ Isolation rules: [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 
 | Symbol | Purpose |
 |---|---|
-| `Service` | Use cases on the store in `ctx`: `CreateStoreTx`, `GetStore`, `UpdateSettings`, `SetStatus`, and the domain operations |
+| `Service` | Use cases on the store in `ctx`: `CreateStoreTx`, `GetStore`, `UpdateSettings`, `SetStatus`, and the domain operations; and `SlugAvailability(ctx, slug)`, which needs no store (identity's sign-up form asks it) |
 | `HostResolver.Resolve(ctx, host)` | Maps a raw `Host` header to `Resolution{StoreID, Status}`, or returns `ErrUnknownHost` |
-| `Store`, `NewStore`, `StoreSettings`, `Domain`, `Resolution` | DTOs (aliases of the domain types) |
+| `Store`, `NewStore`, `StoreSettings`, `Domain`, `Resolution`, `SlugAvailability` | DTOs (aliases of the domain types) |
 | `Module.Mount` | Registers the HTTP API. It needs identity's membership middleware |
 | `Module.RegisterWorkers` | Registers the module's jobs with the worker |
 | `Module.ListenInvalidations` | Run by each storefront instance to receive cache invalidations |

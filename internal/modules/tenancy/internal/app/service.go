@@ -289,3 +289,25 @@ func (s *Service) invalidate(ctx context.Context, tx pgx.Tx, hosts ...string) er
 	}
 	return nil
 }
+
+// SlugAvailability says whether a new store could take slug. It needs no
+// tenant: sign-up asks before the store exists. It reads the hosts
+// directly, not through the resolver's caches, so the answer is current.
+func (s *Service) SlugAvailability(ctx context.Context, raw string) (domain.SlugAvailability, error) {
+	slug, reason := domain.CheckSlug(raw)
+	if reason != "" {
+		return domain.SlugAvailability{Slug: slug, Reason: reason}, nil
+	}
+	var found bool
+	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		_, found, txErr = store.ResolveHost(ctx, tx, domain.SubdomainHost(slug, s.baseDomain))
+		return txErr
+	})
+	if err != nil {
+		return domain.SlugAvailability{}, err
+	}
+	if found {
+		return domain.SlugAvailability{Slug: slug, Reason: "taken"}, nil
+	}
+	return domain.SlugAvailability{Slug: slug, Available: true}, nil
+}

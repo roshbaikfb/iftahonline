@@ -135,6 +135,24 @@ func checkSlug(s string) (errs.FieldError, bool) {
 	return errs.FieldError{}, true
 }
 
+// CheckSlug normalizes a slug as a new store's is, and says why it
+// cannot be used: "invalid", "reserved", or "" when it may be (if no
+// store has it).
+func CheckSlug(raw string) (slug, reason string) {
+	slug = strings.ToLower(strings.TrimSpace(raw))
+	if fe, ok := checkSlug(slug); !ok {
+		return slug, fe.Code
+	}
+	return slug, ""
+}
+
+// SlugAvailability is the sign-up form's answer for an address.
+type SlugAvailability struct {
+	Slug      string
+	Available bool
+	Reason    string // invalid, reserved, taken
+}
+
 // SubdomainHost is the platform host for a slug.
 func SubdomainHost(slug, baseDomain string) string { return slug + "." + baseDomain }
 
