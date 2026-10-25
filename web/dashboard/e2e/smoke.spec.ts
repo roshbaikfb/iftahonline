@@ -19,7 +19,8 @@ test('the login page renders build info fetched through the generated client', a
   const response = await page.goto('/');
   expect(response?.status()).toBe(200);
   expect(response?.headers()['content-security-policy']).toContain("script-src 'self'");
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم التاجر');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('تسجيل الدخول');
+  await expect(page.getByText('لوحة التاجر')).toBeVisible();
   await expect(page.getByTestId('build-info')).toContainText('go1.');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
@@ -35,7 +36,8 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
 
   await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/orders$/);
-  await expect(page.getByRole('link', { name: 'متجر منى' })).toBeVisible();
+  await expect(page.locator('.top .store-name')).toHaveText('متجر منى');
+  await expect(page.getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
   const rows = page.locator('table.orders tbody tr');
   await expect(rows).toHaveCount(3);
   await expect(rows.filter({ hasText: 'مؤكد' })).toHaveCount(1);
