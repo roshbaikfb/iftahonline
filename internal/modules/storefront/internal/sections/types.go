@@ -30,7 +30,7 @@ const MaxGridLimit = 24
 // ProductGrid shows products as cards.
 type ProductGrid struct {
 	Title      string    `json:"title"`
-	Source     string    `json:"source"` // newest, category or manual
+	Source     string    `json:"source"` // newest, bestsellers, category or manual
 	CategoryID *ulid.ID  `json:"category_id"`
 	ProductIDs []ulid.ID `json:"product_ids"`
 	Limit      int       `json:"limit"`

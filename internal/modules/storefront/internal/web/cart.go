@@ -82,6 +82,9 @@ type Orders interface {
 	// Track finds the order a shopper names by its code and phone;
 	// ErrOrderNotFound whichever part was wrong.
 	Track(ctx context.Context, code, phone string) (Tracking, error)
+	// Bestsellers returns the store's products by units sold in
+	// confirmed orders over the last 30 days, most first.
+	Bestsellers(ctx context.Context, limit int) ([]ulid.ID, error)
 }
 
 // Tracking is what order tracking shows of an order: where it stands and

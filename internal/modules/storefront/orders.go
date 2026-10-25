@@ -149,6 +149,10 @@ func (o shopOrders) Track(ctx context.Context, code, phone string) (web.Tracking
 	return t, nil
 }
 
+func (o shopOrders) Bestsellers(ctx context.Context, limit int) ([]ulid.ID, error) {
+	return o.shop.Bestsellers(ctx, min(limit, orders.MaxBestsellers))
+}
+
 func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSummary, error) {
 	id, err := ulid.Parse(ref)
 	if err != nil {

@@ -266,6 +266,11 @@ type OrderItem struct {
 	TotalMinor     int64
 }
 
+type OrderSalesCounted struct {
+	StoreID ulid.ID
+	OrderID ulid.ID
+}
+
 type Payment struct {
 	ID            ulid.ID
 	StoreID       ulid.ID
@@ -359,6 +364,13 @@ type ProductImage struct {
 	FailureReason string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type ProductSale struct {
+	StoreID   ulid.ID
+	ProductID ulid.ID
+	Day       pgtype.Date
+	Units     int32
 }
 
 type RiverJob struct {

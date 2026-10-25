@@ -114,3 +114,17 @@ func TestFinalAndParse(t *testing.T) {
 		t.Errorf("message %q", err.Error())
 	}
 }
+
+// TestCountsAsSale: an order counts towards bestsellers from its
+// confirmation until it is cancelled, fails delivery or comes back.
+func TestCountsAsSale(t *testing.T) {
+	t.Parallel()
+	for s, want := range map[domain.Status]bool{
+		domain.StatusPending: false, domain.StatusConfirmed: true, domain.StatusReadyToShip: true, domain.StatusShipped: true,
+		domain.StatusDelivered: true, domain.StatusCancelled: false, domain.StatusFailedDelivery: false, domain.StatusReturned: false,
+	} {
+		if got := domain.CountsAsSale(s); got != want {
+			t.Errorf("%s: %v, want %v", s, got, want)
+		}
+	}
+}

@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.iftahonline.com/storefront/product_grid.json",
   "title": "Product grid",
-  "description": "Products as cards: the newest, a category's, or a hand-picked list.",
+  "description": "Products as cards: the newest, the bestsellers (confirmed orders, last 30 days; the newest until 4 products have sold), a category's, or a hand-picked list.",
   "type": "object",
   "additionalProperties": false,
   "required": ["source"],
   "properties": {
     "title": { "$ref": "defs.json#/$defs/title" },
-    "source": { "enum": ["newest", "category", "manual"] },
+    "source": { "enum": ["newest", "bestsellers", "category", "manual"] },
     "category_id": { "$ref": "defs.json#/$defs/id" },
     "product_ids": {
       "type": "array",

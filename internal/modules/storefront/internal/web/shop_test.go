@@ -280,11 +280,29 @@ type fakeOrders struct {
 }
 
 type orderLog struct {
-	mu       sync.Mutex
-	reqs     []web.OrderRequest
-	err      error             // returned by the next PlaceOrder
-	summary  *web.OrderSummary // what the thank-you page shows, when set
-	tracking *web.Tracking     // what tracking finds, when set
+	mu        sync.Mutex
+	reqs      []web.OrderRequest
+	err       error             // returned by the next PlaceOrder
+	summary   *web.OrderSummary // what the thank-you page shows, when set
+	tracking  *web.Tracking     // what tracking finds, when set
+	best      []ulid.ID         // the bestsellers, most first
+	bestErr   error
+	bestCalls int
+}
+
+// Bestsellers returns the log's bestsellers (none unless set).
+func (f fakeOrders) Bestsellers(_ context.Context, limit int) ([]ulid.ID, error) {
+	if f.log == nil {
+		return nil, nil
+	}
+	f.log.mu.Lock()
+	defer f.log.mu.Unlock()
+	f.log.bestCalls++
+	ids := f.log.best
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	return ids, f.log.bestErr
 }
 
 // trackCode and trackPhone find the fake order on the tracking page.

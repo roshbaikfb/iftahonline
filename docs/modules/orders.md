@@ -15,6 +15,7 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `TransitionError`, `ErrInvalidTransition`, `ErrOrderNotFound`, `ErrIdempotencyKeyReused`, `ErrVersionConflict` | Errors |
 | `OrderPlaced`, `OrderStatusChanged`, `EventOrderPlaced`, `EventOrderStatusChanged` | Events the module publishes |
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
+| `Shop.Bestsellers(ctx, limit)` | Product IDs by units sold in confirmed orders over the last 30 days, most first, ≤ `MaxBestsellers` (48) |
 | `Shop.Track(ctx, code, phone)` | Order tracking: the order a shopper names by its 8-character code and phone (any usual format), read through that phone's recent orders (`orders_store_phone`) and matched by code; anything else is `ErrOrderNotFound`, whichever part was wrong |
 | `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)) |
 
@@ -46,6 +47,10 @@ The module uses these other modules, each through its `api.go`:
 | `orders.order.placed` (`order_id`, `source`) | An order is placed |
 | `orders.order.status_changed` (`order_id`, `from`, `to`) | Any transition |
 
+The module subscribes to its own `orders.order.status_changed` with
+`orders.count_sales` (`NewSalesCounter`, the worker): bestsellers follow
+each order's current status ([ADR-0033](../adr/0033-shop-search-and-bestsellers.md)).
+
 ## Tables
 
 All are tenant tables under RLS. The first three are partitioned by
@@ -56,6 +61,8 @@ month on the order's creation time, which its ULID encodes.
 | `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal + shipping + cod_fee`, all fixed at placement. Indexes per list driver: status, phone, customer. |
 | `order_items` | Copied titles and prices. Primary key on the order's partition key. |
 | `order_events` | The timeline; append-only. `actor` names a system that made a move (`carrier:bosta`). |
+| `product_sales` | Bestsellers: units per `(store_id, product_id, day)` from confirmed orders, the day being the order's; index `(store_id, day)`; days older than 40 pruned (00037) |
+| `order_sales_counted` | Which orders are counted, so counting is idempotent (00037) |
 | `order_idempotency` | `(store_id, key)` → fingerprint and order. Kept a week, purged per store by keyed orders. |
 
 ## HTTP API (tag `orders`)

@@ -16,6 +16,11 @@ import (
 // beyond it render empty.
 const maxCategoryGrids = 6
 
+// minBestsellers is how many products must have sold (and still be for
+// sale) before a bestsellers grid shows them; until then it shows the
+// newest, titled "new arrivals" (ADR-0033).
+const minBestsellers = 4
+
 // sectionView is a section with the data it shows.
 type sectionView struct {
 	id        string
@@ -63,14 +68,15 @@ type countdownView struct {
 }
 
 // loadSections decodes a page's sections and fetches what they show in
-// a bounded number of catalog calls: one for every product picked by
-// ID, one for the newest products, one per category grid (at most
-// maxCategoryGrids). Products that are gone or not active simply do not
-// appear.
+// a bounded number of calls: the bestsellers' IDs from orders (when a
+// grid shows them), then one catalog call for every product picked by
+// ID (bestsellers included), one for the newest products, one per
+// category grid (at most maxCategoryGrids). Products that are gone or
+// not active simply do not appear.
 func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Section, now time.Time) ([]sectionView, error) {
 	decoded := make([]any, len(secs))
 	var ids []ulid.ID
-	newest := 0
+	newest, bestLimit := 0, 0
 	var cats []ulid.ID
 	for i, sec := range secs {
 		v, err := sections.Decode(sec.Type, sec.Settings)
@@ -94,12 +100,16 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 				if c.CategoryID != nil && len(cats) < maxCategoryGrids && !containsID(cats, *c.CategoryID) {
 					cats = append(cats, *c.CategoryID)
 				}
+			case "bestsellers":
+				bestLimit = max(bestLimit, c.Limit)
 			default:
 				newest = max(newest, c.Limit)
 			}
 		}
 	}
 
+	best := s.bestsellerIDs(ctx, bestLimit)
+	ids = append(ids, best...)
 	byID := map[ulid.ID]catalog.StorefrontProduct{}
 	if len(ids) > 0 {
 		ps, err := s.catalog.ProductsByIDs(ctx, ids)
@@ -109,6 +119,15 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 		for _, pr := range ps {
 			byID[pr.ID] = pr
 		}
+	}
+	var bestItems []catalog.StorefrontProduct
+	for _, id := range best {
+		if pr, ok := byID[id]; ok && pr.Available() {
+			bestItems = append(bestItems, pr)
+		}
+	}
+	if bestLimit > 0 && len(bestItems) < minBestsellers {
+		bestItems, newest = nil, max(newest, bestLimit) // too few yet: the newest stand in
 	}
 	var newestItems []catalog.StorefrontProduct
 	if newest > 0 {
@@ -142,7 +161,7 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 				}
 			}
 		case *sections.ProductGrid:
-			sv.grid = s.grid(p, c, byID, newestItems, inCat)
+			sv.grid = s.grid(p, c, byID, newestItems, bestItems, inCat)
 		case *sections.ProductLanding:
 			pr, ok := byID[c.ProductID]
 			if !ok {
@@ -184,9 +203,18 @@ func (s *Shop) loadSections(ctx context.Context, p *pageCtx, secs []domain.Secti
 }
 
 func (s *Shop) grid(p *pageCtx, c *sections.ProductGrid, byID map[ulid.ID]catalog.StorefrontProduct,
-	newest []catalog.StorefrontProduct, inCat map[ulid.ID][]catalog.StorefrontProduct) *gridView {
+	newest, best []catalog.StorefrontProduct, inCat map[ulid.ID][]catalog.StorefrontProduct) *gridView {
 	g := &gridView{title: c.Title, carousel: c.Layout == "carousel"}
 	switch c.Source {
+	case "bestsellers":
+		if best == nil { // too few have sold yet
+			g.products, g.title = newest, p.l.T(MsgNewArrivals)
+			break
+		}
+		g.products = best
+		if g.title == "" {
+			g.title = p.l.T(MsgBestsellers)
+		}
 	case "manual":
 		for _, id := range c.ProductIDs {
 			if pr, ok := byID[id]; ok {
@@ -236,6 +264,21 @@ func pickCategories(v *storeView, c *sections.CategoryTiles) *catsView {
 		out.cats = out.cats[:c.Limit]
 	}
 	return out
+}
+
+// bestsellerIDs are the store's bestsellers for a grid of limit cards,
+// with a few to spare for products no longer for sale. A failure only
+// costs the grid its bestsellers: it shows the newest instead.
+func (s *Shop) bestsellerIDs(ctx context.Context, limit int) []ulid.ID {
+	if limit == 0 || s.orders == nil {
+		return nil
+	}
+	ids, err := s.orders.Bestsellers(ctx, limit+minBestsellers)
+	if err != nil {
+		s.log.WarnContext(ctx, "storefront: bestsellers", "err", err)
+		return nil
+	}
+	return ids
 }
 
 func containsID(ids []ulid.ID, id ulid.ID) bool {
