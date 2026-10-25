@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 )
 
@@ -182,5 +183,42 @@ func TestThankYou(t *testing.T) {
 	// Without the orders module the page does not exist.
 	if rec = newFixture(t).get(t, "/thank-you/IFT-1001"); rec.Code != http.StatusNotFound {
 		t.Fatalf("no orders: %d", rec.Code)
+	}
+}
+
+// TestAddByChoice: without JavaScript the product page posts its
+// choices (one per option); the server picks the variant they name.
+func TestAddByChoice(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	pid := f.shirt.ID.String()
+	add := func(form url.Values) *httptest.ResponseRecorder {
+		form.Set("qty", "1")
+		return f.post(t, "/cart", form, nil, nil)
+	}
+	rec := add(url.Values{"product": {pid}, "o0": {"M"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("add by choice = %d", rec.Code)
+	}
+	tok := ""
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "__Host-cart" {
+			tok = c.Value
+		}
+	}
+	if lines := f.carts.carts[authtoken.Token(tok)]; lines[f.shirt.Variants[0].ID] != 1 || len(lines) != 1 {
+		t.Fatalf("cart %v, want one M", lines)
+	}
+	for name, form := range map[string]url.Values{
+		"a size the product does not have": {"product": {pid}, "o0": {"XXL"}},
+		"another store's product, or none": {"product": {gen.New().String()}, "o0": {"M"}},
+		"no choice at all":                 {"product": {pid}},
+	} {
+		if rec := add(form); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "هذا المنتج لم يعد متاحًا.") {
+			t.Errorf("%s: %d", name, rec.Code)
+		}
+	}
+	if c := f.catalog.calls0("byIDs"); c != 4 {
+		t.Fatalf("ProductsByIDs called %d times for 4 posts naming a product, want one each", c)
 	}
 }

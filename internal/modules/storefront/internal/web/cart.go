@@ -251,11 +251,11 @@ func (s *Shop) allow(r *http.Request, store tenant.StoreID) bool {
 func (s *Shop) cartRoute(w http.ResponseWriter, r *http.Request, store tenant.StoreID, p *pageCtx, rest string) bool {
 	switch {
 	case rest == "/cart" && r.Method == http.MethodPost:
-		s.cartWrite(w, r, store, p, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
+		s.cartWrite(w, r, store, p, true, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
 			return s.carts.AddToCart(r.Context(), tok, id, qty)
 		})
 	case rest == "/cart/update" && r.Method == http.MethodPost:
-		s.cartWrite(w, r, store, p, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
+		s.cartWrite(w, r, store, p, false, func(tok authtoken.Token, id ulid.ID, qty int) (authtoken.Token, error) {
 			return tok, s.carts.UpdateCartLine(r.Context(), tok, id, qty)
 		})
 	case rest == "/cart" && isRead(r):
@@ -272,7 +272,10 @@ func isRead(r *http.Request) bool { return r.Method == http.MethodGet || r.Metho
 
 // cartWrite runs a form post that changes the cart, then sends the
 // shopper to the cart (post/redirect/get). Errors show on the cart page.
-func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.StoreID, p *pageCtx,
+// When choose is set, a form naming a product and its option values
+// instead of a variant (the product page without JavaScript) is resolved
+// to the variant they name.
+func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.StoreID, p *pageCtx, choose bool,
 	do func(authtoken.Token, ulid.ID, int) (authtoken.Token, error)) {
 	if !sameOrigin(r) {
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
@@ -289,6 +292,16 @@ func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.St
 		return
 	}
 	id, idErr := ulid.Parse(r.PostForm.Get("variant"))
+	if idErr != nil && choose && r.PostForm.Get("variant") == "" {
+		chosen, ok, err := s.chosenVariant(r.Context(), r.PostForm)
+		if err != nil {
+			s.unavailable(w, r, err)
+			return
+		}
+		if ok {
+			id, idErr = chosen, nil
+		}
+	}
 	qty, qtyErr := strconv.Atoi(r.PostForm.Get("qty"))
 	if idErr != nil {
 		s.cartPage(w, r, p, http.StatusUnprocessableEntity, MsgErrUnavailable)
