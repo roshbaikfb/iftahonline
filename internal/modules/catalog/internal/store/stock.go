@@ -45,6 +45,7 @@ type Reserved struct {
 	OK        bool    // false: the variant is not sellable or has too little stock
 	Counted   bool    // the units were counted against tracked stock
 	SoldOut   bool    // this reservation took the last available unit
+	Available int     // units left afterwards (tracked stock only)
 	ProductID ulid.ID // set when OK
 }
 
@@ -63,7 +64,7 @@ func Reserve(ctx context.Context, tx Tx, variantID ulid.ID, qty int) (Reserved, 
 	if err != nil {
 		return Reserved{}, fmt.Errorf("catalog store: reserve: %w", err)
 	}
-	return Reserved{OK: true, Counted: row.Tracked, SoldOut: row.Tracked && row.Available == 0, ProductID: row.ProductID}, nil
+	return Reserved{OK: true, Counted: row.Tracked, SoldOut: row.Tracked && row.Available == 0, Available: int(row.Available), ProductID: row.ProductID}, nil
 }
 
 // Adjust moves a variant's on_hand and reserved by the given deltas and

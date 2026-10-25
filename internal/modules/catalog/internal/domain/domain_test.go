@@ -162,6 +162,49 @@ func TestStock(t *testing.T) {
 	}
 }
 
+func TestStockLeft(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		s    domain.Stock
+		want int
+	}{
+		{"few left", domain.Stock{Tracked: true, OnHand: 5, Reserved: 2}, 3},
+		{"exactly the most shown", domain.Stock{Tracked: true, OnHand: domain.MaxShownLeft}, domain.MaxShownLeft},
+		{"more than shown stays private", domain.Stock{Tracked: true, OnHand: domain.MaxShownLeft + 1}, 0},
+		{"sold out", domain.Stock{Tracked: true, OnHand: 2, Reserved: 2}, 0},
+		{"untracked never runs out", domain.Stock{Tracked: false, OnHand: 1}, 0},
+	}
+	for _, tt := range tests {
+		if got := tt.s.Left(); got != tt.want {
+			t.Errorf("%s: %+v Left = %d, want %d", tt.name, tt.s, got, tt.want)
+		}
+	}
+}
+
+func TestShownStockChanged(t *testing.T) {
+	t.Parallel()
+	top := domain.MaxShownLeft
+	tests := []struct {
+		before, after int
+		want          bool
+	}{
+		{50, 49, false},           // plenty either way: nothing a shopper sees
+		{top + 1, top, true},      // "only 10 left" appears
+		{3, 2, true},              // the count shown drops
+		{1, 0, true},              // sold out
+		{0, 2, true},              // back in stock
+		{top, top + 5, true},      // "only N left" goes away
+		{top + 1, top + 9, false}, // restocked, still plenty
+		{4, 4, false},             // moved but unchanged (a reservation committed)
+	}
+	for _, tt := range tests {
+		if got := domain.ShownStockChanged(tt.before, tt.after); got != tt.want {
+			t.Errorf("ShownStockChanged(%d, %d) = %v, want %v", tt.before, tt.after, got, tt.want)
+		}
+	}
+}
+
 func TestValidateReserve(t *testing.T) {
 	t.Parallel()
 	gen := ulid.NewGenerator()

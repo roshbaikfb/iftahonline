@@ -71,6 +71,8 @@ const (
 	MaxSellableIDs     = app.MaxSellableIDs
 	MaxStorefrontLimit = app.MaxStorefrontLimit
 	MaxStorefrontIDs   = app.MaxStorefrontIDs
+	// MaxShownLeft is the most units left StorefrontVariant.Left reports.
+	MaxShownLeft = domain.MaxShownLeft
 )
 
 // Reservation statuses.

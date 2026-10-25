@@ -71,8 +71,8 @@ func TestStorefrontProductBySlug(t *testing.T) {
 	if got.ID != p.ID || got.Title != "Linen shirt" || len(got.Variants) != 2 || len(got.Options) != 1 {
 		t.Fatalf("product %+v", got)
 	}
-	if v := got.Variants[1]; v.Price != egp(t, 16000) || v.CompareAt == nil || !v.Available {
-		t.Fatalf("variant %+v", v)
+	if v := got.Variants[1]; v.Price != egp(t, 16000) || v.CompareAt == nil || !v.Available || v.Left != 1 {
+		t.Fatalf("variant %+v (1 on hand: Left 1)", v)
 	}
 	if len(got.Images) != 1 {
 		t.Fatalf("images = %d, want only the ready one", len(got.Images))
