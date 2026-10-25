@@ -163,6 +163,64 @@ describe('Shipping', () => {
     expect(await screen.findByText('سعر الشحن: اكتب مبلغًا صحيحًا')).toBeInTheDocument();
     expect(calls.some((c) => c.method === 'POST')).toBe(false);
   });
+
+  it('saves how many days delivery takes, and shows them in the list', async () => {
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET ${base}/shipping`]: () => ({
+        status: 200,
+        body: {
+          currency: 'EGP', areas, settings: { cod_fee: { fixed_minor: 0, bp: 0, min_minor: 0, max_minor: 0 }, version: 0 },
+          zones: [{ ...cairo, eta_min_days: 2, eta_max_days: 3 }],
+        },
+      }),
+      [`PUT ${base}/shipping/zones/Z1`]: () => ({ status: 200, body: {} }),
+    });
+    renderAt(`/stores/${store}/shipping`);
+    const user = userEvent.setup();
+    expect(await screen.findByText('· التوصيل خلال 2–3 أيام')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'تعديل' }));
+    const from = screen.getByLabelText('من (أيام)');
+    const to = screen.getByLabelText('إلى (أيام)');
+    expect(from).toHaveValue('2');
+    await user.clear(from);
+    await user.type(from, '1');
+    await user.click(screen.getByRole('button', { name: 'حفظ المنطقة' }));
+    await waitFor(() => {
+      expect(calls.some((c) => c.method === 'PUT')).toBe(true);
+    });
+    expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ eta_min_days: 1, eta_max_days: 3, version: 3 });
+    expect(to).toHaveValue('3');
+  });
+
+  it('refuses delivery days that are not a range, before sending anything', async () => {
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET ${base}/shipping`]: () => ({
+        status: 200,
+        body: { currency: 'EGP', areas, settings: { cod_fee: { fixed_minor: 0, bp: 0, min_minor: 0, max_minor: 0 }, version: 0 }, zones: [] },
+      }),
+    });
+    renderAt(`/stores/${store}/shipping`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'منطقة جديدة' }));
+    await user.type(screen.getByLabelText('اسم المنطقة'), 'x');
+    await user.type(screen.getByLabelText('سعر الشحن'), '50');
+    await user.click(screen.getByRole('checkbox', { name: 'الإسكندرية' }));
+    for (const [from, to, msg] of [
+      ['2', '', 'مدة التوصيل: اكتب أقل وأكثر عدد أيام معًا'],
+      ['5', '2', 'مدة التوصيل: الأقل لا يزيد عن الأكثر، من 0 إلى 30 يومًا'],
+      ['1', '45', 'مدة التوصيل: الأقل لا يزيد عن الأكثر، من 0 إلى 30 يومًا'],
+    ] as const) {
+      await user.clear(screen.getByLabelText('من (أيام)'));
+      await user.clear(screen.getByLabelText('إلى (أيام)'));
+      await user.type(screen.getByLabelText('من (أيام)'), from);
+      if (to) await user.type(screen.getByLabelText('إلى (أيام)'), to);
+      await user.click(screen.getByRole('button', { name: 'حفظ المنطقة' }));
+      expect(await screen.findByText(msg)).toBeInTheDocument();
+    }
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+  });
 });
 
 describe('Carriers', () => {

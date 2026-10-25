@@ -25,7 +25,9 @@ reconciliation).
   one zone only. It has a flat rate, and optionally:
   - city rates (≤ 200), matched on the city's search form;
   - its own free-shipping threshold;
-  - its own COD fee.
+  - its own COD fee;
+  - how long delivery takes, `eta_min_days`–`eta_max_days` (0–30, both
+    or neither), which the product page shows.
 - **The store's settings** hold the default COD fee and the default
   free-shipping threshold.
 - **A quote:**
@@ -35,7 +37,9 @@ reconciliation).
   - at or above the threshold, shipping is free;
   - the COD fee is fixed plus basis points (≤ 1000) of the subtotal
     plus shipping, clamped to its minimum and maximum (0 = none);
-  - a governorate outside every zone is not deliverable.
+  - a governorate outside every zone is not deliverable;
+  - it also carries the threshold in force (`free_over_minor`) and the
+    zone's delivery days, when set.
 
 ## Carriers
 
@@ -106,7 +110,7 @@ All are tenant tables under RLS.
 | Table | Notes |
 |---|---|
 | `shipping_settings` | One row per store once saved (`version`) |
-| `shipping_zones` | Name, rate, optional threshold and COD fee (all four fee columns or none), position, version |
+| `shipping_zones` | Name, rate, optional threshold and COD fee (all four fee columns or none), optional delivery days (`eta_min_days` ≤ `eta_max_days`, both or neither; 00036), position, version |
 | `shipping_zone_areas` | Primary key `(store_id, area)`: one zone per governorate |
 | `shipping_city_rates` | `(store_id, zone_id, city_key)`; the name as typed is kept for display |
 | `carrier_connections` | Sealed credentials, the webhook secret's hash, `active`/`disconnected`; one active per carrier |

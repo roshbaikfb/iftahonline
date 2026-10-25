@@ -3067,6 +3067,10 @@ export interface components {
              */
             free_over_minor?: number;
             cod_fee?: components["schemas"]["CODFee"];
+            /** @description Fewest days delivery takes; with eta_max_days, or neither. */
+            eta_min_days?: number;
+            /** @description Most days delivery takes. */
+            eta_max_days?: number;
             cities: components["schemas"]["ShippingCity"][];
             position: number;
             version: number;
@@ -3079,6 +3083,10 @@ export interface components {
             /** Format: int64 */
             free_over_minor?: number;
             cod_fee?: components["schemas"]["CODFee"];
+            /** @description Fewest days delivery takes (0: the same day). Set with eta_max_days, or neither. */
+            eta_min_days?: number;
+            /** @description Most days delivery takes; at least eta_min_days. */
+            eta_max_days?: number;
             cities?: components["schemas"]["ShippingCity"][];
             /** @description Required when updating. */
             version?: number;
@@ -3107,6 +3115,14 @@ export interface components {
             /** Format: int64 */
             cod_fee_minor: number;
             currency: string;
+            /**
+             * Format: int64
+             * @description The free-shipping threshold in force (the zone's
+             */
+            free_over_minor?: number;
+            /** @description How long delivery takes to the zone; absent when the merchant did not say. */
+            eta_min_days?: number;
+            eta_max_days?: number;
         };
         CarrierConnection: {
             id: components["schemas"]["ULID"];

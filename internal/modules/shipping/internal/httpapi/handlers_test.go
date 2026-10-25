@@ -253,6 +253,17 @@ func TestHappyPath(t *testing.T) {
 	if code != http.StatusOK || q["deliverable"] != false || q["zone_id"] != nil {
 		t.Fatalf("quote outside zones = %d %v", code, q)
 	}
+	// Delivery days round-trip, and the quote carries them with the free
+	// threshold in force (the store's 1,000).
+	code, z = f.do(t, req(t, http.MethodPut, path(a, "/zones/"+id), tokOwnerA,
+		`{"version":2,"name":"القاهرة","areas":["EG-C"],"rate_minor":4500,"eta_min_days":2,"eta_max_days":3}`))
+	if code != http.StatusOK || z["eta_min_days"] != float64(2) || z["eta_max_days"] != float64(3) {
+		t.Fatalf("zone with delivery days = %d %v", code, z)
+	}
+	code, q = f.do(t, req(t, http.MethodPost, path(a, "/quote"), tokSupportA, `{"governorate":"EG-C","subtotal_minor":24000}`))
+	if code != http.StatusOK || q["eta_min_days"] != float64(2) || q["eta_max_days"] != float64(3) || q["free_over_minor"] != float64(100000) {
+		t.Fatalf("quote with delivery days = %d %v", code, q)
+	}
 	if code, _ = f.do(t, req(t, http.MethodDelete, path(a, "/zones/"+id), tokOwnerA, "")); code != http.StatusNoContent {
 		t.Fatalf("deleteShippingZone = %d", code)
 	}
@@ -291,6 +302,9 @@ func TestValidation(t *testing.T) {
 			http.StatusUnprocessableEntity, "cod_fee.bp"},
 		{"settings stale", http.MethodPut, "/settings", `{"version":3,"cod_fee":{"fixed_minor":0,"bp":0,"min_minor":0,"max_minor":0}}`, http.StatusConflict, ""},
 		{"quote without body", http.MethodPost, "/quote", ``, http.StatusBadRequest, ""},
+		{"days without the most", http.MethodPost, "/zones", `{"name":"x","areas":["EG-ALX"],"rate_minor":1,"eta_min_days":2}`, http.StatusUnprocessableEntity, "eta_max_days"},
+		{"days reversed", http.MethodPost, "/zones", `{"name":"x","areas":["EG-ALX"],"rate_minor":1,"eta_min_days":5,"eta_max_days":2}`, http.StatusUnprocessableEntity, "eta_min_days"},
+		{"days too many", http.MethodPut, "/zones/" + id, `{"version":1,"name":"x","areas":["EG-C"],"rate_minor":1,"eta_min_days":1,"eta_max_days":31}`, http.StatusUnprocessableEntity, "eta_max_days"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -153,9 +153,12 @@ func TestValidateZone(t *testing.T) {
 		"fee min above max": {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, CODFee: &domain.CODFee{FixedMinor: 1, MinMinor: 9, MaxMinor: 5}}, "cod_fee.min_minor"},
 		"duplicate city": {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"},
 			Cities: []domain.CityInput{{Name: "المعادي"}, {Name: "المعادى"}}}, "cities[1].name"},
-		"short city":      {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: []domain.CityInput{{Name: "x"}}}, "cities[0].name"},
-		"city rate":       {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: []domain.CityInput{{Name: "حلوان", RateMinor: -1}}}, "cities[0].rate_minor"},
-		"too many cities": {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: many}, "cities"},
+		"short city":         {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: []domain.CityInput{{Name: "x"}}}, "cities[0].name"},
+		"city rate":          {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: []domain.CityInput{{Name: "حلوان", RateMinor: -1}}}, "cities[0].rate_minor"},
+		"too many cities":    {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Cities: many}, "cities"},
+		"days min above max": {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Delivery: &domain.DeliveryDays{Min: 5, Max: 2}}, "eta_min_days"},
+		"days negative":      {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Delivery: &domain.DeliveryDays{Min: -1, Max: 2}}, "eta_min_days"},
+		"days too many":      {domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Delivery: &domain.DeliveryDays{Min: 1, Max: domain.MaxDeliveryDays + 1}}, "eta_max_days"},
 	}
 	for name, tt := range bad {
 		t.Run(name, func(t *testing.T) {
@@ -165,6 +168,39 @@ func TestValidateZone(t *testing.T) {
 				t.Fatalf("err = %v, want a field error on %s", err, tt.field)
 			}
 		})
+	}
+}
+
+// TestZoneDeliveryDays: a zone may say how long delivery takes; it is
+// kept as typed, and a quote to that zone carries it.
+func TestZoneDeliveryDays(t *testing.T) {
+	t.Parallel()
+	for _, d := range []domain.DeliveryDays{{Min: 2, Max: 3}, {Min: 0, Max: 0}, {Min: 1, Max: domain.MaxDeliveryDays}} {
+		z, err := domain.ValidateZone(domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}, Delivery: &d}, geo.EG)
+		if err != nil || z.Delivery == nil || *z.Delivery != d {
+			t.Fatalf("%+v: zone %+v, %v", d, z.Delivery, err)
+		}
+	}
+	none, err := domain.ValidateZone(domain.ZoneInput{Name: "z", Areas: []string{"EG-C"}}, geo.EG)
+	if err != nil || none.Delivery != nil {
+		t.Fatalf("a zone without days: %+v, %v", none.Delivery, err)
+	}
+
+	days := &domain.DeliveryDays{Min: 2, Max: 3}
+	cairo := zone(t, domain.ZoneInput{Name: "القاهرة", Areas: []string{"EG-C"}, RateMinor: 5000, Delivery: days})
+	far := zone(t, domain.ZoneInput{Name: "الصعيد", Areas: []string{"EG-ASN"}, RateMinor: 9000, FreeOverMinor: ptr[int64](200000)})
+	cfg := domain.Config{Currency: money.EGP, Settings: domain.Settings{FreeOverMinor: ptr[int64](100000)}, Zones: []domain.Zone{cairo, far}}
+	q, err := cfg.Quote(domain.QuoteRequest{Governorate: "EG-C", Subtotal: egp(t, 24000)})
+	if err != nil || q.Delivery == nil || *q.Delivery != *days || q.FreeOverMinor == nil || *q.FreeOverMinor != 100000 {
+		t.Fatalf("quote to Cairo: %+v, %v (days 2-3; the store's free threshold)", q, err)
+	}
+	q, err = cfg.Quote(domain.QuoteRequest{Governorate: "EG-ASN", Subtotal: egp(t, 24000)})
+	if err != nil || q.Delivery != nil || q.FreeOverMinor == nil || *q.FreeOverMinor != 200000 {
+		t.Fatalf("quote to Aswan: %+v, %v (no days; the zone's threshold)", q, err)
+	}
+	q, err = domain.Config{Currency: money.EGP}.Quote(domain.QuoteRequest{Governorate: "EG-C", Subtotal: egp(t, 24000)})
+	if err != nil || q.Delivery != nil || q.FreeOverMinor != nil {
+		t.Fatalf("no zones, no threshold: %+v, %v", q, err)
 	}
 }
 

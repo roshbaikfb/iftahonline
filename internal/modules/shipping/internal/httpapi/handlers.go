@@ -90,6 +90,9 @@ func (h *Handlers) CreateShippingZone(ctx context.Context, req CreateShippingZon
 	if req.Body == nil {
 		return nil, errBodyRequired
 	}
+	if err := checkDays(*req.Body); err != nil {
+		return nil, err
+	}
 	z, err := h.svc.CreateZone(ctx, fromZoneInput(*req.Body))
 	if err != nil {
 		return nil, err
@@ -107,6 +110,9 @@ func (h *Handlers) UpdateShippingZone(ctx context.Context, req UpdateShippingZon
 	}
 	if req.Body.Version == nil {
 		return nil, errVersionRequired
+	}
+	if err := checkDays(*req.Body); err != nil {
+		return nil, err
 	}
 	id, err := ulid.Parse(req.ZoneId)
 	if err != nil {
@@ -151,7 +157,10 @@ func (h *Handlers) QuoteShipping(ctx context.Context, req QuoteShippingRequestOb
 		return nil, err
 	}
 	out := QuoteShipping200JSONResponse{Deliverable: q.Deliverable, ShippingMinor: q.Shipping.Amount(), FreeShipping: q.FreeShipping,
-		CodFeeMinor: q.CODFee.Amount(), Currency: string(q.Shipping.Currency())}
+		CodFeeMinor: q.CODFee.Amount(), Currency: string(q.Shipping.Currency()), FreeOverMinor: q.FreeOverMinor}
+	if d := q.Delivery; d != nil {
+		out.EtaMinDays, out.EtaMaxDays = &d.Min, &d.Max
+	}
 	if q.ZoneID != nil {
 		id := q.ZoneID.String()
 		out.ZoneId = &id
@@ -178,7 +187,21 @@ func fromZoneInput(in ShippingZoneInput) domain.ZoneInput {
 			z.Cities = append(z.Cities, domain.CityInput{Name: c.Name, RateMinor: c.RateMinor})
 		}
 	}
+	if in.EtaMinDays != nil && in.EtaMaxDays != nil {
+		z.Delivery = &domain.DeliveryDays{Min: *in.EtaMinDays, Max: *in.EtaMaxDays}
+	}
 	return z
+}
+
+// errDaysTogether: delivery days are a range; one end alone means nothing.
+var errDaysTogether = errs.Validation(errs.FieldError{Field: "eta_max_days", Code: "required",
+	Message: "eta_min_days and eta_max_days are set together, or neither"})
+
+func checkDays(in ShippingZoneInput) error {
+	if (in.EtaMinDays == nil) != (in.EtaMaxDays == nil) {
+		return errDaysTogether
+	}
+	return nil
 }
 
 func toSettings(s domain.Settings) ShippingSettings {
@@ -194,6 +217,9 @@ func toZone(z domain.Zone) ShippingZone {
 	if z.CODFee != nil {
 		f := toFee(*z.CODFee)
 		out.CodFee = &f
+	}
+	if d := z.Delivery; d != nil {
+		out.EtaMinDays, out.EtaMaxDays = &d.Min, &d.Max
 	}
 	for i, c := range z.Cities {
 		out.Cities[i] = ShippingCity{Name: c.Name, RateMinor: c.RateMinor}

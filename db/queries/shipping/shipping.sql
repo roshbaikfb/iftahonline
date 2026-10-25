@@ -39,9 +39,11 @@ SELECT pg_advisory_xact_lock(hashtextextended('shipping:' || (@store_id::uuid)::
 
 -- name: InsertZone :one
 INSERT INTO shipping_zones (id, store_id, name, rate_minor, free_over_minor,
-                            cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor, position)
+                            cod_fixed_minor, cod_bp, cod_min_minor, cod_max_minor,
+                            eta_min_days, eta_max_days, position)
 VALUES (@id, @store_id, @name, @rate_minor, sqlc.narg(free_over_minor),
-        sqlc.narg(cod_fixed_minor), sqlc.narg(cod_bp), sqlc.narg(cod_min_minor), sqlc.narg(cod_max_minor), @position)
+        sqlc.narg(cod_fixed_minor), sqlc.narg(cod_bp), sqlc.narg(cod_min_minor), sqlc.narg(cod_max_minor),
+        sqlc.narg(eta_min_days), sqlc.narg(eta_max_days), @position)
 RETURNING *;
 
 -- name: UpdateZone :one
@@ -50,6 +52,7 @@ UPDATE shipping_zones
 SET name = @name, rate_minor = @rate_minor, free_over_minor = sqlc.narg(free_over_minor),
     cod_fixed_minor = sqlc.narg(cod_fixed_minor), cod_bp = sqlc.narg(cod_bp),
     cod_min_minor = sqlc.narg(cod_min_minor), cod_max_minor = sqlc.narg(cod_max_minor),
+    eta_min_days = sqlc.narg(eta_min_days), eta_max_days = sqlc.narg(eta_max_days),
     version = version + 1, updated_at = now()
 WHERE store_id = @store_id AND id = @id AND version = @version
 RETURNING *;
