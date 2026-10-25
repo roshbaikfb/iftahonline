@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "activity": "electronics",
+  "accent": "#0e7490",
+  "announcement": "الدفع عند الاستلام متاح لكل الطلبات",
+  "hero": {
+    "heading": "إكسسوارات موبايل وسماعات",
+    "subheading": "منتجات أصلية بضمان، وتوصيل لحد باب البيت"
+  },
+  "categories": [
+    {
+      "slug": "headphones",
+      "name": "سماعات",
+      "image": "electronics-1"
+    },
+    {
+      "slug": "chargers",
+      "name": "شواحن وكابلات",
+      "image": "electronics-2"
+    },
+    {
+      "slug": "phone-accessories",
+      "name": "إكسسوارات الموبايل",
+      "image": "electronics-3"
+    }
+  ],
+  "products": [
+    {
+      "slug": "sample-bluetooth-earbuds",
+      "title": "سماعة بلوتوث لاسلكية",
+      "description": "صوت واضح وبطارية تكفي يومك كله.",
+      "category": "headphones",
+      "prices": {
+        "EGP": 99900,
+        "SAR": 14900,
+        "AED": 14900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-anc-headphones",
+      "title": "سماعة رأس بعزل ضوضاء",
+      "description": "عزل للضوضاء ووسائد أذن مريحة للاستخدام الطويل.",
+      "category": "headphones",
+      "prices": {
+        "EGP": 249900,
+        "SAR": 34900,
+        "AED": 34900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-fast-charger",
+      "title": "شاحن سريع 20 واط",
+      "description": "يشحن الموبايل بسرعة مع حماية من السخونة.",
+      "category": "chargers",
+      "prices": {
+        "EGP": 44900,
+        "SAR": 6900,
+        "AED": 6900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-usb-c-cable",
+      "title": "كابل شحن Type-C",
+      "description": "كابل مضفّر متين بطول متر ونص.",
+      "category": "chargers",
+      "prices": {
+        "EGP": 14900,
+        "SAR": 2900,
+        "AED": 2900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-clear-case",
+      "title": "جراب موبايل شفاف",
+      "description": "يحمي الموبايل من غير ما يخبي شكله.",
+      "category": "phone-accessories",
+      "prices": {
+        "EGP": 19900,
+        "SAR": 3900,
+        "AED": 3900
+      },
+      "stock": 20
+    },
+    {
+      "slug": "sample-car-holder",
+      "title": "حامل موبايل للسيارة",
+      "description": "يثبت على فتحة التكييف ويلف في كل الاتجاهات.",
+      "category": "phone-accessories",
+      "prices": {
+        "EGP": 29900,
+        "SAR": 4900,
+        "AED": 4900
+      },
+      "stock": 20
+    }
+  ]
+}

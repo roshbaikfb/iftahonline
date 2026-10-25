@@ -56,8 +56,9 @@ type (
 	Category = domain.Category
 	// CategoryInput creates a category.
 	CategoryInput = domain.CategoryInput
-	// ProductInput creates a product; VariantInput is one of its variants.
+	// ProductInput creates a product.
 	ProductInput = domain.ProductInput
+	// VariantInput is one variant of a ProductInput.
 	VariantInput = domain.VariantInput
 	// SampleProduct is a starter template's product and picture.
 	SampleProduct = app.SampleProduct
@@ -155,9 +156,6 @@ type Catalog interface {
 	RestockTx(ctx context.Context, tx pgx.Tx, ref string) error
 }
 
-// Storefront is the read side the storefront renders: active, live
-// products only, with signed image URLs and no stock levels. Every method
-// acts on the store in ctx and runs a constant number of queries.
 // Starter is what the setup wizard's starter template uses (ADR-0034).
 // Every method acts on the store in ctx and is idempotent by slug: the
 // template may run twice, and a merchant's own category or product with
@@ -171,6 +169,9 @@ type Starter interface {
 
 var _ Starter = (*app.Service)(nil)
 
+// Storefront is the read side the storefront renders: active, live
+// products only, with signed image URLs and no stock levels. Every method
+// acts on the store in ctx and runs a constant number of queries.
 type Storefront interface {
 	// ProductBySlug returns the active product at slug, or
 	// ErrProductNotFound.
