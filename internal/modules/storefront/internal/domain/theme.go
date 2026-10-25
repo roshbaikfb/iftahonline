@@ -59,6 +59,20 @@ const (
 // Radii lists every radius.
 func Radii() []Radius { return []Radius{RadiusNone, RadiusSmall, RadiusMedium, RadiusLarge} }
 
+// Look is the storefront's layout, chosen in the setup wizard (ADR-0034).
+// The empty look is the original layout.
+type Look string
+
+// The looks.
+const (
+	LookClassic Look = "classic" // the logo on its own centred row
+	LookModern  Look = "modern"  // larger product cards, fewer to a row
+	LookSoft    Look = "soft"    // categories as circles on every screen
+)
+
+// Looks lists the looks, without the empty one.
+func Looks() []Look { return []Look{LookClassic, LookModern, LookSoft} }
+
 // Colors are the theme's palette as #rrggbb.
 type Colors struct {
 	Primary    string `json:"primary"`    // buttons, links, prices
@@ -72,6 +86,8 @@ type ThemeSettings struct {
 	Colors Colors `json:"colors"`
 	Font   Font   `json:"font"`
 	Radius Radius `json:"radius"`
+	// Look is the layout; empty is the original one.
+	Look Look `json:"look,omitempty"`
 	// Announcement is the bar above the header ("free shipping over
 	// 1,000"); empty shows none.
 	Announcement string `json:"announcement,omitempty"`
@@ -152,6 +168,7 @@ func ValidateTheme(in ThemeSettings) (ThemeSettings, error) {
 		},
 		Font:   in.Font,
 		Radius: in.Radius,
+		Look:   in.Look,
 	}
 	line := func(field, v string, maxRunes int) string {
 		clean, err := text.Clean(v, field, 0, maxRunes)
@@ -193,6 +210,9 @@ func ValidateTheme(in ThemeSettings) (ThemeSettings, error) {
 	}
 	if !slices.Contains(Radii(), out.Radius) {
 		fields = append(fields, errs.FieldError{Field: "radius", Code: "invalid", Message: "radius must be none, small, medium or large"})
+	}
+	if out.Look != "" && !slices.Contains(Looks(), out.Look) {
+		fields = append(fields, errs.FieldError{Field: "look", Code: "invalid", Message: "look must be classic, modern or soft"})
 	}
 	if len(fields) == 0 && ContrastRatio(out.Colors.Text, out.Colors.Background) < minTextContrast {
 		fields = append(fields, errs.FieldError{Field: "colors.text", Code: "low_contrast",

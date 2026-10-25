@@ -54,7 +54,18 @@ the theme, catalog and shipping belong to others (CLAUDE.md rule 2)?
    IP) asks tenancy, which applies the same slug rules as sign-up and
    reads the hosts directly, not through the resolver's caches. It is
    advisory: sign-up checks again.
-7. **Templates are versioned data, not code paths.** Each template has a
+7. **A look is a theme setting.** The three looks differ in layout, not
+   only in colour, so the theme gains `look` (`classic`, `modern`,
+   `soft`). The page body carries it as `data-look` and the stylesheet
+   applies it: classic centres the logo on its own row, modern shows
+   larger product cards, soft draws categories as circles on every
+   screen. Stores without a look keep the original layout unchanged.
+8. **Templates add no shipping zones** (the owner, 2026-10-25). The
+   wizard's shipping step saves the merchant's own zones and price; a
+   template cannot know them. A merchant who skips the step keeps the
+   current rule (no zones: delivery everywhere, free), and the last
+   screen says so.
+9. **Templates are versioned data, not code paths.** Each template has a
    version, recorded with the store. Changing the template later touches
    only the theme and home page, never the merchant's products or
    shipping.

@@ -44,7 +44,12 @@ templ layout(p *pageCtx, body templ.Component) {
 				<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 			}
 		</head>
-		<body class={ templ.KV("compact", p.head != headFull), templ.KV("soft", p.soft) }>
+		<body
+			class={ templ.KV("compact", p.head != headFull), templ.KV("soft", p.soft) }
+			if p.v.theme.Look != "" {
+				data-look={ string(p.v.theme.Look) }
+			}
+		>
 			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>
 			switch p.head {
 				case headProduct:

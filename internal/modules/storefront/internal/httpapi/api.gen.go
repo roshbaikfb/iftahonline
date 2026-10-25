@@ -187,6 +187,27 @@ func (e ThemeSettingsFont) Valid() bool {
 	}
 }
 
+// Defines values for ThemeSettingsLook.
+const (
+	Classic ThemeSettingsLook = "classic"
+	Modern  ThemeSettingsLook = "modern"
+	Soft    ThemeSettingsLook = "soft"
+)
+
+// Valid indicates whether the value is a known member of the ThemeSettingsLook enum.
+func (e ThemeSettingsLook) Valid() bool {
+	switch e {
+	case Classic:
+		return true
+	case Modern:
+		return true
+	case Soft:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ThemeSettingsRadius.
 const (
 	Large  ThemeSettingsRadius = "large"
@@ -468,6 +489,13 @@ type ThemeSettings struct {
 	// Font Self-hosted fonts only; system uses the device's font.
 	Font ThemeSettingsFont `json:"font"`
 
+	// Look The storefront's layout, chosen in the setup wizard (ADR-0034):
+	// classic puts the logo on its own centred row; modern shows larger
+	// product cards, fewer to a row; soft draws categories as circles on
+	// every screen. Absent keeps the original layout; saving without it
+	// returns to that.
+	Look *ThemeSettingsLook `json:"look,omitempty"`
+
 	// LowStock The product page says "only N left" when a variant has this many units or fewer; 0 turns it off. Responses always carry the value in force; on save, absent keeps the default (5).
 	LowStock *int                `json:"low_stock,omitempty"`
 	Radius   ThemeSettingsRadius `json:"radius"`
@@ -475,6 +503,13 @@ type ThemeSettings struct {
 
 // ThemeSettingsFont Self-hosted fonts only; system uses the device's font.
 type ThemeSettingsFont string
+
+// ThemeSettingsLook The storefront's layout, chosen in the setup wizard (ADR-0034):
+// classic puts the logo on its own centred row; modern shows larger
+// product cards, fewer to a row; soft draws categories as circles on
+// every screen. Absent keeps the original layout; saving without it
+// returns to that.
+type ThemeSettingsLook string
 
 // ThemeSettingsRadius defines model for ThemeSettings.Radius.
 type ThemeSettingsRadius string
