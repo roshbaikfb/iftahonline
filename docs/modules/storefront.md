@@ -226,6 +226,7 @@ How saves work:
 | Title | 200 characters |
 | Meta description | 300 characters |
 | Policy body | 20,000 characters |
+| Low-stock threshold (`low_stock`) | 0 (off) to 10, default 5; the catalog never reports more than 10 units left |
 
 ## Tests
 

@@ -3319,6 +3319,11 @@ components:
           properties:
             whatsapp: { type: string, maxLength: 32, description: "With its country code, e.g. +201012345678; stored in E.164." }
             email: { type: string, maxLength: 254 }
+        low_stock:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: The product page says "only N left" when a variant has this many units or fewer; 0 turns it off. Responses always carry the value in force; on save, absent keeps the default (5).
     Theme:
       type: object
       required: [settings, version]

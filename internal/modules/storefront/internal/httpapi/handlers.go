@@ -82,7 +82,7 @@ func (h *Handlers) UpdateStorefrontTheme(ctx context.Context, req UpdateStorefro
 	settings := domain.ThemeSettings{
 		Colors: domain.Colors{Primary: in.Colors.Primary, Accent: in.Colors.Accent, Background: in.Colors.Background, Text: in.Colors.Text},
 		Font:   domain.Font(in.Font), Radius: domain.Radius(in.Radius),
-		Announcement: deref(in.Announcement), About: deref(in.About),
+		Announcement: deref(in.Announcement), About: deref(in.About), LowStock: in.LowStock,
 	}
 	if in.Contact != nil {
 		settings.Contact = domain.Contact{WhatsApp: deref(in.Contact.Whatsapp), Email: deref(in.Contact.Email)}
@@ -373,6 +373,8 @@ func toTheme(t domain.Theme) Theme {
 	out.Settings.Font = ThemeSettingsFont(t.Settings.Font)
 	out.Settings.Radius = ThemeSettingsRadius(t.Settings.Radius)
 	out.Settings.Announcement, out.Settings.About = opt(t.Settings.Announcement), opt(t.Settings.About)
+	low := t.Settings.LowStockThreshold()
+	out.Settings.LowStock = &low
 	if c := t.Settings.Contact; c != (domain.Contact{}) {
 		out.Settings.Contact = &struct {
 			Email    *string `json:"email,omitempty"`
