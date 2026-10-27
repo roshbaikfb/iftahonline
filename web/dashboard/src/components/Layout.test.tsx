@@ -76,7 +76,7 @@ describe('Layout', () => {
     renderAt(`/stores/${a}/payments`, s);
     const user = userEvent.setup();
     await user.selectOptions(await screen.findByLabelText('المتجر'), b);
-    expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${b}/orders`);
+    expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${b}/home`);
     await user.click(screen.getByLabelText('حسابي: منى أحمد'));
     expect(screen.getByText('mona@example.com')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'تسجيل الخروج' }));

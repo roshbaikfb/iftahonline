@@ -35,9 +35,17 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   await page.getByLabel('كلمة المرور').fill('demo-password-123');
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
 
+  // Signing in opens the home page (U4): the greeting, the period's
+  // figures, then the orders through the sidebar.
+  await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/home$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('يا منى');
+  await expect(page.getByRole('heading', { name: 'آخر الطلبات' })).toBeVisible();
+  const side = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
+  await expect(side.getByRole('link', { name: 'الرئيسية' })).toHaveAttribute('aria-current', 'page');
+  await side.getByRole('link', { name: 'الطلبات' }).click();
   await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/orders$/);
   await expect(page.locator('.top .store-name')).toHaveText('متجر منى');
-  await expect(page.getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
+  await expect(side.getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
   const rows = page.locator('table.orders tbody tr');
   await expect(rows).toHaveCount(3);
   await expect(rows.filter({ hasText: 'مؤكد' })).toHaveCount(1);
@@ -90,9 +98,9 @@ test('a merchant sets up a shipping zone and connects a carrier', async ({ page 
   await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
   await page.getByLabel('كلمة المرور').fill('demo-password-123');
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-  await expect(page).toHaveURL(/\/orders$/);
+  await expect(page).toHaveURL(/\/home$/);
 
-  await page.getByRole('link', { name: 'مناطق الشحن' }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'مناطق الشحن', exact: true }).click();
   await page.getByRole('button', { name: 'منطقة جديدة' }).click();
   const zone = page.locator('form.zone');
   await zone.getByLabel('اسم المنطقة').fill('الإسكندرية');
@@ -105,7 +113,7 @@ test('a merchant sets up a shipping zone and connects a carrier', async ({ page 
   await expect(page.getByText('أُضيفت المنطقة')).toBeVisible();
   await expect(page.locator('.zones-table tbody tr').filter({ hasText: 'الإسكندرية' })).toContainText('60 ج.م');
 
-  await page.getByRole('link', { name: 'شركات الشحن' }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'شركات الشحن', exact: true }).click();
   await page.getByRole('combobox', { name: 'الشركة' }).selectOption({ label: 'شركة شحن تجريبية' });
   await page.getByLabel('مفتاح API من لوحة الشركة').fill('demo-carrier-key');
   await page.getByRole('button', { name: 'ربط' }).click();
@@ -122,9 +130,9 @@ test('a merchant connects a card gateway and reads the COD report', async ({ pag
   await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
   await page.getByLabel('كلمة المرور').fill('demo-password-123');
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-  await expect(page).toHaveURL(/\/orders$/);
+  await expect(page).toHaveURL(/\/home$/);
 
-  await page.getByRole('link', { name: 'الدفع بالبطاقة' }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الدفع بالبطاقة', exact: true }).click();
   await page.getByRole('combobox', { name: 'البوابة' }).selectOption({ label: 'بوابة دفع تجريبية' });
   await page.getByLabel('API key').fill('demo-gateway-key');
   await page.getByLabel('سر الإشعارات').fill('demo-webhook-secret');
@@ -132,10 +140,10 @@ test('a merchant connects a card gateway and reads the COD report', async ({ pag
   await expect(page.getByText(/تم الربط/)).toBeVisible();
   await expect(page.locator('.rows li').filter({ hasText: 'بوابة دفع تجريبية' })).toContainText('مربوطة');
 
-  await page.getByRole('link', { name: 'التحصيل' }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'التحصيل', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'تحصيل الدفع عند الاستلام' })).toBeVisible();
   await expect(page.getByText(/حُوِّلت قيمتها|لا توجد طرود/).first()).toBeVisible();
-  await page.getByRole('link', { name: 'المدفوعات' }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'المدفوعات', exact: true }).click();
   await expect(page.getByText('لا توجد مدفوعات بالبطاقة بعد.')).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
 });

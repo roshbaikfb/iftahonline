@@ -16,7 +16,7 @@ export interface NavGroup {
 export function navGroups(storeId: string): NavGroup[] {
   const at = (path: string) => `/stores/${storeId}/${path}`;
   return [
-    { items: [{ label: 'الرئيسية' }] },
+    { items: [{ label: 'الرئيسية', to: at('home') }] },
     { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders'), pendingBadge: true }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
     { title: 'المنتجات', items: [{ label: 'المنتجات' }, { label: 'التصنيفات' }, { label: 'المخزون' }] },
     {

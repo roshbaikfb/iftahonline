@@ -9,6 +9,7 @@ import { Gateways } from './pages/Gateways';
 import { Login } from './pages/Login';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
+import { Overview } from './pages/Overview';
 import { Payments } from './pages/Payments';
 import { Setup } from './pages/Setup';
 import { ShipmentDetail } from './pages/ShipmentDetail';
@@ -19,7 +20,7 @@ import { useSession } from './session';
 import { SessionProvider } from './SessionProvider';
 
 // Home opens the first store: its setup wizard while that is open
-// (ADR-0034), its orders otherwise.
+// (ADR-0034), its home page otherwise.
 function Home() {
   const { state } = useSession();
   const first = state.kind === 'signed-in' ? state.me.memberships[0] : undefined;
@@ -29,7 +30,7 @@ function Home() {
     let live = true;
     const id = first.store_id;
     void api.GET('/v1/stores/{store_id}/onboarding', { params: { path: { store_id: id } } }).then(({ data }) => {
-      if (live) setTo(data?.status === 'in_progress' ? `/stores/${id}/setup` : `/stores/${id}/orders`);
+      if (live) setTo(data?.status === 'in_progress' ? `/stores/${id}/setup` : `/stores/${id}/home`);
     });
     return () => {
       live = false;
@@ -62,6 +63,7 @@ function Gate() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/stores/:storeId/setup" element={<Setup />} />
+          <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />

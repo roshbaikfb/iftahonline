@@ -159,7 +159,7 @@ describe('Setup', () => {
 
     await user.click(screen.getByRole('button', { name: 'اذهب إلى لوحة التحكم' }));
     await waitFor(() => {
-      expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${store}/orders`);
+      expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${store}/home`);
     });
     expect(calls.some((c) => c.method === 'POST' && c.path.endsWith('/onboarding/complete'))).toBe(true);
   });
@@ -217,7 +217,7 @@ describe('Setup', () => {
     });
     renderAt(`/stores/${store}/setup`);
     await waitFor(() => {
-      expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${store}/orders`);
+      expect(screen.getByTestId('where')).toHaveTextContent(`/stores/${store}/home`);
     });
   });
 });
