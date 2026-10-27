@@ -74,6 +74,11 @@ The `api` and `worker` roles also need object storage and imgproxy
   **`S3_SECRET_KEY`**: any S3-compatible store. Browsers upload straight
   to it, so set `S3_PUBLIC_ENDPOINT` when they reach it at another
   address, and allow CORS `POST` from the dashboard origin on the bucket.
+  The dashboard's own CSP (set by whatever serves its static build; see
+  `securityHeaders` in `web/dashboard/vite.config.ts`) must then name
+  that address in `connect-src`, and the imgproxy address in `img-src`:
+  the logo upload in the setup wizard (ADR-0034) and product pictures
+  are posted to it straight from the browser.
 - **imgproxy**: run it next to the storefront, behind the CDN. Give it
   the same `IMGPROXY_KEY` and `IMGPROXY_SALT` (hex, `openssl rand -hex
   32` each) as the api, read access to the bucket, and

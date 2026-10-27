@@ -1,4 +1,5 @@
 import { useState, type SubmitEvent } from 'react';
+import { Link } from 'react-router';
 
 import { api } from '../api/client';
 import { BuildInfo } from '../components/BuildInfo';
@@ -80,6 +81,11 @@ export function Login() {
             {challenge === null ? 'تسجيل الدخول' : 'تأكيد'}
           </button>
         </form>
+        {challenge === null && (
+          <p className="login-alt">
+            ليس لديك متجر؟ <Link to="/signup">أنشئ متجرك</Link>
+          </p>
+        )}
         <BuildInfo />
       </div>
     </main>
