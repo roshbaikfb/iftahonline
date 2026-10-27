@@ -455,6 +455,11 @@ func TestValidation(t *testing.T) {
 		{"bad chart id", req(t, http.MethodGet, storePath(a, "/size-charts/nope"), tokOwnerA, ""), 404, "size_chart_not_found", ""},
 		{"missing chart", req(t, http.MethodPut, storePath(a, "/size-charts/"+id), tokOwnerA, `{"name":"x","header":["a","b"],"body":[["S","1"]]}`), 404, "size_chart_not_found", ""},
 		{"missing chart delete", req(t, http.MethodDelete, storePath(a, "/size-charts/"+id), tokOwnerA, ""), 404, "size_chart_not_found", ""},
+		{"bad stock filter", req(t, http.MethodGet, storePath(a, "/products?stock=some"), tokOwnerA, ""), 422, "validation_failed", "stock"},
+		{"zero low threshold", req(t, http.MethodGet, storePath(a, "/products?stock=low&low_threshold=0"), tokOwnerA, ""), 422, "validation_failed", "low_threshold"},
+		{"bulk action", req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+id+`"],"action":"publish"}`), 422, "validation_failed", "action"},
+		{"bulk no ids", req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":[],"action":"draft"}`), 422, "validation_failed", "product_ids"},
+		{"bulk bad id", req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["nope"],"action":"draft"}`), 422, "validation_failed", "product_ids[0]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -546,6 +551,9 @@ func TestAuthorization(t *testing.T) {
 		{"support cannot complete images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokSupportA, ""), http.StatusForbidden},
 		{"shipping cannot edit images", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, `{"alt":"x"}`), http.StatusForbidden},
 		{"shipping cannot delete images", req(t, http.MethodDelete, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, ""), http.StatusForbidden},
+		{"support counts products", req(t, http.MethodGet, storePath(a, "/products/counts"), tokSupportA, ""), http.StatusOK},
+		{"support cannot bulk-edit products", req(t, http.MethodPost, storePath(a, "/products/bulk"), tokSupportA, `{"product_ids":["`+id+`"],"action":"draft"}`), http.StatusForbidden},
+		{"shipping cannot bulk-delete products", req(t, http.MethodPost, storePath(a, "/products/bulk"), tokShippingA, `{"product_ids":["`+id+`"],"action":"delete"}`), http.StatusForbidden},
 		{"support lists size charts", req(t, http.MethodGet, storePath(a, "/size-charts"), tokSupportA, ""), http.StatusOK},
 		{"support reads a size chart", req(t, http.MethodGet, storePath(a, "/size-charts/"+id), tokSupportA, ""), http.StatusNotFound},
 		{"size charts need a session", req(t, http.MethodGet, storePath(a, "/size-charts"), "", ""), http.StatusUnauthorized},
@@ -634,6 +642,8 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(a, "/imports/"+mid+"/start"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(b, "/imports/"+mid+"/start"), tokOwnerA, ""), Unchanged: unchanged},
 		{OperationID: "deleteImage", Request: req(t, http.MethodDelete, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "countProducts", Request: req(t, http.MethodGet, storePath(b, "/products/counts"), tokOwnerA, "")},
+		{OperationID: "bulkProducts", Request: req(t, http.MethodPost, storePath(b, "/products/bulk"), tokOwnerA, `{"product_ids":["`+pid+`"],"action":"archived"}`), Unchanged: unchanged},
 		{OperationID: "listSizeCharts", Request: req(t, http.MethodGet, storePath(b, "/size-charts"), tokOwnerA, "")},
 		{OperationID: "createSizeChart", Request: req(t, http.MethodPost, storePath(b, "/size-charts"), tokOwnerA, chart), Unchanged: unchanged},
 		{OperationID: "getSizeChart", Request: req(t, http.MethodGet, storePath(a, "/size-charts/"+sid), tokOwnerA, ""), Leaks: leaks},
@@ -667,6 +677,16 @@ func TestCrossTenant(t *testing.T) {
 	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+cid+`"],"variants":[{"price_minor":1}]}`))
 	if code != 422 {
 		t.Fatalf("foreign category accepted: %d", code)
+	}
+	// B's products under A's path are skipped, not changed.
+	for _, action := range []string{"archived", "delete"} {
+		code, body := f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+pid+`"],"action":"`+action+`"}`))
+		if code != http.StatusOK || body["updated"] != float64(0) {
+			t.Fatalf("bulk %s on B's product = %d %v", action, code, body)
+		}
+	}
+	if code, body := f.do(t, req(t, http.MethodGet, storePath(a, "/products/counts"), tokOwnerA, "")); code != http.StatusOK || body["all"] != float64(0) {
+		t.Fatalf("A's counts include B's: %d %v", code, body)
 	}
 	// Nor B's size chart.
 	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","size_chart_id":"`+sid+`","variants":[{"price_minor":1}]}`))
@@ -788,5 +808,46 @@ func TestSizeChartsHappyPath(t *testing.T) {
 	}
 	if code, got := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+p["id"].(string)), tokOwnerA, "")); code != http.StatusOK || got["size_chart_id"] != nil {
 		t.Fatalf("product keeps a deleted chart: %d %v", code, got)
+	}
+}
+
+// The products list's tabs, stock filter and bulk bar (U5b).
+func TestProductListTools(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	var ids []string
+	for _, body := range []string{
+		`{"title":"plenty","status":"active","variants":[{"price_minor":100,"on_hand":40}]}`,
+		`{"title":"few","status":"active","variants":[{"price_minor":100,"on_hand":2}]}`,
+		`{"title":"none","status":"draft","variants":[{"price_minor":100,"on_hand":0}]}`,
+	} {
+		code, p := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, body))
+		if code != http.StatusCreated {
+			t.Fatalf("create = %d %v", code, p)
+		}
+		ids = append(ids, p["id"].(string))
+	}
+	if code, c := f.do(t, req(t, http.MethodGet, storePath(a, "/products/counts"), tokOwnerA, "")); code != http.StatusOK ||
+		c["all"] != float64(3) || c["active"] != float64(2) || c["draft"] != float64(1) || c["archived"] != float64(0) {
+		t.Fatalf("counts = %d %v", code, c)
+	}
+	for q, want := range map[string]int{"stock=out": 1, "stock=low": 1, "stock=low&low_threshold=1": 0, "stock=in_stock": 2} {
+		if code, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products?"+q), tokOwnerA, "")); code != http.StatusOK || len(page["items"].([]any)) != want {
+			t.Fatalf("%s = %d %v, want %d", q, code, page, want)
+		}
+	}
+	code, res := f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+ids[0]+`","`+ids[1]+`"],"action":"archived"}`))
+	if code != http.StatusOK || res["updated"] != float64(2) {
+		t.Fatalf("bulk archive = %d %v", code, res)
+	}
+	if code, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products?status=archived"), tokOwnerA, "")); code != http.StatusOK || len(page["items"].([]any)) != 2 {
+		t.Fatalf("archived = %d %v", code, page)
+	}
+	if code, res = f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+ids[2]+`"],"action":"delete"}`)); code != http.StatusOK || res["updated"] != float64(1) {
+		t.Fatalf("bulk delete = %d %v", code, res)
+	}
+	if code, _ := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+ids[2]), tokOwnerA, "")); code != http.StatusNotFound {
+		t.Fatalf("deleted product = %d", code)
 	}
 }

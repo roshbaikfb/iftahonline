@@ -4,9 +4,11 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -254,8 +256,12 @@ func (s *Service) DeleteProduct(ctx context.Context, id ulid.ID) error {
 type ProductQuery struct {
 	Status     string
 	CategoryID *ulid.ID
-	Cursor     string
-	Limit      int
+	// Stock is "", in_stock, low or out; LowThreshold bounds low (0 for
+	// domain.DefaultLowThreshold).
+	Stock        string
+	LowThreshold int
+	Cursor       string
+	Limit        int
 }
 
 // ProductPage is one page of products, newest first.
@@ -278,6 +284,20 @@ func (s *Service) ListProducts(ctx context.Context, q ProductQuery) (ProductPage
 			return ProductPage{}, errs.Validation(errs.FieldError{Field: "status", Code: "invalid", Message: "status must be draft, active or archived"})
 		}
 		f.Status = &st
+	}
+	var fields []errs.FieldError
+	if q.Stock != "" {
+		if !slices.Contains([]string{domain.StockInStock, domain.StockLow, domain.StockOut}, q.Stock) {
+			fields = append(fields, errs.FieldError{Field: "stock", Code: "invalid", Message: "stock must be in_stock, low or out"})
+		}
+		f.Stock = &q.Stock
+	}
+	f.LowThreshold = cmp.Or(q.LowThreshold, domain.DefaultLowThreshold)
+	if f.LowThreshold < 1 || f.LowThreshold > domain.MaxLowThreshold {
+		fields = append(fields, errs.FieldError{Field: "low_threshold", Code: "range", Message: fmt.Sprintf("low_threshold must be between 1 and %d", domain.MaxLowThreshold)})
+	}
+	if len(fields) > 0 {
+		return ProductPage{}, errs.Validation(fields...)
 	}
 	return listPage(ctx, s.db, f, q.Cursor)
 }
@@ -343,4 +363,73 @@ func (s *Service) auditProduct(ctx context.Context, tx pgx.Tx, action string, id
 		e.Metadata = map[string]any{"title": title}
 	}
 	return s.audit.RecordTx(ctx, tx, e)
+}
+
+// ProductCounts is how many live products the store has in each status.
+type ProductCounts struct {
+	All, Active, Draft, Archived int
+}
+
+// CountProducts counts the store's live products by status, for the
+// list's tabs.
+func (s *Service) CountProducts(ctx context.Context) (ProductCounts, error) {
+	var by map[domain.ProductStatus]int
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		by, txErr = store.CountProducts(ctx, tx)
+		return txErr
+	})
+	c := ProductCounts{Active: by[domain.StatusActive], Draft: by[domain.StatusDraft], Archived: by[domain.StatusArchived]}
+	c.All = c.Active + c.Draft + c.Archived
+	return c, err
+}
+
+// BulkProducts sets the status of (action active, draft or archived), or
+// deletes (action delete), the store's live products among ids, and
+// returns how many it changed. Others' and unknown IDs are skipped.
+func (s *Service) BulkProducts(ctx context.Context, ids []ulid.ID, action string) (int, error) {
+	if len(ids) == 0 || len(ids) > domain.MaxBulkProducts {
+		return 0, errs.Validation(errs.FieldError{Field: "product_ids", Code: "count", Message: fmt.Sprintf("send 1 to %d products", domain.MaxBulkProducts)})
+	}
+	if action == domain.BulkDelete {
+		n := 0
+		seen := make(map[ulid.ID]bool, len(ids))
+		for _, id := range ids {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			err := s.DeleteProduct(ctx, id)
+			if errors.Is(err, ErrProductNotFound) {
+				continue
+			}
+			if err != nil {
+				return n, err
+			}
+			n++
+		}
+		return n, nil
+	}
+	st, ok := domain.ParseProductStatus(action)
+	if !ok {
+		return 0, errs.Validation(errs.FieldError{Field: "action", Code: "invalid", Message: "action must be active, draft, archived or delete"})
+	}
+	var changed []ulid.ID
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		if changed, txErr = store.SetProductsStatus(ctx, tx, ids, st); txErr != nil {
+			return txErr
+		}
+		for _, id := range changed {
+			if txErr = s.changed(ctx, tx, id, domain.ReasonUpdated); txErr != nil {
+				return txErr
+			}
+			if txErr = s.auditProduct(ctx, tx, "product.updated", id, ""); txErr != nil {
+				return txErr
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(changed), nil
 }

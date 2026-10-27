@@ -125,6 +125,30 @@ func (e ProductStatus) Valid() bool {
 	}
 }
 
+// Defines values for ProductBulkAction.
+const (
+	ProductBulkActionActive   ProductBulkAction = "active"
+	ProductBulkActionArchived ProductBulkAction = "archived"
+	ProductBulkActionDelete   ProductBulkAction = "delete"
+	ProductBulkActionDraft    ProductBulkAction = "draft"
+)
+
+// Valid indicates whether the value is a known member of the ProductBulkAction enum.
+func (e ProductBulkAction) Valid() bool {
+	switch e {
+	case ProductBulkActionActive:
+		return true
+	case ProductBulkActionArchived:
+		return true
+	case ProductBulkActionDelete:
+		return true
+	case ProductBulkActionDraft:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProductImageFailureReason.
 const (
 	CorruptImage    ProductImageFailureReason = "corrupt_image"
@@ -299,6 +323,27 @@ func (e ListProductsParamsStatus) Valid() bool {
 	case ListProductsParamsStatusArchived:
 		return true
 	case ListProductsParamsStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListProductsParamsStock.
+const (
+	InStock ListProductsParamsStock = "in_stock"
+	Low     ListProductsParamsStock = "low"
+	Out     ListProductsParamsStock = "out"
+)
+
+// Valid indicates whether the value is a known member of the ListProductsParamsStock enum.
+func (e ListProductsParamsStock) Valid() bool {
+	switch e {
+	case InStock:
+		return true
+	case Low:
+		return true
+	case Out:
 		return true
 	default:
 		return false
@@ -522,6 +567,23 @@ type Product struct {
 
 // ProductStatus defines model for Product.Status.
 type ProductStatus string
+
+// ProductBulk defines model for ProductBulk.
+type ProductBulk struct {
+	Action     ProductBulkAction `json:"action"`
+	ProductIds []ULID            `json:"product_ids"`
+}
+
+// ProductBulkAction defines model for ProductBulk.Action.
+type ProductBulkAction string
+
+// ProductCounts defines model for ProductCounts.
+type ProductCounts struct {
+	Active   int `json:"active"`
+	All      int `json:"all"`
+	Archived int `json:"archived"`
+	Draft    int `json:"draft"`
+}
 
 // ProductImage defines model for ProductImage.
 type ProductImage struct {
@@ -773,12 +835,23 @@ type ListLowStockParams struct {
 type ListProductsParams struct {
 	Status     *ListProductsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 	CategoryId *ULID                     `form:"category_id,omitempty" json:"category_id,omitempty"`
-	Cursor     *string                   `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit      *int                      `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Stock `in_stock`: a variant can be bought (untracked, or units free);
+	// `out`: none can; `low`: a tracked variant has 1 to
+	// `low_threshold` units free.
+	Stock *ListProductsParamsStock `form:"stock,omitempty" json:"stock,omitempty"`
+
+	// LowThreshold The `low` bound; the dashboard passes the storefront theme's `low_stock`.
+	LowThreshold *int    `form:"low_threshold,omitempty" json:"low_threshold,omitempty"`
+	Cursor       *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit        *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListProductsParamsStatus defines parameters for ListProducts.
 type ListProductsParamsStatus string
+
+// ListProductsParamsStock defines parameters for ListProducts.
+type ListProductsParamsStock string
 
 // SearchProductsParams defines parameters for SearchProducts.
 type SearchProductsParams struct {
@@ -803,6 +876,9 @@ type CreateImportJSONRequestBody = ImportRequest
 
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductInput
+
+// BulkProductsJSONRequestBody defines body for BulkProducts for application/json ContentType.
+type BulkProductsJSONRequestBody = ProductBulk
 
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductInput
@@ -857,6 +933,12 @@ type ServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// BulkProducts Change the status of, or delete, several products
+	// (POST /v1/stores/{store_id}/products/bulk)
+	BulkProducts(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CountProducts Count products by status
+	// (GET /v1/stores/{store_id}/products/counts)
+	CountProducts(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// DeleteSampleProducts Delete the starter template's sample products
 	// (DELETE /v1/stores/{store_id}/products/samples)
 	DeleteSampleProducts(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -1256,6 +1338,32 @@ func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "stock" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stock", r.URL.Query(), &params.Stock, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stock"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stock", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "low_threshold" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "low_threshold", r.URL.Query(), &params.LowThreshold, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "low_threshold"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "low_threshold", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "cursor" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -1310,6 +1418,58 @@ func (siw *ServerInterfaceWrapper) CreateProduct(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProduct(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BulkProducts operation middleware
+func (siw *ServerInterfaceWrapper) BulkProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkProducts(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CountProducts operation middleware
+func (siw *ServerInterfaceWrapper) CountProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CountProducts(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2025,6 +2185,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.ListProducts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products", wrapper.CreateProduct)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/counts", wrapper.CountProducts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/products/bulk", wrapper.BulkProducts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/samples", wrapper.DeleteSampleProducts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/products/search", wrapper.SearchProducts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/products/{product_id}", wrapper.DeleteProduct)
@@ -2490,6 +2652,87 @@ type CreateProductdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateProductdefaultApplicationProblemPlusJSONResponse) VisitCreateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkProductsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *BulkProductsJSONRequestBody
+}
+
+type BulkProductsResponseObject interface {
+	VisitBulkProductsResponse(w http.ResponseWriter) error
+}
+
+type BulkProducts200JSONResponse struct {
+	Updated int `json:"updated"`
+}
+
+func (response BulkProducts200JSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkProductsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response BulkProductsdefaultApplicationProblemPlusJSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CountProductsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type CountProductsResponseObject interface {
+	VisitCountProductsResponse(w http.ResponseWriter) error
+}
+
+type CountProducts200JSONResponse ProductCounts
+
+func (response CountProducts200JSONResponse) VisitCountProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CountProductsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CountProductsdefaultApplicationProblemPlusJSONResponse) VisitCountProductsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -3126,6 +3369,12 @@ type StrictServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /v1/stores/{store_id}/products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
+	// BulkProducts Change the status of, or delete, several products
+	// (POST /v1/stores/{store_id}/products/bulk)
+	BulkProducts(ctx context.Context, request BulkProductsRequestObject) (BulkProductsResponseObject, error)
+	// CountProducts Count products by status
+	// (GET /v1/stores/{store_id}/products/counts)
+	CountProducts(ctx context.Context, request CountProductsRequestObject) (CountProductsResponseObject, error)
 	// DeleteSampleProducts Delete the starter template's sample products
 	// (DELETE /v1/stores/{store_id}/products/samples)
 	DeleteSampleProducts(ctx context.Context, request DeleteSampleProductsRequestObject) (DeleteSampleProductsResponseObject, error)
@@ -3525,6 +3774,65 @@ func (sh *strictHandler) CreateProduct(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateProductResponseObject); ok {
 		if err := validResponse.VisitCreateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BulkProducts operation middleware
+func (sh *strictHandler) BulkProducts(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request BulkProductsRequestObject
+
+	request.StoreId = storeId
+
+	var body BulkProductsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BulkProducts(ctx, request.(BulkProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BulkProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BulkProductsResponseObject); ok {
+		if err := validResponse.VisitBulkProductsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CountProducts operation middleware
+func (sh *strictHandler) CountProducts(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CountProductsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CountProducts(ctx, request.(CountProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CountProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CountProductsResponseObject); ok {
+		if err := validResponse.VisitCountProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

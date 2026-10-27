@@ -264,7 +264,11 @@ type ProductFilter struct {
 	Status     *domain.ProductStatus
 	CategoryID *ulid.ID
 	After      *ulid.ID // last ID of the previous page
-	Limit      int
+	// Stock keeps in_stock, low (1 to LowThreshold units free) or out
+	// products; nil keeps all.
+	Stock        *string
+	LowThreshold int
+	Limit        int
 }
 
 // ListProducts returns a page of products, newest first, with their
@@ -280,20 +284,21 @@ func ListProducts(ctx context.Context, tx Tx, f ProductFilter) ([]domain.Product
 		s := string(*f.Status)
 		status = &s
 	}
-	lim := int32(f.Limit) //nolint:gosec // bounded by domain.MaxProductsPageLimit
+	lim := int32(f.Limit)        //nolint:gosec // bounded by domain.MaxProductsPageLimit
+	low := int32(f.LowThreshold) //nolint:gosec // bounded by domain.MaxLowThreshold
 	q := catalogdb.New(tx)
 	var rows []catalogdb.ListProductsRow
 	if f.CategoryID != nil {
 		var inCat []catalogdb.ListProductsInCategoryRow
 		inCat, err = q.ListProductsInCategory(ctx, catalogdb.ListProductsInCategoryParams{
-			StoreID: store, CategoryID: *f.CategoryID, Status: status, After: f.After, Lim: lim,
+			StoreID: store, CategoryID: *f.CategoryID, Status: status, After: f.After, Stock: f.Stock, LowThreshold: low, Lim: lim,
 		})
 		rows = make([]catalogdb.ListProductsRow, len(inCat))
 		for i, r := range inCat {
 			rows[i] = catalogdb.ListProductsRow(r)
 		}
 	} else {
-		rows, err = q.ListProducts(ctx, catalogdb.ListProductsParams{StoreID: store, Status: status, After: f.After, Lim: lim})
+		rows, err = q.ListProducts(ctx, catalogdb.ListProductsParams{StoreID: store, Status: status, After: f.After, Stock: f.Stock, LowThreshold: low, Lim: lim})
 	}
 	if err != nil {
 		return nil, productErr(err, "list products")
@@ -448,4 +453,35 @@ func LowStock(ctx context.Context, tx Tx, threshold, limit int) ([]domain.LowSto
 		total = int(r.Total)
 	}
 	return out, total, nil
+}
+
+// CountProducts counts the store's live products by status.
+func CountProducts(ctx context.Context, tx Tx) (map[domain.ProductStatus]int, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := catalogdb.New(tx).CountProductsByStatus(ctx, store)
+	if err != nil {
+		return nil, productErr(err, "count products")
+	}
+	out := make(map[domain.ProductStatus]int, len(rows))
+	for _, r := range rows {
+		out[domain.ProductStatus(r.Status)] = int(r.N)
+	}
+	return out, nil
+}
+
+// SetProductsStatus sets the status of the store's live products among
+// ids and returns the IDs it changed.
+func SetProductsStatus(ctx context.Context, tx Tx, ids []ulid.ID, status domain.ProductStatus) ([]ulid.ID, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out, err := catalogdb.New(tx).SetProductsStatus(ctx, catalogdb.SetProductsStatusParams{StoreID: store, Ids: ids, Status: string(status)})
+	if err != nil {
+		return nil, productErr(err, "set products status")
+	}
+	return out, nil
 }

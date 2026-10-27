@@ -733,6 +733,17 @@ paths:
         - name: category_id
           in: query
           schema: { $ref: "#/components/schemas/ULID" }
+        - name: stock
+          in: query
+          description: |
+            `in_stock`: a variant can be bought (untracked, or units free);
+            `out`: none can; `low`: a tracked variant has 1 to
+            `low_threshold` units free.
+          schema: { type: string, enum: [in_stock, low, out] }
+        - name: low_threshold
+          in: query
+          description: The `low` bound; the dashboard passes the storefront theme's `low_stock`.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 5 }
         - name: cursor
           in: query
           schema: { type: string, maxLength: 64 }
@@ -765,6 +776,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Product" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/counts:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: countProducts
+      summary: Count products by status
+      description: "Permission: catalog.read. Live products only, for the list's tabs."
+      responses:
+        "200":
+          description: The counts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductCounts" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/products/bulk:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [catalog]
+      operationId: bulkProducts
+      summary: Change the status of, or delete, several products
+      description: |
+        Permission: catalog.manage. `active`, `draft` or `archived` sets the
+        status of every listed product; `delete` deletes them as
+        deleteProduct does. IDs that are not the store's live products are
+        skipped; `updated` counts the others.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductBulk" }
+      responses:
+        "200":
+          description: How many products changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated: { type: integer }
         default:
           $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/products/samples:
@@ -3289,6 +3345,24 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Import" }
+    ProductCounts:
+      type: object
+      required: [all, active, draft, archived]
+      properties:
+        all: { type: integer }
+        active: { type: integer }
+        draft: { type: integer }
+        archived: { type: integer }
+    ProductBulk:
+      type: object
+      required: [product_ids, action]
+      properties:
+        product_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ULID" }
+        action: { type: string, enum: [active, draft, archived, delete] }
     ProductSearchPage:
       type: object
       required: [items, estimated_total]

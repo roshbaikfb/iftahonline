@@ -636,6 +636,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/products/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Count products by status
+         * @description Permission: catalog.read. Live products only, for the list's tabs.
+         */
+        get: operations["countProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/products/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the status of, or delete, several products
+         * @description Permission: catalog.manage. `active`, `draft` or `archived` sets the
+         *     status of every listed product; `delete` deletes them as
+         *     deleteProduct does. IDs that are not the store's live products are
+         *     skipped; `updated` counts the others.
+         */
+        post: operations["bulkProducts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/products/samples": {
         parameters: {
             query?: never;
@@ -2843,6 +2890,17 @@ export interface components {
         ImportList: {
             items: components["schemas"]["Import"][];
         };
+        ProductCounts: {
+            all: number;
+            active: number;
+            draft: number;
+            archived: number;
+        };
+        ProductBulk: {
+            product_ids: components["schemas"]["ULID"][];
+            /** @enum {string} */
+            action: "active" | "draft" | "archived" | "delete";
+        };
         ProductSearchPage: {
             items: components["schemas"]["ProductSearchHit"][];
             /** Format: int64 */
@@ -4653,6 +4711,14 @@ export interface operations {
             query?: {
                 status?: "draft" | "active" | "archived";
                 category_id?: components["schemas"]["ULID"];
+                /**
+                 * @description `in_stock`: a variant can be bought (untracked, or units free);
+                 *     `out`: none can; `low`: a tracked variant has 1 to
+                 *     `low_threshold` units free.
+                 */
+                stock?: "in_stock" | "low" | "out";
+                /** @description The `low` bound; the dashboard passes the storefront theme's `low_stock`. */
+                low_threshold?: number;
                 cursor?: string;
                 limit?: number;
             };
@@ -4698,6 +4764,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Product"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    countProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductCounts"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    bulkProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductBulk"];
+            };
+        };
+        responses: {
+            /** @description How many products changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        updated: number;
+                    };
                 };
             };
             default: components["responses"]["Problem"];
