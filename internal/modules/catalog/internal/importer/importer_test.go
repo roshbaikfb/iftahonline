@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -316,5 +318,34 @@ func TestWoo(t *testing.T) {
 	internal.Client = safehttp.New(safehttp.Options{})
 	if _, err = OpenWoo(t.Context(), internal); func() bool { c, ok := IsSourceError(err); return !ok || c != "woo_blocked_address" }() {
 		t.Fatalf("loopback reached: %v", err)
+	}
+}
+
+// TestDashboardTemplate: the CSV the dashboard offers merchants as a
+// starting point imports cleanly.
+func TestDashboardTemplate(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "web", "dashboard", "public", "products-template.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := NewCSV(data, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs := all(t, src)
+	if len(recs) != 2 {
+		t.Fatalf("records = %d, want 2", len(recs))
+	}
+	for _, r := range recs {
+		if r.Err != "" {
+			t.Fatalf("line %d: %s", r.Line, r.Err)
+		}
+		if _, err := domain.ValidateProduct(r.Product); err != nil {
+			t.Fatalf("%s does not validate: %v", r.Product.Slug, err)
+		}
+	}
+	if tee := recs[0].Product; len(tee.Variants) != 3 || len(tee.Options) != 2 {
+		t.Fatalf("tee = %d variants, %d options", len(tee.Variants), len(tee.Options))
 	}
 }

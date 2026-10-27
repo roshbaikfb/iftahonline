@@ -2663,3 +2663,148 @@ tr.hidden-variant input:not([type='checkbox']) {
     margin: 0;
   }
 }
+
+/* Categories, inventory and imports (U5, in the design system). */
+.cat-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cat-tree li {
+  border-block-end: 1px solid var(--line);
+}
+.cat-tree li.depth-2 {
+  padding-inline-start: 1.75rem;
+}
+.cat-tree li.depth-3 {
+  padding-inline-start: 3.5rem;
+}
+.cat-tree li.depth-2 .cat-row,
+.cat-tree li.depth-3 .cat-row {
+  border-inline-start: 2px solid var(--line);
+  padding-inline-start: 0.75rem;
+}
+.cat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  min-block-size: 3.5rem;
+  padding-block: 0.4rem;
+}
+.cat-row > div:first-child {
+  flex: 1 1 12rem;
+}
+.cat-row .title {
+  font-weight: 600;
+}
+.cat-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-block: 0.4rem;
+  border: 1px solid var(--field);
+  border-radius: 0.75rem;
+  background: var(--tint);
+}
+.cat-form .field-label {
+  flex: 1 1 12rem;
+}
+.cat-form .field-label.pos {
+  flex: 0 1 6rem;
+}
+table.inventory {
+  min-inline-size: 46rem;
+}
+table.inventory .title {
+  font-weight: 600;
+}
+table.inventory .status {
+  margin-inline-start: 0.4rem;
+}
+.stock-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.stock-form input {
+  inline-size: 6rem;
+  min-block-size: 2.25rem;
+}
+.steps-list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+  line-height: 1.7;
+}
+.import-csv,
+.import-woo {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: start;
+}
+.import-woo .field-label {
+  inline-size: min(28rem, 100%);
+}
+label.button.primary {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+  cursor: pointer;
+}
+label.button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+ul.imports {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ul.imports > li {
+  padding: 0.75rem 1rem;
+  border-block-end: 1px solid var(--line);
+}
+.import-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.import-row > div:first-child {
+  flex: 1 1 14rem;
+}
+.progress {
+  flex: 1 1 8rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  block-size: 100%;
+  background: var(--green);
+}
+.import-report {
+  margin-block-start: 0.6rem;
+}
+.import-report table {
+  inline-size: auto;
+  min-inline-size: 18rem;
+  font-size: 0.85rem;
+}
+.import-report caption {
+  text-align: start;
+  font-weight: 700;
+  padding-block-end: 0.4rem;
+}
+.import-report th,
+.import-report td {
+  padding: 0.35rem 0.6rem;
+  background: none;
+}

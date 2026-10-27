@@ -1,0 +1,5 @@
+﻿handle,title,description,status,categories,option1_name,option1_value,option2_name,option2_value,sku,price,compare_at_price,stock
+cotton-tee,تيشيرت قطن,قطن مصري 100%,active,تيشيرتات,المقاس,S,اللون,كحلي,TEE-S-NV,250,300,10
+cotton-tee,,,,,,M,,كحلي,TEE-M-NV,250,300,12
+cotton-tee,,,,,,L,,أبيض,TEE-L-WH,250,,8
+canvas-bag,شنطة قماش,شنطة يومية,draft,إكسسوارات,,,,,BAG-1,180,,30

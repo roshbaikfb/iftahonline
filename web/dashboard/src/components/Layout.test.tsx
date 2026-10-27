@@ -63,7 +63,8 @@ describe('Layout', () => {
     expect(within(nav).getByRole('link', { name: 'الشحنات' })).not.toHaveAttribute('aria-current');
     expect(within(nav).getByRole('link', { name: 'الدفع بالبطاقة' })).toHaveAttribute('href', `/stores/${a}/gateways`);
     // a screen not built yet is not a link, and says so
-    expect(within(nav).queryByRole('link', { name: /التصنيفات/ })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: /التصميم/ })).toBeNull();
+    expect(within(nav).getByRole('link', { name: 'التصنيفات' })).toHaveAttribute('href', `/stores/${a}/categories`);
     expect(within(nav).getByRole('link', { name: 'المنتجات' })).toHaveAttribute('href', `/stores/${a}/products`);
     const soon = within(nav).getByText('التصميم').closest('.item');
     expect(soon).toHaveAttribute('aria-disabled', 'true');
