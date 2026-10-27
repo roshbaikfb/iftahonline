@@ -37,13 +37,14 @@ form's shipping and COD-fee line (`POST /order/quote`):
 | `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
 
 The module consumes `catalog.product.changed`, `catalog.product.deleted`,
-`catalog.category.changed`, `payments.connection.changed` and its own
+`catalog.category.changed`, `catalog.size_chart.changed`, `payments.connection.changed` and its own
 two events: the subscriber
 `storefront.invalidate_pages` publishes the store ID on the Redis
 channel `storefront:invalidate`, and every storefront instance drops that
 store's cached pages, and `storefront.purge_edge` purges the edge
 cache's pages (`payments.connection.changed` purges the whole store:
-every footer lists the payment methods).
+every footer lists the payment methods; so does a size chart's change,
+whose event does not list the products using it).
 
 ## Rendering (`internal/web`)
 
@@ -119,7 +120,13 @@ The product page (U2b, the approved mockup):
     `/order/quote` for the delivery and shipping lines.
   - Payment: COD, and cards only when they are on.
   - Returns: only when the refund policy is published, with its link.
-- **Not shown.** The size chart, until products get one (U5).
+- **Size chart.** When the product has one (ADR-0035): «جدول المقاسات»,
+  closed, a table in centimetres with the size as each row's header,
+  scrolling sideways on phones.
+- **Colours.** A colour the merchant set paints its swatch through a
+  second inline `<style>` of the page's own rules (`.swc-<option>-<value>`),
+  which the CSP allows by its own hash; only `#rrggbb` is ever written.
+  Without one the swatch is guessed from the name.
 - **Related products.** The first category's newest (one query, at most
   4). The page carries their `p-` tags, not the listing tag, so a store's
   every edit does not purge every product page.
