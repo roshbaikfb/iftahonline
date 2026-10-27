@@ -2646,3 +2646,20 @@ tr.hidden-variant input:not([type='checkbox']) {
     border: 0;
   }
 }
+@media (max-width: 40rem) {
+  table.variants td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-block-end: 0.15rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  table.variants td.center {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  table.variants td.center::before {
+    margin: 0;
+  }
+}

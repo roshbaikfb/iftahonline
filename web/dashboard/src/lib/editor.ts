@@ -12,10 +12,12 @@ export const maxOptions = 3;
 export const maxValues = 50;
 export const maxVariants = 100;
 
-// OptionDraft is an option being edited. colors is null for an option
-// that is not a colour; otherwise one "#rrggbb" or "" (guess from the
-// name) per value (ADR-0035).
+// OptionDraft is an option being edited. uid follows it through renames
+// and removals of others (never sent). colors is null for an option that
+// is not a colour; otherwise one "#rrggbb" or "" (guess from the name)
+// per value (ADR-0035).
 export interface OptionDraft {
+  uid: string;
   name: string;
   values: string[];
   colors: string[] | null;
@@ -41,25 +43,38 @@ export interface Draft {
   description: string;
   status: ProductStatus;
   options: OptionDraft[];
+  // gridOptions are the options the variants rows were made from: they
+  // lag behind options while those would make too many variants.
+  gridOptions: OptionDraft[];
   variants: VariantDraft[];
   categoryIds: string[];
   sizeChartId: string;
 }
 
+let uids = 0;
+
+// newOption is an empty option with its own uid.
+export function newOption(): OptionDraft {
+  uids += 1;
+  return { uid: `o${String(uids)}`, name: '', values: [], colors: null };
+}
+
 export function emptyDraft(): Draft {
   return {
-    title: '', description: '', status: 'draft', options: [], categoryIds: [], sizeChartId: '',
+    title: '', description: '', status: 'draft', options: [], gridOptions: [], categoryIds: [], sizeChartId: '',
     variants: [{ values: [], price: '', compare: '', sku: '', stock: '0', tracked: true, hidden: false }],
   };
 }
 
 // draftOf reads a saved product into the editor.
 export function draftOf(p: Product): Draft {
+  const options = p.options.map((o) => ({ ...newOption(), name: o.name, values: [...o.values], colors: o.colors ? [...o.colors] : null }));
   return {
     title: p.title,
     description: p.description,
     status: p.status,
-    options: p.options.map((o) => ({ name: o.name, values: [...o.values], colors: o.colors ? [...o.colors] : null })),
+    options,
+    gridOptions: options,
     variants: p.variants.map((v) => ({
       id: v.id,
       values: v.option_values,
@@ -76,26 +91,40 @@ export function draftOf(p: Product): Draft {
   };
 }
 
-const key = (values: string[]) => values.map((v) => v.trim().toLowerCase()).join('\u0000');
-
 // combinations is every choice of one value per option, in option order.
 export function combinations(options: OptionDraft[]): string[][] {
   return options.reduce<string[][]>((acc, o) => acc.flatMap((head) => o.values.map((v) => [...head, v])), [[]]);
 }
 
-// regenerate rebuilds the variants grid after the options changed: one
-// row per combination, keeping a row (and its ID, prices and stock) whose
-// values are still there. New rows start from the first row's price. A
-// renamed value is a new combination: its old row (and stock) goes.
-export function regenerate(options: OptionDraft[], rows: VariantDraft[]): VariantDraft[] {
-  const usable = options.filter((o) => o.values.length > 0);
-  const byKey = new Map(rows.map((r) => [key(r.values), r]));
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// regenerate rebuilds the variants grid after the options went from prev
+// to next: one row per combination. A row keeps its ID, prices and stock
+// while its values are still there; an option added since takes its
+// first value (so adding «اللون» to a product sold by size keeps every
+// size, and its stock, as the first colour). New rows start from the
+// first row's price. A removed value takes its rows (and their stock).
+export function regenerate(prev: OptionDraft[], next: OptionDraft[], rows: VariantDraft[]): VariantDraft[] {
+  const was = prev.filter((o) => o.values.length > 0);
+  const usable = next.filter((o) => o.values.length > 0);
+  const known = rows.map((r) => new Map(was.map((o, i) => [o.uid, r.values[i] ?? ''])));
+  const used = new Set<number>();
   const model = rows[0];
   return combinations(usable).map((values) => {
-    const kept = byKey.get(key(values));
-    if (kept) return { ...kept, values };
-    // Without options there is one variant: the old single row, if any.
-    if (values.length === 0 && model?.values.length === 0) return model;
+    const at = rows.findIndex(
+      (_, r) =>
+        !used.has(r) &&
+        usable.every((o, i) => {
+          const had = known[r]?.get(o.uid);
+          const v = values[i] ?? '';
+          return had === undefined ? same(v, o.values[0] ?? '') : same(had, v);
+        }),
+    );
+    const kept = rows[at];
+    if (kept) {
+      used.add(at);
+      return { ...kept, values };
+    }
     return { values, price: model?.price ?? '', compare: model?.compare ?? '', sku: '', stock: '0', tracked: true, hidden: false };
   });
 }

@@ -6,7 +6,7 @@ import { Layout } from '../components/Layout';
 import { OptionEditor } from '../components/OptionEditor';
 import { ProductImages } from '../components/ProductImages';
 import { VariantsGrid } from '../components/VariantsGrid';
-import { build, draftOf, emptyDraft, maxOptions, maxVariants, regenerate, variantCount, type Draft, type OptionDraft } from '../lib/editor';
+import { build, draftOf, emptyDraft, maxOptions, maxVariants, newOption, regenerate, variantCount, type Draft, type OptionDraft } from '../lib/editor';
 import { count } from '../lib/home';
 import { problemMessage } from '../lib/problem';
 import { productStatusLabel, type Category, type Product } from '../lib/products';
@@ -75,7 +75,9 @@ export function ProductEditor() {
   }, [storeId]);
 
   function setOptions(options: OptionDraft[]) {
-    setDraft((d) => ({ ...d, options, variants: variantCount(options) > maxVariants ? d.variants : regenerate(options, d.variants) }));
+    setDraft((d) =>
+      variantCount(options) > maxVariants ? { ...d, options } : { ...d, options, gridOptions: options, variants: regenerate(d.gridOptions, options, d.variants) },
+    );
   }
 
   async function addCategory(e: KeyboardEvent<HTMLInputElement>) {
@@ -107,6 +109,14 @@ export function ProductEditor() {
     if (Object.keys(b.errors).length > 0) {
       setFailure('راجع الحقول المعلّمة.');
       return;
+    }
+    // Variants left out are deleted with their stock: say so first.
+    const keep = new Set(draft.variants.map((v) => v.id));
+    const lost = (saved?.variants ?? []).filter((v) => !keep.has(v.id) && v.stock.on_hand > 0);
+    if (lost.length > 0) {
+      const units = lost.reduce((n, v) => n + v.stock.on_hand, 0);
+      const names = lost.map((v) => v.option_values.join(' / ')).join('، ');
+      if (!globalThis.confirm(`سيُحذف ${count(lost.length, 'نوع واحد', 'نوعان', 'أنواع', 'نوعًا')} (${names}) ومعه مخزون ${String(units)} قطعة. للاحتفاظ بالمخزون ألغِ «متاح للبيع» بدل حذف القيمة. متابعة؟`)) return;
     }
     setSaving(true);
     const res = saved
@@ -226,7 +236,7 @@ export function ProductEditor() {
             </div>
             {draft.options.map((o, i) => (
               <OptionEditor
-                key={i}
+                key={o.uid}
                 option={o}
                 index={i}
                 error={err(`options.${String(i)}`)}
@@ -249,7 +259,7 @@ export function ProductEditor() {
                   type="button"
                   className="secondary"
                   onClick={() => {
-                    setOptions([...draft.options, { name: '', values: [], colors: null }]);
+                    setOptions([...draft.options, newOption()]);
                   }}
                 >
                   + أضف خيارًا
@@ -259,7 +269,7 @@ export function ProductEditor() {
           </section>
 
           <VariantsGrid
-            options={draft.options}
+            options={draft.gridOptions}
             variants={draft.variants}
             currency={symbols[currency] ?? currency}
             errors={errors}
