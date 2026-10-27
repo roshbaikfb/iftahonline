@@ -12,6 +12,38 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const countProductsByStatus = `-- name: CountProductsByStatus :many
+SELECT status, count(*)::int AS n FROM products
+WHERE store_id = $1 AND deleted_at IS NULL
+GROUP BY status
+`
+
+type CountProductsByStatusRow struct {
+	Status string
+	N      int32
+}
+
+// The dashboard list's tabs (products_store_status_list).
+func (q *Queries) CountProductsByStatus(ctx context.Context, storeID ulid.ID) ([]CountProductsByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countProductsByStatus, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountProductsByStatusRow{}
+	for rows.Next() {
+		var i CountProductsByStatusRow
+		if err := rows.Scan(&i.Status, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteProductCategories = `-- name: DeleteProductCategories :exec
 DELETE FROM product_categories WHERE store_id = $1 AND product_id = $2
 `
@@ -287,15 +319,24 @@ FROM products p
 WHERE p.store_id = $1 AND p.deleted_at IS NULL
   AND ($2::text IS NULL OR p.status = $2::text)
   AND ($3::uuid IS NULL OR p.id < $3::uuid)
+  AND ($4::text IS NULL OR (
+    SELECT CASE $4::text
+      WHEN 'in_stock' THEN coalesce(bool_or(NOT il.tracked OR il.on_hand > il.reserved), false)
+      WHEN 'out' THEN NOT coalesce(bool_or(NOT il.tracked OR il.on_hand > il.reserved), false)
+      ELSE coalesce(bool_or(il.tracked AND il.on_hand - il.reserved BETWEEN 1 AND $5::int), false) END
+    FROM variants v JOIN inventory_levels il ON il.store_id = v.store_id AND il.variant_id = v.id
+    WHERE v.store_id = p.store_id AND v.product_id = p.id AND v.deleted_at IS NULL))
 ORDER BY p.id DESC
-LIMIT $4
+LIMIT $6
 `
 
 type ListProductsParams struct {
-	StoreID ulid.ID
-	Status  *string
-	After   *ulid.ID
-	Lim     int32
+	StoreID      ulid.ID
+	Status       *string
+	After        *ulid.ID
+	Stock        *string
+	LowThreshold int32
+	Lim          int32
 }
 
 type ListProductsRow struct {
@@ -314,12 +355,18 @@ type ListProductsRow struct {
 	CategoryIds []ulid.ID
 }
 
-// Newest first; `after` is the last ID of the previous page.
+// Newest first; `after` is the last ID of the previous page. `stock`
+// keeps products a variant of which can be bought (in_stock), none of
+// which can (out), or with a tracked variant of 1 to low_threshold units
+// free (low). The stock test is one aggregate per scanned product (an
+// EXISTS form gets hashed over every variant of the store).
 func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]ListProductsRow, error) {
 	rows, err := q.db.Query(ctx, listProducts,
 		arg.StoreID,
 		arg.Status,
 		arg.After,
+		arg.Stock,
+		arg.LowThreshold,
 		arg.Lim,
 	)
 	if err != nil {
@@ -363,16 +410,25 @@ JOIN products p ON p.store_id = pc.store_id AND p.id = pc.product_id
 WHERE pc.store_id = $1 AND pc.category_id = $2 AND p.deleted_at IS NULL
   AND ($3::text IS NULL OR p.status = $3::text)
   AND ($4::uuid IS NULL OR pc.product_id < $4::uuid)
+  AND ($5::text IS NULL OR (
+    SELECT CASE $5::text
+      WHEN 'in_stock' THEN coalesce(bool_or(NOT il.tracked OR il.on_hand > il.reserved), false)
+      WHEN 'out' THEN NOT coalesce(bool_or(NOT il.tracked OR il.on_hand > il.reserved), false)
+      ELSE coalesce(bool_or(il.tracked AND il.on_hand - il.reserved BETWEEN 1 AND $6::int), false) END
+    FROM variants v JOIN inventory_levels il ON il.store_id = v.store_id AND il.variant_id = v.id
+    WHERE v.store_id = p.store_id AND v.product_id = p.id AND v.deleted_at IS NULL))
 ORDER BY pc.product_id DESC
-LIMIT $5
+LIMIT $7
 `
 
 type ListProductsInCategoryParams struct {
-	StoreID    ulid.ID
-	CategoryID ulid.ID
-	Status     *string
-	After      *ulid.ID
-	Lim        int32
+	StoreID      ulid.ID
+	CategoryID   ulid.ID
+	Status       *string
+	After        *ulid.ID
+	Stock        *string
+	LowThreshold int32
+	Lim          int32
 }
 
 type ListProductsInCategoryRow struct {
@@ -399,6 +455,8 @@ func (q *Queries) ListProductsInCategory(ctx context.Context, arg ListProductsIn
 		arg.CategoryID,
 		arg.Status,
 		arg.After,
+		arg.Stock,
+		arg.LowThreshold,
 		arg.Lim,
 	)
 	if err != nil {
@@ -509,6 +567,41 @@ func (q *Queries) MarkSample(ctx context.Context, arg MarkSampleParams) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setProductsStatus = `-- name: SetProductsStatus :many
+UPDATE products p SET status = $1, updated_at = now()
+FROM unnest($3::uuid[]) AS ids(id)
+WHERE p.id = ids.id AND p.store_id = $2 AND p.deleted_at IS NULL
+RETURNING p.id
+`
+
+type SetProductsStatusParams struct {
+	Status  string
+	StoreID ulid.ID
+	Ids     []ulid.ID
+}
+
+// One primary-key lookup per ID (see ListActiveProductsByIDs); IDs that
+// are not the store's live products are skipped.
+func (q *Queries) SetProductsStatus(ctx context.Context, arg SetProductsStatusParams) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, setProductsStatus, arg.Status, arg.StoreID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var id ulid.ID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const softDeleteProduct = `-- name: SoftDeleteProduct :execrows

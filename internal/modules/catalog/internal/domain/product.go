@@ -40,7 +40,20 @@ const (
 	DefaultProductsLimit  = 25
 	MaxProductsPageLimit  = 100
 	MaxCategoriesPerStore = 500
+	MaxBulkProducts       = 100
+	DefaultLowThreshold   = 5
+	MaxLowThreshold       = 100
 )
+
+// Stock filters of the dashboard's product list.
+const (
+	StockInStock = "in_stock"
+	StockLow     = "low"
+	StockOut     = "out"
+)
+
+// Bulk actions on products: a status, or delete.
+const BulkDelete = "delete"
 
 // ProductStatus is a product's lifecycle state. Only active products are
 // sellable.

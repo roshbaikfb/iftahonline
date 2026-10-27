@@ -88,6 +88,15 @@ func (h *Handlers) ListProducts(ctx context.Context, req ListProductsRequestObje
 	if req.Params.Limit != nil {
 		q.Limit = *req.Params.Limit
 	}
+	if req.Params.Stock != nil {
+		q.Stock = string(*req.Params.Stock)
+	}
+	if req.Params.LowThreshold != nil {
+		q.LowThreshold = *req.Params.LowThreshold
+		if q.LowThreshold == 0 {
+			q.LowThreshold = -1 // 0 is not "the default"
+		}
+	}
 	if req.Params.CategoryId != nil {
 		id, err := bodyID("category_id", *req.Params.CategoryId)
 		if err != nil {
@@ -761,4 +770,39 @@ func sizeChartInput(b SizeChartInput) domain.SizeChartInput {
 func toSizeChart(c domain.SizeChart) SizeChart {
 	return SizeChart{Id: c.ID.String(), Name: c.Name, Header: c.Header, Body: c.Body, Products: c.Products,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+}
+
+// CountProducts implements StrictServerInterface.
+func (h *Handlers) CountProducts(ctx context.Context, _ CountProductsRequestObject) (CountProductsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	c, err := h.svc.CountProducts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return CountProducts200JSONResponse{All: c.All, Active: c.Active, Draft: c.Draft, Archived: c.Archived}, nil
+}
+
+// BulkProducts implements StrictServerInterface.
+func (h *Handlers) BulkProducts(ctx context.Context, req BulkProductsRequestObject) (BulkProductsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	ids := make([]ulid.ID, len(req.Body.ProductIds))
+	for i, s := range req.Body.ProductIds {
+		id, err := bodyID(fmt.Sprintf("product_ids[%d]", i), s)
+		if err != nil {
+			return nil, err
+		}
+		ids[i] = id
+	}
+	n, err := h.svc.BulkProducts(ctx, ids, string(req.Body.Action))
+	if err != nil {
+		return nil, err
+	}
+	return BulkProducts200JSONResponse{Updated: n}, nil
 }

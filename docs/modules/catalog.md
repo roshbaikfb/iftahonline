@@ -77,7 +77,8 @@ parent (`db/migrations/00015_catalog.sql`).
 
 | Operation | Permission |
 |---|---|
-| `listProducts`, `getProduct`, `listCategories`, `searchProducts` | `catalog.read` |
+| `listProducts` (`stock=in_stock\|low\|out`, `low_threshold`), `countProducts` (by status), `getProduct`, `listCategories`, `searchProducts` | `catalog.read` |
+| `bulkProducts` (`POST /products/bulk`: ≤ 100 IDs, `active`/`draft`/`archived` or `delete`; others' and unknown IDs skipped; returns `updated`) | `catalog.manage` |
 | `createProduct`, `updateProduct`, `deleteProduct` | `catalog.manage` |
 | `deleteSampleProducts` (`DELETE /products/samples`, returns `deleted`) | `catalog.manage` |
 | `listLowStock` (`GET /inventory/low?threshold&limit`: tracked variants of active, non-sample products with at most `threshold` units free, fewest first, and the total; the dashboard passes the storefront theme's `low_stock`) | `catalog.read` |
