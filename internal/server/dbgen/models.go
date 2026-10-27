@@ -678,6 +678,7 @@ type Variant struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	DeletedAt      pgtype.Timestamptz
+	Hidden         bool
 }
 
 type WebhookBody struct {

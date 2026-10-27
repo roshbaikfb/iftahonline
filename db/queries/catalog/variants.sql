@@ -5,10 +5,10 @@
 -- text[][] into rows of text[].
 
 -- name: InsertVariants :exec
-INSERT INTO variants (id, store_id, product_id, sku, option_values, price_minor, compare_at_minor, currency, position)
+INSERT INTO variants (id, store_id, product_id, sku, option_values, price_minor, compare_at_minor, currency, position, hidden)
 SELECT (@ids::uuid[])[n], @store_id, @product_id, nullif((@skus::text[])[n], ''),
        ARRAY(SELECT jsonb_array_elements_text((@option_values::jsonb[])[n])),
-       (@prices::bigint[])[n], nullif((@compare_ats::bigint[])[n], 0), @currency, (@positions::int[])[n]
+       (@prices::bigint[])[n], nullif((@compare_ats::bigint[])[n], 0), @currency, (@positions::int[])[n], (@hidden::boolean[])[n]
 FROM generate_subscripts(@ids::uuid[], 1) AS n;
 
 -- name: InsertInventoryLevels :exec
@@ -21,7 +21,7 @@ UPDATE variants AS t
 SET sku = nullif((@skus::text[])[v.n], ''),
     option_values = ARRAY(SELECT jsonb_array_elements_text((@option_values::jsonb[])[v.n])),
     price_minor = (@prices::bigint[])[v.n], compare_at_minor = nullif((@compare_ats::bigint[])[v.n], 0),
-    position = (@positions::int[])[v.n], updated_at = now()
+    position = (@positions::int[])[v.n], hidden = (@hidden::boolean[])[v.n], updated_at = now()
 FROM (SELECT n, (@ids::uuid[])[n] AS id FROM generate_subscripts(@ids::uuid[], 1) AS n) AS v
 WHERE t.store_id = @store_id AND t.product_id = @product_id AND t.id = v.id AND t.deleted_at IS NULL;
 
@@ -40,11 +40,11 @@ WHERE store_id = @store_id AND product_id = @product_id AND deleted_at IS NULL;
 -- One index lookup per product: the LIMIT (= domain.MaxVariants) keeps
 -- the planner from flattening this into a store-wide scan.
 SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-       v.tracked, v.on_hand, v.reserved
+       v.hidden, v.tracked, v.on_hand, v.reserved
 FROM unnest(@product_ids::uuid[]) WITH ORDINALITY AS ids(product_id, ord)
 CROSS JOIN LATERAL (
   SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-         i.tracked, i.on_hand, i.reserved
+         v.hidden, i.tracked, i.on_hand, i.reserved
   FROM variants v
   JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
   WHERE v.store_id = @store_id AND v.product_id = ids.product_id AND v.deleted_at IS NULL
@@ -53,13 +53,14 @@ CROSS JOIN LATERAL (
 ORDER BY ids.ord, v.position, v.id;
 
 -- name: GetSellableVariant :one
--- Sample products (ADR-0034) are shown but never sellable.
+-- Sample products (ADR-0034) are shown but never sellable; hidden
+-- variants (ADR-0035) are neither.
 SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.sku, v.option_values,
        v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved
 FROM variants v
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
-WHERE v.store_id = @store_id AND v.id = @id AND v.deleted_at IS NULL
+WHERE v.store_id = @store_id AND v.id = @id AND v.deleted_at IS NULL AND NOT v.hidden
   AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample;
 
 -- name: ListSellableVariants :many
@@ -71,7 +72,7 @@ SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.s
        v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved,
        img.object_key AS image_key
 FROM unnest(@ids::uuid[]) WITH ORDINALITY AS ids(id, ord)
-JOIN variants v ON v.id = ids.id AND v.store_id = @store_id AND v.deleted_at IS NULL
+JOIN variants v ON v.id = ids.id AND v.store_id = @store_id AND v.deleted_at IS NULL AND NOT v.hidden
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
 LEFT JOIN LATERAL (

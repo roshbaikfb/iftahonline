@@ -3254,6 +3254,11 @@ components:
         compare_at_minor: { type: integer, format: int64, minimum: 1, description: Must exceed price_minor. }
         tracked: { type: boolean, default: true, description: New variants only. }
         on_hand: { type: integer, minimum: 0, maximum: 1000000, default: 0, description: New variants only. }
+        hidden:
+          type: boolean
+          default: false
+          description: Off sale and not shown to shoppers; the variant and its stock are kept.
+
     Product:
       type: object
       required: [id, slug, title, description, status, options, variants, category_ids, images, created_at, updated_at]
@@ -3456,6 +3461,7 @@ components:
         compare_at_minor: { type: integer, format: int64 }
         currency: { type: string, enum: [EGP, SAR, AED] }
         position: { type: integer }
+        hidden: { type: boolean, description: Off sale and not shown to shoppers; absent means false. }
         stock: { $ref: "#/components/schemas/Stock" }
     Stock:
       type: object

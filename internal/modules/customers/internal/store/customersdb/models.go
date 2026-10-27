@@ -681,6 +681,7 @@ type Variant struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      *time.Time
+	Hidden         bool
 }
 
 type WebhookBody struct {

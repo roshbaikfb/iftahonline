@@ -127,7 +127,10 @@ type Variant struct {
 	Price        money.Money
 	CompareAt    *money.Money
 	Position     int
-	Stock        Stock
+	// Hidden takes the variant off sale and out of the shop; it and its
+	// stock are kept (ADR-0035).
+	Hidden bool
+	Stock  Stock
 }
 
 // Product is a catalog item with its variants and category IDs.
@@ -176,6 +179,7 @@ type VariantInput struct {
 	// variants change stock only through the inventory endpoint.
 	Tracked *bool
 	OnHand  int
+	Hidden  bool
 }
 
 // ValidateProduct normalizes in and checks every rule, reporting all

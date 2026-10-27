@@ -2811,6 +2811,11 @@ export interface components {
              * @default 0
              */
             on_hand: number;
+            /**
+             * @description Off sale and not shown to shoppers; the variant and its stock are kept.
+             * @default false
+             */
+            hidden: boolean;
         };
         Product: {
             id: components["schemas"]["ULID"];
@@ -2985,6 +2990,8 @@ export interface components {
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED";
             position: number;
+            /** @description Off sale and not shown to shoppers; absent means false. */
+            hidden?: boolean;
             stock: components["schemas"]["Stock"];
         };
         Stock: {

@@ -132,19 +132,21 @@ type variantBatch struct {
 	prices     []int64
 	compareAts []int64
 	positions  []int32
+	hidden     []bool
 }
 
 func toBatch(vs []NewVariant) (variantBatch, error) {
 	b := variantBatch{
 		ids: make([]ulid.ID, len(vs)), skus: make([]string, len(vs)), options: make([][]byte, len(vs)),
 		prices: make([]int64, len(vs)), compareAts: make([]int64, len(vs)), positions: make([]int32, len(vs)),
+		hidden: make([]bool, len(vs)),
 	}
 	for i, v := range vs {
 		opts, err := json.Marshal(v.In.OptionValues)
 		if err != nil {
 			return variantBatch{}, fmt.Errorf("catalog store: encode option values: %w", err)
 		}
-		b.ids[i], b.skus[i], b.options[i], b.prices[i] = v.ID, v.In.SKU, opts, v.In.PriceMinor
+		b.ids[i], b.skus[i], b.options[i], b.prices[i], b.hidden[i] = v.ID, v.In.SKU, opts, v.In.PriceMinor, v.In.Hidden
 		b.positions[i] = int32(v.Position) //nolint:gosec // bounded by domain.MaxVariants
 		if v.In.CompareAtMinor != nil {
 			b.compareAts[i] = *v.In.CompareAtMinor // 0 means none: a compare-at price is always > price >= 0
@@ -169,7 +171,7 @@ func InsertVariants(ctx context.Context, tx Tx, productID ulid.ID, cur money.Cur
 	q := catalogdb.New(tx)
 	err = q.InsertVariants(ctx, catalogdb.InsertVariantsParams{
 		Ids: b.ids, StoreID: store, ProductID: productID, Skus: b.skus, OptionValues: b.options,
-		Prices: b.prices, CompareAts: b.compareAts, Currency: string(cur), Positions: b.positions,
+		Prices: b.prices, CompareAts: b.compareAts, Currency: string(cur), Positions: b.positions, Hidden: b.hidden,
 	})
 	if err != nil {
 		return productErr(err, "insert variants")
@@ -202,7 +204,7 @@ func UpdateVariants(ctx context.Context, tx Tx, productID ulid.ID, vs []NewVaria
 	}
 	n, err := catalogdb.New(tx).UpdateVariants(ctx, catalogdb.UpdateVariantsParams{
 		Ids: b.ids, StoreID: store, ProductID: productID, Skus: b.skus, OptionValues: b.options,
-		Prices: b.prices, CompareAts: b.compareAts, Positions: b.positions,
+		Prices: b.prices, CompareAts: b.compareAts, Positions: b.positions, Hidden: b.hidden,
 	})
 	if err != nil {
 		return 0, productErr(err, "update variants")
@@ -378,7 +380,7 @@ func toVariant(v catalogdb.ListVariantsByProductsRow) (domain.Variant, error) {
 	}
 	return domain.Variant{
 		ID: v.ID, ProductID: v.ProductID, SKU: deref(v.Sku), OptionValues: v.OptionValues,
-		Price: price, CompareAt: compareAt, Position: int(v.Position),
+		Price: price, CompareAt: compareAt, Position: int(v.Position), Hidden: v.Hidden,
 		Stock: domain.Stock{Tracked: v.Tracked, OnHand: int(v.OnHand), Reserved: int(v.Reserved)},
 	}, nil
 }
