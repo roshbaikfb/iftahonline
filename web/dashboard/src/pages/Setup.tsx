@@ -6,6 +6,7 @@ import { WizardFrame } from '../components/WizardFrame';
 import { toMinor } from '../lib/amounts';
 import { activities, looks, palette, tint, type Activity, type Look, type Onboarding } from '../lib/onboarding';
 import { problemMessage } from '../lib/problem';
+import { postFile } from '../lib/upload';
 import { storefrontURL } from '../lib/storefront';
 
 type ShippingConfig = components['schemas']['ShippingConfig'];
@@ -107,11 +108,7 @@ export function Setup() {
         body: { content_type: type },
       });
       if (err) throw new Error(problemMessage(err));
-      const form = new FormData();
-      for (const [k, v] of Object.entries(data.upload.fields)) form.append(k, v);
-      form.append('file', file);
-      const up = await fetch(data.upload.url, { method: 'POST', body: form });
-      if (!up.ok) throw new Error('تعذّر رفع الملف، جرّب صورة أصغر (حتى 2 ميجابايت).');
+      await postFile(data.upload, file, 'تعذّر رفع الملف، جرّب صورة أصغر (حتى 2 ميجابايت).');
       const done = await api.POST('/v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete', {
         params: { path: { store_id: storeId, asset_id: data.asset.id } },
       });
