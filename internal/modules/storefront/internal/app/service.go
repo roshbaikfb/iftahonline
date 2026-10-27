@@ -96,15 +96,22 @@ func (s *Service) UpdateTheme(ctx context.Context, in domain.ThemeSettings, vers
 	}
 	var t domain.Theme
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		if t, txErr = store.SaveTheme(ctx, tx, in, version); txErr != nil {
-			return txErr
-		}
-		if txErr = s.publish(ctx, tx, domain.EventThemeChanged, func(m event.Meta) event.Event { return domain.ThemeChanged{Meta: m} }); txErr != nil {
-			return txErr
-		}
-		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "theme.updated", TargetType: "theme"})
+		t, txErr = s.saveThemeTx(ctx, tx, in, version, "theme.updated")
+		return txErr
 	})
 	return t, err
+}
+
+// saveThemeTx saves a validated theme over version and tells the shops.
+func (s *Service) saveThemeTx(ctx context.Context, tx pgx.Tx, in domain.ThemeSettings, version int, action string) (domain.Theme, error) {
+	t, err := store.SaveTheme(ctx, tx, in, version)
+	if err != nil {
+		return domain.Theme{}, err
+	}
+	if err = s.publish(ctx, tx, domain.EventThemeChanged, func(m event.Meta) event.Event { return domain.ThemeChanged{Meta: m} }); err != nil {
+		return domain.Theme{}, err
+	}
+	return t, s.audit.RecordTx(ctx, tx, audit.Entry{Action: action, TargetType: "theme"})
 }
 
 // GetHome returns the home page, or the default one at version 0.
@@ -268,28 +275,36 @@ func (s *Service) saveByKey(ctx context.Context, kind domain.PageKind, policy st
 	}
 	var p domain.Page
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		action := "page.updated"
-		if in.Version == 0 {
-			action = "page.created"
-			p, txErr = store.InsertPage(ctx, tx, s.ids.New(), kind, in)
-			if errors.Is(txErr, store.ErrSlugTaken) {
-				return domain.ErrVersionConflict
-			}
-		} else {
-			var cur domain.Page
-			if cur, txErr = store.GetPageByKey(ctx, tx, kind, in.Slug); errors.Is(txErr, domain.ErrNotFound) {
-				return domain.ErrVersionConflict
-			} else if txErr != nil {
-				return txErr
-			}
-			p, txErr = store.UpdatePage(ctx, tx, cur.ID, in)
-		}
-		if txErr != nil {
-			return txErr
-		}
-		return s.pageChanged(ctx, tx, action, p, "", false)
+		p, txErr = s.saveByKeyTx(ctx, tx, kind, in)
+		return txErr
 	})
 	return p, err
+}
+
+// saveByKeyTx saves a validated page of kind in tx (see saveByKey).
+func (s *Service) saveByKeyTx(ctx context.Context, tx pgx.Tx, kind domain.PageKind, in domain.PageInput) (domain.Page, error) {
+	action := "page.updated"
+	var p domain.Page
+	var err error
+	if in.Version == 0 {
+		action = "page.created"
+		p, err = store.InsertPage(ctx, tx, s.ids.New(), kind, in)
+		if errors.Is(err, store.ErrSlugTaken) {
+			return domain.Page{}, domain.ErrVersionConflict
+		}
+	} else {
+		var cur domain.Page
+		if cur, err = store.GetPageByKey(ctx, tx, kind, in.Slug); errors.Is(err, domain.ErrNotFound) {
+			return domain.Page{}, domain.ErrVersionConflict
+		} else if err != nil {
+			return domain.Page{}, err
+		}
+		p, err = store.UpdatePage(ctx, tx, cur.ID, in)
+	}
+	if err != nil {
+		return domain.Page{}, err
+	}
+	return p, s.pageChanged(ctx, tx, action, p, "", false)
 }
 
 func (s *Service) validate(kind domain.PageKind, policy string, in domain.PageInput) (domain.PageInput, error) {

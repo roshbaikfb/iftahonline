@@ -78,19 +78,7 @@ func (h *Handlers) UpdateStorefrontTheme(ctx context.Context, req UpdateStorefro
 	if req.Body == nil {
 		return nil, errBodyRequired
 	}
-	in := req.Body.Settings
-	settings := domain.ThemeSettings{
-		Colors: domain.Colors{Primary: in.Colors.Primary, Accent: in.Colors.Accent, Background: in.Colors.Background, Text: in.Colors.Text},
-		Font:   domain.Font(in.Font), Radius: domain.Radius(in.Radius),
-		Announcement: deref(in.Announcement), About: deref(in.About), LowStock: in.LowStock,
-	}
-	if in.Look != nil {
-		settings.Look = domain.Look(*in.Look)
-	}
-	if in.Contact != nil {
-		settings.Contact = domain.Contact{WhatsApp: deref(in.Contact.Whatsapp), Email: deref(in.Contact.Email)}
-	}
-	t, err := h.svc.UpdateTheme(ctx, settings, req.Body.Version)
+	t, err := h.svc.UpdateTheme(ctx, themeSettings(req.Body.Settings), req.Body.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -356,34 +344,46 @@ func pageInput(b PageInput) domain.PageInput {
 		in.Version = *b.Version
 	}
 	if b.Sections != nil {
-		in.Sections = make([]domain.Section, len(*b.Sections))
-		for i, s := range *b.Sections {
-			sec := domain.Section{ID: deref(s.Id), Type: domain.SectionType(s.Type)}
-			if s.Settings != nil {
-				sec.Settings = *s.Settings
-			}
-			in.Sections[i] = sec
-		}
+		in.Sections = fromSections(*b.Sections)
 	}
 	return in
 }
 
-func toTheme(t domain.Theme) Theme {
-	out := Theme{Version: t.Version, UpdatedAt: t.UpdatedAt}
-	c := t.Settings.Colors
-	out.Settings.Colors.Primary, out.Settings.Colors.Accent = c.Primary, c.Accent
-	out.Settings.Colors.Background, out.Settings.Colors.Text = c.Background, c.Text
-	out.Settings.Font = ThemeSettingsFont(t.Settings.Font)
-	out.Settings.Radius = ThemeSettingsRadius(t.Settings.Radius)
-	if t.Settings.Look != "" {
-		look := ThemeSettingsLook(t.Settings.Look)
-		out.Settings.Look = &look
+func themeSettings(in ThemeSettings) domain.ThemeSettings {
+	settings := domain.ThemeSettings{
+		Colors: domain.Colors{Primary: in.Colors.Primary, Accent: in.Colors.Accent, Background: in.Colors.Background, Text: in.Colors.Text},
+		Font:   domain.Font(in.Font), Radius: domain.Radius(in.Radius),
+		Announcement: deref(in.Announcement), About: deref(in.About), LowStock: in.LowStock,
 	}
-	out.Settings.Announcement, out.Settings.About = opt(t.Settings.Announcement), opt(t.Settings.About)
-	low := t.Settings.LowStockThreshold()
-	out.Settings.LowStock = &low
-	if c := t.Settings.Contact; c != (domain.Contact{}) {
-		out.Settings.Contact = &struct {
+	if in.Look != nil {
+		settings.Look = domain.Look(*in.Look)
+	}
+	if in.Contact != nil {
+		settings.Contact = domain.Contact{WhatsApp: deref(in.Contact.Whatsapp), Email: deref(in.Contact.Email)}
+	}
+	return settings
+}
+
+func toTheme(t domain.Theme) Theme {
+	return Theme{Version: t.Version, UpdatedAt: t.UpdatedAt, Settings: toThemeSettings(t.Settings)}
+}
+
+func toThemeSettings(s domain.ThemeSettings) ThemeSettings {
+	var out ThemeSettings
+	c := s.Colors
+	out.Colors.Primary, out.Colors.Accent = c.Primary, c.Accent
+	out.Colors.Background, out.Colors.Text = c.Background, c.Text
+	out.Font = ThemeSettingsFont(s.Font)
+	out.Radius = ThemeSettingsRadius(s.Radius)
+	if s.Look != "" {
+		look := ThemeSettingsLook(s.Look)
+		out.Look = &look
+	}
+	out.Announcement, out.About = opt(s.Announcement), opt(s.About)
+	low := s.LowStockThreshold()
+	out.LowStock = &low
+	if c := s.Contact; c != (domain.Contact{}) {
+		out.Contact = &struct {
 			Email    *string `json:"email,omitempty"`
 			Whatsapp *string `json:"whatsapp,omitempty"`
 		}{Email: opt(c.Email), Whatsapp: opt(c.WhatsApp)}
@@ -391,20 +391,49 @@ func toTheme(t domain.Theme) Theme {
 	return out
 }
 
+func toSections(ss []domain.Section) []Section {
+	out := make([]Section, len(ss))
+	for i, s := range ss {
+		id, settings := s.ID, json.RawMessage(s.Settings)
+		out[i] = Section{Id: &id, Type: SectionType(s.Type), Settings: &settings}
+	}
+	return out
+}
+
+func fromSections(ss []Section) []domain.Section {
+	out := make([]domain.Section, len(ss))
+	for i, s := range ss {
+		sec := domain.Section{ID: deref(s.Id), Type: domain.SectionType(s.Type)}
+		if s.Settings != nil {
+			sec.Settings = *s.Settings
+		}
+		out[i] = sec
+	}
+	return out
+}
+
+func toDraft(d domain.Draft) StorefrontDraft {
+	out := StorefrontDraft{UpdatedAt: d.UpdatedAt}
+	if d.Theme != nil {
+		t := toThemeSettings(*d.Theme)
+		out.Theme = &t
+	}
+	if d.Home != nil {
+		out.Home = &HomeDraft{Title: opt(d.Home.Title), Description: opt(d.Home.Description), Sections: toSections(d.Home.Sections)}
+	}
+	return out
+}
+
 func toPage(p domain.Page) Page {
 	out := Page{
 		Kind: PageKind(p.Kind), Slug: p.Slug, Title: p.Title, Description: p.Description, Body: p.Body,
-		Status: PageStatus(p.Status), Version: p.Version, Sections: make([]Section, len(p.Sections)),
+		Status: PageStatus(p.Status), Version: p.Version, Sections: toSections(p.Sections),
 	}
 	if !p.ID.IsZero() {
 		id := p.ID.String()
 		out.Id = &id
 	}
 	out.CreatedAt, out.UpdatedAt = timePtr(p.CreatedAt), timePtr(p.UpdatedAt)
-	for i, s := range p.Sections {
-		id, settings := s.ID, json.RawMessage(s.Settings)
-		out.Sections[i] = Section{Id: &id, Type: SectionType(s.Type), Settings: &settings}
-	}
 	return out
 }
 
@@ -436,4 +465,110 @@ func opt(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// GetStorefrontDraft implements StrictServerInterface.
+func (h *Handlers) GetStorefrontDraft(ctx context.Context, _ GetStorefrontDraftRequestObject) (GetStorefrontDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	d, err := h.svc.GetDraft(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return GetStorefrontDraft200JSONResponse(toDraft(d)), nil
+}
+
+// SaveThemeDraft implements StrictServerInterface.
+func (h *Handlers) SaveThemeDraft(ctx context.Context, req SaveThemeDraftRequestObject) (SaveThemeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	d, err := h.svc.SaveThemeDraft(ctx, themeSettings(*req.Body))
+	if err != nil {
+		return nil, err
+	}
+	return SaveThemeDraft200JSONResponse(toDraft(d)), nil
+}
+
+// DiscardThemeDraft implements StrictServerInterface.
+func (h *Handlers) DiscardThemeDraft(ctx context.Context, _ DiscardThemeDraftRequestObject) (DiscardThemeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if err := h.svc.DiscardThemeDraft(ctx); err != nil {
+		return nil, err
+	}
+	return DiscardThemeDraft204Response{}, nil
+}
+
+// PublishThemeDraft implements StrictServerInterface.
+func (h *Handlers) PublishThemeDraft(ctx context.Context, req PublishThemeDraftRequestObject) (PublishThemeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	t, err := h.svc.PublishTheme(ctx, req.Body.Version)
+	if err != nil {
+		return nil, err
+	}
+	return PublishThemeDraft200JSONResponse(toTheme(t)), nil
+}
+
+// SaveHomeDraft implements StrictServerInterface.
+func (h *Handlers) SaveHomeDraft(ctx context.Context, req SaveHomeDraftRequestObject) (SaveHomeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	d, err := h.svc.SaveHomeDraft(ctx, domain.HomeDraft{Title: deref(req.Body.Title), Description: deref(req.Body.Description), Sections: fromSections(req.Body.Sections)})
+	if err != nil {
+		return nil, err
+	}
+	return SaveHomeDraft200JSONResponse(toDraft(d)), nil
+}
+
+// DiscardHomeDraft implements StrictServerInterface.
+func (h *Handlers) DiscardHomeDraft(ctx context.Context, _ DiscardHomeDraftRequestObject) (DiscardHomeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if err := h.svc.DiscardHomeDraft(ctx); err != nil {
+		return nil, err
+	}
+	return DiscardHomeDraft204Response{}, nil
+}
+
+// PublishHomeDraft implements StrictServerInterface.
+func (h *Handlers) PublishHomeDraft(ctx context.Context, req PublishHomeDraftRequestObject) (PublishHomeDraftResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	p, err := h.svc.PublishHome(ctx, req.Body.Version)
+	if err != nil {
+		return nil, err
+	}
+	return PublishHomeDraft200JSONResponse(toPage(p)), nil
+}
+
+// CreateStorefrontPreview implements StrictServerInterface.
+func (h *Handlers) CreateStorefrontPreview(ctx context.Context, _ CreateStorefrontPreviewRequestObject) (CreateStorefrontPreviewResponseObject, error) {
+	if err := h.authorize(ctx); err != nil {
+		return nil, err
+	}
+	p, err := h.svc.CreatePreview(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return CreateStorefrontPreview201JSONResponse{Token: p.Token, ExpiresAt: p.ExpiresAt}, nil
 }

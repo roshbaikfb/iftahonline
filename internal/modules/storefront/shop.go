@@ -43,7 +43,7 @@ const AssetsPrefix = web.AssetsPrefix
 func InvalidatingEvents() []string {
 	return []string{
 		catalog.EventProductChanged, catalog.EventProductDeleted, catalog.EventCategoryChanged,
-		catalog.EventSizeChartChanged, EventThemeChanged, EventPageChanged,
+		catalog.EventSizeChartChanged, EventThemeChanged, EventPageChanged, payments.EventSettingsChanged,
 	}
 }
 

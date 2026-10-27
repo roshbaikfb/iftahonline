@@ -38,6 +38,8 @@ type Content interface {
 	GetHome(ctx context.Context) (domain.Page, error)
 	PublishedLanding(ctx context.Context, slug string) (domain.Page, error)
 	PublishedPolicy(ctx context.Context, policy string) (domain.Page, error)
+	// PreviewDraft returns the drafts a live preview token opens (ADR-0036).
+	PreviewDraft(ctx context.Context, token string) (domain.Draft, bool, error)
 }
 
 // Signer builds signed image URLs (media.Signer).

@@ -56,6 +56,42 @@ func (e PaymentRefundStatus) Valid() bool {
 	}
 }
 
+// Defines values for PaymentSettingsDefaultMethod.
+const (
+	PaymentSettingsDefaultMethodCard PaymentSettingsDefaultMethod = "card"
+	PaymentSettingsDefaultMethodCod  PaymentSettingsDefaultMethod = "cod"
+)
+
+// Valid indicates whether the value is a known member of the PaymentSettingsDefaultMethod enum.
+func (e PaymentSettingsDefaultMethod) Valid() bool {
+	switch e {
+	case PaymentSettingsDefaultMethodCard:
+		return true
+	case PaymentSettingsDefaultMethodCod:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentSettingsInputDefaultMethod.
+const (
+	PaymentSettingsInputDefaultMethodCard PaymentSettingsInputDefaultMethod = "card"
+	PaymentSettingsInputDefaultMethodCod  PaymentSettingsInputDefaultMethod = "cod"
+)
+
+// Valid indicates whether the value is a known member of the PaymentSettingsInputDefaultMethod enum.
+func (e PaymentSettingsInputDefaultMethod) Valid() bool {
+	switch e {
+	case PaymentSettingsInputDefaultMethodCard:
+		return true
+	case PaymentSettingsInputDefaultMethodCod:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PaymentStatus.
 const (
 	PaymentStatusExpired           PaymentStatus = "expired"
@@ -221,6 +257,23 @@ type PaymentRefund struct {
 // PaymentRefundStatus defines model for PaymentRefund.Status.
 type PaymentRefundStatus string
 
+// PaymentSettings defines model for PaymentSettings.
+type PaymentSettings struct {
+	CardEnabled   bool                         `json:"card_enabled"`
+	DefaultMethod PaymentSettingsDefaultMethod `json:"default_method"`
+}
+
+// PaymentSettingsDefaultMethod defines model for PaymentSettings.DefaultMethod.
+type PaymentSettingsDefaultMethod string
+
+// PaymentSettingsInput defines model for PaymentSettingsInput.
+type PaymentSettingsInput struct {
+	DefaultMethod PaymentSettingsInputDefaultMethod `json:"default_method"`
+}
+
+// PaymentSettingsInputDefaultMethod defines model for PaymentSettingsInput.DefaultMethod.
+type PaymentSettingsInputDefaultMethod string
+
 // PaymentStatus defines model for PaymentStatus.
 type PaymentStatus string
 
@@ -297,6 +350,9 @@ type ListPaymentsParams struct {
 // ConnectPaymentGatewayJSONRequestBody defines body for ConnectPaymentGateway for application/json ContentType.
 type ConnectPaymentGatewayJSONRequestBody = ConnectPaymentGatewayInput
 
+// UpdatePaymentSettingsJSONRequestBody defines body for UpdatePaymentSettings for application/json ContentType.
+type UpdatePaymentSettingsJSONRequestBody = PaymentSettingsInput
+
 // RefundPaymentJSONRequestBody defines body for RefundPayment for application/json ContentType.
 type RefundPaymentJSONRequestBody = RefundPaymentInput
 
@@ -314,6 +370,12 @@ type ServerInterface interface {
 	// DisconnectPaymentGateway Stop taking card payments
 	// (DELETE /v1/stores/{store_id}/payments/gateways/{connection_id})
 	DisconnectPaymentGateway(w http.ResponseWriter, r *http.Request, storeId StoreID, connectionId ULID)
+	// GetPaymentSettings Which payment method checkout starts on
+	// (GET /v1/stores/{store_id}/payments/settings)
+	GetPaymentSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// UpdatePaymentSettings Choose the payment method checkout starts on
+	// (PUT /v1/stores/{store_id}/payments/settings)
+	UpdatePaymentSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// GetPayment A payment with its refunds
 	// (GET /v1/stores/{store_id}/payments/{payment_id})
 	GetPayment(w http.ResponseWriter, r *http.Request, storeId StoreID, paymentId ULID)
@@ -477,6 +539,58 @@ func (siw *ServerInterfaceWrapper) DisconnectPaymentGateway(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DisconnectPaymentGateway(w, r, storeId, connectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPaymentSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetPaymentSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPaymentSettings(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePaymentSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePaymentSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePaymentSettings(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -678,6 +792,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/payments/gateways", wrapper.ListPaymentConnections)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/payments/gateways", wrapper.ConnectPaymentGateway)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/payments/settings", wrapper.GetPaymentSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/payments/settings", wrapper.UpdatePaymentSettings)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/payments/gateways/{connection_id}", wrapper.DisconnectPaymentGateway)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/payments", wrapper.ListPayments)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/payments/{payment_id}", wrapper.GetPayment)
@@ -841,6 +957,85 @@ func (response DisconnectPaymentGatewaydefaultApplicationProblemPlusJSONResponse
 	return err
 }
 
+type GetPaymentSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetPaymentSettingsResponseObject interface {
+	VisitGetPaymentSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetPaymentSettings200JSONResponse PaymentSettings
+
+func (response GetPaymentSettings200JSONResponse) VisitGetPaymentSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaymentSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPaymentSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetPaymentSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePaymentSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *UpdatePaymentSettingsJSONRequestBody
+}
+
+type UpdatePaymentSettingsResponseObject interface {
+	VisitUpdatePaymentSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdatePaymentSettings200JSONResponse PaymentSettings
+
+func (response UpdatePaymentSettings200JSONResponse) VisitUpdatePaymentSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePaymentSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdatePaymentSettingsdefaultApplicationProblemPlusJSONResponse) VisitUpdatePaymentSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPaymentRequestObject struct {
 	StoreId   StoreID `json:"store_id"`
 	PaymentId ULID    `json:"payment_id"`
@@ -936,6 +1131,12 @@ type StrictServerInterface interface {
 	// DisconnectPaymentGateway Stop taking card payments
 	// (DELETE /v1/stores/{store_id}/payments/gateways/{connection_id})
 	DisconnectPaymentGateway(ctx context.Context, request DisconnectPaymentGatewayRequestObject) (DisconnectPaymentGatewayResponseObject, error)
+	// GetPaymentSettings Which payment method checkout starts on
+	// (GET /v1/stores/{store_id}/payments/settings)
+	GetPaymentSettings(ctx context.Context, request GetPaymentSettingsRequestObject) (GetPaymentSettingsResponseObject, error)
+	// UpdatePaymentSettings Choose the payment method checkout starts on
+	// (PUT /v1/stores/{store_id}/payments/settings)
+	UpdatePaymentSettings(ctx context.Context, request UpdatePaymentSettingsRequestObject) (UpdatePaymentSettingsResponseObject, error)
 	// GetPayment A payment with its refunds
 	// (GET /v1/stores/{store_id}/payments/{payment_id})
 	GetPayment(ctx context.Context, request GetPaymentRequestObject) (GetPaymentResponseObject, error)
@@ -1089,6 +1290,65 @@ func (sh *strictHandler) DisconnectPaymentGateway(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DisconnectPaymentGatewayResponseObject); ok {
 		if err := validResponse.VisitDisconnectPaymentGatewayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPaymentSettings operation middleware
+func (sh *strictHandler) GetPaymentSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetPaymentSettingsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPaymentSettings(ctx, request.(GetPaymentSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPaymentSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPaymentSettingsResponseObject); ok {
+		if err := validResponse.VisitGetPaymentSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePaymentSettings operation middleware
+func (sh *strictHandler) UpdatePaymentSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request UpdatePaymentSettingsRequestObject
+
+	request.StoreId = storeId
+
+	var body UpdatePaymentSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePaymentSettings(ctx, request.(UpdatePaymentSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePaymentSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePaymentSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdatePaymentSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1463,6 +1463,151 @@ paths:
               schema: { $ref: "#/components/schemas/Page" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/draft:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [storefront]
+      operationId: getStorefrontDraft
+      summary: The unpublished theme and home page
+      description: |
+        Drafts (ADR-0036): what the merchant is editing. Shoppers see the
+        published theme and home page until the draft is published. A part
+        without edits is absent.
+      responses:
+        "200":
+          description: The drafts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontDraft" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/draft/theme:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [storefront]
+      operationId: saveThemeDraft
+      summary: Save the theme draft
+      description: Validated as the theme is (422 low_contrast too); the live theme does not change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ThemeSettings" }
+      responses:
+        "200":
+          description: The drafts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontDraft" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [storefront]
+      operationId: discardThemeDraft
+      summary: Discard the theme draft
+      description: Back to the published theme. Idempotent.
+      responses:
+        "204":
+          description: Discarded.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/draft/theme/publish:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [storefront]
+      operationId: publishThemeDraft
+      summary: Publish the theme draft
+      description: |
+        The draft becomes the live theme over the version you read (409 version_conflict when it moved on; 409 no_draft without one), and the draft goes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishInput" }
+      responses:
+        "200":
+          description: The live theme.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Theme" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/draft/home:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [storefront]
+      operationId: saveHomeDraft
+      summary: Save the home page draft
+      description: Validated as the home page is; the live page does not change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HomeDraft" }
+      responses:
+        "200":
+          description: The drafts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontDraft" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [storefront]
+      operationId: discardHomeDraft
+      summary: Discard the home page draft
+      description: Back to the published home page. Idempotent.
+      responses:
+        "204":
+          description: Discarded.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/draft/home/publish:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [storefront]
+      operationId: publishHomeDraft
+      summary: Publish the home page draft
+      description: |
+        The draft becomes the live home page over the version you read (0 when it was never saved), and the draft goes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishInput" }
+      responses:
+        "200":
+          description: The live home page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/storefront/previews:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [storefront]
+      operationId: createStorefrontPreview
+      summary: A link to the shop with the drafts
+      description: |
+        Open the shop with `?preview=<token>`: for 30 minutes it shows the
+        drafts, marked as a preview, never cached and never indexed. Only
+        the token's hash is stored. At most 20 live links per store (409
+        preview_limit).
+      responses:
+        "201":
+          description: The preview token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontPreview" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/storefront/pages:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -2545,6 +2690,44 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PaymentConnection" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/payments/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [payments]
+      operationId: getPaymentSettings
+      summary: Which payment method checkout starts on
+      description: |
+        Permission: payments.manage. `default_method` is what the merchant
+        chose; `card_enabled` says whether a gateway is connected (card
+        only counts then: without one, checkout offers cash on delivery
+        alone).
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [payments]
+      operationId: updatePaymentSettings
+      summary: Choose the payment method checkout starts on
+      description: "Permission: payments.manage. The shopper can always switch."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentSettingsInput" }
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSettings" }
         default:
           $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/payments/gateways/{connection_id}:
@@ -3943,6 +4126,44 @@ components:
           additionalProperties: true
           description: Validated against the type's schema (listSectionTypes).
           x-go-type: json.RawMessage
+    HomeDraft:
+      type: object
+      required: [sections]
+      properties:
+        title: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 300, description: Meta description for search engines. }
+        sections:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/Section" }
+    StorefrontDraft:
+      type: object
+      properties:
+        theme: { $ref: "#/components/schemas/ThemeSettings" }
+        home: { $ref: "#/components/schemas/HomeDraft" }
+        updated_at: { type: string, format: date-time }
+    PublishInput:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 0, description: "The published version you read, 0 when it was never saved." }
+    StorefrontPreview:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: { type: string, description: "Add as ?preview=<token> to the shop address." }
+        expires_at: { type: string, format: date-time }
+    PaymentSettingsInput:
+      type: object
+      required: [default_method]
+      properties:
+        default_method: { type: string, enum: [cod, card] }
+    PaymentSettings:
+      type: object
+      required: [default_method, card_enabled]
+      properties:
+        default_method: { type: string, enum: [cod, card] }
+        card_enabled: { type: boolean }
     PageInput:
       type: object
       properties:

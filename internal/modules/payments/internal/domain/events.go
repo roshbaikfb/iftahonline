@@ -28,3 +28,13 @@ type PaymentStatusChanged struct {
 	OrderID   ulid.ID `json:"order_id"`
 	Status    Status  `json:"status"`
 }
+
+// EventSettingsChanged is the type of SettingsChanged.
+const EventSettingsChanged = "payments.settings.changed"
+
+// SettingsChanged is published when the store changes which method its
+// checkout starts on (the storefront's caches follow).
+type SettingsChanged struct {
+	event.Meta
+	DefaultMethod string `json:"default_method"`
+}

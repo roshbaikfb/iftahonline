@@ -142,6 +142,11 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
 		return
 	}
+	if token := r.URL.Query().Get("preview"); token != "" && isRead(r) {
+		if s.servePreview(w, r, p, token, rest) {
+			return
+		}
+	}
 	if !isRead(r) {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -220,6 +225,9 @@ func (s *Shop) home(ctx context.Context, p *pageCtx) (result, error) {
 	page, err := s.content.GetHome(ctx)
 	if err != nil {
 		return result{}, err
+	}
+	if d := p.homeDraft; d != nil {
+		page.Title, page.Description, page.Sections = d.Title, d.Description, d.Sections
 	}
 	secs, err := s.loadSections(ctx, p, page.Sections, s.now())
 	if err != nil {
@@ -344,7 +352,7 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 		return result{}, fmt.Errorf("web: render: %w", err)
 	}
 	html := buf.Bytes()
-	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l}
+	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l, private: p.preview != ""}
 	if p.css != "" {
 		c.pageStyle = styleHash(p.css)
 	}
@@ -357,6 +365,12 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 func (s *Shop) write(w http.ResponseWriter, r *http.Request, c cached) {
 	s.writeHeaders(w, c)
 	h := w.Header()
+	if c.private {
+		h.Set("Cache-Control", "private, no-store")
+		h.Set("X-Robots-Tag", "noindex")
+		s.writeBody(w, r, c)
+		return
+	}
 	if c.status == http.StatusOK {
 		h.Set("Cache-Control", s.edge)
 		h.Set("Cache-Tag", c.tags)

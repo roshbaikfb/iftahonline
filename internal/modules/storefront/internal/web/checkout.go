@@ -124,6 +124,9 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 		return
 	}
 	f := &orderForm{action: "/checkout", areas: geo.Areas(p.v.country), summary: s.cartSummary(view), card: s.cardOffered(r.Context(), false)}
+	if f.card && s.cardFirst(r.Context()) {
+		f.values = map[string]string{"pay_method": "card"} // the merchant's choice; the shopper can switch
+	}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }
 
@@ -297,6 +300,27 @@ func (s *Shop) cardOffered(ctx context.Context, fresh bool) bool {
 	on, err := s.payments.CardEnabled(ctx)
 	if err != nil {
 		s.log.WarnContext(ctx, "storefront: card payment check", "err", err)
+		return false
+	}
+	s.caches.cards.Add(key, on)
+	return on
+}
+
+// cardFirst reports whether checkout starts on card (the merchant's
+// choice, ADR-0036), cached like cardOffered; a failed check starts on
+// cash on delivery.
+func (s *Shop) cardFirst(ctx context.Context) bool {
+	store, err := tenant.FromContext(ctx)
+	if err != nil || s.payments == nil {
+		return false
+	}
+	key := s.caches.prefix(store) + "card-first"
+	if on, ok := s.caches.cards.Get(key); ok {
+		return on
+	}
+	on, err := s.payments.CardDefault(ctx)
+	if err != nil {
+		s.log.WarnContext(ctx, "storefront: card default check", "err", err)
 		return false
 	}
 	s.caches.cards.Add(key, on)

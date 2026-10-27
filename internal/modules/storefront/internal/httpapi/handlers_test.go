@@ -216,6 +216,14 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	draftB := domain.DefaultTheme()
+	draftB.Colors.Primary = "#b0b0b3"
+	if _, err = svc.SaveThemeDraft(ctxB, draftB); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.SaveHomeDraft(ctxB, domain.HomeDraft{Title: "B secret draft home"}); err != nil {
+		t.Fatal(err)
+	}
 	landing, err := svc.CreateLandingPage(ctxB, domain.PageInput{Title: "B secret offer", Status: "published"})
 	if err != nil {
 		t.Fatal(err)
@@ -280,6 +288,8 @@ func (f fixture) do(t *testing.T, rq *http.Request) (int, map[string]any) {
 func storePath(s tenant.StoreID, rest string) string {
 	return "/v1/stores/" + s.String() + "/storefront" + rest
 }
+
+const themeSettingsBody = `{"colors":{"primary":"#0F766E","accent":"#f59e0b","background":"#ffffff","text":"#111827"},"font":"tajawal","radius":"large","look":"soft"}`
 
 const themeBody = `{"version":%d,"settings":{"colors":{"primary":"#0F766E","accent":"#f59e0b","background":"#ffffff","text":"#111827"},"font":"tajawal","radius":"large"}}`
 
@@ -441,6 +451,15 @@ func TestValidation(t *testing.T) {
 			`{"version":0,"settings":{"colors":{"primary":"#000000","accent":"#000000","background":"#ffffff","text":"#000000"},"font":"https://evil/font.woff","radius":"none"}}`),
 			http.StatusUnprocessableEntity, []string{"font:invalid"}},
 		{"theme without body", req(t, http.MethodPut, storePath(a, "/theme"), tokOwnerA, ""), http.StatusBadRequest, nil},
+		{"draft low contrast", req(t, http.MethodPut, storePath(a, "/draft/theme"), tokOwnerA,
+			`{"colors":{"primary":"#000000","accent":"#000000","background":"#ffffff","text":"#eeeeee"},"font":"cairo","radius":"none"}`),
+			http.StatusUnprocessableEntity, []string{"colors.text:low_contrast"}},
+		{"draft section link", req(t, http.MethodPut, storePath(a, "/draft/home"), tokOwnerA,
+			`{"sections":[{"type":"hero","settings":{"button_label":"x","button_link":"javascript:alert(1)"}}]}`),
+			http.StatusUnprocessableEntity, []string{"sections[0].settings.button_link:pattern"}},
+		{"publish without a draft", req(t, http.MethodPost, storePath(a, "/draft/theme/publish"), tokOwnerA, `{"version":0}`), http.StatusConflict, nil},
+		{"publish home without a draft", req(t, http.MethodPost, storePath(a, "/draft/home/publish"), tokOwnerA, `{"version":0}`), http.StatusConflict, nil},
+		{"publish without body", req(t, http.MethodPost, storePath(a, "/draft/theme/publish"), tokOwnerA, ""), http.StatusBadRequest, nil},
 		{"malformed JSON", req(t, http.MethodPost, storePath(a, "/pages"), tokOwnerA, `{"title":`), http.StatusBadRequest, nil},
 		{"section settings", req(t, http.MethodPut, storePath(a, "/home"), tokOwnerA,
 			`{"sections":[{"type":"reviews","settings":{"items":[{"name":"","rating":9,"text":"x"}]}},{"type":"hero","settings":{"onclick":"x"}}]}`),
@@ -497,6 +516,9 @@ func TestAuthorization(t *testing.T) {
 		{http.MethodGet, "/policies", ""}, {http.MethodGet, "/policies/refund", ""}, {http.MethodPut, "/policies/refund", `{}`},
 		{http.MethodGet, "/logo", ""}, {http.MethodDelete, "/logo", ""},
 		{http.MethodPost, "/logo/uploads", `{"content_type":"image/png"}`}, {http.MethodPost, "/logo/uploads/" + id + "/complete", ""},
+		{http.MethodGet, "/draft", ""}, {http.MethodPut, "/draft/theme", themeSettingsBody}, {http.MethodDelete, "/draft/theme", ""},
+		{http.MethodPost, "/draft/theme/publish", `{"version":0}`}, {http.MethodPut, "/draft/home", `{"sections":[]}`},
+		{http.MethodDelete, "/draft/home", ""}, {http.MethodPost, "/draft/home/publish", `{"version":0}`}, {http.MethodPost, "/previews", ""},
 	}
 	for _, o := range ops {
 		t.Run(o.method+o.path, func(t *testing.T) {
@@ -520,7 +542,7 @@ func TestCrossTenant(t *testing.T) {
 	a, b := f.storeA, f.storeB
 	lid, hid := f.landing.ID.String(), f.homeB.ID.String()
 	logoID, uploadID := f.logoB.ID.String(), f.uploadB.ID.String()
-	leaks := []string{"B secret", "b-secret-hero", "#b0b0b1", "noto-kufi-arabic", lid, hid, logoID, uploadID, f.logoB.ObjectKey}
+	leaks := []string{"B secret", "b-secret-hero", "#b0b0b1", "#b0b0b3", "noto-kufi-arabic", lid, hid, logoID, uploadID, f.logoB.ObjectKey}
 
 	unchanged := func(tb testing.TB) {
 		tb.Helper()
@@ -530,6 +552,9 @@ func TestCrossTenant(t *testing.T) {
 		}
 		if h, err := f.svc.GetHome(ctx); err != nil || h.Version != 1 || h.Title != "B secret home" {
 			tb.Errorf("store B's home changed: %+v %v", h, err)
+		}
+		if d, err := f.svc.GetDraft(ctx); err != nil || d.Theme == nil || d.Theme.Colors.Primary != "#b0b0b3" || d.Home == nil || d.Home.Title != "B secret draft home" {
+			tb.Errorf("store B's drafts changed: %+v %v", d, err)
 		}
 		if lp, err := f.svc.GetLandingPage(ctx, f.landing.ID); err != nil || lp.Version != 1 || lp.Title != "B secret offer" {
 			tb.Errorf("store B's landing page changed: %+v %v", lp, err)
@@ -552,6 +577,14 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "getStorefrontTheme", Request: req(t, http.MethodGet, storePath(b, "/theme"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "updateStorefrontTheme", Request: req(t, http.MethodPut, storePath(b, "/theme"), tokOwnerA, fmt.Sprintf(themeBody, 1)), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "listSectionTypes", Request: req(t, http.MethodGet, storePath(b, "/section-types"), tokOwnerA, "")},
+		{OperationID: "getStorefrontDraft", Request: req(t, http.MethodGet, storePath(b, "/draft"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "saveThemeDraft", Request: req(t, http.MethodPut, storePath(b, "/draft/theme"), tokOwnerA, themeSettingsBody), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "discardThemeDraft", Request: req(t, http.MethodDelete, storePath(b, "/draft/theme"), tokOwnerA, ""), Unchanged: unchanged},
+		{OperationID: "publishThemeDraft", Request: req(t, http.MethodPost, storePath(b, "/draft/theme/publish"), tokOwnerA, `{"version":1}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "saveHomeDraft", Request: req(t, http.MethodPut, storePath(b, "/draft/home"), tokOwnerA, `{"title":"pwned","sections":[]}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "discardHomeDraft", Request: req(t, http.MethodDelete, storePath(b, "/draft/home"), tokOwnerA, ""), Unchanged: unchanged},
+		{OperationID: "publishHomeDraft", Request: req(t, http.MethodPost, storePath(b, "/draft/home/publish"), tokOwnerA, `{"version":1}`), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "createStorefrontPreview", Request: req(t, http.MethodPost, storePath(b, "/previews"), tokOwnerA, ""), Unchanged: unchanged},
 		{OperationID: "getHomePage", Request: req(t, http.MethodGet, storePath(b, "/home"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "saveHomePage", Request: req(t, http.MethodPut, storePath(b, "/home"), tokOwnerA, page), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "listLandingPages", Request: req(t, http.MethodGet, storePath(b, "/pages"), tokOwnerA, ""), Leaks: leaks},
@@ -581,5 +614,47 @@ func TestCrossTenant(t *testing.T) {
 	// Store A's own reads after all that show only A's defaults.
 	if code, home := f.do(t, req(t, http.MethodGet, storePath(a, "/home"), tokOwnerA, "")); code != http.StatusOK || home["version"] != float64(0) {
 		t.Fatalf("store A's home = %d %v", code, home)
+	}
+}
+
+// TestDraftAndPreview: edit as a draft, make a preview link, publish.
+func TestDraftAndPreview(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	if c, body := f.do(t, req(t, http.MethodPut, storePath(a, "/draft/theme"), tokOwnerA, themeSettingsBody)); c != http.StatusOK ||
+		body["theme"].(map[string]any)["look"] != "soft" || body["updated_at"] == nil {
+		t.Fatalf("saveThemeDraft = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodPut, storePath(a, "/draft/home"), tokOwnerA,
+		`{"title":"متجر","sections":[{"type":"hero","settings":{"heading":"أهلًا"}}]}`)); c != http.StatusOK || body["home"] == nil {
+		t.Fatalf("saveHomeDraft = %d %v", c, body)
+	}
+	if c, body := f.do(t, req(t, http.MethodGet, storePath(a, "/theme"), tokOwnerA, "")); c != http.StatusOK || body["version"] != float64(0) {
+		t.Fatalf("the live theme changed before publishing: %d %v", c, body)
+	}
+	c, body := f.do(t, req(t, http.MethodPost, storePath(a, "/previews"), tokOwnerA, ""))
+	if c != http.StatusCreated || len(body["token"].(string)) < 40 || body["expires_at"] == nil {
+		t.Fatalf("createStorefrontPreview = %d %v", c, body)
+	}
+	if c, body = f.do(t, req(t, http.MethodPost, storePath(a, "/draft/theme/publish"), tokOwnerA, `{"version":0}`)); c != http.StatusOK ||
+		body["version"] != float64(1) || body["settings"].(map[string]any)["look"] != "soft" {
+		t.Fatalf("publishThemeDraft = %d %v", c, body)
+	}
+	if c, body = f.do(t, req(t, http.MethodPost, storePath(a, "/draft/home/publish"), tokOwnerA, `{"version":0}`)); c != http.StatusOK ||
+		body["title"] != "متجر" || body["version"] != float64(1) {
+		t.Fatalf("publishHomeDraft = %d %v", c, body)
+	}
+	if c, body = f.do(t, req(t, http.MethodGet, storePath(a, "/draft"), tokOwnerA, "")); c != http.StatusOK || body["theme"] != nil || body["home"] != nil {
+		t.Fatalf("drafts after publishing = %d %v", c, body)
+	}
+	if c, _ = f.do(t, req(t, http.MethodPut, storePath(a, "/draft/theme"), tokOwnerA, themeSettingsBody)); c != http.StatusOK {
+		t.Fatal("second draft")
+	}
+	if c, _ = f.do(t, req(t, http.MethodDelete, storePath(a, "/draft/theme"), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("discardThemeDraft = %d", c)
+	}
+	if c, _ = f.do(t, req(t, http.MethodDelete, storePath(a, "/draft/home"), tokOwnerA, "")); c != http.StatusNoContent {
+		t.Fatalf("discardHomeDraft = %d", c)
 	}
 }

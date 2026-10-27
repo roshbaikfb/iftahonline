@@ -170,7 +170,15 @@ type fakeContent struct {
 	home     domain.Page
 	landings map[string]domain.Page
 	policies map[string]domain.Page
+	previews map[string]domain.Draft // live preview tokens
 	err      error
+}
+
+func (f *fakeContent) PreviewDraft(_ context.Context, token string) (domain.Draft, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.previews[token]
+	return d, ok, nil
 }
 
 func (f *fakeContent) ShopContent(context.Context) (app.ShopContent, error) {
