@@ -43,6 +43,8 @@ func (l *eventLog) PublishTx(ctx context.Context, tx pgx.Tx, ev event.Event) err
 		line = fmt.Sprintf("%s %s", m.Type, e.ProductID)
 	case domain.CategoryChanged:
 		line = fmt.Sprintf("%s %s %s", m.Type, e.CategoryID, e.Reason)
+	case domain.SizeChartChanged:
+		line = fmt.Sprintf("%s %s %s", m.Type, e.SizeChartID, e.Reason)
 	default:
 		return fmt.Errorf("unexpected event %T", ev)
 	}

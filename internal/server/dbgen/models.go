@@ -338,6 +338,7 @@ type Product struct {
 	UpdatedAt   pgtype.Timestamptz
 	DeletedAt   pgtype.Timestamptz
 	IsSample    bool
+	SizeChartID pgtype.UUID
 }
 
 type ProductCategory struct {
@@ -493,6 +494,16 @@ type ShippingZoneArea struct {
 	StoreID pgtype.UUID
 	ZoneID  pgtype.UUID
 	Area    string
+}
+
+type SizeChart struct {
+	ID        pgtype.UUID
+	StoreID   pgtype.UUID
+	Name      string
+	Header    []byte
+	Body      []byte
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type StockReservation struct {

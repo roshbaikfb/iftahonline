@@ -60,10 +60,12 @@ func ParseProductStatus(s string) (ProductStatus, bool) {
 }
 
 // Option is a product dimension such as size or colour, with the values a
-// variant may take.
+// variant may take. Colors marks a colour option (ADR-0035): one
+// "#rrggbb" per value, or "" where the storefront guesses from the name.
 type Option struct {
 	Name   string   `json:"name"`
 	Values []string `json:"values"`
+	Colors []string `json:"colors,omitempty"`
 }
 
 // Stock is a variant's inventory level.
@@ -127,9 +129,12 @@ type Product struct {
 	Images      []Image
 	// Sample marks a product the setup wizard's template added (ADR-0034):
 	// shown, never sellable, deleted with the store's other samples.
-	Sample    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Sample bool
+	// SizeChartID is the store's size chart the product page shows; nil
+	// for none.
+	SizeChartID *ulid.ID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // ProductInput creates or replaces a product. On update, variants with an
@@ -143,6 +148,7 @@ type ProductInput struct {
 	Options     []Option
 	Variants    []VariantInput
 	CategoryIDs []ulid.ID
+	SizeChartID *ulid.ID
 }
 
 // VariantInput is one variant in a ProductInput.
@@ -167,6 +173,7 @@ func ValidateProduct(in ProductInput) (ProductInput, error) {
 		Description: strings.TrimSpace(in.Description),
 		Status:      strings.TrimSpace(in.Status),
 		CategoryIDs: in.CategoryIDs,
+		SizeChartID: in.SizeChartID,
 	}
 	out.Slug = slug.Normalize(in.Slug, out.Title)
 	if out.Status == "" {
@@ -265,7 +272,9 @@ func normalizeOptions(in []Option) ([]Option, []errs.FieldError) {
 			seen[strings.ToLower(v)] = struct{}{}
 			values[j] = v
 		}
-		out[i] = Option{Name: name, Values: values}
+		colors, colorFields := normalizeColors(prefix, o.Colors, len(o.Values))
+		fields = append(fields, colorFields...)
+		out[i] = Option{Name: name, Values: values, Colors: colors}
 	}
 	return out, fields
 }

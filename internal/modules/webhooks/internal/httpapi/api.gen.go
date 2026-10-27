@@ -117,6 +117,9 @@ type PolicySlug string
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID
 
+// SizeChartID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type SizeChartID = ULID
+
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
 

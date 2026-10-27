@@ -37,7 +37,8 @@ var (
 	errSlugTaken = errs.Validation(errs.FieldError{Field: "slug", Code: "taken", Message: "another product already uses this slug"})
 	errSKUTaken  = errs.Validation(errs.FieldError{Field: "variants", Code: "sku_taken",
 		Message: "a SKU is already used by another product's variant"})
-	errUnknownCategory = errs.Validation(errs.FieldError{Field: "category_ids", Code: "unknown", Message: "a category does not exist"})
+	errUnknownCategory  = errs.Validation(errs.FieldError{Field: "category_ids", Code: "unknown", Message: "a category does not exist"})
+	errUnknownSizeChart = errs.Validation(errs.FieldError{Field: "size_chart_id", Code: "unknown", Message: "the size chart does not exist"})
 )
 
 func productErr(err error, op string) error {
@@ -50,6 +51,8 @@ func productErr(err error, op string) error {
 		return errSKUTaken
 	case postgres.IsForeignKeyViolation(err, "product_categories_category_fkey"):
 		return errUnknownCategory
+	case postgres.IsForeignKeyViolation(err, "products_size_chart_fkey"):
+		return errUnknownSizeChart
 	}
 	return fmt.Errorf("catalog store: %s: %w", op, err)
 }
@@ -67,10 +70,12 @@ func SaveProduct(ctx context.Context, tx Tx, id ulid.ID, in domain.ProductInput,
 	q := catalogdb.New(tx)
 	if isNew {
 		_, err = q.InsertProduct(ctx, catalogdb.InsertProductParams{
-			ID: id, StoreID: store, Slug: in.Slug, Title: in.Title, Description: in.Description, Status: in.Status, Options: opts})
+			ID: id, StoreID: store, Slug: in.Slug, Title: in.Title, Description: in.Description, Status: in.Status, Options: opts,
+			SizeChartID: in.SizeChartID})
 	} else {
 		_, err = q.UpdateProduct(ctx, catalogdb.UpdateProductParams{
-			ID: id, StoreID: store, Slug: in.Slug, Title: in.Title, Description: in.Description, Status: in.Status, Options: opts})
+			ID: id, StoreID: store, Slug: in.Slug, Title: in.Title, Description: in.Description, Status: in.Status, Options: opts,
+			SizeChartID: in.SizeChartID})
 	}
 	if err != nil {
 		return productErr(err, "save product")
@@ -357,7 +362,7 @@ func toProduct(r catalogdb.ListProductsRow) (domain.Product, error) {
 	}
 	return domain.Product{
 		ID: r.ID, Slug: r.Slug, Title: r.Title, Description: r.Description, Status: domain.ProductStatus(r.Status),
-		Options: opts, Variants: []domain.Variant{}, Images: []domain.Image{}, CategoryIDs: r.CategoryIds, Sample: r.IsSample, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Options: opts, Variants: []domain.Variant{}, Images: []domain.Image{}, CategoryIDs: r.CategoryIds, Sample: r.IsSample, SizeChartID: r.SizeChartID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }
 

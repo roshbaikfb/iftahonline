@@ -1169,6 +1169,88 @@ paths:
           description: Deleted.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/size-charts:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: listSizeCharts
+      summary: List the size charts
+      description: "Permission: catalog.read. Every size chart (at most 100), by name, with how many products use it."
+      responses:
+        "200":
+          description: The size charts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SizeChartList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [catalog]
+      operationId: createSizeChart
+      summary: Create a size chart
+      description: |
+        Permission: catalog.manage. Measurements are in centimetres; the
+        column names are free and the first column is the size. At most
+        100 per store (409 size_chart_limit).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SizeChartInput" }
+      responses:
+        "201":
+          description: The size chart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SizeChart" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/size-charts/{size_chart_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/SizeChartID"
+    get:
+      tags: [catalog]
+      operationId: getSizeChart
+      summary: Get a size chart
+      description: "Permission: catalog.read."
+      responses:
+        "200":
+          description: The size chart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SizeChart" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [catalog]
+      operationId: updateSizeChart
+      summary: Replace a size chart
+      description: "Permission: catalog.manage. Every product using it shows the new chart."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SizeChartInput" }
+      responses:
+        "200":
+          description: The size chart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SizeChart" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [catalog]
+      operationId: deleteSizeChart
+      summary: Delete a size chart
+      description: "Permission: catalog.manage. Its products simply lose the chart."
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/storefront/theme:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -2630,6 +2712,11 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
+    SizeChartID:
+      name: size_chart_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
     ImageID:
       name: image_id
       in: path
@@ -3060,6 +3147,16 @@ components:
           maxItems: 50
           items: { type: string, minLength: 1, maxLength: 50 }
           example: [S, M, L]
+        colors:
+          type: array
+          maxItems: 50
+          description: |
+            Present when the option is a colour (the storefront shows
+            swatches): one entry per value, in value order, each "#rrggbb"
+            or "" to let the storefront guess the colour from the value's
+            name.
+          items: { type: string, pattern: "^(#[0-9a-fA-F]{6})?$" }
+          example: ["#1f2a44", "#ffffff", ""]
     ProductInput:
       type: object
       required: [title, variants]
@@ -3082,6 +3179,9 @@ components:
           type: array
           maxItems: 20
           items: { $ref: "#/components/schemas/ULID" }
+        size_chart_id:
+          $ref: "#/components/schemas/ULID"
+          description: One of the store's size charts; absent for none.
     VariantInput:
       type: object
       required: [price_minor]
@@ -3126,6 +3226,9 @@ components:
             Added by the setup wizard's starter template (ADR-0034): shown on
             the storefront marked as a sample, never sellable, deleted with
             deleteSampleProducts. Absent means false.
+        size_chart_id:
+          $ref: "#/components/schemas/ULID"
+          description: The product's size chart; absent for none.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ImportRequest:
@@ -3302,6 +3405,53 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Product" }
         next_cursor: { type: string }
+    SizeChartInput:
+      type: object
+      required: [name, header, body]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60, description: For the merchant only., example: تيشيرتات رجالي }
+        header:
+          type: array
+          minItems: 2
+          maxItems: 8
+          description: Column names; the first is the size.
+          items: { type: string, minLength: 1, maxLength: 30 }
+          example: [المقاس, الصدر, الطول]
+        body:
+          type: array
+          minItems: 1
+          maxItems: 30
+          description: Rows as long as the header, in centimetres; a row's first cell (the size) is required.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 8
+            items: { type: string, maxLength: 30 }
+          example: [[S, "96", "68"], [M, "102", "71"]]
+    SizeChart:
+      type: object
+      required: [id, name, header, body, products, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        header:
+          type: array
+          items: { type: string }
+        body:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+        products: { type: integer, description: Live products using the chart. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SizeChartList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SizeChart" }
     CategoryInput:
       type: object
       required: [name]

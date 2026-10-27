@@ -62,6 +62,9 @@ func TestPurgeTags(t *testing.T) {
 		{"category", delivery(t, store, catalog.EventCategoryChanged, func(m event.Meta) event.Event {
 			return catalog.CategoryChanged{Meta: m, CategoryID: gen.New(), Reason: "updated"}
 		}), []string{"s-" + s}},
+		{"size chart", delivery(t, store, catalog.EventSizeChartChanged, func(m event.Meta) event.Event {
+			return catalog.SizeChartChanged{Meta: m, SizeChartID: gen.New(), Reason: "updated"}
+		}), []string{"s-" + s}}, // the event does not list the chart's products
 		{"theme", delivery(t, store, storefront.EventThemeChanged, func(m event.Meta) event.Event {
 			return storefront.ThemeChanged{Meta: m}
 		}), []string{"s-" + s}},

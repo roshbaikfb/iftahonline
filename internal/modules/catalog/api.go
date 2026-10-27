@@ -42,6 +42,8 @@ type (
 	StorefrontSearch = app.StorefrontSearch
 	// StorefrontSearchResult is a page of a shopper's search.
 	StorefrontSearchResult = app.StorefrontSearchResult
+	// StorefrontSizeChart is a product page's size chart.
+	StorefrontSizeChart = app.StorefrontSizeChart
 	// StorefrontImage is a ready image with its delivery renditions.
 	StorefrontImage = app.StorefrontImage
 	// Rendition is one signed image URL with its served size.
@@ -69,6 +71,8 @@ type (
 	ProductDeleted = domain.ProductDeleted
 	// CategoryChanged is the catalog.category.changed event.
 	CategoryChanged = domain.CategoryChanged
+	// SizeChartChanged is the catalog.size_chart.changed event.
+	SizeChartChanged = domain.SizeChartChanged
 )
 
 // Event types the catalog publishes (ADR-0015).
@@ -76,6 +80,8 @@ const (
 	EventProductChanged  = domain.EventProductChanged
 	EventProductDeleted  = domain.EventProductDeleted
 	EventCategoryChanged = domain.EventCategoryChanged
+	// EventSizeChartChanged: every page of the chart's products changed.
+	EventSizeChartChanged = domain.EventSizeChartChanged
 )
 
 // Storefront limits.

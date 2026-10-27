@@ -985,6 +985,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/size-charts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the size charts
+         * @description Permission: catalog.read. Every size chart (at most 100), by name, with how many products use it.
+         */
+        get: operations["listSizeCharts"];
+        put?: never;
+        /**
+         * Create a size chart
+         * @description Permission: catalog.manage. Measurements are in centimetres; the
+         *     column names are free and the first column is the size. At most
+         *     100 per store (409 size_chart_limit).
+         */
+        post: operations["createSizeChart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/size-charts/{size_chart_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                size_chart_id: components["parameters"]["SizeChartID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a size chart
+         * @description Permission: catalog.read.
+         */
+        get: operations["getSizeChart"];
+        /**
+         * Replace a size chart
+         * @description Permission: catalog.manage. Every product using it shows the new chart.
+         */
+        put: operations["updateSizeChart"];
+        post?: never;
+        /**
+         * Delete a size chart
+         * @description Permission: catalog.manage. Its products simply lose the chart.
+         */
+        delete: operations["deleteSizeChart"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/storefront/theme": {
         parameters: {
             query?: never;
@@ -2649,6 +2708,18 @@ export interface components {
              *     ]
              */
             values: string[];
+            /**
+             * @description Present when the option is a colour (the storefront shows
+             *     swatches): one entry per value, in value order, each "#rrggbb"
+             *     or "" to let the storefront guess the colour from the value's
+             *     name.
+             * @example [
+             *       "#1f2a44",
+             *       "#ffffff",
+             *       ""
+             *     ]
+             */
+            colors?: string[];
         };
         ProductInput: {
             /** @example تيشيرت قطن */
@@ -2665,6 +2736,8 @@ export interface components {
             /** @description Exactly one when there are no options. */
             variants: components["schemas"]["VariantInput"][];
             category_ids?: components["schemas"]["ULID"][];
+            /** @description One of the store's size charts; absent for none. */
+            size_chart_id?: components["schemas"]["ULID"];
         };
         VariantInput: {
             id?: components["schemas"]["ULID"];
@@ -2711,6 +2784,8 @@ export interface components {
              *     deleteSampleProducts. Absent means false.
              */
             sample?: boolean;
+            /** @description The product's size chart; absent for none. */
+            size_chart_id?: components["schemas"]["ULID"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2871,6 +2946,53 @@ export interface components {
         ProductPage: {
             items: components["schemas"]["Product"][];
             next_cursor?: string;
+        };
+        SizeChartInput: {
+            /**
+             * @description For the merchant only.
+             * @example تيشيرتات رجالي
+             */
+            name: string;
+            /**
+             * @description Column names; the first is the size.
+             * @example [
+             *       "المقاس",
+             *       "الصدر",
+             *       "الطول"
+             *     ]
+             */
+            header: string[];
+            /**
+             * @description Rows as long as the header, in centimetres; a row's first cell (the size) is required.
+             * @example [
+             *       [
+             *         "S",
+             *         "96",
+             *         "68"
+             *       ],
+             *       [
+             *         "M",
+             *         "102",
+             *         "71"
+             *       ]
+             *     ]
+             */
+            body: string[][];
+        };
+        SizeChart: {
+            id: components["schemas"]["ULID"];
+            name: string;
+            header: string[];
+            body: string[][];
+            /** @description Live products using the chart. */
+            products: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SizeChartList: {
+            items: components["schemas"]["SizeChart"][];
         };
         CategoryInput: {
             /** @example ملابس رجالي */
@@ -3698,6 +3820,7 @@ export interface components {
         ProductID: components["schemas"]["ULID"];
         VariantID: components["schemas"]["ULID"];
         CategoryID: components["schemas"]["ULID"];
+        SizeChartID: components["schemas"]["ULID"];
         ImageID: components["schemas"]["ULID"];
         ImportID: components["schemas"]["ULID"];
         AssetID: components["schemas"]["ULID"];
@@ -5059,6 +5182,130 @@ export interface operations {
             path: {
                 store_id: components["parameters"]["StoreID"];
                 category_id: components["parameters"]["CategoryID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSizeCharts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The size charts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SizeChartList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSizeChart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SizeChartInput"];
+            };
+        };
+        responses: {
+            /** @description The size chart. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SizeChart"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSizeChart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                size_chart_id: components["parameters"]["SizeChartID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The size chart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SizeChart"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateSizeChart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                size_chart_id: components["parameters"]["SizeChartID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SizeChartInput"];
+            };
+        };
+        responses: {
+            /** @description The size chart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SizeChart"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSizeChart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                size_chart_id: components["parameters"]["SizeChartID"];
             };
             cookie?: never;
         };

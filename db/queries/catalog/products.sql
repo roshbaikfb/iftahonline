@@ -1,6 +1,6 @@
 -- name: InsertProduct :one
-INSERT INTO products (id, store_id, slug, title, description, status, options)
-VALUES (@id, @store_id, @slug, @title, @description, @status, @options)
+INSERT INTO products (id, store_id, slug, title, description, status, options, size_chart_id)
+VALUES (@id, @store_id, @slug, @title, @description, @status, @options, sqlc.narg(size_chart_id))
 RETURNING *;
 
 -- Product reads carry their category IDs inline: one PK lookup per
@@ -22,7 +22,7 @@ FOR UPDATE;
 -- name: UpdateProduct :one
 UPDATE products
 SET slug = @slug, title = @title, description = @description, status = @status,
-    options = @options, updated_at = now()
+    options = @options, size_chart_id = sqlc.narg(size_chart_id), updated_at = now()
 WHERE store_id = @store_id AND id = @id AND deleted_at IS NULL
 RETURNING *;
 

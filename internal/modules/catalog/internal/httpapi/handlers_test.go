@@ -111,6 +111,7 @@ type fixture struct {
 	catB     domain.Category
 	imageB   domain.Image
 	importB  domain.Import
+	chartB   domain.SizeChart
 }
 
 func testImports(t *testing.T) app.Imports {
@@ -210,7 +211,13 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB, imageB: imageB, importB: importB}
+	chartB, err := svc.CreateSizeChart(ctxB, domain.SizeChartInput{Name: "B secret chart", Header: []string{"المقاس", "الصدر"},
+		Body: [][]string{{"S", "96"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixture{h: mux, svc: svc, storeA: a, storeB: b, ctxB: ctxB, productB: productB, catB: catB, imageB: imageB, importB: importB,
+		chartB: chartB}
 }
 
 func req(t *testing.T, method, path, token, body string) *http.Request {
@@ -436,6 +443,18 @@ func TestValidation(t *testing.T) {
 		{"long alt", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokOwnerA, `{"alt":"`+strings.Repeat("a", 201)+`"}`), 422, "validation_failed", "alt"},
 		{"missing image", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokOwnerA, ""), 404, "image_not_found", ""},
 		{"bad image id", req(t, http.MethodDelete, storePath(a, "/products/"+id+"/images/nope"), tokOwnerA, ""), 404, "image_not_found", ""},
+		{"bad colour", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","options":[{"name":"اللون","values":["كحلي"],"colors":["navy"]}],"variants":[{"option_values":["كحلي"],"price_minor":1}]}`), 422, "validation_failed", "options[0].colors[0]"},
+		{"colour count", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","options":[{"name":"اللون","values":["كحلي"],"colors":[]}],"variants":[{"option_values":["كحلي"],"price_minor":1}]}`), 422, "validation_failed", "options[0].colors"},
+		{"malformed size chart id", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","size_chart_id":"nope","variants":[{"price_minor":1}]}`), 422, "validation_failed", "size_chart_id"},
+		{"unknown size chart", req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","size_chart_id":"`+id+`","variants":[{"price_minor":1}]}`), 422, "validation_failed", "size_chart_id"},
+		{"chart without rows", req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA, `{"name":"x","header":["a","b"],"body":[]}`), 422, "validation_failed", "body"},
+		{"chart short row", req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA, `{"name":"x","header":["a","b"],"body":[["S"]]}`), 422, "validation_failed", "body[0]"},
+		{"chart one column", req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA, `{"name":"x","header":["a"],"body":[["S"]]}`), 422, "validation_failed", "header"},
+		{"chart no size", req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA, `{"name":"x","header":["a","b"],"body":[[" ","1"]]}`), 422, "validation_failed", "body[0][0]"},
+		{"chart without body", req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA, ``), 400, "", ""},
+		{"bad chart id", req(t, http.MethodGet, storePath(a, "/size-charts/nope"), tokOwnerA, ""), 404, "size_chart_not_found", ""},
+		{"missing chart", req(t, http.MethodPut, storePath(a, "/size-charts/"+id), tokOwnerA, `{"name":"x","header":["a","b"],"body":[["S","1"]]}`), 404, "size_chart_not_found", ""},
+		{"missing chart delete", req(t, http.MethodDelete, storePath(a, "/size-charts/"+id), tokOwnerA, ""), 404, "size_chart_not_found", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -497,6 +516,7 @@ func TestAuthorization(t *testing.T) {
 	a := f.storeA
 	id := ulid.NewGenerator().New().String()
 	product := `{"title":"x","variants":[{"price_minor":1}]}`
+	chart := `{"name":"x","header":["a","b"],"body":[["S","1"]]}`
 	tests := []struct {
 		name   string
 		rq     *http.Request
@@ -526,6 +546,12 @@ func TestAuthorization(t *testing.T) {
 		{"support cannot complete images", req(t, http.MethodPost, storePath(a, "/products/"+id+"/images/"+id+"/complete"), tokSupportA, ""), http.StatusForbidden},
 		{"shipping cannot edit images", req(t, http.MethodPatch, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, `{"alt":"x"}`), http.StatusForbidden},
 		{"shipping cannot delete images", req(t, http.MethodDelete, storePath(a, "/products/"+id+"/images/"+id), tokShippingA, ""), http.StatusForbidden},
+		{"support lists size charts", req(t, http.MethodGet, storePath(a, "/size-charts"), tokSupportA, ""), http.StatusOK},
+		{"support reads a size chart", req(t, http.MethodGet, storePath(a, "/size-charts/"+id), tokSupportA, ""), http.StatusNotFound},
+		{"size charts need a session", req(t, http.MethodGet, storePath(a, "/size-charts"), "", ""), http.StatusUnauthorized},
+		{"support cannot create size charts", req(t, http.MethodPost, storePath(a, "/size-charts"), tokSupportA, chart), http.StatusForbidden},
+		{"support cannot update size charts", req(t, http.MethodPut, storePath(a, "/size-charts/"+id), tokSupportA, chart), http.StatusForbidden},
+		{"shipping cannot delete size charts", req(t, http.MethodDelete, storePath(a, "/size-charts/"+id), tokShippingA, ""), http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -545,8 +571,10 @@ func TestCrossTenant(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.storeA, f.storeB
 	pid, vid, cid, iid := f.productB.ID.String(), f.productB.Variants[0].ID.String(), f.catB.ID.String(), f.imageB.ID.String()
-	mid := f.importB.ID.String()
-	leaks := []string{"B secret product", "B secret category", "B-SKU-1", "B secret alt", "b-secret-shop", "cs_bsecret", pid, vid, cid, iid, mid}
+	mid, sid := f.importB.ID.String(), f.chartB.ID.String()
+	leaks := []string{"B secret product", "B secret category", "B-SKU-1", "B secret alt", "b-secret-shop", "cs_bsecret", pid, vid, cid, iid, mid,
+		"B secret chart", sid}
+	chart := `{"name":"pwned","header":["a","b"],"body":[["S","1"]]}`
 	product := `{"title":"pwned","variants":[{"price_minor":1}]}`
 
 	unchanged := func(tb testing.TB) {
@@ -565,6 +593,12 @@ func TestCrossTenant(t *testing.T) {
 		cats, err := f.svc.ListCategories(f.ctxB)
 		if err != nil || len(cats) != 1 || cats[0].Name != "B secret category" {
 			tb.Errorf("store B's categories changed: %+v %v", cats, err)
+		}
+		if c, cErr := f.svc.GetSizeChart(f.ctxB, f.chartB.ID); cErr != nil || c.Name != "B secret chart" || len(c.Body) != 1 {
+			tb.Errorf("store B's size chart changed: %+v %v", c, cErr)
+		}
+		if list, listErr := f.svc.ListSizeCharts(f.ctxB); listErr != nil || len(list) != 1 {
+			tb.Errorf("store B's size charts changed: %d %v", len(list), listErr)
 		}
 	}
 
@@ -600,6 +634,14 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(a, "/imports/"+mid+"/start"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "startImport", Request: req(t, http.MethodPost, storePath(b, "/imports/"+mid+"/start"), tokOwnerA, ""), Unchanged: unchanged},
 		{OperationID: "deleteImage", Request: req(t, http.MethodDelete, storePath(a, "/products/"+pid+"/images/"+iid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "listSizeCharts", Request: req(t, http.MethodGet, storePath(b, "/size-charts"), tokOwnerA, "")},
+		{OperationID: "createSizeChart", Request: req(t, http.MethodPost, storePath(b, "/size-charts"), tokOwnerA, chart), Unchanged: unchanged},
+		{OperationID: "getSizeChart", Request: req(t, http.MethodGet, storePath(a, "/size-charts/"+sid), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "getSizeChart", Request: req(t, http.MethodGet, storePath(b, "/size-charts/"+sid), tokOwnerA, "")},
+		{OperationID: "updateSizeChart", Request: req(t, http.MethodPut, storePath(a, "/size-charts/"+sid), tokOwnerA, chart), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "updateSizeChart", Request: req(t, http.MethodPut, storePath(b, "/size-charts/"+sid), tokOwnerA, chart), Unchanged: unchanged},
+		{OperationID: "deleteSizeChart", Request: req(t, http.MethodDelete, storePath(a, "/size-charts/"+sid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "deleteSizeChart", Request: req(t, http.MethodDelete, storePath(b, "/size-charts/"+sid), tokOwnerA, ""), Unchanged: unchanged},
 	}
 	for _, c := range cases {
 		testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, c)
@@ -612,7 +654,7 @@ func TestCrossTenant(t *testing.T) {
 	}
 
 	// Lists under A's own path never show B's rows.
-	for _, path := range []string{"/products", "/products?category_id=" + cid, "/categories"} {
+	for _, path := range []string{"/products", "/products?category_id=" + cid, "/categories", "/size-charts"} {
 		rec := httptest.NewRecorder()
 		f.h.ServeHTTP(rec, req(t, http.MethodGet, storePath(a, path), tokOwnerA, ""))
 		for _, leak := range leaks[:3] {
@@ -625,6 +667,11 @@ func TestCrossTenant(t *testing.T) {
 	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","category_ids":["`+cid+`"],"variants":[{"price_minor":1}]}`))
 	if code != 422 {
 		t.Fatalf("foreign category accepted: %d", code)
+	}
+	// Nor B's size chart.
+	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","size_chart_id":"`+sid+`","variants":[{"price_minor":1}]}`))
+	if code != 422 {
+		t.Fatalf("foreign size chart accepted: %d", code)
 	}
 	unchanged(t)
 }
@@ -701,4 +748,45 @@ func TestListLowStock(t *testing.T) {
 	}
 	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "listLowStock",
 		Request: req(t, http.MethodGet, storePath(b, "/inventory/low?threshold=10"), tokOwnerA, ""), Leaks: []string{"B secret product", "B-SKU-1"}})
+}
+
+// Size charts (ADR-0035): created, used by a product, listed with its
+// product count, replaced and deleted; colours round-trip on options.
+func TestSizeChartsHappyPath(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	code, c := f.do(t, req(t, http.MethodPost, storePath(a, "/size-charts"), tokOwnerA,
+		`{"name":"تيشيرتات","header":["المقاس","الصدر","الطول"],"body":[["S","96","68"],["M","102",""]]}`))
+	if code != http.StatusCreated || c["name"] != "تيشيرتات" || len(c["body"].([]any)) != 2 || c["products"] != float64(0) {
+		t.Fatalf("createSizeChart = %d %v", code, c)
+	}
+	cid := c["id"].(string)
+	code, p := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA,
+		`{"title":"تيشيرت","size_chart_id":"`+cid+`","options":[{"name":"اللون","values":["كحلي","أبيض"],"colors":["#1F2A44",""]}],`+
+			`"variants":[{"option_values":["كحلي"],"price_minor":25000},{"option_values":["أبيض"],"price_minor":25000}]}`))
+	if code != http.StatusCreated || p["size_chart_id"] != cid {
+		t.Fatalf("createProduct = %d %v", code, p)
+	}
+	colors := p["options"].([]any)[0].(map[string]any)["colors"].([]any)
+	if colors[0] != "#1f2a44" || colors[1] != "" {
+		t.Fatalf("colors = %v", colors)
+	}
+	if code, list := f.do(t, req(t, http.MethodGet, storePath(a, "/size-charts"), tokOwnerA, "")); code != http.StatusOK ||
+		len(list["items"].([]any)) != 1 || list["items"].([]any)[0].(map[string]any)["products"] != float64(1) {
+		t.Fatalf("listSizeCharts = %d %v", code, list)
+	}
+	if code, got := f.do(t, req(t, http.MethodPut, storePath(a, "/size-charts/"+cid), tokOwnerA,
+		`{"name":"تيشيرتات رجالي","header":["المقاس","الصدر"],"body":[["L","108"]]}`)); code != http.StatusOK || got["name"] != "تيشيرتات رجالي" || got["products"] != float64(1) {
+		t.Fatalf("updateSizeChart = %d %v", code, got)
+	}
+	if code, got := f.do(t, req(t, http.MethodGet, storePath(a, "/size-charts/"+cid), tokOwnerA, "")); code != http.StatusOK || len(got["header"].([]any)) != 2 {
+		t.Fatalf("getSizeChart = %d %v", code, got)
+	}
+	if code, _ := f.do(t, req(t, http.MethodDelete, storePath(a, "/size-charts/"+cid), tokOwnerA, "")); code != http.StatusNoContent {
+		t.Fatalf("deleteSizeChart = %d", code)
+	}
+	if code, got := f.do(t, req(t, http.MethodGet, storePath(a, "/products/"+p["id"].(string)), tokOwnerA, "")); code != http.StatusOK || got["size_chart_id"] != nil {
+		t.Fatalf("product keeps a deleted chart: %d %v", code, got)
+	}
 }
