@@ -18,7 +18,7 @@ export function navGroups(storeId: string): NavGroup[] {
   return [
     { items: [{ label: 'الرئيسية', to: at('home') }] },
     { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders'), pendingBadge: true }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
-    { title: 'المنتجات', items: [{ label: 'المنتجات' }, { label: 'التصنيفات' }, { label: 'المخزون' }] },
+    { title: 'المنتجات', items: [{ label: 'المنتجات', to: at('products') }, { label: 'التصنيفات' }, { label: 'المخزون' }, { label: 'جداول المقاسات' }] },
     {
       title: 'الشحن',
       items: [

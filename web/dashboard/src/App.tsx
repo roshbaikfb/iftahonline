@@ -11,6 +11,7 @@ import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
 import { Payments } from './pages/Payments';
+import { Products } from './pages/Products';
 import { Setup } from './pages/Setup';
 import { ShipmentDetail } from './pages/ShipmentDetail';
 import { Shipments } from './pages/Shipments';
@@ -66,6 +67,7 @@ function Gate() {
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
+          <Route path="/stores/:storeId/products" element={<Products />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />
           <Route path="/stores/:storeId/shipments/:shipmentId" element={<ShipmentDetail />} />
           <Route path="/stores/:storeId/shipping" element={<Shipping />} />

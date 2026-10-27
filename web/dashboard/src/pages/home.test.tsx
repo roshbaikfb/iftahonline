@@ -115,7 +115,8 @@ describe('Overview', () => {
     expect(within(setup).getByText('1 من 5 خطوات')).toBeInTheDocument();
     expect(within(setup).getByRole('link', { name: 'حدّد مناطق الشحن' })).toHaveAttribute('href', `/stores/${store}/shipping`);
     expect(within(setup).queryByRole('link', { name: /اربط شركة شحن/ })).toBeNull();
-    expect(within(setup).getByText('أضف أول منتج').closest('.step')).toHaveTextContent('قريبًا');
+    expect(within(setup).getByRole('link', { name: 'أضف أول منتج' })).toHaveAttribute('href', `/stores/${store}/products`);
+    expect(within(setup).getByText('اربط الدومين الخاص').closest('.step')).toHaveTextContent('قريبًا');
 
     const attention = screen.getByRole('region', { name: 'يحتاج انتباهك' });
     expect(within(attention).getByText('7 طلبات تنتظر التأكيد')).toBeInTheDocument();

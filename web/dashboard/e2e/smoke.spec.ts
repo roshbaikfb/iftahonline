@@ -179,3 +179,38 @@ test('a new merchant signs up and walks the setup wizard', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'جارٍ تجهيز متجرك…' })).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
 });
+
+// The products list (U5): reached from the sidebar, filtered by stock,
+// and the product moved to drafts and back in bulk.
+test('a merchant lists, filters and bulk-edits products', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'المنتجات', exact: true }).click();
+  await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/products$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('المنتجات');
+  const row = page.locator('table.products-table tbody tr').filter({ hasText: 'عطر العود الملكي' });
+  await expect(row).toContainText('منشور');
+  await expect(row).toContainText('450 ج.م');
+  await expect(page.getByRole('tab', { name: /^منشورة/ })).toContainText('1');
+
+  await page.getByLabel('المخزون').selectOption('out');
+  await page.getByRole('button', { name: 'تصفية' }).click();
+  await expect(page.getByText('لا منتجات تطابق التصفية.')).toBeVisible();
+  await page.getByLabel('المخزون').selectOption('in_stock');
+  await page.getByRole('button', { name: 'تصفية' }).click();
+  await expect(row).toBeVisible();
+
+  await row.getByRole('checkbox').check();
+  const bulk = page.getByRole('region', { name: 'إجراءات المحدد' });
+  await bulk.getByRole('button', { name: 'تحويل لمسودة' }).click();
+  await expect(page.getByText('تحوّل إلى مسودة: منتج واحد')).toBeVisible();
+  await expect(row).toContainText('مسودة');
+  await row.getByRole('checkbox').check();
+  await bulk.getByRole('button', { name: 'نشر' }).click();
+  await expect(row).toContainText('منشور');
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
