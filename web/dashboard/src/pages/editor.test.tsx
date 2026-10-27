@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { build, combinations, draftOf, emptyDraft, guessColour, isColourName, normalizeHex, regenerate, type OptionDraft } from '../lib/editor';
+import { build, combinations, draftOf, emptyDraft, guessColour, isColourName, newOption, normalizeHex, regenerate, type OptionDraft } from '../lib/editor';
 import type { Product } from '../lib/products';
 import { SessionContext, type Session } from '../session';
 import { mockAPI, type Call } from '../test/api';
@@ -142,6 +142,17 @@ describe('ProductEditor', () => {
     expect(calls.filter((c) => c.path.endsWith('/inventory')).map((c) => [c.path, c.body])).toEqual([[`${base}/variants/v1/inventory`, { on_hand: 20, tracked: true }]]);
   });
 
+  it('asks before deleting variants that hold stock', async () => {
+    const calls = routes({ [`PUT ${base}/products/p1`]: () => ({ status: 200, body: tee }) });
+    renderAt(`/stores/${store}/products/p1`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'احذف S' }));
+    const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+    await user.click(screen.getByRole('button', { name: 'حفظ التغييرات' }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('سيُحذف نوعان (كحلي / S، أبيض / S) ومعه مخزون 13 قطعة'));
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
   it('says what the server refused', async () => {
     routes({
       [`PUT ${base}/products/p1`]: () => ({
@@ -204,19 +215,36 @@ function row<T>(list: T[], i: number): T {
 }
 
 describe('editor helpers', () => {
-  const opts = (...o: [string, string[]][]): OptionDraft[] => o.map(([name, values]) => ({ name, values, colors: null }));
+  const opts = (...o: [string, string[]][]): OptionDraft[] => o.map(([name, values]) => ({ ...newOption(), name, values }));
 
   it('makes one variant per combination and keeps the ones still there', () => {
     expect(combinations(opts(['a', ['1', '2']], ['b', ['x', 'y']]))).toEqual([['1', 'x'], ['1', 'y'], ['2', 'x'], ['2', 'y']]);
-    const rows = draftOf(tee).variants;
-    const next = regenerate([...opts(['اللون', ['كحلي', 'أبيض', 'نبيتي']], ['المقاس', ['S', 'M']])], rows);
+    const d = draftOf(tee);
+    const [colour, size] = d.options as [OptionDraft, OptionDraft];
+    const next = regenerate(d.options, [{ ...colour, values: [...colour.values, 'نبيتي'] }, size], d.variants);
     expect(next).toHaveLength(6);
     expect(next.slice(0, 4).map((v) => v.id)).toEqual(['v1', 'v2', 'v3', 'v4']);
     expect(next[4]).toMatchObject({ values: ['نبيتي', 'S'], price: '250', stock: '0', hidden: false });
     expect(next[4]?.id).toBeUndefined();
     // no options: the one variant stays the same row
     const single = emptyDraft().variants;
-    expect(regenerate([], single)).toEqual(single);
+    expect(regenerate([], [], single)).toEqual(single);
+  });
+
+  it('keeps every variant and its stock when an option is added, renamed or another removed', () => {
+    const d = draftOf(tee);
+    const [colour, size] = d.options as [OptionDraft, OptionDraft];
+    // by size only, then a colour added: each size becomes the first colour
+    const bySize = regenerate(d.options, [size], d.variants);
+    expect(bySize.map((v) => [v.id, v.values])).toEqual([['v1', ['S']], ['v2', ['M']]]);
+    const fabric = { ...newOption(), name: 'الخامة', values: ['قطن', 'كتان'] };
+    const added = regenerate([size], [size, fabric], bySize);
+    expect(added.map((v) => [v.id ?? 'new', v.values, v.stock])).toEqual([
+      ['v1', ['S', 'قطن'], '8'], ['new', ['S', 'كتان'], '0'], ['v2', ['M', 'قطن'], '12'], ['new', ['M', 'كتان'], '0'],
+    ]);
+    // renaming an option keeps every row
+    const renamed = regenerate(d.options, [{ ...colour, name: 'Colour' }, size], d.variants);
+    expect(renamed.map((v) => v.id)).toEqual(['v1', 'v2', 'v3', 'v4']);
   });
 
   it('checks amounts and stock before sending', () => {

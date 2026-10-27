@@ -45,7 +45,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
     return (
       <tr key={v.values.join('\u0000') || 'single'} className={v.hidden ? 'hidden-variant' : undefined}>
         <th scope="row">{name}</th>
-        <td>
+        <td data-label="السعر">
           <input
             inputMode="decimal"
             value={v.price}
@@ -56,7 +56,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
             }}
           />
         </td>
-        <td>
+        <td data-label="قبل الخصم">
           <input
             inputMode="decimal"
             value={v.compare}
@@ -67,7 +67,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
             }}
           />
         </td>
-        <td>
+        <td data-label="رمز SKU">
           <input
             dir="ltr"
             value={v.sku}
@@ -78,7 +78,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
             }}
           />
         </td>
-        <td>
+        <td data-label="المخزون">
           {v.tracked ? (
             <input
               inputMode="numeric"
@@ -94,7 +94,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
             <span className="muted">غير محدود</span>
           )}
         </td>
-        <td className="center">
+        <td className="center" data-label="متاح للبيع">
           <input
             type="checkbox"
             checked={!v.hidden}
