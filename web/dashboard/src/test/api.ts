@@ -23,8 +23,8 @@ function parseBody(text: string): unknown {
 // records every call, so a test can assert what the page sent.
 export function mockAPI(routes: Record<string, Handler>): Call[] {
   const calls: Call[] = [];
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
-    const req = input instanceof Request ? input : new Request(input);
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = input instanceof Request ? input : new Request(input, init);
     const url = new URL(req.url);
     const text = await req.text();
     const call: Call = { method: req.method, path: url.pathname, search: url.searchParams, body: parseBody(text) };

@@ -4,8 +4,11 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { api } from './api/client';
 
 import { Carriers } from './pages/Carriers';
+import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
 import { Gateways } from './pages/Gateways';
+import { Imports } from './pages/Imports';
+import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
@@ -73,6 +76,9 @@ function Gate() {
           <Route path="/stores/:storeId/products/new" element={<ProductEditor />} />
           <Route path="/stores/:storeId/products/:productId" element={<ProductEditor key="edit" />} />
           <Route path="/stores/:storeId/size-charts" element={<SizeCharts />} />
+          <Route path="/stores/:storeId/categories" element={<Categories />} />
+          <Route path="/stores/:storeId/inventory" element={<Inventory />} />
+          <Route path="/stores/:storeId/imports" element={<Imports />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />
           <Route path="/stores/:storeId/shipments/:shipmentId" element={<ShipmentDetail />} />
           <Route path="/stores/:storeId/shipping" element={<Shipping />} />

@@ -232,6 +232,9 @@ export function Products() {
           {counts && <p className="muted">{productsTotal(counts.all)}</p>}
         </div>
         <div className="actions">
+          <Link className="button secondary" to={`/stores/${storeId}/imports`}>
+            استيراد من ملف
+          </Link>
           <Link className="button primary" to={`/stores/${storeId}/products/new`}>
             أضف منتجًا
           </Link>

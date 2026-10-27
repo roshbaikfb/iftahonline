@@ -257,3 +257,40 @@ test('a merchant makes a size chart and a product with variants', async ({ page 
   await expect(page.getByRole('heading', { name: 'الصور' })).toBeVisible();
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// Categories and inventory (U5): a category under another, then a stock
+// count set from the inventory screen.
+test('a merchant arranges categories and counts stock', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  const side = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
+
+  await side.getByRole('link', { name: 'التصنيفات' }).click();
+  await page.getByRole('button', { name: 'أضف تصنيفًا' }).click();
+  let form = page.getByRole('form', { name: 'تصنيف جديد' });
+  await form.getByLabel('الاسم').fill('عطور');
+  await form.getByRole('button', { name: 'حفظ' }).click();
+  await expect(page.getByText('أُضيف «عطور».')).toBeVisible();
+  await page.getByRole('button', { name: 'أضف تصنيفًا' }).click();
+  form = page.getByRole('form', { name: 'تصنيف جديد' });
+  await form.getByLabel('الاسم').fill('عطور شرقية');
+  await form.getByLabel('تحت').selectOption({ label: 'عطور' });
+  await form.getByRole('button', { name: 'حفظ' }).click();
+  await expect(page.locator('.cat-tree li.depth-2')).toContainText('عطور شرقية');
+
+  await side.getByRole('link', { name: 'المخزون' }).click();
+  await page.getByRole('tab', { name: 'الكل' }).click();
+  const row = page.locator('table.inventory tbody tr').filter({ hasText: 'عطر العود الملكي' }).first();
+  await row.getByRole('textbox').fill('250');
+  await row.getByRole('button', { name: 'حفظ' }).click();
+  await expect(row).toContainText('حُفظ');
+  await expect(row.locator('td').nth(2)).toHaveText('250');
+
+  await side.getByRole('link', { name: 'الاستيراد' }).click();
+  await expect(page.getByRole('link', { name: 'الملف النموذجي' })).toHaveAttribute('href', '/products-template.csv');
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
