@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"time"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -64,6 +66,43 @@ func (h *Handlers) CountOrders(ctx context.Context, _ CountOrdersRequestObject) 
 	return CountOrders200JSONResponse{Pending: c[domain.StatusPending], Confirmed: c[domain.StatusConfirmed], ReadyToShip: c[domain.StatusReadyToShip],
 		Shipped: c[domain.StatusShipped], Delivered: c[domain.StatusDelivered], Cancelled: c[domain.StatusCancelled],
 		FailedDelivery: c[domain.StatusFailedDelivery], Returned: c[domain.StatusReturned]}, nil
+}
+
+// GetOrderStats implements StrictServerInterface.
+func (h *Handlers) GetOrderStats(ctx context.Context, req GetOrderStatsRequestObject) (GetOrderStatsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermOrdersRead); err != nil {
+		return nil, err
+	}
+	r := domain.RangeToday
+	if req.Params.Range != nil {
+		var ok bool
+		if r, ok = domain.ParseStatsRange(string(*req.Params.Range)); !ok {
+			return nil, errs.Validation(errs.FieldError{Field: "range", Code: "invalid", Message: "range must be today, 7d or 30d"})
+		}
+	}
+	st, err := h.svc.Stats(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	tally := func(t domain.Tally) OrderTally { return OrderTally{Orders: t.Orders, TotalMinor: t.TotalMinor} }
+	out := GetOrderStats200JSONResponse{
+		Range: OrderStatsRange(st.Range), Currency: st.Currency, From: st.Windows.From, To: st.Windows.To,
+		Sales: tally(st.Sales), CodOrders: st.COD, CardOrders: st.Card, Previous: tally(st.Previous),
+		Cancelled: tally(st.Cancelled), Returned: tally(st.Returned), OldestPendingAt: st.OldestPending,
+	}
+	out.Daily = make([]struct {
+		Date       openapi_types.Date `json:"date"`
+		Orders     int                `json:"orders"`
+		SalesMinor int64              `json:"sales_minor"`
+	}, len(st.Daily))
+	for i, d := range st.Daily {
+		day, err := time.Parse(time.DateOnly, d.Date)
+		if err != nil {
+			return nil, fmt.Errorf("orders: day %q: %w", d.Date, err)
+		}
+		out.Daily[i].Date, out.Daily[i].Orders, out.Daily[i].SalesMinor = openapi_types.Date{Time: day}, d.Orders, d.SalesMinor
+	}
+	return out, nil
 }
 
 // ListOrders implements StrictServerInterface.

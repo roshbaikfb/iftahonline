@@ -42,6 +42,55 @@ func (q *Queries) CountOrdersByStatus(ctx context.Context, storeID ulid.ID) ([]C
 	return items, nil
 }
 
+const dailySales = `-- name: DailySales :many
+SELECT ((created_at AT TIME ZONE $1::text)::date)::text AS day,
+       count(*)::int AS orders, coalesce(sum(total_minor), 0)::bigint AS sales_minor
+FROM orders
+WHERE store_id = $2 AND created_at >= $3 AND created_at < $4 AND status NOT IN ('cancelled', 'returned')
+GROUP BY 1
+ORDER BY 1
+`
+
+type DailySalesParams struct {
+	Tz      string
+	StoreID ulid.ID
+	Since   time.Time
+	Until   time.Time
+}
+
+type DailySalesRow struct {
+	Day        string
+	Orders     int32
+	SalesMinor int64
+}
+
+// Sales per local day for the chart, by the store's time zone; days
+// without orders are filled in by the caller.
+func (q *Queries) DailySales(ctx context.Context, arg DailySalesParams) ([]DailySalesRow, error) {
+	rows, err := q.db.Query(ctx, dailySales,
+		arg.Tz,
+		arg.StoreID,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DailySalesRow{}
+	for rows.Next() {
+		var i DailySalesRow
+		if err := rows.Scan(&i.Day, &i.Orders, &i.SalesMinor); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrders = `-- name: ListOrders :many
 
 SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status FROM orders
@@ -337,4 +386,84 @@ func (q *Queries) ListOrdersByStatus(ctx context.Context, arg ListOrdersByStatus
 		return nil, err
 	}
 	return items, nil
+}
+
+const oldestPending = `-- name: OldestPending :one
+SELECT created_at FROM orders WHERE store_id = $1 AND status = 'pending'
+ORDER BY created_at
+LIMIT 1
+`
+
+// When the oldest order waiting for confirmation came (orders_store_status).
+// No row when none waits.
+func (q *Queries) OldestPending(ctx context.Context, storeID ulid.ID) (time.Time, error) {
+	row := q.db.QueryRow(ctx, oldestPending, storeID)
+	var created_at time.Time
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
+const orderStats = `-- name: OrderStats :one
+SELECT
+  count(*) FILTER (WHERE created_at >= $1 AND status NOT IN ('cancelled', 'returned'))::int AS orders,
+  coalesce(sum(total_minor) FILTER (WHERE created_at >= $1 AND status NOT IN ('cancelled', 'returned')), 0)::bigint AS sales_minor,
+  count(*) FILTER (WHERE created_at >= $1 AND status NOT IN ('cancelled', 'returned') AND payment_method = 'cod')::int AS cod_orders,
+  count(*) FILTER (WHERE created_at >= $1 AND status NOT IN ('cancelled', 'returned') AND payment_method = 'card')::int AS card_orders,
+  count(*) FILTER (WHERE created_at < $2 AND status NOT IN ('cancelled', 'returned'))::int AS prev_orders,
+  coalesce(sum(total_minor) FILTER (WHERE created_at < $2 AND status NOT IN ('cancelled', 'returned')), 0)::bigint AS prev_sales_minor,
+  count(*) FILTER (WHERE created_at >= $1 AND status = 'cancelled')::int AS cancelled_orders,
+  coalesce(sum(total_minor) FILTER (WHERE created_at >= $1 AND status = 'cancelled'), 0)::bigint AS cancelled_minor,
+  count(*) FILTER (WHERE created_at >= $1 AND status = 'returned')::int AS returned_orders,
+  coalesce(sum(total_minor) FILTER (WHERE created_at >= $1 AND status = 'returned'), 0)::bigint AS returned_minor
+FROM orders
+WHERE store_id = $3 AND created_at >= $4 AND created_at < $5
+`
+
+type OrderStatsParams struct {
+	Since     time.Time
+	PrevUntil time.Time
+	StoreID   ulid.ID
+	PrevSince time.Time
+	Until     time.Time
+}
+
+type OrderStatsRow struct {
+	Orders          int32
+	SalesMinor      int64
+	CodOrders       int32
+	CardOrders      int32
+	PrevOrders      int32
+	PrevSalesMinor  int64
+	CancelledOrders int32
+	CancelledMinor  int64
+	ReturnedOrders  int32
+	ReturnedMinor   int64
+}
+
+// The dashboard home's sums (the owner, 2026-10-27): sales are every
+// order but cancelled and returned ones, which are summed apart; totals
+// include shipping and the COD fee. One walk of the primary key over
+// [prev_since, until): the current period and the one before it, by FILTER.
+func (q *Queries) OrderStats(ctx context.Context, arg OrderStatsParams) (OrderStatsRow, error) {
+	row := q.db.QueryRow(ctx, orderStats,
+		arg.Since,
+		arg.PrevUntil,
+		arg.StoreID,
+		arg.PrevSince,
+		arg.Until,
+	)
+	var i OrderStatsRow
+	err := row.Scan(
+		&i.Orders,
+		&i.SalesMinor,
+		&i.CodOrders,
+		&i.CardOrders,
+		&i.PrevOrders,
+		&i.PrevSalesMinor,
+		&i.CancelledOrders,
+		&i.CancelledMinor,
+		&i.ReturnedOrders,
+		&i.ReturnedMinor,
+	)
+	return i, err
 }

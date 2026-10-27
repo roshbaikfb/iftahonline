@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for OrderPaymentMethod.
@@ -81,6 +82,27 @@ func (e OrderSource) Valid() bool {
 	}
 }
 
+// Defines values for OrderStatsRange.
+const (
+	OrderStatsRangeN30d  OrderStatsRange = "30d"
+	OrderStatsRangeN7d   OrderStatsRange = "7d"
+	OrderStatsRangeToday OrderStatsRange = "today"
+)
+
+// Valid indicates whether the value is a known member of the OrderStatsRange enum.
+func (e OrderStatsRange) Valid() bool {
+	switch e {
+	case OrderStatsRangeN30d:
+		return true
+	case OrderStatsRangeN7d:
+		return true
+	case OrderStatsRangeToday:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderStatus.
 const (
 	Cancelled      OrderStatus = "cancelled"
@@ -135,6 +157,27 @@ func (e PolicySlug) Valid() bool {
 	case Shipping:
 		return true
 	case Terms:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetOrderStatsParamsRange.
+const (
+	GetOrderStatsParamsRangeN30d  GetOrderStatsParamsRange = "30d"
+	GetOrderStatsParamsRangeN7d   GetOrderStatsParamsRange = "7d"
+	GetOrderStatsParamsRangeToday GetOrderStatsParamsRange = "today"
+)
+
+// Valid indicates whether the value is a known member of the GetOrderStatsParamsRange enum.
+func (e GetOrderStatsParamsRange) Valid() bool {
+	switch e {
+	case GetOrderStatsParamsRangeN30d:
+		return true
+	case GetOrderStatsParamsRangeN7d:
+		return true
+	case GetOrderStatsParamsRangeToday:
 		return true
 	default:
 		return false
@@ -320,8 +363,45 @@ type OrderPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// OrderStats defines model for OrderStats.
+type OrderStats struct {
+	Cancelled OrderTally `json:"cancelled"`
+
+	// CardOrders Orders within sales paid by card.
+	CardOrders int `json:"card_orders"`
+
+	// CodOrders Orders within sales paid on delivery.
+	CodOrders int `json:"cod_orders"`
+
+	// Currency Example: EGP
+	Currency string `json:"currency"`
+	Daily    []struct {
+		Date       openapi_types.Date `json:"date"`
+		Orders     int                `json:"orders"`
+		SalesMinor int64              `json:"sales_minor"`
+	} `json:"daily"`
+	From time.Time `json:"from"`
+
+	// OldestPendingAt When the oldest order waiting for confirmation came; absent when none waits.
+	OldestPendingAt *time.Time      `json:"oldest_pending_at,omitempty"`
+	Previous        OrderTally      `json:"previous"`
+	Range           OrderStatsRange `json:"range"`
+	Returned        OrderTally      `json:"returned"`
+	Sales           OrderTally      `json:"sales"`
+	To              time.Time       `json:"to"`
+}
+
+// OrderStatsRange defines model for OrderStats.Range.
+type OrderStatsRange string
+
 // OrderStatus defines model for OrderStatus.
 type OrderStatus string
+
+// OrderTally defines model for OrderTally.
+type OrderTally struct {
+	Orders     int   `json:"orders"`
+	TotalMinor int64 `json:"total_minor"`
+}
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -417,6 +497,14 @@ type ExportOrdersParams struct {
 	Governorate *string      `form:"governorate,omitempty" json:"governorate,omitempty"`
 }
 
+// GetOrderStatsParams defines parameters for GetOrderStats.
+type GetOrderStatsParams struct {
+	Range *GetOrderStatsParamsRange `form:"range,omitempty" json:"range,omitempty"`
+}
+
+// GetOrderStatsParamsRange defines parameters for GetOrderStats.
+type GetOrderStatsParamsRange string
+
 // CreateOrderJSONRequestBody defines body for CreateOrder for application/json ContentType.
 type CreateOrderJSONRequestBody = OrderInput
 
@@ -440,6 +528,9 @@ type ServerInterface interface {
 	// ExportOrders Export orders as CSV
 	// (GET /v1/stores/{store_id}/orders/export)
 	ExportOrders(w http.ResponseWriter, r *http.Request, storeId StoreID, params ExportOrdersParams)
+	// GetOrderStats Sum the store's orders for the dashboard home
+	// (GET /v1/stores/{store_id}/orders/stats)
+	GetOrderStats(w http.ResponseWriter, r *http.Request, storeId StoreID, params GetOrderStatsParams)
 	// BulkTransitionOrders Move many orders (bulk confirm)
 	// (POST /v1/stores/{store_id}/orders/transitions)
 	BulkTransitionOrders(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -750,6 +841,48 @@ func (siw *ServerInterfaceWrapper) ExportOrders(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetOrderStats operation middleware
+func (siw *ServerInterfaceWrapper) GetOrderStats(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrderStatsParams
+
+	// ------------- Optional query parameter "range" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "range", r.URL.Query(), &params.Range, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "range"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "range", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrderStats(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BulkTransitionOrders operation middleware
 func (siw *ServerInterfaceWrapper) BulkTransitionOrders(w http.ResponseWriter, r *http.Request) {
 
@@ -969,6 +1102,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders", wrapper.ListOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders", wrapper.CreateOrder)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/counts", wrapper.CountOrders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/stats", wrapper.GetOrderStats)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders/transitions", wrapper.BulkTransitionOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/export", wrapper.ExportOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}", wrapper.GetOrder)
@@ -1177,6 +1311,46 @@ func (response ExportOrdersdefaultApplicationProblemPlusJSONResponse) VisitExpor
 	return err
 }
 
+type GetOrderStatsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  GetOrderStatsParams
+}
+
+type GetOrderStatsResponseObject interface {
+	VisitGetOrderStatsResponse(w http.ResponseWriter) error
+}
+
+type GetOrderStats200JSONResponse OrderStats
+
+func (response GetOrderStats200JSONResponse) VisitGetOrderStatsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrderStatsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrderStatsdefaultApplicationProblemPlusJSONResponse) VisitGetOrderStatsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type BulkTransitionOrdersRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *BulkTransitionOrdersJSONRequestBody
@@ -1312,6 +1486,9 @@ type StrictServerInterface interface {
 	// ExportOrders Export orders as CSV
 	// (GET /v1/stores/{store_id}/orders/export)
 	ExportOrders(ctx context.Context, request ExportOrdersRequestObject) (ExportOrdersResponseObject, error)
+	// GetOrderStats Sum the store's orders for the dashboard home
+	// (GET /v1/stores/{store_id}/orders/stats)
+	GetOrderStats(ctx context.Context, request GetOrderStatsRequestObject) (GetOrderStatsResponseObject, error)
 	// BulkTransitionOrders Move many orders (bulk confirm)
 	// (POST /v1/stores/{store_id}/orders/transitions)
 	BulkTransitionOrders(ctx context.Context, request BulkTransitionOrdersRequestObject) (BulkTransitionOrdersResponseObject, error)
@@ -1469,6 +1646,33 @@ func (sh *strictHandler) ExportOrders(w http.ResponseWriter, r *http.Request, st
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ExportOrdersResponseObject); ok {
 		if err := validResponse.VisitExportOrdersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrderStats operation middleware
+func (sh *strictHandler) GetOrderStats(w http.ResponseWriter, r *http.Request, storeId StoreID, params GetOrderStatsParams) {
+	var request GetOrderStatsRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrderStats(ctx, request.(GetOrderStatsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrderStats")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrderStatsResponseObject); ok {
+		if err := validResponse.VisitGetOrderStatsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

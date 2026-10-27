@@ -423,3 +423,24 @@ func SampleIDs(ctx context.Context, tx Tx) ([]ulid.ID, error) {
 	}
 	return ids, nil
 }
+
+// LowStock lists up to limit variants with at most threshold units free,
+// the fewest first, and how many there are in all.
+func LowStock(ctx context.Context, tx Tx, threshold, limit int) ([]domain.LowStockItem, int, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := catalogdb.New(tx).LowStock(ctx, catalogdb.LowStockParams{StoreID: store, Threshold: int32(threshold), Lim: int32(limit)}) //nolint:gosec // bounded by the caller
+	if err != nil {
+		return nil, 0, fmt.Errorf("catalog store: low stock: %w", err)
+	}
+	out := make([]domain.LowStockItem, len(rows))
+	total := 0
+	for i, r := range rows {
+		out[i] = domain.LowStockItem{VariantID: r.VariantID, ProductID: r.ProductID, ProductTitle: r.ProductTitle,
+			OptionValues: r.OptionValues, Available: int(r.Available)}
+		total = int(r.Total)
+	}
+	return out, total, nil
+}

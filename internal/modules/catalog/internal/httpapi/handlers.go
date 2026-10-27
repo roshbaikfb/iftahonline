@@ -174,6 +174,37 @@ func replace[B, In, Out any](ctx context.Context, auth authz.Authorizer, perm au
 	return call(ctx, id, in)
 }
 
+// ListLowStock implements StrictServerInterface.
+func (h *Handlers) ListLowStock(ctx context.Context, req ListLowStockRequestObject) (ListLowStockResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	threshold, limit := 5, 5
+	if req.Params.Threshold != nil {
+		threshold = *req.Params.Threshold
+	}
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	items, total, err := h.svc.LowStock(ctx, threshold, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := ListLowStock200JSONResponse{Total: total}
+	out.Items = make([]struct {
+		Available    int      `json:"available"`
+		OptionValues []string `json:"option_values"`
+		ProductId    ULID     `json:"product_id"`
+		ProductTitle string   `json:"product_title"`
+		VariantId    ULID     `json:"variant_id"`
+	}, len(items))
+	for i, it := range items {
+		out.Items[i].Available, out.Items[i].OptionValues = it.Available, it.OptionValues
+		out.Items[i].ProductId, out.Items[i].ProductTitle, out.Items[i].VariantId = it.ProductID.String(), it.ProductTitle, it.VariantID.String()
+	}
+	return out, nil
+}
+
 // DeleteSampleProducts implements StrictServerInterface.
 func (h *Handlers) DeleteSampleProducts(ctx context.Context, _ DeleteSampleProductsRequestObject) (DeleteSampleProductsResponseObject, error) {
 	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {

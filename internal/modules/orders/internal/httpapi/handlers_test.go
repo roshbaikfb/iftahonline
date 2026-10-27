@@ -316,6 +316,7 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "bulkTransitionOrders", Request: req(t, http.MethodPost, path(b, "/transitions"), owner, bulk), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "exportOrders", Request: req(t, http.MethodGet, path(b, "/export"), owner, ""), Leaks: leaks},
 		{OperationID: "countOrders", Request: req(t, http.MethodGet, path(b, "/counts"), owner, ""), Leaks: leaks},
+		{OperationID: "getOrderStats", Request: req(t, http.MethodGet, path(b, "/stats?range=30d"), owner, ""), Leaks: leaks},
 		// A's store in the path, B's order.
 		{OperationID: "getOrder", Request: req(t, http.MethodGet, path(a, "/"+oid), owner, ""), Leaks: leaks},
 		{OperationID: "transitionOrder", Request: req(t, http.MethodPost, path(a, "/"+oid+"/transitions"), owner, move), Leaks: leaks, Unchanged: unchanged},
@@ -368,5 +369,32 @@ func TestCountOrders(t *testing.T) {
 	code, counts, _ := f.do(t, req(t, http.MethodGet, path(a, "/counts"), owner, ""))
 	if code != http.StatusOK || counts["pending"] != float64(2) || counts["confirmed"] != float64(1) || counts["delivered"] != float64(0) || len(counts) != 8 {
 		t.Fatalf("countOrders = %d %v (store B's pending order must not count)", code, counts)
+	}
+}
+
+// The dashboard home's sums: only the caller's store, and only a known
+// range.
+func TestOrderStats(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, owner := f.storeA, f.tok[authz.RoleOwner]
+	ctx := ordertest.As(tenant.WithStore(t.Context(), a), t, authz.RoleOwner)
+	p, err := f.env.Svc.PlaceOrder(ctx, domain.NewOrder{Source: domain.SourceMerchant, Name: "nn", Phone: "01012345670",
+		Governorate: "EG-C", City: "cc", Address: "aaaaa", Lines: []domain.LineInput{{VariantID: f.variantA, Qty: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, st, _ := f.do(t, req(t, http.MethodGet, path(a, "/stats"), owner, ""))
+	sales, _ := st["sales"].(map[string]any)
+	daily, _ := st["daily"].([]any)
+	if code != http.StatusOK || st["range"] != "today" || st["currency"] != "EGP" || sales["orders"] != float64(1) ||
+		sales["total_minor"] != float64(p.Order.Total.Amount()) || len(daily) != 30 || st["oldest_pending_at"] == nil {
+		t.Fatalf("getOrderStats = %d %v (store B's order must not count)", code, st)
+	}
+	if code, body, _ := f.do(t, req(t, http.MethodGet, path(a, "/stats?range=1y"), owner, "")); code != http.StatusUnprocessableEntity {
+		t.Fatalf("range 1y = %d %v", code, body)
+	}
+	if code, body, _ := f.do(t, req(t, http.MethodGet, path(a, "/stats"), "", "")); code != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d %v", code, body)
 	}
 }

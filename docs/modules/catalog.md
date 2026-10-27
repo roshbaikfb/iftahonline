@@ -78,6 +78,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | `listProducts`, `getProduct`, `listCategories`, `searchProducts` | `catalog.read` |
 | `createProduct`, `updateProduct`, `deleteProduct` | `catalog.manage` |
 | `deleteSampleProducts` (`DELETE /products/samples`, returns `deleted`) | `catalog.manage` |
+| `listLowStock` (`GET /inventory/low?threshold&limit`: tracked variants of active, non-sample products with at most `threshold` units free, fewest first, and the total; the dashboard passes the storefront theme's `low_stock`) | `catalog.read` |
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
 | `createImageUpload`, `completeImageUpload`, `updateImage`, `deleteImage` | `catalog.manage` |

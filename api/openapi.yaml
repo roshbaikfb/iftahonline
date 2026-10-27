@@ -1035,6 +1035,48 @@ paths:
               schema: { $ref: "#/components/schemas/Import" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/inventory/low:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [catalog]
+      operationId: listLowStock
+      summary: Variants running low
+      description: |
+        Permission: catalog.read. Tracked variants of active products (sample
+        products left out) with at most `threshold` units free to sell, the
+        fewest first, and how many there are in all. The dashboard passes the
+        store's low-stock setting (the storefront theme's `low_stock`).
+      parameters:
+        - name: threshold
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 100, default: 5 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        "200":
+          description: The variants running low.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [variant_id, product_id, product_title, option_values, available]
+                      properties:
+                        variant_id: { $ref: "#/components/schemas/ULID" }
+                        product_id: { $ref: "#/components/schemas/ULID" }
+                        product_title: { type: string }
+                        option_values: { type: array, items: { type: string } }
+                        available: { type: integer }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/variants/{variant_id}/inventory:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -1845,6 +1887,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OrderCounts" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/stats:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [orders]
+      operationId: getOrderStats
+      summary: Sum the store's orders for the dashboard home
+      description: |
+        Permission: orders.read. Days follow the store's time zone. Sales are
+        every order placed in the period except cancelled and returned ones,
+        which are summed apart; totals include shipping and the COD fee.
+        `previous` is the same span one period earlier (today so far against
+        yesterday until the same hour). `daily` is the last 30 days, oldest
+        first, days without orders included.
+      parameters:
+        - name: range
+          in: query
+          schema: { type: string, enum: [today, 7d, 30d], default: today }
+      responses:
+        "200":
+          description: The sums.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderStats" }
         default:
           $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/orders/transitions:
@@ -3312,6 +3380,36 @@ components:
           type: array
           description: The timeline, oldest first.
           items: { $ref: "#/components/schemas/OrderEvent" }
+    OrderTally:
+      type: object
+      required: [orders, total_minor]
+      properties:
+        orders: { type: integer }
+        total_minor: { type: integer, format: int64 }
+    OrderStats:
+      type: object
+      required: [range, currency, from, to, sales, cod_orders, card_orders, previous, cancelled, returned, daily]
+      properties:
+        range: { type: string, enum: [today, 7d, 30d] }
+        currency: { type: string, example: EGP }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        sales: { $ref: "#/components/schemas/OrderTally" }
+        cod_orders: { type: integer, description: Orders within sales paid on delivery. }
+        card_orders: { type: integer, description: Orders within sales paid by card. }
+        previous: { $ref: "#/components/schemas/OrderTally" }
+        cancelled: { $ref: "#/components/schemas/OrderTally" }
+        returned: { $ref: "#/components/schemas/OrderTally" }
+        daily:
+          type: array
+          items:
+            type: object
+            required: [date, sales_minor, orders]
+            properties:
+              date: { type: string, format: date }
+              sales_minor: { type: integer, format: int64 }
+              orders: { type: integer }
+        oldest_pending_at: { type: string, format: date-time, description: When the oldest order waiting for confirmation came; absent when none waits. }
     OrderCounts:
       type: object
       required: [pending, confirmed, ready_to_ship, shipped, delivered, cancelled, failed_delivery, returned]

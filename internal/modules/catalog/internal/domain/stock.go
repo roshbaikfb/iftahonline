@@ -165,3 +165,12 @@ func ValidateStock(in StockInput) error {
 	}
 	return nil
 }
+
+// LowStockItem is a tracked variant running low (the dashboard home).
+type LowStockItem struct {
+	VariantID    ulid.ID
+	ProductID    ulid.ID
+	ProductTitle string
+	OptionValues []string
+	Available    int
+}

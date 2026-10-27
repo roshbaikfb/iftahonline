@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -120,6 +121,27 @@ func (s *Service) Counts(ctx context.Context) (map[domain.Status]int, error) {
 		out[st] = got[st]
 	}
 	return out, nil
+}
+
+// Stats sums the store's orders for the dashboard home over r, by the
+// store's time zone (the owner, 2026-10-27).
+func (s *Service) Stats(ctx context.Context, r domain.StatsRange) (domain.Stats, error) {
+	info, err := s.stores(ctx)
+	if err != nil {
+		return domain.Stats{}, err
+	}
+	loc := info.Location
+	if loc == nil {
+		loc = time.UTC
+	}
+	w := r.Windows(s.now(), loc)
+	var st domain.Stats
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		st, txErr = store.Stats(ctx, tx, w, loc.String())
+		return txErr
+	})
+	st.Range, st.Currency = r, string(info.Currency)
+	return st, err
 }
 
 // maxTrackedOrders is how far back one phone's orders are searched for a
