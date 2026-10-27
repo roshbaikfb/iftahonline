@@ -742,6 +742,9 @@ type Variant struct {
 	CompareAtMinor *int64          `json:"compare_at_minor,omitempty"`
 	Currency       VariantCurrency `json:"currency"`
 
+	// Hidden Off sale and not shown to shoppers; absent means false.
+	Hidden *bool `json:"hidden,omitempty"`
+
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	Id           ULID     `json:"id"`
 	OptionValues []string `json:"option_values"`
@@ -758,6 +761,9 @@ type VariantCurrency string
 type VariantInput struct {
 	// CompareAtMinor Must exceed price_minor.
 	CompareAtMinor *int64 `json:"compare_at_minor,omitempty"`
+
+	// Hidden Off sale and not shown to shoppers; the variant and its stock are kept.
+	Hidden *bool `json:"hidden,omitempty"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	Id *ULID `json:"id,omitempty"`

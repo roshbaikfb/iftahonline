@@ -17,7 +17,7 @@ SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.s
 FROM variants v
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
-WHERE v.store_id = $1 AND v.id = $2 AND v.deleted_at IS NULL
+WHERE v.store_id = $1 AND v.id = $2 AND v.deleted_at IS NULL AND NOT v.hidden
   AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
 `
 
@@ -41,7 +41,8 @@ type GetSellableVariantRow struct {
 	Reserved       int32
 }
 
-// Sample products (ADR-0034) are shown but never sellable.
+// Sample products (ADR-0034) are shown but never sellable; hidden
+// variants (ADR-0035) are neither.
 func (q *Queries) GetSellableVariant(ctx context.Context, arg GetSellableVariantParams) (GetSellableVariantRow, error) {
 	row := q.db.QueryRow(ctx, getSellableVariant, arg.StoreID, arg.ID)
 	var i GetSellableVariantRow
@@ -87,10 +88,10 @@ func (q *Queries) InsertInventoryLevels(ctx context.Context, arg InsertInventory
 
 const insertVariants = `-- name: InsertVariants :exec
 
-INSERT INTO variants (id, store_id, product_id, sku, option_values, price_minor, compare_at_minor, currency, position)
+INSERT INTO variants (id, store_id, product_id, sku, option_values, price_minor, compare_at_minor, currency, position, hidden)
 SELECT ($1::uuid[])[n], $2, $3, nullif(($4::text[])[n], ''),
        ARRAY(SELECT jsonb_array_elements_text(($5::jsonb[])[n])),
-       ($6::bigint[])[n], nullif(($7::bigint[])[n], 0), $8, ($9::int[])[n]
+       ($6::bigint[])[n], nullif(($7::bigint[])[n], 0), $8, ($9::int[])[n], ($10::boolean[])[n]
 FROM generate_subscripts($1::uuid[], 1) AS n
 `
 
@@ -104,6 +105,7 @@ type InsertVariantsParams struct {
 	CompareAts   []int64
 	Currency     string
 	Positions    []int32
+	Hidden       []bool
 }
 
 // Variants are written in batches: one statement per kind of change, not
@@ -122,6 +124,7 @@ func (q *Queries) InsertVariants(ctx context.Context, arg InsertVariantsParams) 
 		arg.CompareAts,
 		arg.Currency,
 		arg.Positions,
+		arg.Hidden,
 	)
 	return err
 }
@@ -161,7 +164,7 @@ SELECT v.id, v.product_id, p.title AS product_title, p.slug AS product_slug, v.s
        v.price_minor, v.compare_at_minor, v.currency, i.tracked, i.on_hand, i.reserved,
        img.object_key AS image_key
 FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(id, ord)
-JOIN variants v ON v.id = ids.id AND v.store_id = $2 AND v.deleted_at IS NULL
+JOIN variants v ON v.id = ids.id AND v.store_id = $2 AND v.deleted_at IS NULL AND NOT v.hidden
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
 JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
 LEFT JOIN LATERAL (
@@ -234,11 +237,11 @@ func (q *Queries) ListSellableVariants(ctx context.Context, arg ListSellableVari
 
 const listVariantsByProducts = `-- name: ListVariantsByProducts :many
 SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-       v.tracked, v.on_hand, v.reserved
+       v.hidden, v.tracked, v.on_hand, v.reserved
 FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(product_id, ord)
 CROSS JOIN LATERAL (
   SELECT v.id, v.product_id, v.sku, v.option_values, v.price_minor, v.compare_at_minor, v.currency, v.position,
-         i.tracked, i.on_hand, i.reserved
+         v.hidden, i.tracked, i.on_hand, i.reserved
   FROM variants v
   JOIN inventory_levels i ON i.store_id = v.store_id AND i.variant_id = v.id
   WHERE v.store_id = $2 AND v.product_id = ids.product_id AND v.deleted_at IS NULL
@@ -261,6 +264,7 @@ type ListVariantsByProductsRow struct {
 	CompareAtMinor *int64
 	Currency       string
 	Position       int32
+	Hidden         bool
 	Tracked        bool
 	OnHand         int32
 	Reserved       int32
@@ -286,6 +290,7 @@ func (q *Queries) ListVariantsByProducts(ctx context.Context, arg ListVariantsBy
 			&i.CompareAtMinor,
 			&i.Currency,
 			&i.Position,
+			&i.Hidden,
 			&i.Tracked,
 			&i.OnHand,
 			&i.Reserved,
@@ -324,9 +329,9 @@ UPDATE variants AS t
 SET sku = nullif(($1::text[])[v.n], ''),
     option_values = ARRAY(SELECT jsonb_array_elements_text(($2::jsonb[])[v.n])),
     price_minor = ($3::bigint[])[v.n], compare_at_minor = nullif(($4::bigint[])[v.n], 0),
-    position = ($5::int[])[v.n], updated_at = now()
-FROM (SELECT n, ($8::uuid[])[n] AS id FROM generate_subscripts($8::uuid[], 1) AS n) AS v
-WHERE t.store_id = $6 AND t.product_id = $7 AND t.id = v.id AND t.deleted_at IS NULL
+    position = ($5::int[])[v.n], hidden = ($6::boolean[])[v.n], updated_at = now()
+FROM (SELECT n, ($9::uuid[])[n] AS id FROM generate_subscripts($9::uuid[], 1) AS n) AS v
+WHERE t.store_id = $7 AND t.product_id = $8 AND t.id = v.id AND t.deleted_at IS NULL
 `
 
 type UpdateVariantsParams struct {
@@ -335,6 +340,7 @@ type UpdateVariantsParams struct {
 	Prices       []int64
 	CompareAts   []int64
 	Positions    []int32
+	Hidden       []bool
 	StoreID      ulid.ID
 	ProductID    ulid.ID
 	Ids          []ulid.ID
@@ -347,6 +353,7 @@ func (q *Queries) UpdateVariants(ctx context.Context, arg UpdateVariantsParams) 
 		arg.Prices,
 		arg.CompareAts,
 		arg.Positions,
+		arg.Hidden,
 		arg.StoreID,
 		arg.ProductID,
 		arg.Ids,

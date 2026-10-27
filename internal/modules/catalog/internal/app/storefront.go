@@ -240,6 +240,9 @@ func (s *Storefront) ProductBySlug(ctx context.Context, productSlug string) (Sto
 		return StorefrontProduct{}, notFound(err, ErrProductNotFound)
 	}
 	v := s.view(p)
+	if len(v.Variants) == 0 {
+		return StorefrontProduct{}, ErrProductNotFound // every variant hidden: nothing to sell or price
+	}
 	v.SizeChart = chart
 	return v, nil
 }
@@ -308,8 +311,8 @@ func (s *Storefront) Categories(ctx context.Context) ([]domain.Category, error) 
 func (s *Storefront) views(ps []domain.Product) []StorefrontProduct {
 	out := make([]StorefrontProduct, 0, len(ps))
 	for _, p := range ps {
-		if len(p.Variants) > 0 { // a product without variants cannot be sold or priced
-			out = append(out, s.view(p))
+		if v := s.view(p); len(v.Variants) > 0 { // a product without shown variants cannot be sold or priced
+			out = append(out, v)
 		}
 	}
 	return out
@@ -319,16 +322,20 @@ func (s *Storefront) view(p domain.Product) StorefrontProduct {
 	v := StorefrontProduct{
 		ID: p.ID, Slug: p.Slug, Title: p.Title, Description: p.Description, Options: p.Options,
 		CategoryIDs: p.CategoryIDs, Sample: p.Sample, UpdatedAt: p.UpdatedAt,
-		Variants: make([]StorefrontVariant, len(p.Variants)),
+		Variants: make([]StorefrontVariant, 0, len(p.Variants)),
 		Images:   make([]StorefrontImage, 0, len(p.Images)),
 	}
-	for i, pv := range p.Variants {
-		v.Variants[i] = StorefrontVariant{
+	for _, pv := range p.Variants {
+		if pv.Hidden {
+			continue // off sale: shoppers never see it (ADR-0035)
+		}
+		sv := StorefrontVariant{
 			ID: pv.ID, OptionValues: pv.OptionValues, Price: pv.Price, CompareAt: pv.CompareAt, Available: pv.Stock.CanSell(1) && !p.Sample,
 		}
 		if !p.Sample {
-			v.Variants[i].Left = pv.Stock.Left()
+			sv.Left = pv.Stock.Left()
 		}
+		v.Variants = append(v.Variants, sv)
 	}
 	for _, img := range p.Images {
 		if img.Status == domain.ImageReady {

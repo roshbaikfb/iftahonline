@@ -126,7 +126,7 @@ const lowStock = `-- name: LowStock :many
 SELECT v.id AS variant_id, v.product_id, p.title AS product_title, v.option_values,
        (i.on_hand - i.reserved)::int AS available, count(*) OVER ()::int AS total
 FROM inventory_levels i
-JOIN variants v ON v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
+JOIN variants v ON v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL AND NOT v.hidden
 JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
   AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
 WHERE i.store_id = $1 AND i.tracked AND i.on_hand - i.reserved <= $2::int
@@ -149,8 +149,8 @@ type LowStockRow struct {
 	Total        int32
 }
 
-// The dashboard home's "running low": tracked variants of live, active,
-// non-sample products with at most threshold units free to sell, the
+// The dashboard home's "running low": tracked, shown variants of live,
+// active, non-sample products with at most threshold units free to sell, the
 // fewest first, with how many there are in all.
 func (q *Queries) LowStock(ctx context.Context, arg LowStockParams) ([]LowStockRow, error) {
 	rows, err := q.db.Query(ctx, lowStock, arg.StoreID, arg.Threshold, arg.Lim)
@@ -240,7 +240,7 @@ WHERE i.store_id = $2 AND i.variant_id = $3
   AND (NOT i.tracked OR i.on_hand - i.reserved >= $1::int)
   AND EXISTS (
     SELECT 1 FROM variants v JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
-    WHERE v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
+    WHERE v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL AND NOT v.hidden
       AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample)
 RETURNING i.tracked, (i.on_hand - i.reserved)::int AS available,
   (SELECT v.product_id FROM variants v WHERE v.store_id = i.store_id AND v.id = i.variant_id)::uuid AS product_id
@@ -261,7 +261,8 @@ type ReserveInventoryRow struct {
 // The race-safe step (ADR-0011): the row lock serializes concurrent
 // reservations of one variant, and the WHERE re-checks availability on
 // the locked row. No row means the variant is not sellable or short.
-// Sample products (ADR-0034) are never sellable.
+// Sample products (ADR-0034) and hidden variants (ADR-0035) are never
+// sellable.
 func (q *Queries) ReserveInventory(ctx context.Context, arg ReserveInventoryParams) (ReserveInventoryRow, error) {
 	row := q.db.QueryRow(ctx, reserveInventory, arg.Qty, arg.StoreID, arg.VariantID)
 	var i ReserveInventoryRow
