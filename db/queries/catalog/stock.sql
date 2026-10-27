@@ -57,3 +57,17 @@ SET status = @to_status,
 WHERE store_id = @store_id AND ref = @ref AND status = @from_status
   AND (NOT @only_expired::boolean OR expires_at <= now())
 RETURNING variant_id, qty, counted;
+
+-- name: LowStock :many
+-- The dashboard home's "running low": tracked variants of live, active,
+-- non-sample products with at most threshold units free to sell, the
+-- fewest first, with how many there are in all.
+SELECT v.id AS variant_id, v.product_id, p.title AS product_title, v.option_values,
+       (i.on_hand - i.reserved)::int AS available, count(*) OVER ()::int AS total
+FROM inventory_levels i
+JOIN variants v ON v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
+JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
+  AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
+WHERE i.store_id = @store_id AND i.tracked AND i.on_hand - i.reserved <= @threshold::int
+ORDER BY available, p.title, v.id
+LIMIT @lim;

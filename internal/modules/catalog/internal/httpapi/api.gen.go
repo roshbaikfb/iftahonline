@@ -707,6 +707,12 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// ListLowStockParams defines parameters for ListLowStock.
+type ListLowStockParams struct {
+	Threshold *int `form:"threshold,omitempty" json:"threshold,omitempty"`
+	Limit     *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListProductsParams defines parameters for ListProducts.
 type ListProductsParams struct {
 	Status     *ListProductsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -780,6 +786,9 @@ type ServerInterface interface {
 	// StartImport Start a pending import
 	// (POST /v1/stores/{store_id}/imports/{import_id}/start)
 	StartImport(w http.ResponseWriter, r *http.Request, storeId StoreID, importId ImportID)
+	// ListLowStock Variants running low
+	// (GET /v1/stores/{store_id}/inventory/low)
+	ListLowStock(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListLowStockParams)
 	// ListProducts List products
 	// (GET /v1/stores/{store_id}/products)
 	ListProducts(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListProductsParams)
@@ -1062,6 +1071,61 @@ func (siw *ServerInterfaceWrapper) StartImport(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartImport(w, r, storeId, importId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLowStock operation middleware
+func (siw *ServerInterfaceWrapper) ListLowStock(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLowStockParams
+
+	// ------------- Optional query parameter "threshold" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "threshold", r.URL.Query(), &params.Threshold, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "threshold"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "threshold", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLowStock(w, r, storeId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1740,6 +1804,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/imports", wrapper.CreateImport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/imports/{import_id}", wrapper.GetImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/imports/{import_id}/start", wrapper.StartImport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/inventory/low", wrapper.ListLowStock)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/variants/{variant_id}/inventory", wrapper.SetInventory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.ListCategories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.CreateCategory)
@@ -2053,6 +2118,59 @@ type StartImportdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response StartImportdefaultApplicationProblemPlusJSONResponse) VisitStartImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowStockRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  ListLowStockParams
+}
+
+type ListLowStockResponseObject interface {
+	VisitListLowStockResponse(w http.ResponseWriter) error
+}
+
+type ListLowStock200JSONResponse struct {
+	Items []struct {
+		Available    int      `json:"available"`
+		OptionValues []string `json:"option_values"`
+
+		// ProductId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+		ProductId    ULID   `json:"product_id"`
+		ProductTitle string `json:"product_title"`
+
+		// VariantId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+		VariantId ULID `json:"variant_id"`
+	} `json:"items"`
+	Total int `json:"total"`
+}
+
+func (response ListLowStock200JSONResponse) VisitListLowStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLowStockdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLowStockdefaultApplicationProblemPlusJSONResponse) VisitListLowStockResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2566,6 +2684,9 @@ type StrictServerInterface interface {
 	// StartImport Start a pending import
 	// (POST /v1/stores/{store_id}/imports/{import_id}/start)
 	StartImport(ctx context.Context, request StartImportRequestObject) (StartImportResponseObject, error)
+	// ListLowStock Variants running low
+	// (GET /v1/stores/{store_id}/inventory/low)
+	ListLowStock(ctx context.Context, request ListLowStockRequestObject) (ListLowStockResponseObject, error)
 	// ListProducts List products
 	// (GET /v1/stores/{store_id}/products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -2869,6 +2990,33 @@ func (sh *strictHandler) StartImport(w http.ResponseWriter, r *http.Request, sto
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartImportResponseObject); ok {
 		if err := validResponse.VisitStartImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLowStock operation middleware
+func (sh *strictHandler) ListLowStock(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListLowStockParams) {
+	var request ListLowStockRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLowStock(ctx, request.(ListLowStockRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLowStock")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLowStockResponseObject); ok {
+		if err := validResponse.VisitListLowStockResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -76,6 +76,7 @@ month on the order's creation time, which its ULID encodes.
 | `bulkTransitionOrders` (≤ 100; one result per order) | the move's permission, per order |
 | `exportOrders` (CSV) | orders.export |
 | `countOrders` (every status with its count, zeros included; one query on `orders_store_status`) | orders.read |
+| `getOrderStats` (`range` today, 7d or 30d, by the store's time zone; sales are every order but cancelled and returned ones, which are summed apart, totals including shipping and the COD fee; `previous` is the same span one period earlier; `daily` the last 30 days; `oldest_pending_at`). Three queries: one walk of the primary key for both periods, one grouped read for the chart, one step of `orders_store_status` | orders.read |
 
 Roles:
 

@@ -401,3 +401,50 @@ func CountByStatus(ctx context.Context, tx Tx) (map[domain.Status]int, error) {
 	}
 	return out, nil
 }
+
+// Stats sums the store's orders over w (the dashboard home): one walk of
+// the primary key for the period and the one before it, one grouped read
+// for the daily chart (by tz, an IANA zone), and the oldest order waiting
+// for confirmation through orders_store_status.
+func Stats(ctx context.Context, tx Tx, w domain.Windows, tz string) (domain.Stats, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Stats{}, err
+	}
+	q := ordersdb.New(tx)
+	row, err := q.OrderStats(ctx, ordersdb.OrderStatsParams{Since: w.From, PrevUntil: w.PrevTo, StoreID: store, PrevSince: w.PrevFrom, Until: w.To})
+	if err != nil {
+		return domain.Stats{}, fmt.Errorf("orders store: stats: %w", err)
+	}
+	st := domain.Stats{
+		Windows:   w,
+		Sales:     domain.Tally{Orders: int(row.Orders), TotalMinor: row.SalesMinor},
+		COD:       int(row.CodOrders),
+		Card:      int(row.CardOrders),
+		Previous:  domain.Tally{Orders: int(row.PrevOrders), TotalMinor: row.PrevSalesMinor},
+		Cancelled: domain.Tally{Orders: int(row.CancelledOrders), TotalMinor: row.CancelledMinor},
+		Returned:  domain.Tally{Orders: int(row.ReturnedOrders), TotalMinor: row.ReturnedMinor},
+	}
+	days, err := q.DailySales(ctx, ordersdb.DailySalesParams{Tz: tz, StoreID: store, Since: w.ChartFrom, Until: w.To})
+	if err != nil {
+		return domain.Stats{}, fmt.Errorf("orders store: daily sales: %w", err)
+	}
+	got := make(map[string]domain.Day, len(days))
+	for _, d := range days {
+		got[d.Day] = domain.Day{Date: d.Day, SalesMinor: d.SalesMinor, Orders: int(d.Orders)}
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return domain.Stats{}, fmt.Errorf("orders store: time zone %q: %w", tz, err)
+	}
+	st.Daily = domain.FillDays(w.ChartFrom, loc, domain.ChartDays, got)
+	oldest, err := q.OldestPending(ctx, store)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return domain.Stats{}, fmt.Errorf("orders store: oldest pending: %w", err)
+	default:
+		st.OldestPending = &oldest
+	}
+	return st, nil
+}

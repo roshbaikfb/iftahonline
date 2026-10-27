@@ -314,3 +314,30 @@ func (w *ExpireWorker) Work(ctx context.Context, job *river.Job[ExpireReservatio
 	}
 	return nil
 }
+
+// Low-stock list bounds.
+const (
+	MaxLowStockThreshold = 100
+	MaxLowStockList      = 20
+)
+
+// LowStock lists the variants with at most threshold units free to sell
+// (the store's low-stock setting, read by the caller from the storefront
+// theme), the fewest first, and how many there are in all.
+func (s *Service) LowStock(ctx context.Context, threshold, limit int) (items []domain.LowStockItem, total int, err error) {
+	var fields []errs.FieldError
+	if threshold < 0 || threshold > MaxLowStockThreshold {
+		fields = append(fields, errs.FieldError{Field: "threshold", Code: "range", Message: "threshold must be between 0 and 100"})
+	}
+	if limit < 1 || limit > MaxLowStockList {
+		fields = append(fields, errs.FieldError{Field: "limit", Code: "range", Message: "limit must be between 1 and 20"})
+	}
+	if len(fields) > 0 {
+		return nil, 0, errs.Validation(fields...)
+	}
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		items, total, txErr = store.LowStock(ctx, tx, threshold, limit)
+		return txErr
+	})
+	return items, total, err
+}

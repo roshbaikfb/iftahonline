@@ -115,3 +115,46 @@ func TestSampleValidation(t *testing.T) {
 		t.Fatalf("an empty category = %v", err)
 	}
 }
+
+// The dashboard home's "running low": tracked variants of active,
+// non-sample products, by units free to sell.
+func TestLowStock(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.ctxA
+	shirt := mustCreate(ctx, t, f, tee("تيشيرت", 10)) // two variants, 10 each
+	low := mustCreate(ctx, t, f, single("كاب", 2, true))
+	mustCreate(ctx, t, f, single("بلا مخزون", 0, false)) // untracked: never low
+	draft := single("مسودة", 1, true)
+	draft.Status = "draft"
+	mustCreate(ctx, t, f, draft)
+	sample := app.SampleProduct{Product: single("عينة", 1, true)}
+	sample.Product.Slug = "sample-low"
+	if _, err := f.svc.EnsureSampleProduct(ctx, sample); err != nil {
+		t.Fatal(err)
+	}
+
+	items, total, err := f.svc.LowStock(ctx, 5, 5)
+	if err != nil || total != 1 || len(items) != 1 || items[0].ProductID != low.ID || items[0].Available != 2 || items[0].ProductTitle != "كاب" {
+		t.Fatalf("LowStock = %+v (%d), %v", items, total, err)
+	}
+	// Reserving 9 of a shirt's 10 leaves 1: it comes first.
+	if _, err = f.svc.ReserveStock(ctx, domain.ReserveRequest{Ref: "o-1", Lines: []domain.ReserveLine{{VariantID: shirt.Variants[0].ID, Qty: 9}}}); err != nil {
+		t.Fatal(err)
+	}
+	items, total, err = f.svc.LowStock(ctx, 5, 5)
+	if err != nil || total != 2 || items[0].VariantID != shirt.Variants[0].ID || items[0].Available != 1 || len(items[0].OptionValues) != 1 {
+		t.Fatalf("after a reservation = %+v (%d), %v", items, total, err)
+	}
+	if items, total, err = f.svc.LowStock(ctx, 5, 1); err != nil || len(items) != 1 || total != 2 {
+		t.Fatalf("limit 1 = %d items of %d, %v", len(items), total, err)
+	}
+	if _, _, err = f.svc.LowStock(f.ctxB, 5, 5); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range [][2]int{{-1, 5}, {101, 5}, {5, 0}, {5, 21}} {
+		if _, _, err = f.svc.LowStock(ctx, c[0], c[1]); errs.KindOf(err) != errs.KindValidation {
+			t.Errorf("threshold %d limit %d = %v", c[0], c[1], err)
+		}
+	}
+}

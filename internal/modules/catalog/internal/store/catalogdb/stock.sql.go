@@ -122,6 +122,63 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 	return items, nil
 }
 
+const lowStock = `-- name: LowStock :many
+SELECT v.id AS variant_id, v.product_id, p.title AS product_title, v.option_values,
+       (i.on_hand - i.reserved)::int AS available, count(*) OVER ()::int AS total
+FROM inventory_levels i
+JOIN variants v ON v.store_id = i.store_id AND v.id = i.variant_id AND v.deleted_at IS NULL
+JOIN products p ON p.store_id = v.store_id AND p.id = v.product_id
+  AND p.deleted_at IS NULL AND p.status = 'active' AND NOT p.is_sample
+WHERE i.store_id = $1 AND i.tracked AND i.on_hand - i.reserved <= $2::int
+ORDER BY available, p.title, v.id
+LIMIT $3
+`
+
+type LowStockParams struct {
+	StoreID   ulid.ID
+	Threshold int32
+	Lim       int32
+}
+
+type LowStockRow struct {
+	VariantID    ulid.ID
+	ProductID    ulid.ID
+	ProductTitle string
+	OptionValues []string
+	Available    int32
+	Total        int32
+}
+
+// The dashboard home's "running low": tracked variants of live, active,
+// non-sample products with at most threshold units free to sell, the
+// fewest first, with how many there are in all.
+func (q *Queries) LowStock(ctx context.Context, arg LowStockParams) ([]LowStockRow, error) {
+	rows, err := q.db.Query(ctx, lowStock, arg.StoreID, arg.Threshold, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LowStockRow{}
+	for rows.Next() {
+		var i LowStockRow
+		if err := rows.Scan(
+			&i.VariantID,
+			&i.ProductID,
+			&i.ProductTitle,
+			&i.OptionValues,
+			&i.Available,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveReservations = `-- name: MoveReservations :many
 UPDATE stock_reservations
 SET status = $1,

@@ -687,3 +687,18 @@ func TestDeleteSampleProducts(t *testing.T) {
 	}
 	bSamples(t)
 }
+
+func TestListLowStock(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, b := f.storeA, f.storeB
+	code, body := f.do(t, req(t, http.MethodGet, storePath(a, "/inventory/low?threshold=10&limit=5"), tokSupportA, ""))
+	if code != http.StatusOK || body["total"] == nil || body["items"] == nil {
+		t.Fatalf("listLowStock = %d %v", code, body)
+	}
+	if code, body = f.do(t, req(t, http.MethodGet, storePath(a, "/inventory/low?limit=50"), tokOwnerA, "")); code != http.StatusUnprocessableEntity && code != http.StatusBadRequest {
+		t.Fatalf("limit 50 = %d %v", code, body)
+	}
+	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "listLowStock",
+		Request: req(t, http.MethodGet, storePath(b, "/inventory/low?threshold=10"), tokOwnerA, ""), Leaks: []string{"B secret product", "B-SKU-1"}})
+}

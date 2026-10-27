@@ -882,6 +882,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/inventory/low": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Variants running low
+         * @description Permission: catalog.read. Tracked variants of active products (sample
+         *     products left out) with at most `threshold` units free to sell, the
+         *     fewest first, and how many there are in all. The dashboard passes the
+         *     store's low-stock setting (the storefront theme's `low_stock`).
+         */
+        get: operations["listLowStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/variants/{variant_id}/inventory": {
         parameters: {
             query?: never;
@@ -1584,6 +1609,33 @@ export interface paths {
          *     sidebar's pending badge.
          */
         get: operations["countOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/orders/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Sum the store's orders for the dashboard home
+         * @description Permission: orders.read. Days follow the store's time zone. Sales are
+         *     every order placed in the period except cancelled and returned ones,
+         *     which are summed apart; totals include shipping and the COD fee.
+         *     `previous` is the same span one period earlier (today so far against
+         *     yesterday until the same hour). `daily` is the last 30 days, oldest
+         *     first, days without orders included.
+         */
+        get: operations["getOrderStats"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2917,6 +2969,41 @@ export interface components {
             lines: components["schemas"]["OrderLine"][];
             /** @description The timeline, oldest first. */
             events: components["schemas"]["OrderEvent"][];
+        };
+        OrderTally: {
+            orders: number;
+            /** Format: int64 */
+            total_minor: number;
+        };
+        OrderStats: {
+            /** @enum {string} */
+            range: "today" | "7d" | "30d";
+            /** @example EGP */
+            currency: string;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            sales: components["schemas"]["OrderTally"];
+            /** @description Orders within sales paid on delivery. */
+            cod_orders: number;
+            /** @description Orders within sales paid by card. */
+            card_orders: number;
+            previous: components["schemas"]["OrderTally"];
+            cancelled: components["schemas"]["OrderTally"];
+            returned: components["schemas"]["OrderTally"];
+            daily: {
+                /** Format: date */
+                date: string;
+                /** Format: int64 */
+                sales_minor: number;
+                orders: number;
+            }[];
+            /**
+             * Format: date-time
+             * @description When the oldest order waiting for confirmation came; absent when none waits.
+             */
+            oldest_pending_at?: string;
         };
         OrderCounts: {
             pending: number;
@@ -4824,6 +4911,41 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listLowStock: {
+        parameters: {
+            query?: {
+                threshold?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The variants running low. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        items: {
+                            variant_id: components["schemas"]["ULID"];
+                            product_id: components["schemas"]["ULID"];
+                            product_title: string;
+                            option_values: string[];
+                            available: number;
+                        }[];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     setInventory: {
         parameters: {
             query?: never;
@@ -5861,6 +5983,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderCounts"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrderStats: {
+        parameters: {
+            query?: {
+                range?: "today" | "7d" | "30d";
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sums. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderStats"];
                 };
             };
             default: components["responses"]["Problem"];
