@@ -52,7 +52,8 @@ const (
 	StockOut     = "out"
 )
 
-// Bulk actions on products: a status, or delete.
+// BulkDelete is the bulk action that deletes products; the others are
+// statuses.
 const BulkDelete = "delete"
 
 // ProductStatus is a product's lifecycle state. Only active products are

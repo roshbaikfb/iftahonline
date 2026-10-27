@@ -680,13 +680,13 @@ func TestCrossTenant(t *testing.T) {
 	}
 	// B's products under A's path are skipped, not changed.
 	for _, action := range []string{"archived", "delete"} {
-		code, body := f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+pid+`"],"action":"`+action+`"}`))
-		if code != http.StatusOK || body["updated"] != float64(0) {
-			t.Fatalf("bulk %s on B's product = %d %v", action, code, body)
+		got, body := f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+pid+`"],"action":"`+action+`"}`))
+		if got != http.StatusOK || body["updated"] != float64(0) {
+			t.Fatalf("bulk %s on B's product = %d %v", action, got, body)
 		}
 	}
-	if code, body := f.do(t, req(t, http.MethodGet, storePath(a, "/products/counts"), tokOwnerA, "")); code != http.StatusOK || body["all"] != float64(0) {
-		t.Fatalf("A's counts include B's: %d %v", code, body)
+	if got, body := f.do(t, req(t, http.MethodGet, storePath(a, "/products/counts"), tokOwnerA, "")); got != http.StatusOK || body["all"] != float64(0) {
+		t.Fatalf("A's counts include B's: %d %v", got, body)
 	}
 	// Nor B's size chart.
 	code, _ = f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, `{"title":"x","size_chart_id":"`+sid+`","variants":[{"price_minor":1}]}`))
@@ -841,8 +841,8 @@ func TestProductListTools(t *testing.T) {
 	if code != http.StatusOK || res["updated"] != float64(2) {
 		t.Fatalf("bulk archive = %d %v", code, res)
 	}
-	if code, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products?status=archived"), tokOwnerA, "")); code != http.StatusOK || len(page["items"].([]any)) != 2 {
-		t.Fatalf("archived = %d %v", code, page)
+	if got, page := f.do(t, req(t, http.MethodGet, storePath(a, "/products?status=archived"), tokOwnerA, "")); got != http.StatusOK || len(page["items"].([]any)) != 2 {
+		t.Fatalf("archived = %d %v", got, page)
 	}
 	if code, res = f.do(t, req(t, http.MethodPost, storePath(a, "/products/bulk"), tokOwnerA, `{"product_ids":["`+ids[2]+`"],"action":"delete"}`)); code != http.StatusOK || res["updated"] != float64(1) {
 		t.Fatalf("bulk delete = %d %v", code, res)
