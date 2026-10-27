@@ -139,3 +139,35 @@ test('a merchant connects a card gateway and reads the COD report', async ({ pag
   await expect(page.getByText('لا توجد مدفوعات بالبطاقة بعد.')).toBeVisible();
   expect(errors, 'no console errors').toEqual([]);
 });
+
+// The setup wizard (ADR-0034) against the real API: sign up from the
+// login page, then the activity, look and shipping steps. The demo API has
+// no worker, so the template stays "preparing" here; applying it is the
+// onboarding module's own tests. Under the production CSP, the looks'
+// colours must not raise a violation.
+test('a new merchant signs up and walks the setup wizard', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByRole('link', { name: 'أنشئ متجرك' }).click();
+  await expect(page).toHaveURL(/\/signup$/);
+  await page.getByLabel('اسمك').fill('تاجر جديد');
+  await page.getByLabel('البريد الإلكتروني').fill(`new-${String(Date.now())}@demo.test`);
+  await page.getByLabel(/كلمة المرور/).fill('demo-password-123');
+  await page.getByRole('button', { name: 'متابعة' }).click();
+
+  await page.getByLabel('اسم المتجر').fill('متجر جديد');
+  await page.getByLabel(/^رابط المتجر/).fill(`new-${String(Date.now())}`);
+  await expect(page.getByText('الرابط متاح')).toBeVisible();
+  await page.getByRole('button', { name: 'إنشاء المتجر' }).click();
+
+  await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/setup$/);
+  await expect(page.getByRole('heading', { name: 'ماذا تبيع؟' })).toBeVisible();
+  await page.getByRole('button', { name: 'عطور' }).click();
+  await page.getByRole('button', { name: 'متابعة' }).click();
+  await page.getByRole('button', { name: /ناعم/ }).click();
+  await page.getByRole('button', { name: 'متابعة' }).click();
+  await page.getByLabel(/^سعر الشحن/).fill('50');
+  await page.getByRole('button', { name: 'تجهيز متجري' }).click();
+  await expect(page.getByRole('heading', { name: 'جارٍ تجهيز متجرك…' })).toBeVisible();
+  expect(errors, 'no console errors').toEqual([]);
+});

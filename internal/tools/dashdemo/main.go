@@ -133,8 +133,8 @@ func waitReady(ctx context.Context, u string) error {
 }
 
 // seed creates the merchant through the public API, as the dashboard
-// would: sign-up (a mobile client, to get a bearer token), one product,
-// three orders, one of them confirmed.
+// would: sign-up (a mobile client, to get a bearer token), the setup
+// wizard closed, one product, three orders, one of them confirmed.
 func seed(ctx context.Context, base string) error {
 	c := client{ctx: ctx, base: base}
 	var signup struct {
@@ -149,6 +149,11 @@ func seed(ctx context.Context, base string) error {
 	}
 	c.token = signup.Token
 	store := "/v1/stores/" + signup.StoreID
+	// The demo merchant runs an established store: their setup wizard
+	// (ADR-0034) is closed, so signing in opens the orders.
+	if err := c.do(http.MethodPost, store+"/onboarding/complete", nil, http.StatusOK, nil); err != nil {
+		return err
+	}
 	var product struct {
 		Variants []struct {
 			ID string `json:"id"`
