@@ -161,21 +161,25 @@ export function Inventory() {
                 const st = state[v.id];
                 return (
                   <tr key={v.id}>
-                    <td>
+                    <td className="c-product">
                       <Link to={`/stores/${storeId}/products/${p.id}`} className="title">
                         {p.title}
                       </Link>
                       {v.option_values.length > 0 && <small className="sub">{v.option_values.join(' / ')}</small>}
                       {v.hidden && <span className="status p-draft">مخفي</span>}
                     </td>
-                    <td dir="ltr" className="muted">
+                    <td dir="ltr" className="muted c-sku" data-label="SKU">
                       {v.sku ?? '—'}
                     </td>
                     {v.stock.tracked ? (
                       <>
-                        <td className="num">{v.stock.on_hand}</td>
-                        <td className="num muted">{v.stock.reserved}</td>
-                        <td className="num">
+                        <td className="num" data-label="في المخزن">
+                          {v.stock.on_hand}
+                        </td>
+                        <td className="num muted" data-label="محجوز">
+                          {v.stock.reserved}
+                        </td>
+                        <td className="num" data-label="متاح">
                           {v.stock.available === 0 ? (
                             <span className="status stock-out">نفد</span>
                           ) : v.stock.available <= threshold ? (
@@ -184,7 +188,7 @@ export function Inventory() {
                             v.stock.available
                           )}
                         </td>
-                        <td>
+                        <td className="c-new">
                           <form
                             className="stock-form"
                             onSubmit={(e) => {
@@ -219,7 +223,7 @@ export function Inventory() {
                         </td>
                       </>
                     ) : (
-                      <td colSpan={4} className="muted">
+                      <td colSpan={4} className="muted c-new">
                         لا يُتابَع مخزونه (غير محدود)
                       </td>
                     )}

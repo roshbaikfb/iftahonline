@@ -176,6 +176,7 @@ describe('Imports', () => {
     state = 2;
     expect(await screen.findByText('اكتمل', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(screen.getByText(/أُضيف 8 · حُدّث 1 · تخطّينا 1/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'التفاصيل' }));
     expect(screen.getByText('line 7: price: not an amount')).toBeInTheDocument();
   });
 

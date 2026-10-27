@@ -2808,3 +2808,51 @@ ul.imports > li {
   padding: 0.35rem 0.6rem;
   background: none;
 }
+.cat-row .sub,
+.import-row .sub {
+  display: block;
+  color: var(--subtle);
+  font-size: 0.8rem;
+}
+
+/* On phones each stock row is a card: the variant, its figures, then a
+   new count. */
+@media (max-width: 40rem) {
+  .table-card table.inventory,
+  table.inventory tbody {
+    display: block;
+    min-inline-size: 0;
+  }
+  table.inventory thead {
+    display: none;
+  }
+  table.inventory tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem 0.75rem;
+    padding: 0.75rem 1rem;
+    border-block-end: 1px solid var(--line);
+  }
+  table.inventory td {
+    padding: 0;
+    border: 0;
+    text-align: start;
+  }
+  table.inventory td.c-product,
+  table.inventory td.c-new {
+    grid-column: 1 / -1;
+  }
+  table.inventory td.c-sku {
+    display: none;
+  }
+  table.inventory td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--muted);
+  }
+}
+.cat-row .sub[dir='ltr'] {
+  text-align: end;
+}

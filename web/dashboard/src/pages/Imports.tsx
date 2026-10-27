@@ -99,7 +99,6 @@ export function Imports() {
       if (!data.upload) throw new Error('تعذّر تجهيز الرفع');
       await postFile(data.upload, file, 'تعذّر رفع الملف، جرّب ملفًا أصغر.');
       await start(data.import.id);
-      setOpen(data.import.id);
     } catch (err) {
       setError(problemMessage(err));
     } finally {
@@ -123,7 +122,6 @@ export function Imports() {
       });
       if (err) throw new Error(problemMessage(err));
       await start(data.import.id);
-      setOpen(data.import.id);
       e.currentTarget.reset();
     } catch (err) {
       setError(problemMessage(err));
