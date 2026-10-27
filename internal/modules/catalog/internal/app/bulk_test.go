@@ -118,12 +118,12 @@ func TestBulkProducts(t *testing.T) {
 		t.Fatalf("events = %q, want %q", got, want)
 	}
 	for id, st := range map[ulid.ID]domain.ProductStatus{a.ID: domain.StatusArchived, b.ID: domain.StatusArchived, keep.ID: domain.StatusActive} {
-		if p, err := f.svc.GetProduct(ctx, id); err != nil || p.Status != st {
-			t.Fatalf("%s status = %q, %v", id, p.Status, err)
+		if p, getErr := f.svc.GetProduct(ctx, id); getErr != nil || p.Status != st {
+			t.Fatalf("%s status = %q, %v", id, p.Status, getErr)
 		}
 	}
-	if p, err := f.svc.GetProduct(f.ctxB, other.ID); err != nil || p.Status != domain.StatusActive {
-		t.Fatalf("store B's product changed: %q %v", p.Status, err)
+	if p, getErr := f.svc.GetProduct(f.ctxB, other.ID); getErr != nil || p.Status != domain.StatusActive {
+		t.Fatalf("store B's product changed: %q %v", p.Status, getErr)
 	}
 
 	if n, err = f.svc.BulkProducts(ctx, []ulid.ID{a.ID, a.ID, other.ID}, domain.BulkDelete); err != nil || n != 1 {
