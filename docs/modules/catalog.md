@@ -64,7 +64,7 @@ parent (`db/migrations/00015_catalog.sql`).
 | Table | Notes |
 |---|---|
 | `products` | `slug` (text, lower-case; 00018) unique per store among live rows; `options` JSONB (a colour option carries `colors`, one `#rrggbb` or `""` per value); `size_chart_id` (00040, cleared when the chart is deleted); `status` draft/active/archived; soft delete |
-| `variants` | `sku` unique per store among live rows; `option_values text[]` unique per product; prices in minor units + currency; soft delete |
+| `variants` | `hidden` (00041: off sale and out of the shop, stock kept; ADR-0035); `sku` unique per store among live rows; `option_values text[]` unique per product; prices in minor units + currency; soft delete |
 | `inventory_levels` | `tracked`, `on_hand`, `reserved`; `CHECK (0 <= reserved <= on_hand)` |
 | `stock_reservations` | One row per (ref, variant): `qty`, `counted`, `status`, `expires_at` |
 | `categories` | Tree via `parent_id` (≤ 3 levels, ≤ 500 per store); `slug` unique per store; a parent with children cannot be deleted |

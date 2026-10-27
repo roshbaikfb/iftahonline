@@ -55,6 +55,12 @@ cached pages.
    unbounded.
 6. **Only the product page reads the chart**: `ProductBySlug` makes one
    more query when the product has one; lists and search never do.
+7. **A variant can be hidden** (`variants.hidden`, migration 00041; the
+   owner's choice, 2026-10-27, over deleting it). Unticking «متاح للبيع»
+   in the editor hides it: it keeps its ID and stock, but it is not
+   sellable, not reserved, not listed as running low and not shown to
+   shoppers. A product with every variant hidden leaves the shop. Ticking
+   it again puts it back on sale with the stock it had.
 
 ## Consequences
 
