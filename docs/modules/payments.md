@@ -103,6 +103,7 @@ The return URL must be an http(s) URL on a host of the same store
 | `listPayments` (`order_id`, or `cursor` + `limit` ≤ 200) | orders.read |
 | `getPayment` (with its refunds) | orders.read |
 | `refundPayment` (`amount_minor`, `reason` ≤ 300; 202) | payments.refund |
+| `getPaymentSettings`, `updatePaymentSettings` (`default_method`: `cod` or `card`, which checkout starts on; card counts only while a gateway is connected; publishes `payments.settings.changed`; [ADR-0036](../adr/0036-storefront-drafts-and-preview.md)) | payments.manage |
 
 `payments.manage` is the owner's alone. `payments.refund` belongs to the
 owner and the manager.
@@ -119,6 +120,7 @@ owner and the manager.
 
 ## Data
 
-`payment_connections`, `payments`, `payment_refunds` (migration 00035):
+`payment_connections`, `payments`, `payment_refunds` (migration 00035) and
+`payment_settings` (00043, one row per store, absent = cash on delivery):
 all with `store_id`, behind FORCE RLS, with composite foreign keys
 within the store.

@@ -36,8 +36,12 @@ form's shipping and COD-fee line (`POST /order/quote`):
 | `storefront.theme.changed` | The theme is saved, a new logo goes live, or the logo is deleted |
 | `storefront.page.changed` (`page_id`, `kind`, `slug`, `previous_slug`, `deleted`) | A home page, landing page or policy is saved or deleted; `previous_slug` when a landing page moved |
 
+Checkout starts on card when the store chose it and takes cards
+(`payments.CardCheck.CardDefault`, ADR-0036); otherwise on cash on
+delivery.
+
 The module consumes `catalog.product.changed`, `catalog.product.deleted`,
-`catalog.category.changed`, `catalog.size_chart.changed`, `payments.connection.changed` and its own
+`catalog.category.changed`, `catalog.size_chart.changed`, `payments.connection.changed`, `payments.settings.changed` and its own
 two events: the subscriber
 `storefront.invalidate_pages` publishes the store ID on the Redis
 channel `storefront:invalidate`, and every storefront instance drops that
@@ -62,6 +66,7 @@ whose event does not list the products using it).
 | `/order` (POST) | A landing page's one-step order form |
 | `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart |
 | `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code); for a card order, its payment status, and `?pay=1` sends the shopper on to pay |
+| any page `?preview=<token>` | With a live preview link (ADR-0036): the draft theme and home page, a «معاينة» banner, links that keep the token, `private, no-store`, `noindex`; never cached. A dead token shows the published page |
 
 Every page (the approved U1 design):
 - **Header.** The theme's announcement bar when set; the brand, the
@@ -287,6 +292,8 @@ All paths are under `/v1/stores/{store_id}/storefront`.
 | `/logo`, `/logo/uploads`, `/logo/uploads/{asset_id}/complete` | `getStoreLogo` (`current` + `latest`), `deleteStoreLogo`, `createLogoUpload`, `completeLogoUpload` |
 | `/section-types` | `listSectionTypes`: schemas for the editor |
 | `/home` | `getHomePage`, `saveHomePage` |
+| `/draft`, `/draft/theme`, `/draft/theme/publish`, `/draft/home`, `/draft/home/publish` | `getStorefrontDraft`, `saveThemeDraft`, `discardThemeDraft`, `publishThemeDraft`, `saveHomeDraft`, `discardHomeDraft`, `publishHomeDraft` ([ADR-0036](../adr/0036-storefront-drafts-and-preview.md)): edits kept apart from what shoppers see until published over the version read |
+| `/previews` | `createStorefrontPreview`: a 30-minute `?preview=<token>` link to the shop with the drafts (hash stored, ≤ 20 live per store) |
 | `/pages`, `/pages/{page_id}` | landing pages: list (without sections), create, get, update, delete |
 | `/policies`, `/policies/{policy}` | `listPolicies` (defaults included), `getPolicy`, `savePolicy` |
 
