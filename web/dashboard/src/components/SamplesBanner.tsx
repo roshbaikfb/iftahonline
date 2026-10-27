@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import { api } from '../api/client';
+import { count as plural } from '../lib/home';
 import { problemMessage } from '../lib/problem';
 
 // SamplesBanner reminds the merchant that the starter template's sample
 // products are still in the store (ADR-0034), and deletes them in one go.
-// Until the products screen exists, this is where they go.
+// It heads the products list and the home page (the approved mockups).
 export function SamplesBanner({ storeId }: { storeId: string }) {
   const [count, setCount] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -34,9 +35,10 @@ export function SamplesBanner({ storeId }: { storeId: string }) {
   if (count === 0) return null;
   return (
     <div className="notice samples" role="region" aria-label="المنتجات التجريبية">
-      <p>
-        في متجرك {count === 1 ? 'منتج تجريبي واحد' : `${String(count)} منتجات تجريبية`} من قالب البداية، تظهر بعلامة «تجريبي» ولا يمكن شراؤها.
-      </p>
+      <div>
+        <strong>{plural(count, 'منتج تجريبي واحد', 'منتجان تجريبيان', 'منتجات تجريبية', 'منتجًا تجريبيًا')} من القالب</strong>
+        <p>تظهر في متجرك بعلامة «تجريبي» ولا يمكن شراؤها. عدّلها لتصبح منتجاتك، أو احذفها كلها مرة واحدة.</p>
+      </div>
       {error && <p role="alert">{error}</p>}
       <button type="button" className="secondary" disabled={busy} onClick={() => void remove()}>
         {busy ? 'جارٍ الحذف…' : 'احذف المنتجات التجريبية'}

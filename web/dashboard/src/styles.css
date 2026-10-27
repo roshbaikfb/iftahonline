@@ -2032,3 +2032,157 @@ p.muted {
   color: var(--muted);
   padding: 0.625rem 0;
 }
+
+/* The products list (U5, the approved mockup): tabs and filters inside
+   the card, a light bar for the selected, a picture beside each title. */
+.table-card.products .tabs {
+  padding-inline: 0.75rem;
+}
+.table-card.products .filters {
+  padding: 0.9rem 1rem 0;
+}
+.table-card.products .filters .note {
+  flex-basis: 100%;
+  margin: 0;
+}
+.table-card.products .bulk {
+  margin: 0.75rem 1rem 0;
+  background: #eef3f9;
+  color: var(--text);
+}
+.table-card.products .bulk button.link {
+  color: var(--navy);
+}
+.table-card.products > [role='status'],
+.table-card.products > [role='alert'] {
+  margin: 0.75rem 1rem 0;
+}
+.page-head .muted {
+  margin: 0;
+}
+.product-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.product-cell .thumb {
+  flex: none;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+.product-cell .title {
+  font-weight: 600;
+}
+.status.sample {
+  margin-inline-start: 0.4rem;
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+.p-active {
+  background: #dcfce7;
+  color: #166534;
+}
+.p-draft {
+  background: #e2e8f0;
+  color: #334155;
+}
+.p-archived {
+  background: #f8fafc;
+  color: var(--muted);
+  border: 1px solid var(--field);
+}
+.stock-low {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.stock-out {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.notice.samples {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #7c2d12;
+}
+.notice.samples > div {
+  flex: 1 1 18rem;
+}
+.notice.samples strong {
+  color: var(--text);
+}
+
+/* On phones each product is a card (the approved mockup): picture and
+   title, then stock, then status and price; the category stays in the
+   product's page. */
+@media (max-width: 40rem) {
+  .table-card.products .tabs {
+    gap: 0.4rem;
+    padding: 0.6rem 0.75rem;
+    border: 0;
+  }
+  .table-card.products .tabs button {
+    min-block-size: 2.5rem;
+    border: 1px solid var(--field);
+    border-radius: 999px;
+  }
+  .table-card.products .tabs button[aria-selected='true'] {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: #fff;
+  }
+  .table-card.products .tabs button[aria-selected='true'] .count {
+    background: #fff;
+    color: var(--navy);
+  }
+  .table-card table.products-table,
+  .products-table tbody {
+    display: block;
+    min-inline-size: 0;
+  }
+  .products-table thead {
+    display: none;
+  }
+  .products-table tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'pick product product'
+      'pick stock stock'
+      'pick status price';
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    border-block-end: 1px solid var(--line);
+  }
+  .products-table tbody td {
+    padding: 0;
+    border: 0;
+  }
+  .products-table td.pick {
+    grid-area: pick;
+    align-self: start;
+  }
+  .products-table td.c-product {
+    grid-area: product;
+  }
+  .products-table td.c-stock {
+    grid-area: stock;
+    padding-inline-start: 3.5rem;
+    font-size: 0.85rem;
+  }
+  .products-table td.c-status {
+    grid-area: status;
+    padding-inline-start: 3.5rem;
+  }
+  .products-table td.c-price {
+    grid-area: price;
+  }
+  .products-table td.c-category {
+    display: none;
+  }
+}

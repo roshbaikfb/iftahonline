@@ -118,7 +118,7 @@ export function Overview() {
   const delta = stats ? change(stats.sales.total_minor, stats.previous.total_minor) : null;
   const steps = setup
     ? [
-        { label: 'أضف أول منتج', done: setup.product, soon: true },
+        { label: 'أضف أول منتج', done: setup.product, to: 'products' },
         { label: 'اربط شركة شحن', done: setup.carrier, to: 'carriers' },
         { label: 'حدّد مناطق الشحن', done: setup.zones, to: 'shipping' },
         { label: 'اربط بوابة الدفع', done: setup.gateway, to: 'gateways' },

@@ -3,7 +3,6 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
-import { SamplesBanner } from '../components/SamplesBanner';
 import {
   dateTime,
   dayStart,
@@ -199,7 +198,6 @@ export function Orders() {
           تصدير CSV
         </a>
       </div>
-      <SamplesBanner storeId={storeId} />
 
       <div className="tabs" role="tablist" aria-label="حالة الطلب">
         {tabs.map((t) => (

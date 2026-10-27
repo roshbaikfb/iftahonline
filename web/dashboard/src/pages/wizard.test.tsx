@@ -231,7 +231,7 @@ describe('SamplesBanner', () => {
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     render(<SamplesBanner storeId={store} />);
     const region = await screen.findByRole('region', { name: 'المنتجات التجريبية' });
-    expect(within(region).getByText(/2 منتجات تجريبية/)).toBeInTheDocument();
+    expect(within(region).getByText('منتجان تجريبيان من القالب')).toBeInTheDocument();
     await userEvent.setup().click(within(region).getByRole('button', { name: 'احذف المنتجات التجريبية' }));
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'المنتجات التجريبية' })).toBeNull();
