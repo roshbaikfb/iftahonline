@@ -37,6 +37,7 @@ type pageCtx struct {
 	search    bool   // the header shows the search box
 	track     bool   // the store takes orders: order tracking is linked
 	q         string // the search shown in it
+	css       string // the page's own rules (a product's merchant colours), after the store's
 }
 
 // head is the short header a page shows on phones instead of the full
@@ -138,9 +139,15 @@ func (p *pageCtx) ldScript() templ.Component {
 	return templ.Raw(`<script type="application/ld+json">` + string(p.jsonLD) + `</script>`)
 }
 
-// styleTag is the inline stylesheet whose hash the CSP allows. It is
-// built from validated theme values and our own CSS only.
-func (p *pageCtx) styleTag() templ.Component { return templ.Raw("<style>" + p.v.css + "</style>") }
+// styleTag is the inline stylesheets whose hashes the CSP allows: the
+// store's and the page's own. Both are built from validated values
+// (theme settings, "#rrggbb" colours) and our own CSS only.
+func (p *pageCtx) styleTag() templ.Component {
+	if p.css == "" {
+		return templ.Raw("<style>" + p.v.css + "</style>")
+	}
+	return templ.Raw("<style>" + p.v.css + "</style><style>" + p.css + "</style>")
+}
 
 // image is a picture's sources: AVIF and WebP srcsets of one image.
 type image struct {

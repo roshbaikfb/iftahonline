@@ -93,6 +93,36 @@ templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 					}
 				</details>
 			}
+			if c := v.pr.SizeChart; c != nil {
+				<details class="pd-desc pd-size">
+					<summary>{ p.l.T(MsgSizeChart) }</summary>
+					<div class="scroll">
+						<table>
+							<caption>{ p.l.T(MsgSizeChartUnit) }</caption>
+							<thead>
+								<tr>
+									for _, h := range c.Header {
+										<th scope="col">{ h }</th>
+									}
+								</tr>
+							</thead>
+							<tbody>
+								for _, row := range c.Body {
+									<tr>
+										for i, cell := range row {
+											if i == 0 {
+												<th scope="row">{ cell }</th>
+											} else {
+												<td>{ cell }</td>
+											}
+										}
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</details>
+			}
 		</div>
 	</div>
 	if len(v.related) > 0 {

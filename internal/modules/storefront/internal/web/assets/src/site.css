@@ -301,6 +301,9 @@ main { display: block; min-block-size: 50vh; }
 .pd-desc { border-block-end: 1px solid var(--line); padding-block-end: .75rem; margin-block-start: .75rem; }
 .pd-desc summary { font-weight: 700; font-size: 1.05rem; min-block-size: 2.75rem; display: flex; align-items: center; cursor: pointer; }
 .pd-desc p { color: #334155; margin-block: 0 .75rem; }
+.pd-size .scroll { overflow-x: auto; }
+.pd-size table { inline-size: 100%; border-collapse: collapse; }
+.pd-size th, .pd-size td { padding: .5rem; border-block-end: 1px solid var(--line); text-align: center; }
 .sticky { display: none; }
 @media (max-width: 47.99rem) {
   .sticky { display: flex; gap: .625rem; align-items: center; position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 20;

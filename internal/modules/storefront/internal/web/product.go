@@ -82,15 +82,22 @@ func (s *Shop) productView(p *pageCtx, pr catalog.StorefrontProduct, related []c
 			v.cats = append(v.cats, c)
 		}
 	}
+	var css strings.Builder
 	for i, o := range pr.Options {
-		ov := optionView{index: i, name: o.Name, color: isColorOption(o.Name)}
-		for _, val := range o.Values {
+		ov := optionView{index: i, name: o.Name, color: o.Colors != nil || isColorOption(o.Name)}
+		for j, val := range o.Values {
 			vv := valueView{value: val, out: !anyAvailable(pr, i, val)}
 			if i < len(v.current.OptionValues) && v.current.OptionValues[i] == val {
 				vv.checked, ov.chosen = true, val
 			}
 			if ov.color {
 				vv.swatch = swatch(val)
+				if j < len(o.Colors) && isHex(o.Colors[j]) {
+					// The merchant's colour (ADR-0035): a class this page's
+					// own stylesheet paints, as the CSP allows no inline style.
+					vv.swatch = fmt.Sprintf("swc-%d-%d", i, j)
+					fmt.Fprintf(&css, ".%s{background:%s}", vv.swatch, o.Colors[j])
+				}
 			}
 			ov.values = append(ov.values, vv)
 		}
@@ -108,6 +115,7 @@ func (s *Shop) productView(p *pageCtx, pr catalog.StorefrontProduct, related []c
 			js[i].Values = []string{}
 		}
 	}
+	p.css = css.String()
 	b, err := json.Marshal(js)
 	if err == nil {
 		v.variants = string(b)
