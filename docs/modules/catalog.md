@@ -20,14 +20,14 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `Catalog.ReleaseStock(ctx, ref)` | Gives the held stock back; idempotent; unknown ref is `ErrReservationNotFound` |
 | `ErrInsufficientStock`, `ErrVariantNotSellable` | Wrapped in a `*StockError` that names the variant |
 | `ErrReservationRefUsed` | The ref already holds a different set of lines |
-| `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with variants (`Available`, and `Left`: the units left only when there are 1 to `MaxShownLeft` (10), never higher counts) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
+| `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with its size chart (`SizeChart`, one more query when it has one; [ADR-0035](../adr/0035-size-charts-and-option-colours.md)), variants (`Available`, and `Left`: the units left only when there are 1 to `MaxShownLeft` (10), never higher counts) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
 | `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
 | `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
 | `Storefront.Categories(ctx)` | The category tree, by position |
 | `Storefront.Search(ctx, q)` | Shoppers' search: active products matching the text (≤ 100 characters, normalized), 24 a page, ≤ 20 pages, in the index's order, read from the database in one query; `ErrSearchUnavailable` without a search key (ADR-0033) |
 | `Storefront.SellableVariants(ctx, ids)` | A cart's variants in one query, with the product's first ready picture (`ImageKey`) for thumbnails |
 | `NewStorefront(StorefrontDeps)` | The read side alone (pool + image delivery settings), for the storefront role |
-| `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `Event*` | Events the module publishes (below) |
+| `ProductChanged`, `ProductDeleted`, `CategoryChanged`, `SizeChartChanged`, `Event*` | Events the module publishes (below) |
 | `CurrencySource`, `CurrencyFunc` | How the module learns the store currency (cmd/platform adapts tenancy) |
 | `Module.Mount`, `Module.RegisterWorkers` | HTTP routes (behind identity's membership middleware) and the expiry job |
 | `Module.Starter()` → `Starter`, `SampleProduct`, `CategoryInput`, `ProductInput`, `VariantInput` | What the setup wizard's starter template uses ([ADR-0034](../adr/0034-setup-wizard-and-starter-templates.md)): `EnsureCategory` and `EnsureSampleProduct`, idempotent by slug (a merchant's own category or product with that slug is left alone) |
@@ -44,6 +44,7 @@ the change. Payloads carry IDs; subscribers read current state.
 | `catalog.product.changed` (`reason`) | `created`, `updated` (fields, variants, prices, categories), `images` (ready, updated, deleted), `stock` (on-hand set, or a reservation/release/expiry changed what shops show: a variant sold out, came back, or its "only N left" count, i.e. 10 or fewer available before or after; changes among plenty publish nothing) |
 | `catalog.product.deleted` | A product is deleted |
 | `catalog.category.changed` (`reason`) | A category is created, updated or deleted |
+| `catalog.size_chart.changed` (`reason`) | `updated` or `deleted`: every page of the chart's products changed (creating one changes no page) |
 
 | Job | When | Effect |
 |---|---|---|
@@ -62,13 +63,14 @@ parent (`db/migrations/00015_catalog.sql`).
 
 | Table | Notes |
 |---|---|
-| `products` | `slug` (text, lower-case; 00018) unique per store among live rows; `options` JSONB; `status` draft/active/archived; soft delete |
+| `products` | `slug` (text, lower-case; 00018) unique per store among live rows; `options` JSONB (a colour option carries `colors`, one `#rrggbb` or `""` per value); `size_chart_id` (00040, cleared when the chart is deleted); `status` draft/active/archived; soft delete |
 | `variants` | `sku` unique per store among live rows; `option_values text[]` unique per product; prices in minor units + currency; soft delete |
 | `inventory_levels` | `tracked`, `on_hand`, `reserved`; `CHECK (0 <= reserved <= on_hand)` |
 | `stock_reservations` | One row per (ref, variant): `qty`, `counted`, `status`, `expires_at` |
 | `categories` | Tree via `parent_id` (≤ 3 levels, ≤ 500 per store); `slug` unique per store; a parent with children cannot be deleted |
 | `product_categories` | Product ↔ category links (≤ 20 per product) |
 | `catalog_imports` | `kind`, `status`, counters, `cursor` (resume point), first 100 `row_errors`; sealed WooCommerce credentials |
+| `size_charts` | `name` (the merchant's), `header` (2–8 column names, the size first) and `body` (1–30 rows as long), in centimetres; ≤ 100 per store (00040) |
 | `product_images` | `pending` → `processing` → `ready` / `failed`; `upload_key`, master `object_key`, size, `alt`, `position` (≤ 20 per product) |
 
 ## HTTP API (tag `catalog`)
@@ -80,6 +82,8 @@ parent (`db/migrations/00015_catalog.sql`).
 | `deleteSampleProducts` (`DELETE /products/samples`, returns `deleted`) | `catalog.manage` |
 | `listLowStock` (`GET /inventory/low?threshold&limit`: tracked variants of active, non-sample products with at most `threshold` units free, fewest first, and the total; the dashboard passes the storefront theme's `low_stock`) | `catalog.read` |
 | `createCategory`, `updateCategory`, `deleteCategory` | `catalog.manage` |
+| `listSizeCharts` (with each chart's live `products`), `getSizeChart` | `catalog.read` |
+| `createSizeChart`, `updateSizeChart`, `deleteSizeChart` | `catalog.manage` |
 | `setInventory` | `inventory.manage` |
 | `createImageUpload`, `completeImageUpload`, `updateImage`, `deleteImage` | `catalog.manage` |
 | `createImport`, `startImport`, `getImport`, `listImports` | `imports.manage` |
@@ -97,6 +101,18 @@ parent (`db/migrations/00015_catalog.sql`).
   `upload.fields`, file last as `file`); after the upload, call
   `completeImageUpload`. `ready` images carry signed imgproxy `urls` for
   four sizes in AVIF and WebP.
+
+### Size charts and colours
+
+[ADR-0035](../adr/0035-size-charts-and-option-colours.md). A store keeps
+reusable size charts; a product points at one with `size_chart_id`
+(another store's or an unknown chart is a 422 on that field). Deleting a
+chart leaves its products without one. The product page shows the chart
+under «جدول المقاسات».
+
+An option with `colors` is a colour option: one `#rrggbb` (stored lower
+case) or `""` per value, in value order. The storefront paints a set
+colour; for `""` it guesses from the value's name, as before.
 
 ### Sample products
 
