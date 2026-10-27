@@ -13,8 +13,8 @@ var colorOptions = map[string]bool{ //nolint:gochecknoglobals // constant lookup
 
 // swatches maps common color names, Arabic and English, to the swatch
 // class site.css paints (sw-<name>): the CSP allows no inline styles, so
-// the colors live in the stylesheet. Merchants set their own hex in U5;
-// until then an unknown name shows as a text button.
+// the colors live in the stylesheet. A colour the merchant set wins
+// (productView); without one an unknown name shows as a text button.
 var swatches = map[string]string{ //nolint:gochecknoglobals // constant lookup table
 	"اسود": "black", "black": "black",
 	"ابيض": "white", "white": "white",
@@ -49,6 +49,20 @@ func swatch(value string) string {
 		return "sw-" + c
 	}
 	return ""
+}
+
+// isHex reports whether s is "#rrggbb" in lower-case hex, the only
+// merchant colour form written into a stylesheet.
+func isHex(s string) bool {
+	if len(s) != 7 || s[0] != '#' {
+		return false
+	}
+	for _, c := range []byte(s[1:]) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // colorKey matches names however they are written: "أبيض" and "ابيض",

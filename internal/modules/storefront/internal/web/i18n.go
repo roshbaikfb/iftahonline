@@ -57,6 +57,8 @@ const (
 	MsgOptions
 	MsgQuantity
 	MsgDescription
+	MsgSizeChart
+	MsgSizeChartUnit
 	MsgNewArrivals
 	MsgProducts
 	MsgReviews
@@ -250,6 +252,8 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgOptions:           {"الاختيار", "Option"},
 	MsgQuantity:          {"الكمية", "Quantity"},
 	MsgDescription:       {"الوصف", "Description"},
+	MsgSizeChart:         {"جدول المقاسات", "Size chart"},
+	MsgSizeChartUnit:     {"القياسات بالسنتيمتر", "Measurements in centimetres"},
 	MsgNewArrivals:       {"وصل حديثًا", "New arrivals"},
 	MsgProducts:          {"المنتجات", "Products"},
 	MsgReviews:           {"آراء العملاء", "Customer reviews"},

@@ -36,6 +36,7 @@ type cached struct {
 	status    int
 	body      []byte
 	styleHash string
+	pageStyle string // the CSP hash of the page's own style; empty for none
 	tags      string // Cache-Tag header
 	language  Locale
 	challenge bool   // the page shows a Turnstile challenge (CSP)

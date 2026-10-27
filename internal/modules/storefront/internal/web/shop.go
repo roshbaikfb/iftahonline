@@ -344,7 +344,11 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 		return result{}, fmt.Errorf("web: render: %w", err)
 	}
 	html := buf.Bytes()
-	return result{cached: cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l}}, nil
+	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l}
+	if p.css != "" {
+		c.pageStyle = styleHash(p.css)
+	}
+	return result{cached: c}, nil
 }
 
 // write sends a rendered page. Pages are the same for every shopper, so
@@ -388,10 +392,14 @@ func (s *Shop) writeBody(w http.ResponseWriter, r *http.Request, c cached) {
 func (s *Shop) writeHeaders(w http.ResponseWriter, c cached) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
+	hashes := []string{c.styleHash}
+	if c.pageStyle != "" {
+		hashes = append(hashes, c.pageStyle)
+	}
 	if c.challenge {
-		h.Set("Content-Security-Policy", csp.StorefrontChallenge(c.styleHash))
+		h.Set("Content-Security-Policy", csp.StorefrontChallenge(hashes...))
 	} else {
-		h.Set("Content-Security-Policy", csp.Storefront(c.styleHash))
+		h.Set("Content-Security-Policy", csp.Storefront(hashes...))
 	}
 	h.Set("Content-Language", string(c.language))
 }
