@@ -128,7 +128,7 @@ export function Layout({ storeId, children }: { storeId: string; children: React
           {memberships.length > 1 ? (
             <label className="store-pick">
               <span>المتجر</span>
-              <select value={storeId} onChange={(e) => void navigate(`/stores/${e.target.value}/orders`)}>
+              <select value={storeId} onChange={(e) => void navigate(`/stores/${e.target.value}/home`)}>
                 {memberships.map((m) => (
                   <option key={m.store_id} value={m.store_id}>
                     {m.store_id === storeId && name ? name : m.store_id}

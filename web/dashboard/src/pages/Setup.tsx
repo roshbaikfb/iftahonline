@@ -189,10 +189,10 @@ export function Setup() {
     const { error: err } = await api.POST('/v1/stores/{store_id}/onboarding/complete', { params: { path: { store_id: storeId } } });
     setBusy(false);
     if (err) setError(problemMessage(err));
-    else void navigate(`/stores/${storeId}/orders`);
+    else void navigate(`/stores/${storeId}/home`);
   }
 
-  if (ob?.status === 'completed') return <Navigate to={`/stores/${storeId}/orders`} replace />;
+  if (ob?.status === 'completed') return <Navigate to={`/stores/${storeId}/home`} replace />;
 
   const nav = (next: () => void, label = 'متابعة') => (
     <div className="wiz-nav">
