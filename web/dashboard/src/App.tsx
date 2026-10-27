@@ -11,12 +11,14 @@ import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
 import { Payments } from './pages/Payments';
+import { ProductEditor } from './pages/ProductEditor';
 import { Products } from './pages/Products';
 import { Setup } from './pages/Setup';
 import { ShipmentDetail } from './pages/ShipmentDetail';
 import { Shipments } from './pages/Shipments';
 import { Shipping } from './pages/Shipping';
 import { Signup } from './pages/Signup';
+import { SizeCharts } from './pages/SizeCharts';
 import { useSession } from './session';
 import { SessionProvider } from './SessionProvider';
 
@@ -68,6 +70,9 @@ function Gate() {
           <Route path="/stores/:storeId/orders" element={<Orders />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
           <Route path="/stores/:storeId/products" element={<Products />} />
+          <Route path="/stores/:storeId/products/new" element={<ProductEditor />} />
+          <Route path="/stores/:storeId/products/:productId" element={<ProductEditor key="edit" />} />
+          <Route path="/stores/:storeId/size-charts" element={<SizeCharts />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />
           <Route path="/stores/:storeId/shipments/:shipmentId" element={<ShipmentDetail />} />
           <Route path="/stores/:storeId/shipping" element={<Shipping />} />

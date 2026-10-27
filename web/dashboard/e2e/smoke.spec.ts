@@ -214,3 +214,46 @@ test('a merchant lists, filters and bulk-edits products', async ({ page }) => {
   await expect(row).toContainText('منشور');
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// The product editor and size charts (U5): a chart in centimetres, then a
+// product whose colour option makes its variants, one taken off sale.
+test('a merchant makes a size chart and a product with variants', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  const side = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
+
+  await side.getByRole('link', { name: 'جداول المقاسات' }).click();
+  await page.getByRole('button', { name: '+ جدول جديد' }).click();
+  await page.getByLabel('اسم الجدول (لك فقط)').fill('تيشيرتات');
+  await page.getByLabel('الصدر S').fill('96');
+  await page.getByRole('button', { name: 'حفظ', exact: true }).click();
+  await expect(page.getByText('حُفظ الجدول.')).toBeVisible();
+
+  await side.getByRole('link', { name: 'المنتجات', exact: true }).click();
+  await page.getByRole('link', { name: 'أضف منتجًا' }).click();
+  await page.getByLabel('اسم المنتج').fill('بولو قطن');
+  await page.getByRole('button', { name: '+ أضف خيارًا' }).click();
+  await page.getByLabel('اسم الخيار').fill('اللون');
+  await page.getByLabel('قيمة جديدة لـ اللون').fill('أسود');
+  await page.keyboard.press('Enter');
+  await page.getByLabel('قيمة جديدة لـ اللون').fill('أبيض');
+  await page.keyboard.press('Enter');
+  await page.getByLabel('سعر أسود').fill('320');
+  await page.getByLabel('سعر أبيض').fill('320');
+  await page.getByLabel('مخزون أسود').fill('5');
+  await page.getByLabel('أبيض متاح للبيع').uncheck();
+  await page.getByRole('combobox', { name: 'جدول المقاسات' }).selectOption({ label: 'تيشيرتات' });
+  await page.getByRole('button', { name: 'حفظ المنتج' }).click();
+
+  await expect(page.getByText('حُفظ المنتج.')).toBeVisible();
+  await expect(page).toHaveURL(/\/products\/[0-9A-Z]{26}$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('بولو قطن');
+  await expect(page.getByLabel('أبيض متاح للبيع')).not.toBeChecked();
+  await expect(page.getByLabel('مخزون أسود')).toHaveValue('5');
+  await expect(page.getByRole('heading', { name: 'الصور' })).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});

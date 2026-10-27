@@ -2186,3 +2186,463 @@ p.muted {
     display: none;
   }
 }
+
+/* The product editor and size charts (U5, the approved mockups): the
+   main column and a side column that stacks below it on phones. */
+.editor-head .back {
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.editor-head .title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.editor,
+.charts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.editor-main,
+.chart-side {
+  flex: 999 1 34rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: 1.25rem;
+}
+.editor-side {
+  flex: 1 1 18rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: 1.25rem;
+}
+.charts > .card {
+  flex: 1 1 16rem;
+}
+.editor-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.editor-card h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.editor-card .card-head {
+  padding: 0;
+  border: 0;
+  flex-wrap: wrap;
+}
+.field-label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.field-label.narrow {
+  max-inline-size: 26rem;
+}
+.field-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.85rem;
+}
+.field-error li {
+  margin-inline-start: 1rem;
+}
+[aria-invalid='true'] {
+  border-color: var(--red);
+}
+.small {
+  font-size: 0.8rem;
+}
+button.small,
+.button.small {
+  min-block-size: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+}
+.editor-card .muted {
+  margin: 0;
+}
+
+/* Options: name, colour switch, values as chips. */
+.option {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.option-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+.option-head .field-label {
+  flex: 0 1 14rem;
+}
+.option-head .danger {
+  margin-inline-start: auto;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.625rem;
+}
+.editor-card .chips {
+  align-items: center;
+}
+.editor-card .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 2.25rem;
+  padding-inline: 0.75rem 0.25rem;
+  border: 1px solid var(--field);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.chip-input {
+  min-inline-size: 12rem;
+  min-block-size: 2.25rem;
+}
+button.x {
+  min-block-size: 1.75rem;
+  inline-size: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+}
+button.x:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--text);
+}
+.swatch {
+  display: inline-block;
+  flex: none;
+  inline-size: 1.4rem;
+  block-size: 1.4rem;
+  min-block-size: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgb(15 23 42 / 25%);
+}
+button.swatch:hover:not(:disabled) {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+.swatch.unknown {
+  background: repeating-linear-gradient(45deg, #fff 0 4px, #e2e8f0 4px 8px);
+}
+.picker {
+  display: grid;
+  gap: 0.6rem;
+  inline-size: min(19rem, 100%);
+  padding: 0.9rem;
+  border: 1px solid var(--field);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(15 23 42 / 16%);
+}
+.picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.picker-preview {
+  block-size: 6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+}
+.picker-preview.unknown {
+  background: repeating-linear-gradient(45deg, #fff 0 8px, #e2e8f0 8px 16px);
+}
+.picker-palette {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.picker-palette .swatch {
+  inline-size: 100%;
+  block-size: 1.75rem;
+  border-radius: 0.4rem;
+}
+.picker-palette .swatch[aria-pressed='true'] {
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+.picker-hex {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.picker-hex input {
+  inline-size: 7.5rem;
+}
+
+/* The variants grid. */
+.apply-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--tint);
+}
+.apply-all label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.apply-all input {
+  inline-size: 7rem;
+  min-block-size: 2.25rem;
+}
+table.variants {
+  min-inline-size: 42rem;
+}
+table.variants th,
+table.variants td {
+  padding: 0.4rem 0.5rem;
+  background: none;
+  text-align: start;
+}
+table.variants thead th {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+table.variants tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+table.variants input:not([type='checkbox']) {
+  inline-size: 100%;
+  min-inline-size: 5rem;
+  min-block-size: 2.25rem;
+}
+table.variants input.qty {
+  max-inline-size: 6rem;
+}
+table.variants .center {
+  text-align: center;
+}
+.group-head th {
+  background: var(--tint);
+}
+.group-head button.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+}
+tr.hidden-variant th,
+tr.hidden-variant input:not([type='checkbox']) {
+  opacity: 0.5;
+}
+
+/* Pictures. */
+.image-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.6rem;
+}
+.image-grid li {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: var(--tint);
+  border: 1px solid var(--line);
+}
+.image-grid img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.image-grid .tag {
+  position: absolute;
+  inset-block-start: 0.4rem;
+  inset-inline-start: 0.4rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.image-grid .remove {
+  position: absolute;
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.3rem;
+  background: rgb(255 255 255 / 90%);
+}
+.image-grid .main-btn {
+  position: absolute;
+  inset-block-end: 0.4rem;
+  inset-inline: 0.4rem;
+}
+.image-state {
+  display: grid;
+  place-items: center;
+  block-size: 100%;
+  padding: 0.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.add-image {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  block-size: 100%;
+  gap: 0.25rem;
+  border: 2px dashed var(--field);
+  border-radius: 0.6rem;
+  color: var(--navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+.add-image span {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.image-grid li:has(.add-image) {
+  border: 0;
+  background: none;
+}
+
+/* Size charts. */
+.mini-chart table,
+.chart-grid,
+.shop-preview table {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+.mini-chart {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+.mini-chart th,
+.mini-chart td,
+.shop-preview th,
+.shop-preview td {
+  padding: 0.4rem 0.5rem;
+  background: none;
+  text-align: center;
+  font-size: 0.8rem;
+}
+.charts h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.chart-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chart-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  min-block-size: 3rem;
+  padding-inline: 0.5rem;
+  border-block-end: 1px solid var(--line);
+}
+.chart-list button.link {
+  text-decoration: none;
+}
+.chart-list button[aria-current='true'] {
+  font-weight: 800;
+  color: var(--navy);
+}
+.chart-list li:has([aria-current='true']) {
+  background: #eef3f9;
+  border-radius: 0.5rem;
+}
+.chart-grid th,
+.chart-grid td {
+  padding: 0.2rem;
+  background: none;
+}
+.chart-grid .cell-row {
+  display: flex;
+  align-items: center;
+}
+.chart-grid input {
+  inline-size: 100%;
+  min-inline-size: 4.5rem;
+  min-block-size: 2.25rem;
+}
+.chart-grid input.head {
+  font-weight: 700;
+  background: var(--tint);
+}
+.shop-preview {
+  padding: 1rem;
+  border: 1px dashed var(--field);
+  border-radius: 0.75rem;
+}
+.shop-preview summary {
+  font-weight: 700;
+  min-block-size: 2rem;
+  cursor: pointer;
+}
+.shop-preview caption {
+  text-align: start;
+  color: var(--muted);
+  padding-block-end: 0.4rem;
+  font-size: 0.8rem;
+}
+
+/* On phones the variants become one card per variant, two fields a row. */
+@media (max-width: 40rem) {
+  table.variants,
+  table.variants tbody {
+    display: block;
+    min-inline-size: 0;
+  }
+  table.variants thead {
+    display: none;
+  }
+  table.variants tr:not(.group-head) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0.6rem;
+    margin-block-end: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.6rem;
+  }
+  table.variants tr.group-head {
+    display: block;
+  }
+  table.variants tbody th {
+    grid-column: 1 / -1;
+  }
+  table.variants td {
+    padding: 0;
+    border: 0;
+  }
+}
