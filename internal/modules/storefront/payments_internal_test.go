@@ -14,6 +14,8 @@ type cardsOn bool
 
 func (c cardsOn) CardEnabled(context.Context) (bool, error) { return bool(c), nil }
 
+func (c cardsOn) CardDefault(context.Context) (bool, error) { return false, nil }
+
 func TestShopPayments(t *testing.T) {
 	t.Parallel()
 	ids := ulid.NewGenerator()

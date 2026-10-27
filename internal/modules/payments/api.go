@@ -60,6 +60,13 @@ const EventConnectionChanged = domain.EventConnectionChanged
 // ConnectionChanged is the payments.connection.changed event.
 type ConnectionChanged = domain.ConnectionChanged
 
+// SettingsChanged is the payments.settings.changed event.
+type SettingsChanged = domain.SettingsChanged
+
+// EventSettingsChanged is published when the method checkout starts on
+// changes.
+const EventSettingsChanged = domain.EventSettingsChanged
+
 // Checkout is what the storefront uses to take card payments. Every
 // method acts on the store in ctx.
 type Checkout interface {
@@ -81,6 +88,8 @@ var _ Checkout = (*app.Service)(nil)
 // it.
 type CardCheck interface {
 	CardEnabled(ctx context.Context) (bool, error)
+	// CardDefault reports whether checkout starts on card (ADR-0036).
+	CardDefault(ctx context.Context) (bool, error)
 }
 
 var _ CardCheck = (*app.Service)(nil)

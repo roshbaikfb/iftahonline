@@ -266,6 +266,14 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
+// HomeDraft defines model for HomeDraft.
+type HomeDraft struct {
+	// Description Meta description for search engines.
+	Description *string   `json:"description,omitempty"`
+	Sections    []Section `json:"sections"`
+	Title       *string   `json:"title,omitempty"`
+}
+
 // ImageFormats defines model for ImageFormats.
 type ImageFormats struct {
 	Avif string `json:"avif"`
@@ -394,6 +402,12 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// PublishInput defines model for PublishInput.
+type PublishInput struct {
+	// Version The published version you read, 0 when it was never saved.
+	Version int `json:"version"`
+}
+
 // Section defines model for Section.
 type Section struct {
 	// Id Stable within the page; assigned when empty.
@@ -438,6 +452,21 @@ type SectionTypeList struct {
 type StoreLogo struct {
 	Current *LogoAsset `json:"current,omitempty"`
 	Latest  *LogoAsset `json:"latest,omitempty"`
+}
+
+// StorefrontDraft defines model for StorefrontDraft.
+type StorefrontDraft struct {
+	Home      *HomeDraft     `json:"home,omitempty"`
+	Theme     *ThemeSettings `json:"theme,omitempty"`
+	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
+}
+
+// StorefrontPreview defines model for StorefrontPreview.
+type StorefrontPreview struct {
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// Token Add as ?preview=<token> to the shop address.
+	Token string `json:"token"`
 }
 
 // Theme defines model for Theme.
@@ -556,6 +585,18 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// SaveHomeDraftJSONRequestBody defines body for SaveHomeDraft for application/json ContentType.
+type SaveHomeDraftJSONRequestBody = HomeDraft
+
+// PublishHomeDraftJSONRequestBody defines body for PublishHomeDraft for application/json ContentType.
+type PublishHomeDraftJSONRequestBody = PublishInput
+
+// SaveThemeDraftJSONRequestBody defines body for SaveThemeDraft for application/json ContentType.
+type SaveThemeDraftJSONRequestBody = ThemeSettings
+
+// PublishThemeDraftJSONRequestBody defines body for PublishThemeDraft for application/json ContentType.
+type PublishThemeDraftJSONRequestBody = PublishInput
+
 // SaveHomePageJSONRequestBody defines body for SaveHomePage for application/json ContentType.
 type SaveHomePageJSONRequestBody = PageInput
 
@@ -576,6 +617,27 @@ type UpdateStorefrontThemeJSONRequestBody = ThemeInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetStorefrontDraft The unpublished theme and home page
+	// (GET /v1/stores/{store_id}/storefront/draft)
+	GetStorefrontDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DiscardHomeDraft Discard the home page draft
+	// (DELETE /v1/stores/{store_id}/storefront/draft/home)
+	DiscardHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// SaveHomeDraft Save the home page draft
+	// (PUT /v1/stores/{store_id}/storefront/draft/home)
+	SaveHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// PublishHomeDraft Publish the home page draft
+	// (POST /v1/stores/{store_id}/storefront/draft/home/publish)
+	PublishHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DiscardThemeDraft Discard the theme draft
+	// (DELETE /v1/stores/{store_id}/storefront/draft/theme)
+	DiscardThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// SaveThemeDraft Save the theme draft
+	// (PUT /v1/stores/{store_id}/storefront/draft/theme)
+	SaveThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// PublishThemeDraft Publish the theme draft
+	// (POST /v1/stores/{store_id}/storefront/draft/theme/publish)
+	PublishThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// GetHomePage Get the home page
 	// (GET /v1/stores/{store_id}/storefront/home)
 	GetHomePage(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -618,6 +680,9 @@ type ServerInterface interface {
 	// SavePolicy Save a policy
 	// (PUT /v1/stores/{store_id}/storefront/policies/{policy})
 	SavePolicy(w http.ResponseWriter, r *http.Request, storeId StoreID, policy PolicySlug)
+	// CreateStorefrontPreview A link to the shop with the drafts
+	// (POST /v1/stores/{store_id}/storefront/previews)
+	CreateStorefrontPreview(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// ListSectionTypes List section types with their settings schemas
 	// (GET /v1/stores/{store_id}/storefront/section-types)
 	ListSectionTypes(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -637,6 +702,188 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetStorefrontDraft operation middleware
+func (siw *ServerInterfaceWrapper) GetStorefrontDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStorefrontDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardHomeDraft operation middleware
+func (siw *ServerInterfaceWrapper) DiscardHomeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardHomeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveHomeDraft operation middleware
+func (siw *ServerInterfaceWrapper) SaveHomeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveHomeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishHomeDraft operation middleware
+func (siw *ServerInterfaceWrapper) PublishHomeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishHomeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardThemeDraft operation middleware
+func (siw *ServerInterfaceWrapper) DiscardThemeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardThemeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveThemeDraft operation middleware
+func (siw *ServerInterfaceWrapper) SaveThemeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveThemeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishThemeDraft operation middleware
+func (siw *ServerInterfaceWrapper) PublishThemeDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishThemeDraft(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHomePage operation middleware
 func (siw *ServerInterfaceWrapper) GetHomePage(w http.ResponseWriter, r *http.Request) {
@@ -1056,6 +1303,32 @@ func (siw *ServerInterfaceWrapper) SavePolicy(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// CreateStorefrontPreview operation middleware
+func (siw *ServerInterfaceWrapper) CreateStorefrontPreview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStorefrontPreview(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSectionTypes operation middleware
 func (siw *ServerInterfaceWrapper) ListSectionTypes(w http.ResponseWriter, r *http.Request) {
 
@@ -1263,6 +1536,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/section-types", wrapper.ListSectionTypes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/home", wrapper.GetHomePage)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/home", wrapper.SaveHomePage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft", wrapper.GetStorefrontDraft)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/theme", wrapper.DiscardThemeDraft)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/theme", wrapper.SaveThemeDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/theme/publish", wrapper.PublishThemeDraft)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/home", wrapper.DiscardHomeDraft)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/home", wrapper.SaveHomeDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/draft/home/publish", wrapper.PublishHomeDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/previews", wrapper.CreateStorefrontPreview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/pages", wrapper.ListLandingPages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/pages", wrapper.CreateLandingPage)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/storefront/pages/{page_id}", wrapper.DeleteLandingPage)
@@ -1276,6 +1557,271 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type GetStorefrontDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetStorefrontDraftResponseObject interface {
+	VisitGetStorefrontDraftResponse(w http.ResponseWriter) error
+}
+
+type GetStorefrontDraft200JSONResponse StorefrontDraft
+
+func (response GetStorefrontDraft200JSONResponse) VisitGetStorefrontDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetStorefrontDraftdefaultApplicationProblemPlusJSONResponse) VisitGetStorefrontDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscardHomeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type DiscardHomeDraftResponseObject interface {
+	VisitDiscardHomeDraftResponse(w http.ResponseWriter) error
+}
+
+type DiscardHomeDraft204Response struct {
+}
+
+func (response DiscardHomeDraft204Response) VisitDiscardHomeDraftResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DiscardHomeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DiscardHomeDraftdefaultApplicationProblemPlusJSONResponse) VisitDiscardHomeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveHomeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *SaveHomeDraftJSONRequestBody
+}
+
+type SaveHomeDraftResponseObject interface {
+	VisitSaveHomeDraftResponse(w http.ResponseWriter) error
+}
+
+type SaveHomeDraft200JSONResponse StorefrontDraft
+
+func (response SaveHomeDraft200JSONResponse) VisitSaveHomeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveHomeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SaveHomeDraftdefaultApplicationProblemPlusJSONResponse) VisitSaveHomeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishHomeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *PublishHomeDraftJSONRequestBody
+}
+
+type PublishHomeDraftResponseObject interface {
+	VisitPublishHomeDraftResponse(w http.ResponseWriter) error
+}
+
+type PublishHomeDraft200JSONResponse Page
+
+func (response PublishHomeDraft200JSONResponse) VisitPublishHomeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishHomeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PublishHomeDraftdefaultApplicationProblemPlusJSONResponse) VisitPublishHomeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscardThemeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type DiscardThemeDraftResponseObject interface {
+	VisitDiscardThemeDraftResponse(w http.ResponseWriter) error
+}
+
+type DiscardThemeDraft204Response struct {
+}
+
+func (response DiscardThemeDraft204Response) VisitDiscardThemeDraftResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DiscardThemeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DiscardThemeDraftdefaultApplicationProblemPlusJSONResponse) VisitDiscardThemeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveThemeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *SaveThemeDraftJSONRequestBody
+}
+
+type SaveThemeDraftResponseObject interface {
+	VisitSaveThemeDraftResponse(w http.ResponseWriter) error
+}
+
+type SaveThemeDraft200JSONResponse StorefrontDraft
+
+func (response SaveThemeDraft200JSONResponse) VisitSaveThemeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveThemeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SaveThemeDraftdefaultApplicationProblemPlusJSONResponse) VisitSaveThemeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishThemeDraftRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *PublishThemeDraftJSONRequestBody
+}
+
+type PublishThemeDraftResponseObject interface {
+	VisitPublishThemeDraftResponse(w http.ResponseWriter) error
+}
+
+type PublishThemeDraft200JSONResponse Theme
+
+func (response PublishThemeDraft200JSONResponse) VisitPublishThemeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishThemeDraftdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PublishThemeDraftdefaultApplicationProblemPlusJSONResponse) VisitPublishThemeDraftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetHomePageRequestObject struct {
 	StoreId StoreID `json:"store_id"`
@@ -1822,6 +2368,45 @@ func (response SavePolicydefaultApplicationProblemPlusJSONResponse) VisitSavePol
 	return err
 }
 
+type CreateStorefrontPreviewRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type CreateStorefrontPreviewResponseObject interface {
+	VisitCreateStorefrontPreviewResponse(w http.ResponseWriter) error
+}
+
+type CreateStorefrontPreview201JSONResponse StorefrontPreview
+
+func (response CreateStorefrontPreview201JSONResponse) VisitCreateStorefrontPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStorefrontPreviewdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateStorefrontPreviewdefaultApplicationProblemPlusJSONResponse) VisitCreateStorefrontPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListSectionTypesRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 }
@@ -1942,6 +2527,27 @@ func (response UpdateStorefrontThemedefaultApplicationProblemPlusJSONResponse) V
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetStorefrontDraft The unpublished theme and home page
+	// (GET /v1/stores/{store_id}/storefront/draft)
+	GetStorefrontDraft(ctx context.Context, request GetStorefrontDraftRequestObject) (GetStorefrontDraftResponseObject, error)
+	// DiscardHomeDraft Discard the home page draft
+	// (DELETE /v1/stores/{store_id}/storefront/draft/home)
+	DiscardHomeDraft(ctx context.Context, request DiscardHomeDraftRequestObject) (DiscardHomeDraftResponseObject, error)
+	// SaveHomeDraft Save the home page draft
+	// (PUT /v1/stores/{store_id}/storefront/draft/home)
+	SaveHomeDraft(ctx context.Context, request SaveHomeDraftRequestObject) (SaveHomeDraftResponseObject, error)
+	// PublishHomeDraft Publish the home page draft
+	// (POST /v1/stores/{store_id}/storefront/draft/home/publish)
+	PublishHomeDraft(ctx context.Context, request PublishHomeDraftRequestObject) (PublishHomeDraftResponseObject, error)
+	// DiscardThemeDraft Discard the theme draft
+	// (DELETE /v1/stores/{store_id}/storefront/draft/theme)
+	DiscardThemeDraft(ctx context.Context, request DiscardThemeDraftRequestObject) (DiscardThemeDraftResponseObject, error)
+	// SaveThemeDraft Save the theme draft
+	// (PUT /v1/stores/{store_id}/storefront/draft/theme)
+	SaveThemeDraft(ctx context.Context, request SaveThemeDraftRequestObject) (SaveThemeDraftResponseObject, error)
+	// PublishThemeDraft Publish the theme draft
+	// (POST /v1/stores/{store_id}/storefront/draft/theme/publish)
+	PublishThemeDraft(ctx context.Context, request PublishThemeDraftRequestObject) (PublishThemeDraftResponseObject, error)
 	// GetHomePage Get the home page
 	// (GET /v1/stores/{store_id}/storefront/home)
 	GetHomePage(ctx context.Context, request GetHomePageRequestObject) (GetHomePageResponseObject, error)
@@ -1984,6 +2590,9 @@ type StrictServerInterface interface {
 	// SavePolicy Save a policy
 	// (PUT /v1/stores/{store_id}/storefront/policies/{policy})
 	SavePolicy(ctx context.Context, request SavePolicyRequestObject) (SavePolicyResponseObject, error)
+	// CreateStorefrontPreview A link to the shop with the drafts
+	// (POST /v1/stores/{store_id}/storefront/previews)
+	CreateStorefrontPreview(ctx context.Context, request CreateStorefrontPreviewRequestObject) (CreateStorefrontPreviewResponseObject, error)
 	// ListSectionTypes List section types with their settings schemas
 	// (GET /v1/stores/{store_id}/storefront/section-types)
 	ListSectionTypes(ctx context.Context, request ListSectionTypesRequestObject) (ListSectionTypesResponseObject, error)
@@ -2032,6 +2641,216 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetStorefrontDraft operation middleware
+func (sh *strictHandler) GetStorefrontDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetStorefrontDraftRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStorefrontDraft(ctx, request.(GetStorefrontDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStorefrontDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStorefrontDraftResponseObject); ok {
+		if err := validResponse.VisitGetStorefrontDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DiscardHomeDraft operation middleware
+func (sh *strictHandler) DiscardHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request DiscardHomeDraftRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscardHomeDraft(ctx, request.(DiscardHomeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscardHomeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscardHomeDraftResponseObject); ok {
+		if err := validResponse.VisitDiscardHomeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SaveHomeDraft operation middleware
+func (sh *strictHandler) SaveHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request SaveHomeDraftRequestObject
+
+	request.StoreId = storeId
+
+	var body SaveHomeDraftJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SaveHomeDraft(ctx, request.(SaveHomeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SaveHomeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SaveHomeDraftResponseObject); ok {
+		if err := validResponse.VisitSaveHomeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishHomeDraft operation middleware
+func (sh *strictHandler) PublishHomeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request PublishHomeDraftRequestObject
+
+	request.StoreId = storeId
+
+	var body PublishHomeDraftJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishHomeDraft(ctx, request.(PublishHomeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishHomeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishHomeDraftResponseObject); ok {
+		if err := validResponse.VisitPublishHomeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DiscardThemeDraft operation middleware
+func (sh *strictHandler) DiscardThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request DiscardThemeDraftRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscardThemeDraft(ctx, request.(DiscardThemeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscardThemeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscardThemeDraftResponseObject); ok {
+		if err := validResponse.VisitDiscardThemeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SaveThemeDraft operation middleware
+func (sh *strictHandler) SaveThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request SaveThemeDraftRequestObject
+
+	request.StoreId = storeId
+
+	var body SaveThemeDraftJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SaveThemeDraft(ctx, request.(SaveThemeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SaveThemeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SaveThemeDraftResponseObject); ok {
+		if err := validResponse.VisitSaveThemeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishThemeDraft operation middleware
+func (sh *strictHandler) PublishThemeDraft(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request PublishThemeDraftRequestObject
+
+	request.StoreId = storeId
+
+	var body PublishThemeDraftJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishThemeDraft(ctx, request.(PublishThemeDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishThemeDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishThemeDraftResponseObject); ok {
+		if err := validResponse.VisitPublishThemeDraftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHomePage operation middleware
@@ -2432,6 +3251,32 @@ func (sh *strictHandler) SavePolicy(w http.ResponseWriter, r *http.Request, stor
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SavePolicyResponseObject); ok {
 		if err := validResponse.VisitSavePolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStorefrontPreview operation middleware
+func (sh *strictHandler) CreateStorefrontPreview(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateStorefrontPreviewRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStorefrontPreview(ctx, request.(CreateStorefrontPreviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStorefrontPreview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStorefrontPreviewResponseObject); ok {
+		if err := validResponse.VisitCreateStorefrontPreviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

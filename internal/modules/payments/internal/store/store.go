@@ -330,3 +330,32 @@ func toRefund(r paymentsdb.PaymentRefund) (domain.Refund, error) {
 	return domain.Refund{ID: r.ID, PaymentID: r.PaymentID, Amount: amount, Status: r.Status, Reason: r.Reason, ProviderID: r.ProviderRefundID,
 		Failure: r.Failure, CreatedAt: r.CreatedAt}, nil
 }
+
+// DefaultMethod is the store's checkout starting method: domain.DefaultCOD
+// until it chose another.
+func DefaultMethod(ctx context.Context, tx Tx) (string, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return "", err
+	}
+	m, err := paymentsdb.New(tx).GetPaymentSettings(ctx, store)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.DefaultCOD, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("payments store: settings: %w", err)
+	}
+	return m, nil
+}
+
+// SaveDefaultMethod sets the store's checkout starting method.
+func SaveDefaultMethod(ctx context.Context, tx Tx, method string) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = paymentsdb.New(tx).SavePaymentSettings(ctx, paymentsdb.SavePaymentSettingsParams{StoreID: store, DefaultMethod: method}); err != nil {
+		return fmt.Errorf("payments store: save settings: %w", err)
+	}
+	return nil
+}

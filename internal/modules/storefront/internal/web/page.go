@@ -2,12 +2,14 @@ package web
 
 import (
 	"encoding/json"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 )
 
 // pageCtx is one page being rendered: the store, the shopper's language
@@ -38,6 +40,8 @@ type pageCtx struct {
 	track     bool   // the store takes orders: order tracking is linked
 	q         string // the search shown in it
 	css       string // the page's own rules (a product's merchant colours), after the store's
+	preview   string // a live preview token (ADR-0036): links keep it; nothing is cached
+	homeDraft *domain.HomeDraft
 }
 
 // head is the short header a page shows on phones instead of the full
@@ -77,13 +81,21 @@ func (p *pageCtx) eager() bool {
 // localize prefixes a store path with the language when it is not the
 // store's default one.
 func (p *pageCtx) localize(l Locale, path string) string {
-	if l == p.v.locale {
-		return path
+	switch {
+	case l == p.v.locale:
+	case path == "/":
+		path = "/" + string(l) + "/"
+	default:
+		path = "/" + string(l) + path
 	}
-	if path == "/" {
-		return "/" + string(l) + "/"
+	if p.preview != "" { // a preview stays a preview from link to link
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		path += sep + "preview=" + url.QueryEscape(p.preview)
 	}
-	return "/" + string(l) + path
+	return path
 }
 
 // URL is a link to path in the shopper's language.

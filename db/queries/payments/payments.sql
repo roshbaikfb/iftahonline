@@ -71,3 +71,10 @@ WHERE store_id = @store_id AND payment_id = @payment_id AND status = 'requested'
 -- name: SetRefund :exec
 UPDATE payment_refunds SET status = @status, provider_refund_id = @provider_refund_id, failure = @failure, updated_at = now()
 WHERE store_id = @store_id AND id = @id;
+
+-- name: GetPaymentSettings :one
+SELECT default_method FROM payment_settings WHERE store_id = @store_id;
+
+-- name: SavePaymentSettings :exec
+INSERT INTO payment_settings (store_id, default_method) VALUES (@store_id, @default_method)
+ON CONFLICT (store_id) DO UPDATE SET default_method = excluded.default_method, updated_at = now();

@@ -51,6 +51,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			}
 		>
 			<a class="sr" href="#main">{ p.l.T(MsgSkipToContent) }</a>
+			if p.preview != "" {
+				<div class="preview-bar" role="status">{ p.l.T(MsgPreviewBar) }</div>
+			}
 			switch p.head {
 				case headProduct:
 					@compactHeader(p)

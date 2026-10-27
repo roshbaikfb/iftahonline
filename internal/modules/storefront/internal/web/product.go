@@ -115,7 +115,7 @@ func (s *Shop) productView(p *pageCtx, pr catalog.StorefrontProduct, related []c
 			js[i].Values = []string{}
 		}
 	}
-	p.css = css.String()
+	p.css += css.String()
 	b, err := json.Marshal(js)
 	if err == nil {
 		v.variants = string(b)

@@ -73,6 +73,7 @@ func (l *log) take() (events, actions []string) {
 }
 
 type fixture struct {
+	pool *pgxpool.Pool
 	svc  *app.Service
 	log  *log
 	rdb  *redis.Client // set by the cart fixture
@@ -93,7 +94,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	ids := ulid.NewGenerator()
 	l := &log{}
-	f := fixture{svc: app.NewService(app.Deps{DB: pool, IDs: ids, Audit: l, Events: l, Sections: reg}), log: l}
+	f := fixture{pool: pool, svc: app.NewService(app.Deps{DB: pool, IDs: ids, Audit: l, Events: l, Sections: reg}), log: l}
 	f.ctxA = createStore(t, pool, ids)
 	f.ctxB = createStore(t, pool, ids)
 	return f

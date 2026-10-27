@@ -359,6 +359,9 @@ func TestAuthorization(t *testing.T) {
 		{tokCatalogA, http.MethodGet, "", ``, http.StatusForbidden},
 		{tokCatalogA, http.MethodGet, "/" + id, ``, http.StatusForbidden},
 		{"", http.MethodGet, "", ``, http.StatusUnauthorized},
+		{tokSupportA, http.MethodGet, "/settings", ``, http.StatusForbidden},
+		{tokManagerA, http.MethodPut, "/settings", `{"default_method":"card"}`, http.StatusForbidden},
+		{"", http.MethodPut, "/settings", `{"default_method":"card"}`, http.StatusUnauthorized},
 	}
 	for _, tt := range tests {
 		if code, body := f.do(t, req(t, tt.method, path(a, tt.path), tt.token, tt.body)); code != tt.want {
@@ -383,6 +386,9 @@ func TestCrossTenant(t *testing.T) {
 		if err != nil || len(list) != 1 || list[0].Status != domain.ConnectionActive {
 			t.Fatalf("store B's gateway changed: %+v %v", list, err)
 		}
+		if st, err := f.svc.Settings(f.ctxB); err != nil || st.DefaultMethod != domain.DefaultCOD {
+			t.Fatalf("store B's payment settings changed: %+v %v", st, err)
+		}
 	}
 	refund := `{"amount_minor":100}`
 	cases := []testkit.CrossTenantCase{
@@ -391,6 +397,8 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "connectPaymentGateway", Request: req(t, http.MethodPost, path(b, "/gateways"), tokOwnerA, connectInput), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "disconnectPaymentGateway", Request: req(t, http.MethodDelete, path(b, "/gateways/"+cid), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 		{OperationID: "listPayments", Request: req(t, http.MethodGet, path(b, ""), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "getPaymentSettings", Request: req(t, http.MethodGet, path(b, "/settings"), tokOwnerA, "")},
+		{OperationID: "updatePaymentSettings", Request: req(t, http.MethodPut, path(b, "/settings"), tokOwnerA, `{"default_method":"card"}`), Unchanged: unchanged},
 		{OperationID: "getPayment", Request: req(t, http.MethodGet, path(b, "/"+pid), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "refundPayment", Request: req(t, http.MethodPost, path(b, "/"+pid+"/refunds"), tokOwnerA, refund), Leaks: leaks, Unchanged: unchanged},
 		// A's store in the path, B's IDs.
@@ -411,5 +419,25 @@ func TestCrossTenant(t *testing.T) {
 	// B's owner sees their own.
 	if code, page = f.do(t, req(t, http.MethodGet, path(b, ""), tokOwnerB, "")); code != http.StatusOK || len(page["items"].([]any)) != 1 {
 		t.Fatalf("B's payments = %d %v", code, page)
+	}
+}
+
+// The checkout's starting method (ADR-0036).
+func TestPaymentSettings(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	if code, body := f.do(t, req(t, http.MethodGet, path(a, "/settings"), tokOwnerA, "")); code != http.StatusOK || body["default_method"] != "cod" {
+		t.Fatalf("getPaymentSettings = %d %v", code, body)
+	}
+	if code, body := f.do(t, req(t, http.MethodPut, path(a, "/settings"), tokOwnerA, `{"default_method":"card"}`)); code != http.StatusOK ||
+		body["default_method"] != "card" {
+		t.Fatalf("updatePaymentSettings = %d %v", code, body)
+	}
+	if code, _ := f.do(t, req(t, http.MethodPut, path(a, "/settings"), tokOwnerA, `{"default_method":"wallet"}`)); code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown method = %d", code)
+	}
+	if code, _ := f.do(t, req(t, http.MethodPut, path(a, "/settings"), tokOwnerA, "")); code != http.StatusBadRequest {
+		t.Fatalf("no body = %d", code)
 	}
 }

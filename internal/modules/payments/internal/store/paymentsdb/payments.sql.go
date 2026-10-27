@@ -153,6 +153,17 @@ func (q *Queries) GetPaymentForUpdate(ctx context.Context, arg GetPaymentForUpda
 	return i, err
 }
 
+const getPaymentSettings = `-- name: GetPaymentSettings :one
+SELECT default_method FROM payment_settings WHERE store_id = $1
+`
+
+func (q *Queries) GetPaymentSettings(ctx context.Context, storeID ulid.ID) (string, error) {
+	row := q.db.QueryRow(ctx, getPaymentSettings, storeID)
+	var default_method string
+	err := row.Scan(&default_method)
+	return default_method, err
+}
+
 const getRefundForUpdate = `-- name: GetRefundForUpdate :one
 SELECT id, store_id, payment_id, currency, amount_minor, status, reason, provider_refund_id, failure, created_at, updated_at FROM payment_refunds WHERE store_id = $1 AND id = $2 FOR UPDATE
 `
@@ -547,6 +558,21 @@ func (q *Queries) RequestedRefunds(ctx context.Context, arg RequestedRefundsPara
 	var minor int64
 	err := row.Scan(&minor)
 	return minor, err
+}
+
+const savePaymentSettings = `-- name: SavePaymentSettings :exec
+INSERT INTO payment_settings (store_id, default_method) VALUES ($1, $2)
+ON CONFLICT (store_id) DO UPDATE SET default_method = excluded.default_method, updated_at = now()
+`
+
+type SavePaymentSettingsParams struct {
+	StoreID       ulid.ID
+	DefaultMethod string
+}
+
+func (q *Queries) SavePaymentSettings(ctx context.Context, arg SavePaymentSettingsParams) error {
+	_, err := q.db.Exec(ctx, savePaymentSettings, arg.StoreID, arg.DefaultMethod)
+	return err
 }
 
 const setCheckout = `-- name: SetCheckout :exec

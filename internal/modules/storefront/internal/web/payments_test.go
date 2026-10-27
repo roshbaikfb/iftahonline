@@ -16,9 +16,12 @@ import (
 // order and the way back. asked counts the checks, when set.
 type fakePayments struct {
 	on    bool
+	first bool // checkout starts on card
 	err   error
 	asked *atomic.Int64
 }
+
+func (p fakePayments) CardDefault(context.Context) (bool, error) { return p.on && p.first, p.err }
 
 func (p fakePayments) CardEnabled(context.Context) (bool, error) {
 	if p.asked != nil {
@@ -181,5 +184,24 @@ func TestCardCheckIsCached(t *testing.T) {
 	f.getWith(t, "/checkout", cookies)
 	if n := asked.Load(); n != 3 {
 		t.Fatalf("after an invalidation: asked %d times, want 3", n)
+	}
+}
+
+// TestCardFirst (ADR-0036): checkout starts on card when the merchant
+// chose it and takes cards; never when the store takes none.
+func TestCardFirst(t *testing.T) {
+	t.Parallel()
+	f := newCheckoutFixture(t, withCards(fakePayments{on: true, first: true}))
+	cookies, _ := checkoutCart(t, f)
+	body := f.getWith(t, "/checkout", cookies).Body.String()
+	wantContains(t, body, `name="pay_method" value="card" checked`)
+	if strings.Contains(body, `value="cod" checked`) {
+		t.Fatal("cash on delivery is also chosen")
+	}
+
+	off := newCheckoutFixture(t, withCards(fakePayments{on: false, first: true}))
+	cookies, _ = checkoutCart(t, off)
+	if body = off.getWith(t, "/checkout", cookies).Body.String(); strings.Contains(body, `value="card"`) {
+		t.Fatal("card offered without a gateway")
 	}
 }

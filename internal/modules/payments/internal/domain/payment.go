@@ -171,3 +171,10 @@ func CleanKey(field, k string, required bool) (string, error) {
 	}
 	return k, nil
 }
+
+// Checkout's starting method (ADR-0036): cash on delivery unless the
+// merchant picks card.
+const (
+	DefaultCOD  = "cod"
+	DefaultCard = "card"
+)

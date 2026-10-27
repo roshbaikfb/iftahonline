@@ -1241,6 +1241,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/storefront/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The unpublished theme and home page
+         * @description Drafts (ADR-0036): what the merchant is editing. Shoppers see the
+         *     published theme and home page until the draft is published. A part
+         *     without edits is absent.
+         */
+        get: operations["getStorefrontDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/draft/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the theme draft
+         * @description Validated as the theme is (422 low_contrast too); the live theme does not change.
+         */
+        put: operations["saveThemeDraft"];
+        post?: never;
+        /**
+         * Discard the theme draft
+         * @description Back to the published theme. Idempotent.
+         */
+        delete: operations["discardThemeDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/draft/theme/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the theme draft
+         * @description The draft becomes the live theme over the version you read (409 version_conflict when it moved on; 409 no_draft without one), and the draft goes.
+         */
+        post: operations["publishThemeDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/draft/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the home page draft
+         * @description Validated as the home page is; the live page does not change.
+         */
+        put: operations["saveHomeDraft"];
+        post?: never;
+        /**
+         * Discard the home page draft
+         * @description Back to the published home page. Idempotent.
+         */
+        delete: operations["discardHomeDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/draft/home/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the home page draft
+         * @description The draft becomes the live home page over the version you read (0 when it was never saved), and the draft goes.
+         */
+        post: operations["publishHomeDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/storefront/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A link to the shop with the drafts
+         * @description Open the shop with `?preview=<token>`: for 30 minutes it shows the
+         *     drafts, marked as a preview, never cached and never indexed. Only
+         *     the token's hash is stored. At most 20 live links per store (409
+         *     preview_limit).
+         */
+        post: operations["createStorefrontPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/storefront/pages": {
         parameters: {
             query?: never;
@@ -2226,6 +2371,35 @@ export interface paths {
          *     from then on.
          */
         post: operations["connectPaymentGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/payments/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Which payment method checkout starts on
+         * @description Permission: payments.manage. `default_method` is what the merchant
+         *     chose; `card_enabled` says whether a gateway is connected (card
+         *     only counts then: without one, checkout offers cash on delivery
+         *     alone).
+         */
+        get: operations["getPaymentSettings"];
+        /**
+         * Choose the payment method checkout starts on
+         * @description Permission: payments.manage. The shopper can always switch.
+         */
+        put: operations["updatePaymentSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3433,6 +3607,37 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             };
+        };
+        HomeDraft: {
+            title?: string;
+            /** @description Meta description for search engines. */
+            description?: string;
+            sections: components["schemas"]["Section"][];
+        };
+        StorefrontDraft: {
+            theme?: components["schemas"]["ThemeSettings"];
+            home?: components["schemas"]["HomeDraft"];
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        PublishInput: {
+            /** @description The published version you read, 0 when it was never saved. */
+            version: number;
+        };
+        StorefrontPreview: {
+            /** @description Add as ?preview=<token> to the shop address. */
+            token: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        PaymentSettingsInput: {
+            /** @enum {string} */
+            default_method: "cod" | "card";
+        };
+        PaymentSettings: {
+            /** @enum {string} */
+            default_method: "cod" | "card";
+            card_enabled: boolean;
         };
         PageInput: {
             /** @description Required for landing pages. */
@@ -5664,6 +5869,202 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getStorefrontDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The drafts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontDraft"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveThemeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeSettings"];
+            };
+        };
+        responses: {
+            /** @description The drafts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontDraft"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    discardThemeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discarded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    publishThemeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishInput"];
+            };
+        };
+        responses: {
+            /** @description The live theme. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Theme"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveHomeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HomeDraft"];
+            };
+        };
+        responses: {
+            /** @description The drafts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontDraft"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    discardHomeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discarded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    publishHomeDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishInput"];
+            };
+        };
+        responses: {
+            /** @description The live home page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createStorefrontPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview token. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listLandingPages: {
         parameters: {
             query?: never;
@@ -6972,6 +7373,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentConnection"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPaymentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePaymentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSettings"];
                 };
             };
             default: components["responses"]["Problem"];

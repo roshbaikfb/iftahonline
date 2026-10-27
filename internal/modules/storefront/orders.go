@@ -87,6 +87,8 @@ var _ web.Payments = shopPayments{}
 
 func (p shopPayments) CardEnabled(ctx context.Context) (bool, error) { return p.cards.CardEnabled(ctx) }
 
+func (p shopPayments) CardDefault(ctx context.Context) (bool, error) { return p.cards.CardDefault(ctx) }
+
 func (p shopPayments) PayURL(store, orderRef, back string) string {
 	s, err := tenant.ParseStoreID(store)
 	if err != nil {

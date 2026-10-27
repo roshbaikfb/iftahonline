@@ -225,3 +225,34 @@ func opt(s string) *string {
 	}
 	return &s
 }
+
+// GetPaymentSettings implements StrictServerInterface.
+func (h *Handlers) GetPaymentSettings(ctx context.Context, _ GetPaymentSettingsRequestObject) (GetPaymentSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermPaymentsManage); err != nil {
+		return nil, err
+	}
+	st, err := h.svc.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return GetPaymentSettings200JSONResponse(toSettings(st)), nil
+}
+
+// UpdatePaymentSettings implements StrictServerInterface.
+func (h *Handlers) UpdatePaymentSettings(ctx context.Context, req UpdatePaymentSettingsRequestObject) (UpdatePaymentSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermPaymentsManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errs.BadRequest("request body is required", nil)
+	}
+	st, err := h.svc.UpdateSettings(ctx, string(req.Body.DefaultMethod))
+	if err != nil {
+		return nil, err
+	}
+	return UpdatePaymentSettings200JSONResponse(toSettings(st)), nil
+}
+
+func toSettings(st app.Settings) PaymentSettings {
+	return PaymentSettings{DefaultMethod: PaymentSettingsDefaultMethod(st.DefaultMethod), CardEnabled: st.CardEnabled}
+}

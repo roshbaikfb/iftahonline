@@ -150,6 +150,8 @@ const (
 type Payments interface {
 	// CardEnabled reports whether the store in ctx takes cards.
 	CardEnabled(ctx context.Context) (bool, error)
+	// CardDefault reports whether its checkout starts on card (ADR-0036).
+	CardDefault(ctx context.Context) (bool, error)
 	// PayURL is where a card order's shopper pays; back is the absolute
 	// thank-you URL they return to.
 	PayURL(store, orderRef, back string) string

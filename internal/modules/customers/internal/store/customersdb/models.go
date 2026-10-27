@@ -316,6 +316,12 @@ type PaymentRefund struct {
 	UpdatedAt        time.Time
 }
 
+type PaymentSetting struct {
+	StoreID       ulid.ID
+	DefaultMethod string
+	UpdatedAt     time.Time
+}
+
 type PlatformAdmin struct {
 	ID           ulid.ID
 	Email        string
@@ -622,6 +628,20 @@ type StoreTheme struct {
 	Settings  []byte
 	Version   int32
 	UpdatedAt time.Time
+}
+
+type StorefrontDraft struct {
+	StoreID   ulid.ID
+	Theme     []byte
+	Home      []byte
+	UpdatedAt time.Time
+}
+
+type StorefrontPreview struct {
+	TokenHash []byte
+	StoreID   ulid.ID
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 type User struct {
