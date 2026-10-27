@@ -50,10 +50,11 @@ func Mount(mux *http.ServeMux, svc *app.Service, urls URLSigner, auth authz.Auth
 }
 
 var (
-	errProductNotFound  = errs.NotFound("product_not_found", "product not found")
-	errCategoryNotFound = errs.NotFound("category_not_found", "category not found")
-	errImageNotFound    = errs.NotFound("image_not_found", "image not found")
-	errBodyRequired     = errs.BadRequest("request body is required", nil)
+	errProductNotFound   = errs.NotFound("product_not_found", "product not found")
+	errCategoryNotFound  = errs.NotFound("category_not_found", "category not found")
+	errImageNotFound     = errs.NotFound("image_not_found", "image not found")
+	errSizeChartNotFound = errs.NotFound("size_chart_not_found", "size chart not found")
+	errBodyRequired      = errs.BadRequest("request body is required", nil)
 )
 
 // pathID parses a path ID. A malformed ID is simply not found.
@@ -323,7 +324,17 @@ func productInput(b ProductInput) (domain.ProductInput, error) {
 		in.Options = make([]domain.Option, len(*b.Options))
 		for i, o := range *b.Options {
 			in.Options[i] = domain.Option{Name: o.Name, Values: o.Values}
+			if o.Colors != nil {
+				in.Options[i].Colors = *o.Colors
+			}
 		}
+	}
+	if b.SizeChartId != nil {
+		id, err := bodyID("size_chart_id", *b.SizeChartId)
+		if err != nil {
+			return domain.ProductInput{}, err
+		}
+		in.SizeChartID = &id
 	}
 	if b.CategoryIds != nil {
 		in.CategoryIDs = make([]ulid.ID, len(*b.CategoryIds))
@@ -386,6 +397,13 @@ func (h *Handlers) toProduct(p domain.Product) Product {
 	}
 	for i, o := range p.Options {
 		out.Options[i] = ProductOption{Name: o.Name, Values: o.Values}
+		if o.Colors != nil {
+			out.Options[i].Colors = &o.Colors
+		}
+	}
+	if p.SizeChartID != nil {
+		id := p.SizeChartID.String()
+		out.SizeChartId = &id
 	}
 	for i, v := range p.Variants {
 		out.Variants[i] = Variant{
@@ -662,4 +680,85 @@ func toImport(im domain.Import) Import {
 		out.WoocommerceUrl = &im.WooURL
 	}
 	return out
+}
+
+// ListSizeCharts implements StrictServerInterface.
+func (h *Handlers) ListSizeCharts(ctx context.Context, _ ListSizeChartsRequestObject) (ListSizeChartsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	cs, err := h.svc.ListSizeCharts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := ListSizeCharts200JSONResponse{Items: make([]SizeChart, len(cs))}
+	for i, c := range cs {
+		out.Items[i] = toSizeChart(c)
+	}
+	return out, nil
+}
+
+// GetSizeChart implements StrictServerInterface.
+func (h *Handlers) GetSizeChart(ctx context.Context, req GetSizeChartRequestObject) (GetSizeChartResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogRead); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.SizeChartId, errSizeChartNotFound)
+	if err != nil {
+		return nil, err
+	}
+	c, err := h.svc.GetSizeChart(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return GetSizeChart200JSONResponse(toSizeChart(c)), nil
+}
+
+// CreateSizeChart implements StrictServerInterface.
+func (h *Handlers) CreateSizeChart(ctx context.Context, req CreateSizeChartRequestObject) (CreateSizeChartResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	c, err := h.svc.CreateSizeChart(ctx, sizeChartInput(*req.Body))
+	if err != nil {
+		return nil, err
+	}
+	return CreateSizeChart201JSONResponse(toSizeChart(c)), nil
+}
+
+// UpdateSizeChart implements StrictServerInterface.
+func (h *Handlers) UpdateSizeChart(ctx context.Context, req UpdateSizeChartRequestObject) (UpdateSizeChartResponseObject, error) {
+	c, err := replace(ctx, h.auth, authz.PermCatalogManage, req.SizeChartId, errSizeChartNotFound, req.Body,
+		func(b SizeChartInput) (domain.SizeChartInput, error) { return sizeChartInput(b), nil }, h.svc.UpdateSizeChart)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateSizeChart200JSONResponse(toSizeChart(c)), nil
+}
+
+// DeleteSizeChart implements StrictServerInterface.
+func (h *Handlers) DeleteSizeChart(ctx context.Context, req DeleteSizeChartRequestObject) (DeleteSizeChartResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermCatalogManage); err != nil {
+		return nil, err
+	}
+	id, err := pathID(req.SizeChartId, errSizeChartNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteSizeChart(ctx, id); err != nil {
+		return nil, err
+	}
+	return DeleteSizeChart204Response{}, nil
+}
+
+func sizeChartInput(b SizeChartInput) domain.SizeChartInput {
+	return domain.SizeChartInput{Name: b.Name, Header: b.Header, Body: b.Body}
+}
+
+func toSizeChart(c domain.SizeChart) SizeChart {
+	return SizeChart{Id: c.ID.String(), Name: c.Name, Header: c.Header, Body: c.Body, Products: c.Products,
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 }

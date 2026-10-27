@@ -50,6 +50,12 @@ func (e Events) categoryChanged(ctx context.Context, tx pgx.Tx, id ulid.ID, reas
 	})
 }
 
+func (e Events) sizeChartChanged(ctx context.Context, tx pgx.Tx, id ulid.ID, reason string) error {
+	return e.publish(ctx, tx, domain.EventSizeChartChanged, func(m event.Meta) event.Event {
+		return domain.SizeChartChanged{Meta: m, SizeChartID: id, Reason: reason}
+	})
+}
+
 // stockChanged publishes one ReasonStock change per distinct product.
 func (e Events) stockChanged(ctx context.Context, tx pgx.Tx, productIDs []ulid.ID) error {
 	seen := make([]ulid.ID, 0, len(productIDs))

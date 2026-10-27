@@ -509,6 +509,9 @@ type Product struct {
 	// deleteSampleProducts. Absent means false.
 	Sample *bool `json:"sample,omitempty"`
 
+	// SizeChartId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	SizeChartId *ULID `json:"size_chart_id,omitempty"`
+
 	// Slug Example: تيشيرت-قطن
 	Slug      string        `json:"slug"`
 	Status    ProductStatus `json:"status"`
@@ -549,6 +552,9 @@ type ProductInput struct {
 	Description *string          `json:"description,omitempty"`
 	Options     *[]ProductOption `json:"options,omitempty"`
 
+	// SizeChartId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	SizeChartId *ULID `json:"size_chart_id,omitempty"`
+
 	// Slug Derived from the title when empty.
 	Slug   *string             `json:"slug,omitempty"`
 	Status *ProductInputStatus `json:"status,omitempty"`
@@ -565,6 +571,15 @@ type ProductInputStatus string
 
 // ProductOption defines model for ProductOption.
 type ProductOption struct {
+	// Colors Present when the option is a colour (the storefront shows
+	// swatches): one entry per value, in value order, each "#rrggbb"
+	// or "" to let the storefront guess the colour from the value's
+	// name.
+	//
+	//
+	// Example: ["#1f2a44","#ffffff",""]
+	Colors *[]string `json:"colors,omitempty"`
+
 	// Name Example: المقاس
 	Name string `json:"name"`
 
@@ -604,6 +619,44 @@ type ProductSearchHitStatus string
 type ProductSearchPage struct {
 	EstimatedTotal int64              `json:"estimated_total"`
 	Items          []ProductSearchHit `json:"items"`
+}
+
+// SizeChart defines model for SizeChart.
+type SizeChart struct {
+	Body      [][]string `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	Header    []string   `json:"header"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id   ULID   `json:"id"`
+	Name string `json:"name"`
+
+	// Products Live products using the chart.
+	Products  int       `json:"products"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SizeChartInput defines model for SizeChartInput.
+type SizeChartInput struct {
+	// Body Rows as long as the header, in centimetres; a row's first cell (the size) is required.
+	//
+	// Example: [["S","96","68"],["M","102","71"]]
+	Body [][]string `json:"body"`
+
+	// Header Column names; the first is the size.
+	//
+	// Example: ["المقاس","الصدر","الطول"]
+	Header []string `json:"header"`
+
+	// Name For the merchant only.
+	//
+	// Example: تيشيرتات رجالي
+	Name string `json:"name"`
+}
+
+// SizeChartList defines model for SizeChartList.
+type SizeChartList struct {
+	Items []SizeChart `json:"items"`
 }
 
 // Stock defines model for Stock.
@@ -701,6 +754,9 @@ type PolicySlug string
 // ProductID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ProductID = ULID
 
+// SizeChartID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type SizeChartID = ULID
+
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
 
@@ -756,6 +812,12 @@ type CreateImageUploadJSONRequestBody = ImageUploadRequest
 
 // UpdateImageJSONRequestBody defines body for UpdateImage for application/json ContentType.
 type UpdateImageJSONRequestBody = ImageInput
+
+// CreateSizeChartJSONRequestBody defines body for CreateSizeChart for application/json ContentType.
+type CreateSizeChartJSONRequestBody = SizeChartInput
+
+// UpdateSizeChartJSONRequestBody defines body for UpdateSizeChart for application/json ContentType.
+type UpdateSizeChartJSONRequestBody = SizeChartInput
 
 // SetInventoryJSONRequestBody defines body for SetInventory for application/json ContentType.
 type SetInventoryJSONRequestBody = InventoryInput
@@ -822,6 +884,21 @@ type ServerInterface interface {
 	// CompleteImageUpload Process an uploaded image
 	// (POST /v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete)
 	CompleteImageUpload(w http.ResponseWriter, r *http.Request, storeId StoreID, productId ProductID, imageId ImageID)
+	// ListSizeCharts List the size charts
+	// (GET /v1/stores/{store_id}/size-charts)
+	ListSizeCharts(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CreateSizeChart Create a size chart
+	// (POST /v1/stores/{store_id}/size-charts)
+	CreateSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// DeleteSizeChart Delete a size chart
+	// (DELETE /v1/stores/{store_id}/size-charts/{size_chart_id})
+	DeleteSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID)
+	// GetSizeChart Get a size chart
+	// (GET /v1/stores/{store_id}/size-charts/{size_chart_id})
+	GetSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID)
+	// UpdateSizeChart Replace a size chart
+	// (PUT /v1/stores/{store_id}/size-charts/{size_chart_id})
+	UpdateSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID)
 	// SetInventory Set a variant's stock
 	// (PUT /v1/stores/{store_id}/variants/{variant_id}/inventory)
 	SetInventory(w http.ResponseWriter, r *http.Request, storeId StoreID, variantId VariantID)
@@ -1634,6 +1711,163 @@ func (siw *ServerInterfaceWrapper) CompleteImageUpload(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListSizeCharts operation middleware
+func (siw *ServerInterfaceWrapper) ListSizeCharts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSizeCharts(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSizeChart operation middleware
+func (siw *ServerInterfaceWrapper) CreateSizeChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSizeChart(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSizeChart operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSizeChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "size_chart_id" -------------
+	var sizeChartId SizeChartID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "size_chart_id", r.PathValue("size_chart_id"), &sizeChartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size_chart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSizeChart(w, r, storeId, sizeChartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSizeChart operation middleware
+func (siw *ServerInterfaceWrapper) GetSizeChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "size_chart_id" -------------
+	var sizeChartId SizeChartID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "size_chart_id", r.PathValue("size_chart_id"), &sizeChartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size_chart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSizeChart(w, r, storeId, sizeChartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSizeChart operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSizeChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "size_chart_id" -------------
+	var sizeChartId SizeChartID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "size_chart_id", r.PathValue("size_chart_id"), &sizeChartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size_chart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSizeChart(w, r, storeId, sizeChartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetInventory operation middleware
 func (siw *ServerInterfaceWrapper) SetInventory(w http.ResponseWriter, r *http.Request) {
 
@@ -1810,6 +2044,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/categories", wrapper.CreateCategory)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/categories/{category_id}", wrapper.DeleteCategory)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/categories/{category_id}", wrapper.UpdateCategory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/size-charts", wrapper.ListSizeCharts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/size-charts", wrapper.CreateSizeChart)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/size-charts/{size_chart_id}", wrapper.DeleteSizeChart)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/size-charts/{size_chart_id}", wrapper.GetSizeChart)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/size-charts/{size_chart_id}", wrapper.UpdateSizeChart)
 
 	return m
 }
@@ -2617,6 +2856,200 @@ func (response CompleteImageUploaddefaultApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type ListSizeChartsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListSizeChartsResponseObject interface {
+	VisitListSizeChartsResponse(w http.ResponseWriter) error
+}
+
+type ListSizeCharts200JSONResponse SizeChartList
+
+func (response ListSizeCharts200JSONResponse) VisitListSizeChartsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSizeChartsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListSizeChartsdefaultApplicationProblemPlusJSONResponse) VisitListSizeChartsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSizeChartRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *CreateSizeChartJSONRequestBody
+}
+
+type CreateSizeChartResponseObject interface {
+	VisitCreateSizeChartResponse(w http.ResponseWriter) error
+}
+
+type CreateSizeChart201JSONResponse SizeChart
+
+func (response CreateSizeChart201JSONResponse) VisitCreateSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSizeChartdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSizeChartdefaultApplicationProblemPlusJSONResponse) VisitCreateSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSizeChartRequestObject struct {
+	StoreId     StoreID     `json:"store_id"`
+	SizeChartId SizeChartID `json:"size_chart_id"`
+}
+
+type DeleteSizeChartResponseObject interface {
+	VisitDeleteSizeChartResponse(w http.ResponseWriter) error
+}
+
+type DeleteSizeChart204Response struct {
+}
+
+func (response DeleteSizeChart204Response) VisitDeleteSizeChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSizeChartdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSizeChartdefaultApplicationProblemPlusJSONResponse) VisitDeleteSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSizeChartRequestObject struct {
+	StoreId     StoreID     `json:"store_id"`
+	SizeChartId SizeChartID `json:"size_chart_id"`
+}
+
+type GetSizeChartResponseObject interface {
+	VisitGetSizeChartResponse(w http.ResponseWriter) error
+}
+
+type GetSizeChart200JSONResponse SizeChart
+
+func (response GetSizeChart200JSONResponse) VisitGetSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSizeChartdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSizeChartdefaultApplicationProblemPlusJSONResponse) VisitGetSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSizeChartRequestObject struct {
+	StoreId     StoreID     `json:"store_id"`
+	SizeChartId SizeChartID `json:"size_chart_id"`
+	Body        *UpdateSizeChartJSONRequestBody
+}
+
+type UpdateSizeChartResponseObject interface {
+	VisitUpdateSizeChartResponse(w http.ResponseWriter) error
+}
+
+type UpdateSizeChart200JSONResponse SizeChart
+
+func (response UpdateSizeChart200JSONResponse) VisitUpdateSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSizeChartdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateSizeChartdefaultApplicationProblemPlusJSONResponse) VisitUpdateSizeChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetInventoryRequestObject struct {
 	StoreId   StoreID   `json:"store_id"`
 	VariantId VariantID `json:"variant_id"`
@@ -2720,6 +3153,21 @@ type StrictServerInterface interface {
 	// CompleteImageUpload Process an uploaded image
 	// (POST /v1/stores/{store_id}/products/{product_id}/images/{image_id}/complete)
 	CompleteImageUpload(ctx context.Context, request CompleteImageUploadRequestObject) (CompleteImageUploadResponseObject, error)
+	// ListSizeCharts List the size charts
+	// (GET /v1/stores/{store_id}/size-charts)
+	ListSizeCharts(ctx context.Context, request ListSizeChartsRequestObject) (ListSizeChartsResponseObject, error)
+	// CreateSizeChart Create a size chart
+	// (POST /v1/stores/{store_id}/size-charts)
+	CreateSizeChart(ctx context.Context, request CreateSizeChartRequestObject) (CreateSizeChartResponseObject, error)
+	// DeleteSizeChart Delete a size chart
+	// (DELETE /v1/stores/{store_id}/size-charts/{size_chart_id})
+	DeleteSizeChart(ctx context.Context, request DeleteSizeChartRequestObject) (DeleteSizeChartResponseObject, error)
+	// GetSizeChart Get a size chart
+	// (GET /v1/stores/{store_id}/size-charts/{size_chart_id})
+	GetSizeChart(ctx context.Context, request GetSizeChartRequestObject) (GetSizeChartResponseObject, error)
+	// UpdateSizeChart Replace a size chart
+	// (PUT /v1/stores/{store_id}/size-charts/{size_chart_id})
+	UpdateSizeChart(ctx context.Context, request UpdateSizeChartRequestObject) (UpdateSizeChartResponseObject, error)
 	// SetInventory Set a variant's stock
 	// (PUT /v1/stores/{store_id}/variants/{variant_id}/inventory)
 	SetInventory(ctx context.Context, request SetInventoryRequestObject) (SetInventoryResponseObject, error)
@@ -3343,6 +3791,153 @@ func (sh *strictHandler) CompleteImageUpload(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CompleteImageUploadResponseObject); ok {
 		if err := validResponse.VisitCompleteImageUploadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSizeCharts operation middleware
+func (sh *strictHandler) ListSizeCharts(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListSizeChartsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSizeCharts(ctx, request.(ListSizeChartsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSizeCharts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSizeChartsResponseObject); ok {
+		if err := validResponse.VisitListSizeChartsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSizeChart operation middleware
+func (sh *strictHandler) CreateSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CreateSizeChartRequestObject
+
+	request.StoreId = storeId
+
+	var body CreateSizeChartJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSizeChart(ctx, request.(CreateSizeChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSizeChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSizeChartResponseObject); ok {
+		if err := validResponse.VisitCreateSizeChartResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSizeChart operation middleware
+func (sh *strictHandler) DeleteSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID) {
+	var request DeleteSizeChartRequestObject
+
+	request.StoreId = storeId
+	request.SizeChartId = sizeChartId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSizeChart(ctx, request.(DeleteSizeChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSizeChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSizeChartResponseObject); ok {
+		if err := validResponse.VisitDeleteSizeChartResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSizeChart operation middleware
+func (sh *strictHandler) GetSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID) {
+	var request GetSizeChartRequestObject
+
+	request.StoreId = storeId
+	request.SizeChartId = sizeChartId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSizeChart(ctx, request.(GetSizeChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSizeChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSizeChartResponseObject); ok {
+		if err := validResponse.VisitGetSizeChartResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSizeChart operation middleware
+func (sh *strictHandler) UpdateSizeChart(w http.ResponseWriter, r *http.Request, storeId StoreID, sizeChartId SizeChartID) {
+	var request UpdateSizeChartRequestObject
+
+	request.StoreId = storeId
+	request.SizeChartId = sizeChartId
+
+	var body UpdateSizeChartJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSizeChart(ctx, request.(UpdateSizeChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSizeChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSizeChartResponseObject); ok {
+		if err := validResponse.VisitUpdateSizeChartResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

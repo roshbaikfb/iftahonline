@@ -12,6 +12,9 @@ const (
 	EventProductChanged  = "catalog.product.changed"
 	EventProductDeleted  = "catalog.product.deleted"
 	EventCategoryChanged = "catalog.category.changed"
+	// EventSizeChartChanged: a size chart's products show it changed or
+	// gone (ADR-0035).
+	EventSizeChartChanged = "catalog.size_chart.changed"
 )
 
 // Why a product changed.
@@ -49,4 +52,18 @@ type CategoryChanged struct {
 	event.Meta
 	CategoryID ulid.ID `json:"category_id"`
 	Reason     string  `json:"reason"`
+}
+
+// Why a size chart changed.
+const (
+	SizeChartUpdated = "updated"
+	SizeChartDeleted = "deleted"
+)
+
+// SizeChartChanged is published when a size chart is replaced or
+// deleted: every product page using it changes.
+type SizeChartChanged struct {
+	event.Meta
+	SizeChartID ulid.ID `json:"size_chart_id"`
+	Reason      string  `json:"reason"`
 }

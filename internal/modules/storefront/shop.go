@@ -43,7 +43,7 @@ const AssetsPrefix = web.AssetsPrefix
 func InvalidatingEvents() []string {
 	return []string{
 		catalog.EventProductChanged, catalog.EventProductDeleted, catalog.EventCategoryChanged,
-		EventThemeChanged, EventPageChanged,
+		catalog.EventSizeChartChanged, EventThemeChanged, EventPageChanged,
 	}
 }
 
@@ -79,6 +79,8 @@ func PurgeHandler(p cdn.Purger) eventbus.Handler {
 //   - a product: its page (p-) and every listing (l-), which may show it;
 //   - a category or the theme: the whole store (s-), since the header
 //     and the look are on every page;
+//   - a size chart: the whole store too (rarely edited; its products'
+//     pages are not listed in the event);
 //   - a policy: the whole store (its link is in every footer);
 //   - another page: that page (pg-).
 func PurgeTags(d eventbus.Delivery) ([]string, error) {

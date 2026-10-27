@@ -138,8 +138,18 @@ type StorefrontProduct struct {
 	Images      []StorefrontImage // ready images only, by position
 	// Sample is a product from the setup wizard's template (ADR-0034):
 	// shown, marked, and never sellable (no variant is available).
-	Sample    bool
+	Sample bool
+	// SizeChart is the product's size chart, on ProductBySlug only (the
+	// product page); nil for none and in lists.
+	SizeChart *StorefrontSizeChart
 	UpdatedAt time.Time
+}
+
+// StorefrontSizeChart is a size chart as the product page shows it, in
+// centimetres: column names (the size first) and rows as long.
+type StorefrontSizeChart struct {
+	Header []string
+	Body   [][]string
 }
 
 // StorefrontVariant is a variant as a shopper sees it. Stock levels stay
@@ -215,14 +225,23 @@ func (s *Storefront) ProductBySlug(ctx context.Context, productSlug string) (Sto
 		return StorefrontProduct{}, ErrProductNotFound
 	}
 	var p domain.Product
+	var chart *StorefrontSizeChart
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		p, txErr = store.GetActiveProductBySlug(ctx, tx, productSlug)
+		if p, txErr = store.GetActiveProductBySlug(ctx, tx, productSlug); txErr != nil || p.SizeChartID == nil {
+			return txErr
+		}
+		c, txErr := store.SizeChartOnly(ctx, tx, *p.SizeChartID)
+		if txErr == nil {
+			chart = &StorefrontSizeChart{Header: c.Header, Body: c.Body}
+		}
 		return txErr
 	})
 	if err != nil {
 		return StorefrontProduct{}, notFound(err, ErrProductNotFound)
 	}
-	return s.view(p), nil
+	v := s.view(p)
+	v.SizeChart = chart
+	return v, nil
 }
 
 // ProductsByIDs returns the active products among ids in the order

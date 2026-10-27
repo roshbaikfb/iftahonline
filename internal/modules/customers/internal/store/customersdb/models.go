@@ -341,6 +341,7 @@ type Product struct {
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
 	IsSample    bool
+	SizeChartID *ulid.ID
 }
 
 type ProductCategory struct {
@@ -496,6 +497,16 @@ type ShippingZoneArea struct {
 	StoreID ulid.ID
 	ZoneID  ulid.ID
 	Area    string
+}
+
+type SizeChart struct {
+	ID        ulid.ID
+	StoreID   ulid.ID
+	Name      string
+	Header    []byte
+	Body      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type StockReservation struct {

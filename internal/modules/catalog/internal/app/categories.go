@@ -118,20 +118,30 @@ func (s *Service) checkPlacement(ctx context.Context, tx pgx.Tx, id ulid.ID, par
 // DeleteCategory deletes a category that has no subcategories; its
 // products simply leave it.
 func (s *Service) DeleteCategory(ctx context.Context, id ulid.ID) error {
-	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		c, err := store.GetCategory(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		if err := store.DeleteCategory(ctx, tx, id); err != nil {
-			return err
-		}
+	return deleteOne(ctx, s.db, id, store.GetCategory, store.DeleteCategory, func(tx pgx.Tx, c domain.Category) error {
 		if err := s.events.categoryChanged(ctx, tx, id, domain.CategoryDeleted); err != nil {
 			return err
 		}
 		return s.auditCategory(ctx, tx, "category.deleted", c)
+	}, errCategoryNotFound)
+}
+
+// deleteOne reads a row (for the audit), deletes it and runs after
+// (events, audit) in one tenant transaction; a missing row is missing.
+func deleteOne[T any](ctx context.Context, db postgres.Beginner, id ulid.ID,
+	get func(context.Context, store.Tx, ulid.ID) (T, error), del func(context.Context, store.Tx, ulid.ID) error,
+	after func(pgx.Tx, T) error, missing error) error {
+	err := postgres.InTenantTx(ctx, db, func(tx pgx.Tx) error {
+		row, err := get(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err = del(ctx, tx, id); err != nil {
+			return err
+		}
+		return after(tx, row)
 	})
-	return notFound(err, errCategoryNotFound)
+	return notFound(err, missing)
 }
 
 func (s *Service) auditCategory(ctx context.Context, tx pgx.Tx, action string, c domain.Category) error {
