@@ -41,3 +41,4 @@ supersedes it.
 | [0033](0033-shop-search-and-bestsellers.md) | Shoppers' search key, and how bestsellers are counted | Accepted |
 | [0034](0034-setup-wizard-and-starter-templates.md) | The setup wizard and starter templates | Accepted |
 | [0035](0035-size-charts-and-option-colours.md) | Size charts and option colours | Accepted |
+| [0036](0036-storefront-drafts-and-preview.md) | Storefront drafts, preview links, and checkout's starting method | Accepted |
