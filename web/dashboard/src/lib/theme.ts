@@ -31,11 +31,13 @@ export const radii: { id: Radius; label: string; css: string }[] = [
 
 type ColorKey = keyof ThemeSettings['colors'];
 
-export const colorRows: { key: ColorKey; label: string; hint?: string }[] = [
-  { key: 'primary', label: 'اللون الأساسي', hint: 'الأزرار والروابط والأسعار' },
-  { key: 'accent', label: 'لون التمييز', hint: 'الخصومات والشارات' },
-  { key: 'background', label: 'الخلفية' },
-  { key: 'text', label: 'النص' },
+// The colour rows: label and hint on wide screens, the short label on
+// phones (the approved mockups).
+export const colorRows: { key: ColorKey; label: string; short: string; hint?: string }[] = [
+  { key: 'primary', label: 'اللون الأساسي', short: 'الأساسي', hint: 'الأزرار والروابط والأسعار' },
+  { key: 'accent', label: 'لون التمييز', short: 'التمييز', hint: 'الخصومات والشارات' },
+  { key: 'background', label: 'الخلفية', short: 'الخلفية' },
+  { key: 'text', label: 'النص', short: 'النص' },
 ];
 
 // Ready palettes («ألوان جاهزة»): each passes the storefront's contrast
