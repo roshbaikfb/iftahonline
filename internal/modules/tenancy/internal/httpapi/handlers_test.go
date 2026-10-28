@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -152,7 +153,7 @@ func newFixture(t *testing.T) fixture {
 		tokOwnerB:    {UserID: ids.New(), Roles: map[tenant.StoreID]authz.Role{b: authz.RoleOwner}},
 	}
 	mux := http.NewServeMux()
-	httpapi.Mount(mux, svc, testPolicy(t), testkit.FakeStoreScope(resp, members), resp)
+	httpapi.Mount(mux, svc, testEdge, testPolicy(t), testkit.FakeStoreScope(resp, members), resp)
 	return fixture{h: mux, svc: svc, owner: owner, storeA: a, storeB: b, ctxA: ctxA, ctxB: ctxB, domB: domB, hostB: hostB}
 }
 
@@ -187,6 +188,13 @@ func (f fixture) do(t *testing.T, rq *http.Request) (int, map[string]any) {
 
 func storePath(s tenant.StoreID, rest string) string { return "/v1/stores/" + s.String() + rest }
 
+// testEdge is where the fixture's custom domains point (ADR-0037).
+var testEdge = domain.Edge{ //nolint:gochecknoglobals // a fixed test value
+	Target: "connect.example.test",
+	IPv4:   []netip.Addr{netip.MustParseAddr("203.0.113.10")},
+	IPv6:   []netip.Addr{netip.MustParseAddr("2001:db8::10")},
+}
+
 func TestHappyPath(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
@@ -210,6 +218,23 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("verification = %v", ver)
 	}
 	custom := body["id"].(string)
+	// a subdomain points at the edge with one CNAME
+	routing, _ := body["routing"].(map[string]any)
+	if routing["apex"] != false || !sameRecords(routing["records"], [][3]string{{"CNAME", "shop-a.example.com", "connect.example.test"}}) {
+		t.Fatalf("routing = %v", routing)
+	}
+	// an apex domain: an ALIAS, or the edge's addresses
+	apex := "apex-" + strings.ToLower(f.storeA.String()[16:]) + ".com.eg"
+	code, body = f.do(t, req(t, http.MethodPost, storePath(a, "/domains"), tokOwnerA, `{"host":"`+apex+`"}`))
+	routing, _ = body["routing"].(map[string]any)
+	if code != http.StatusCreated || routing["apex"] != true || !sameRecords(routing["records"], [][3]string{
+		{"ALIAS", apex, "connect.example.test"}, {"A", apex, "203.0.113.10"}, {"AAAA", apex, "2001:db8::10"},
+	}) {
+		t.Fatalf("apex addDomain = %d %v", code, body)
+	}
+	if code, _ = f.do(t, req(t, http.MethodDelete, storePath(a, "/domains/"+body["id"].(string)), tokOwnerA, "")); code != http.StatusNoContent {
+		t.Fatalf("delete apex = %d", code)
+	}
 
 	code, body = f.do(t, req(t, http.MethodGet, storePath(a, "/domains"), tokOwnerA, ""))
 	items, _ := body["items"].([]any)
@@ -217,7 +242,7 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("listDomains = %d %v", code, body)
 	}
 	sub := items[0].(map[string]any)
-	if sub["kind"] != "subdomain" || sub["is_primary"] != true || sub["verification"] != nil {
+	if sub["kind"] != "subdomain" || sub["is_primary"] != true || sub["verification"] != nil || sub["routing"] != nil {
 		t.Fatalf("subdomain = %v", sub)
 	}
 
@@ -346,4 +371,19 @@ func TestCrossTenant(t *testing.T) {
 	if code, body := f.do(t, req(t, http.MethodGet, storePath(b, "/domains"), tokOwnerB, "")); code != http.StatusOK || len(body["items"].([]any)) != 2 {
 		t.Fatalf("B's own view = %d %v", code, body)
 	}
+}
+
+// sameRecords compares a routing's records with (type, name, value)s.
+func sameRecords(got any, want [][3]string) bool {
+	list, _ := got.([]any)
+	if len(list) != len(want) {
+		return false
+	}
+	for i, r := range list {
+		m, _ := r.(map[string]any)
+		if m["type"] != want[i][0] || m["name"] != want[i][1] || m["value"] != want[i][2] {
+			return false
+		}
+	}
+	return true
 }

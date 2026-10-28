@@ -231,6 +231,12 @@ type Tenancy struct {
 	NegativeCacheSize int           // L1 entries for unknown hosts (separate, so floods cannot evict real stores)
 	NegativeTTL       time.Duration // lifetime of unknown-host entries in L1 and L2
 	SharedCacheTTL    time.Duration // L2 (Redis) lifetime for known hosts
+	// Where custom domains point (ADR-0037): the CNAME/ALIAS target, and
+	// the edge's fixed addresses for apex domains without an ALIAS (none:
+	// apex domains are told to use an ALIAS).
+	DomainTarget string
+	DomainIPv4   []netip.Addr
+	DomainIPv6   []netip.Addr
 }
 
 // Load reads configuration for role.
@@ -302,6 +308,9 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			SharedCacheTTL:    r.duration("HOSTCACHE_SHARED_TTL", 10*time.Minute),
 		}
 		c.Tenancy.AdminHost = r.hostname("ADMIN_HOST", "admin."+c.Tenancy.BaseDomain)
+		c.Tenancy.DomainTarget = r.hostname("CUSTOM_DOMAIN_TARGET", "connect."+c.Tenancy.BaseDomain)
+		c.Tenancy.DomainIPv4 = r.publicAddrs("CUSTOM_DOMAIN_IPV4", false)
+		c.Tenancy.DomainIPv6 = r.publicAddrs("CUSTOM_DOMAIN_IPV6", true)
 	}
 	if role == RoleAPI || role == RoleWorker || role == RoleAdmin {
 		if kr, err := secretbox.ParseKeyring(r.secret("SECRETBOX_KEYS")); err != nil {
@@ -647,6 +656,30 @@ func (r *reader) hostname(key, def string) string {
 		r.errorf("%s: %q is not a domain name", key, v)
 	}
 	return v
+}
+
+// publicAddrs reads a comma-separated list of addresses of one family
+// that shoppers can reach: global unicast, not private.
+func (r *reader) publicAddrs(key string, v6 bool) []netip.Addr {
+	v, ok := r.get(key)
+	if !ok {
+		return nil
+	}
+	var out []netip.Addr
+	for part := range strings.SplitSeq(v, ",") {
+		a, err := netip.ParseAddr(strings.TrimSpace(part))
+		switch {
+		case err != nil:
+			r.errorf("%s: %q is not an IP address", key, part)
+		case (a.Is6() && !a.Is4In6()) != v6:
+			r.errorf("%s: %q is not an IPv%s address", key, part, map[bool]string{false: "4", true: "6"}[v6])
+		case !a.IsGlobalUnicast() || a.IsPrivate():
+			r.errorf("%s: %q is not a public address", key, part)
+		default:
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (r *reader) prefixes(key string) []netip.Prefix {

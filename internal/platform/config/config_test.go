@@ -84,6 +84,46 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestCustomDomainEdgeConfig(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleAPI, env(with("PLATFORM_BASE_DOMAIN", "shops.example.eg")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Tenancy.DomainTarget != "connect.shops.example.eg" || c.Tenancy.DomainIPv4 != nil || c.Tenancy.DomainIPv6 != nil {
+		t.Fatalf("defaults = %+v", c.Tenancy)
+	}
+	c, err = config.Load(config.RoleAPI, env(with(
+		"CUSTOM_DOMAIN_TARGET", "Edge.Example.NET.",
+		"CUSTOM_DOMAIN_IPV4", "203.0.113.10, 198.51.100.7",
+		"CUSTOM_DOMAIN_IPV6", "2001:db8::10",
+	)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Tenancy.DomainTarget != "edge.example.net" ||
+		len(c.Tenancy.DomainIPv4) != 2 || c.Tenancy.DomainIPv4[1] != netip.MustParseAddr("198.51.100.7") ||
+		len(c.Tenancy.DomainIPv6) != 1 || c.Tenancy.DomainIPv6[0] != netip.MustParseAddr("2001:db8::10") {
+		t.Fatalf("edge = %+v", c.Tenancy)
+	}
+	bad := []struct{ key, value string }{
+		{"CUSTOM_DOMAIN_TARGET", "not a host"},
+		{"CUSTOM_DOMAIN_IPV4", "2001:db8::1"},   // wrong family
+		{"CUSTOM_DOMAIN_IPV4", "10.0.0.1"},      // private: shoppers cannot reach it
+		{"CUSTOM_DOMAIN_IPV4", "127.0.0.1"},     // loopback
+		{"CUSTOM_DOMAIN_IPV4", "203.0.113.300"}, // not an address
+		{"CUSTOM_DOMAIN_IPV4", "203.0.113.10,"}, // an empty entry
+		{"CUSTOM_DOMAIN_IPV6", "203.0.113.10"},  // wrong family
+		{"CUSTOM_DOMAIN_IPV6", "fd00::1"},       // unique local
+		{"CUSTOM_DOMAIN_IPV6", "fe80::1"},       // link-local
+	}
+	for _, b := range bad {
+		if _, err := config.Load(config.RoleAPI, env(with(b.key, b.value))); err == nil {
+			t.Errorf("%s=%q must be rejected", b.key, b.value)
+		}
+	}
+}
+
 func TestTenancyConfig(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleStorefront, env(with(

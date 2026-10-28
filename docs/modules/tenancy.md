@@ -66,6 +66,24 @@ Other rules:
 TLS for custom domains (on-demand TLS at the edge) is **not** part of this
 phase.
 
+### Pointing a custom domain at the store (ADR-0037)
+
+Each custom domain in the API carries `routing`, the records its owner
+adds at their DNS provider:
+
+| Domain | Records |
+|---|---|
+| Subdomain (`shop.example.com`) | `CNAME` to `CUSTOM_DOMAIN_TARGET` |
+| Apex (`example.com`, `example.com.eg`; public suffix list) | `ALIAS` to `CUSTOM_DOMAIN_TARGET`, then `A`/`AAAA` for `CUSTOM_DOMAIN_IPV4`/`CUSTOM_DOMAIN_IPV6` if set |
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CUSTOM_DOMAIN_TARGET` | `connect.<PLATFORM_BASE_DOMAIN>` | The name every custom domain points at; operators point it at the edge |
+| `CUSTOM_DOMAIN_IPV4` | unset | The edge's fixed public IPv4 addresses, comma-separated |
+| `CUSTOM_DOMAIN_IPV6` | unset | The same for IPv6 |
+
+Verification remains TXT-only.
+
 ## Host resolution and caches
 
 | Layer | What | Default |
