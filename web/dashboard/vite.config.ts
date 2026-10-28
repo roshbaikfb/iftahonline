@@ -19,7 +19,8 @@ const securityHeaders = {
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173, strictPort: true, proxy },
+  // The design screen shows the shop's own font files (shop-fonts.css).
+  server: { port: 5173, strictPort: true, proxy, fs: { allow: ['.', '../../internal/modules/storefront/internal/web/assets/fonts'] } },
   preview: { port: 4173, strictPort: true, proxy, headers: securityHeaders },
   build: { sourcemap: true },
   test: {

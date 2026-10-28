@@ -6,6 +6,7 @@ import { api } from './api/client';
 import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
+import { Design } from './pages/Design';
 import { Gateways } from './pages/Gateways';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
@@ -77,6 +78,7 @@ function Gate() {
           <Route path="/stores/:storeId/products/:productId" element={<ProductEditor key="edit" />} />
           <Route path="/stores/:storeId/size-charts" element={<SizeCharts />} />
           <Route path="/stores/:storeId/categories" element={<Categories />} />
+          <Route path="/stores/:storeId/design" element={<Design />} />
           <Route path="/stores/:storeId/inventory" element={<Inventory />} />
           <Route path="/stores/:storeId/imports" element={<Imports />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />

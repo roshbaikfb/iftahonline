@@ -1,0 +1,87 @@
+/* The shop's fonts, for the design screen's sample and preview (U6).
+   They are the storefront's own files (no copy): the browser downloads
+   a face only when the merchant picks it. */
+@font-face {
+  font-family: 'Cairo';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/cairo-arabic-400.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Cairo';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/cairo-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'Cairo';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/cairo-arabic-700.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Cairo';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/cairo-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/tajawal-arabic-400.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/tajawal-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/tajawal-arabic-700.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/tajawal-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'Noto Kufi Arabic';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/noto-kufi-arabic-arabic-400.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Noto Kufi Arabic';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/noto-kufi-arabic-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'Noto Kufi Arabic';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/noto-kufi-arabic-arabic-700.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Noto Kufi Arabic';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../internal/modules/storefront/internal/web/assets/fonts/noto-kufi-arabic-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}

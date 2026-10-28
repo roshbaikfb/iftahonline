@@ -294,3 +294,28 @@ test('a merchant arranges categories and counts stock', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'الملف النموذجي' })).toHaveAttribute('href', '/products-template.csv');
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// The design screen (U6): an edit is saved as a draft at once, then
+// published; under the production CSP, the shop fonts load from 'self'.
+test('a merchant edits the look as a draft and publishes it', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'التصميم' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('التصميم');
+
+  await page.getByRole('button', { name: 'ألوان جاهزة' }).click();
+  await page.getByRole('group', { name: 'ألوان جاهزة' }).getByRole('button', { name: /فيروزي/ }).click();
+  await page.getByRole('combobox', { name: 'الخط', exact: true }).selectOption('cairo');
+  await expect(page.getByText('حُفظت المسودة')).toBeVisible();
+  await expect(page.getByText('تغييرات لم تُنشر')).toBeVisible();
+
+  await page.locator('.design-head').getByRole('button', { name: 'نشر' }).click();
+  await expect(page.getByText('تغييرات لم تُنشر')).toBeHidden();
+  await page.reload();
+  await expect(page.getByLabel('كود اللون الأساسي')).toHaveValue('#0F766E');
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
