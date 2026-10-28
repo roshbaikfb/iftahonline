@@ -8,7 +8,7 @@ import { ThemePreview, type PreviewHero, type PreviewProduct } from '../componen
 import { uploadLogo } from '../lib/logo';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
-import { storefrontURL } from '../lib/storefront';
+import { openPreview } from '../lib/preview';
 import { colorRows, contrast, fonts, hexColor, looks, minContrast, presets, radii, sameSettings, type ThemeSettings } from '../lib/theme';
 
 type Theme = components['schemas']['Theme'];
@@ -179,23 +179,8 @@ export function Design() {
 
   async function preview() {
     if (!store) return;
-    // Opened at the click, so the browser does not block it as a popup.
-    const tab = globalThis.open('about:blank', '_blank');
-    if (!(await flush())) {
-      tab?.close();
-      return;
-    }
-    const { data, error: err } = await api.POST('/v1/stores/{store_id}/storefront/previews', { params: { path: { store_id: storeId } } });
-    if (err) {
-      tab?.close();
-      setError(problemMessage(err));
-      return;
-    }
-    const url = `${storefrontURL(store.slug)}/?preview=${encodeURIComponent(data.token)}`;
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = url;
-    }
+    const msg = await openPreview(storeId, store.slug, flush);
+    if (msg) setError(msg);
   }
 
   async function pickLogo(e: ChangeEvent<HTMLInputElement>) {

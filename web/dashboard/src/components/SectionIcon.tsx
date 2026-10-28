@@ -49,6 +49,12 @@ const paths: Record<string, React.ReactNode> = {
     </>
   ),
   whatsapp: <path d="M21 12a9 9 0 1 1-4-7.5L21 3l-1 4.5A9 9 0 0 1 21 12z" />,
+  bag: (
+    <>
+      <path d="M5 8h14l-1 12H6z" />
+      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+    </>
+  ),
   down: <path d="M6 9l6 6 6-6" />,
   up: <path d="M6 15l6-6 6 6" />,
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
