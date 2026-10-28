@@ -43,3 +43,4 @@ supersedes it.
 | [0035](0035-size-charts-and-option-colours.md) | Size charts and option colours | Accepted |
 | [0036](0036-storefront-drafts-and-preview.md) | Storefront drafts, preview links, and checkout's starting method | Accepted |
 | [0037](0037-custom-domain-routing-records.md) | Where custom domains point (CNAME, ALIAS, A/AAAA) | Accepted |
+| [0038](0038-entitlements-platform-accounts-mailer.md) | Interim quotas, platform-owned messaging accounts, and a shared mailer | Accepted |
