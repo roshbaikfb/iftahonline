@@ -56,6 +56,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/logging"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/otel"
@@ -181,6 +182,9 @@ type clients struct {
 	// sets it once the payments module is built.
 	watchOrders *lateHandler
 	countSales  *lateHandler
+	// confirmOrders handles orders.order.placed for messaging (the
+	// order confirmation); the worker sets it.
+	confirmOrders *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -228,7 +232,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderStatusChanged, orders.SalesSubscriber, sales.Handle); err != nil {
 		return clients{}, err
 	}
-	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales}, nil
+	// Cash-on-delivery customers confirm by message (ADR-0040).
+	confirm := &lateHandler{}
+	if err = bus.Subscribe(orders.EventOrderPlaced, messaging.ConfirmOrdersSubscriber, confirm.Handle); err != nil {
+		return clients{}, err
+	}
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales,
+		confirmOrders: confirm}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -335,8 +345,9 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 // newWebhooks builds the inbound webhook inbox. Carriers and gateways
 // register their providers on it (P5).
 // newMessaging builds the messaging module with its quotas (api and
-// worker roles). inbox is the worker's, for webhook jobs; nil in the api.
-func newMessaging(c clients, inbox webhooks.Inbox) (*messaging.Module, error) {
+// worker roles). inbox is the worker's, for webhook jobs, and conf its
+// order confirmation's collaborators; both nil in the api.
+func newMessaging(c clients, inbox webhooks.Inbox, conf *messaging.Deps) (*messaging.Module, error) {
 	ent, err := entitlements.New(entitlements.Deps{Pool: c.pool, Config: c.cfg.Entitlements})
 	if err != nil {
 		return nil, err
@@ -345,10 +356,40 @@ func newMessaging(c clients, inbox webhooks.Inbox) (*messaging.Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	return messaging.New(messaging.Deps{
+	d := messaging.Deps{
 		Pool: c.pool, IDs: c.ids, Secrets: c.cfg.Secrets, Config: c.cfg.Messaging, Quota: ent.Entitlements(), Jobs: ins,
 		PublicURL: c.cfg.Mail.DashboardURL, Inbox: inbox, Audit: identity.NewAuditRecorder(c.ids), Log: c.log,
-	})
+	}
+	if conf != nil {
+		d.Orders, d.Stores, d.Contacts, d.Mailer, d.DashboardURL = conf.Orders, conf.Stores, conf.Contacts, conf.Mailer, conf.DashboardURL
+	}
+	return messaging.New(d)
+}
+
+// messagingStores adapts tenancy to what a confirmation needs: the
+// store's name, locale and primary host (for the SMS link).
+func messagingStores(ten *tenancy.Module) messaging.StoreSource {
+	stores := ten.Service()
+	return func(ctx context.Context) (messaging.StoreInfo, error) {
+		st, err := stores.GetStore(ctx)
+		if err != nil {
+			return messaging.StoreInfo{}, err
+		}
+		domains, err := stores.ListDomains(ctx)
+		if err != nil {
+			return messaging.StoreInfo{}, err
+		}
+		info := messaging.StoreInfo{Name: st.Name, Locale: string(st.Locale)}
+		for _, d := range domains {
+			if d.IsPrimary {
+				info.Host = d.Host
+			}
+		}
+		if info.Host == "" {
+			return messaging.StoreInfo{}, fmt.Errorf("messaging: store %s has no primary host", st.Slug)
+		}
+		return info, nil
+	}
 }
 
 func newWebhooks(c clients) (*webhooks.Module, error) {
@@ -494,7 +535,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			return nil, err
 		}
 	}
-	msg, err := newMessaging(c, nil)
+	msg, err := newMessaging(c, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -753,13 +794,17 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.watchOrders.Set(pay.OrderPlacedHandler())
-	msg, err := newMessaging(c, hooks.Inbox())
+	msg, err := newMessaging(c, hooks.Inbox(), &messaging.Deps{
+		Orders: ords, Stores: messagingStores(ten), Contacts: identity.StaffEmails(pool, authz.RoleOwner, authz.RoleManager),
+		Mailer: mailer.FromConfig(cfg.Mail, log), DashboardURL: cfg.Mail.DashboardURL,
+	})
 	if err != nil {
 		return err
 	}
 	if err = msg.RegisterWorkers(workers); err != nil {
 		return err
 	}
+	c.confirmOrders.Set(msg.OrderPlacedHandler())
 	counter, err := orders.NewSalesCounter(orderDeps)
 	if err != nil {
 		return err

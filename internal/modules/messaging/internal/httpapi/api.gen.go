@@ -74,13 +74,13 @@ func (e CustomerMessageReply) Valid() bool {
 
 // Defines values for MessageKind.
 const (
-	OrderConfirmation MessageKind = "order_confirmation"
+	MessageKindOrderConfirmation MessageKind = "order_confirmation"
 )
 
 // Valid indicates whether the value is a known member of the MessageKind enum.
 func (e MessageKind) Valid() bool {
 	switch e {
-	case OrderConfirmation:
+	case MessageKindOrderConfirmation:
 		return true
 	default:
 		return false
@@ -150,6 +150,69 @@ func (e MessageUsageLevel) Valid() bool {
 	case Ok:
 		return true
 	case Reached:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationKind.
+const (
+	ConfirmationUnreached NotificationKind = "confirmation_unreached"
+	OrderAutoCancelled    NotificationKind = "order_auto_cancelled"
+	OrderCancelled        NotificationKind = "order_cancelled"
+	OrderConfirmed        NotificationKind = "order_confirmed"
+	QuotaNearly           NotificationKind = "quota_nearly"
+	QuotaReached          NotificationKind = "quota_reached"
+)
+
+// Valid indicates whether the value is a known member of the NotificationKind enum.
+func (e NotificationKind) Valid() bool {
+	switch e {
+	case ConfirmationUnreached:
+		return true
+	case OrderAutoCancelled:
+		return true
+	case OrderCancelled:
+		return true
+	case OrderConfirmed:
+		return true
+	case QuotaNearly:
+		return true
+	case QuotaReached:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderConfirmationStatus.
+const (
+	Cancelled OrderConfirmationStatus = "cancelled"
+	Confirmed OrderConfirmationStatus = "confirmed"
+	Expired   OrderConfirmationStatus = "expired"
+	Pending   OrderConfirmationStatus = "pending"
+	Skipped   OrderConfirmationStatus = "skipped"
+	Stale     OrderConfirmationStatus = "stale"
+	Unreached OrderConfirmationStatus = "unreached"
+)
+
+// Valid indicates whether the value is a known member of the OrderConfirmationStatus enum.
+func (e OrderConfirmationStatus) Valid() bool {
+	switch e {
+	case Cancelled:
+		return true
+	case Confirmed:
+		return true
+	case Expired:
+		return true
+	case Pending:
+		return true
+	case Skipped:
+		return true
+	case Stale:
+		return true
+	case Unreached:
 		return true
 	default:
 		return false
@@ -268,6 +331,73 @@ type MessageUsage struct {
 // MessageUsageLevel nearly: 80% used; reached: the limit.
 type MessageUsageLevel string
 
+// MessagingSettings defines model for MessagingSettings.
+type MessagingSettings struct {
+	AutoCancelHours int  `json:"auto_cancel_hours"`
+	ConfirmCod      bool `json:"confirm_cod"`
+}
+
+// Notification defines model for Notification.
+type Notification struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id    ULID             `json:"id"`
+	Kind  NotificationKind `json:"kind"`
+	Limit *int64           `json:"limit,omitempty"`
+
+	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	OrderId  *ULID   `json:"order_id,omitempty"`
+	OrderRef *string `json:"order_ref,omitempty"`
+
+	// Period Example: 2026-10
+	Period *string `json:"period,omitempty"`
+	Read   bool    `json:"read"`
+	Used   *int64  `json:"used,omitempty"`
+}
+
+// NotificationKind defines model for Notification.Kind.
+type NotificationKind string
+
+// NotificationPage defines model for NotificationPage.
+type NotificationPage struct {
+	Items      []Notification `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
+	Unread     int64          `json:"unread"`
+}
+
+// OrderConfirmation defines model for OrderConfirmation.
+type OrderConfirmation struct {
+	AnsweredAt *time.Time `json:"answered_at,omitempty"`
+
+	// AnsweredBy Example: customer:whatsapp
+	AnsweredBy *string   `json:"answered_by,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// ExpiresAt When an unanswered order is cancelled.
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// MessageId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	MessageId *ULID `json:"message_id,omitempty"`
+
+	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	OrderId ULID `json:"order_id"`
+
+	// Status pending: waiting for the customer; confirmed or cancelled: the
+	// customer answered; expired: cancelled unanswered; skipped: the
+	// quota was used up; unreached: the message never reached the
+	// customer (the merchant decides); stale: the merchant moved the
+	// order first.
+	Status OrderConfirmationStatus `json:"status"`
+}
+
+// OrderConfirmationStatus pending: waiting for the customer; confirmed or cancelled: the
+// customer answered; expired: cancelled unanswered; skipped: the
+// quota was used up; unreached: the message never reached the
+// customer (the merchant decides); stale: the merchant moved the
+// order first.
+type OrderConfirmationStatus string
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -333,10 +463,28 @@ type ListMessagesParams struct {
 	Limit   *int           `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListNotificationsParams defines parameters for ListNotifications.
+type ListNotificationsParams struct {
+	UnreadOnly *bool   `form:"unread_only,omitempty" json:"unread_only,omitempty"`
+	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// MarkNotificationsReadJSONBody defines parameters for MarkNotificationsRead.
+type MarkNotificationsReadJSONBody struct {
+	Ids []ULID `json:"ids"`
+}
+
 // SaveMessageTextJSONBody defines parameters for SaveMessageText.
 type SaveMessageTextJSONBody struct {
 	SmsBody string `json:"sms_body"`
 }
+
+// MarkNotificationsReadJSONRequestBody defines body for MarkNotificationsRead for application/json ContentType.
+type MarkNotificationsReadJSONRequestBody MarkNotificationsReadJSONBody
+
+// UpdateMessagingSettingsJSONRequestBody defines body for UpdateMessagingSettings for application/json ContentType.
+type UpdateMessagingSettingsJSONRequestBody = MessagingSettings
 
 // SaveMessageTextJSONRequestBody defines body for SaveMessageText for application/json ContentType.
 type SaveMessageTextJSONRequestBody SaveMessageTextJSONBody
@@ -346,6 +494,21 @@ type ServerInterface interface {
 	// ListMessages The store's customer messages, newest first
 	// (GET /v1/stores/{store_id}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListMessagesParams)
+	// GetOrderConfirmation An order's confirmation by message
+	// (GET /v1/stores/{store_id}/messaging/confirmations/{order_id})
+	GetOrderConfirmation(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId ULID)
+	// ListNotifications The store's notices, newest first
+	// (GET /v1/stores/{store_id}/messaging/notifications)
+	ListNotifications(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListNotificationsParams)
+	// MarkNotificationsRead Mark notices read
+	// (POST /v1/stores/{store_id}/messaging/notifications/read)
+	MarkNotificationsRead(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetMessagingSettings The store's order confirmation settings
+	// (GET /v1/stores/{store_id}/messaging/settings)
+	GetMessagingSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// UpdateMessagingSettings Change the order confirmation settings
+	// (PUT /v1/stores/{store_id}/messaging/settings)
+	UpdateMessagingSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// ListMessageTexts The store's SMS texts, one per message kind and locale
 	// (GET /v1/stores/{store_id}/messaging/texts)
 	ListMessageTexts(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -441,6 +604,187 @@ func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMessages(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrderConfirmation operation middleware
+func (siw *ServerInterfaceWrapper) GetOrderConfirmation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "order_id" -------------
+	var orderId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_id", r.PathValue("order_id"), &orderId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrderConfirmation(w, r, storeId, orderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotifications operation middleware
+func (siw *ServerInterfaceWrapper) ListNotifications(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationsParams
+
+	// ------------- Optional query parameter "unread_only" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "unread_only", r.URL.Query(), &params.UnreadOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unread_only"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unread_only", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotifications(w, r, storeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkNotificationsRead operation middleware
+func (siw *ServerInterfaceWrapper) MarkNotificationsRead(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkNotificationsRead(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMessagingSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetMessagingSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessagingSettings(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMessagingSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMessagingSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMessagingSettings(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -715,6 +1059,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/texts", wrapper.ListMessageTexts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/texts/{kind}/{locale}", wrapper.ResetMessageText)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/texts/{kind}/{locale}", wrapper.SaveMessageText)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/settings", wrapper.GetMessagingSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/settings", wrapper.UpdateMessagingSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/confirmations/{order_id}", wrapper.GetOrderConfirmation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/notifications", wrapper.ListNotifications)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/messaging/notifications/read", wrapper.MarkNotificationsRead)
 
 	return m
 }
@@ -750,6 +1099,207 @@ type ListMessagesdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListMessagesdefaultApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrderConfirmationRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	OrderId ULID    `json:"order_id"`
+}
+
+type GetOrderConfirmationResponseObject interface {
+	VisitGetOrderConfirmationResponse(w http.ResponseWriter) error
+}
+
+type GetOrderConfirmation200JSONResponse OrderConfirmation
+
+func (response GetOrderConfirmation200JSONResponse) VisitGetOrderConfirmationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrderConfirmationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrderConfirmationdefaultApplicationProblemPlusJSONResponse) VisitGetOrderConfirmationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Params  ListNotificationsParams
+}
+
+type ListNotificationsResponseObject interface {
+	VisitListNotificationsResponse(w http.ResponseWriter) error
+}
+
+type ListNotifications200JSONResponse NotificationPage
+
+func (response ListNotifications200JSONResponse) VisitListNotificationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListNotificationsdefaultApplicationProblemPlusJSONResponse) VisitListNotificationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkNotificationsReadRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *MarkNotificationsReadJSONRequestBody
+}
+
+type MarkNotificationsReadResponseObject interface {
+	VisitMarkNotificationsReadResponse(w http.ResponseWriter) error
+}
+
+type MarkNotificationsRead200JSONResponse struct {
+	Marked int64 `json:"marked"`
+}
+
+func (response MarkNotificationsRead200JSONResponse) VisitMarkNotificationsReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkNotificationsReaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response MarkNotificationsReaddefaultApplicationProblemPlusJSONResponse) VisitMarkNotificationsReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessagingSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetMessagingSettingsResponseObject interface {
+	VisitGetMessagingSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetMessagingSettings200JSONResponse MessagingSettings
+
+func (response GetMessagingSettings200JSONResponse) VisitGetMessagingSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessagingSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMessagingSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetMessagingSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMessagingSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *UpdateMessagingSettingsJSONRequestBody
+}
+
+type UpdateMessagingSettingsResponseObject interface {
+	VisitUpdateMessagingSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateMessagingSettings200JSONResponse MessagingSettings
+
+func (response UpdateMessagingSettings200JSONResponse) VisitUpdateMessagingSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMessagingSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMessagingSettingsdefaultApplicationProblemPlusJSONResponse) VisitUpdateMessagingSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -929,6 +1479,21 @@ type StrictServerInterface interface {
 	// ListMessages The store's customer messages, newest first
 	// (GET /v1/stores/{store_id}/messages)
 	ListMessages(ctx context.Context, request ListMessagesRequestObject) (ListMessagesResponseObject, error)
+	// GetOrderConfirmation An order's confirmation by message
+	// (GET /v1/stores/{store_id}/messaging/confirmations/{order_id})
+	GetOrderConfirmation(ctx context.Context, request GetOrderConfirmationRequestObject) (GetOrderConfirmationResponseObject, error)
+	// ListNotifications The store's notices, newest first
+	// (GET /v1/stores/{store_id}/messaging/notifications)
+	ListNotifications(ctx context.Context, request ListNotificationsRequestObject) (ListNotificationsResponseObject, error)
+	// MarkNotificationsRead Mark notices read
+	// (POST /v1/stores/{store_id}/messaging/notifications/read)
+	MarkNotificationsRead(ctx context.Context, request MarkNotificationsReadRequestObject) (MarkNotificationsReadResponseObject, error)
+	// GetMessagingSettings The store's order confirmation settings
+	// (GET /v1/stores/{store_id}/messaging/settings)
+	GetMessagingSettings(ctx context.Context, request GetMessagingSettingsRequestObject) (GetMessagingSettingsResponseObject, error)
+	// UpdateMessagingSettings Change the order confirmation settings
+	// (PUT /v1/stores/{store_id}/messaging/settings)
+	UpdateMessagingSettings(ctx context.Context, request UpdateMessagingSettingsRequestObject) (UpdateMessagingSettingsResponseObject, error)
 	// ListMessageTexts The store's SMS texts, one per message kind and locale
 	// (GET /v1/stores/{store_id}/messaging/texts)
 	ListMessageTexts(ctx context.Context, request ListMessageTextsRequestObject) (ListMessageTextsResponseObject, error)
@@ -1002,6 +1567,152 @@ func (sh *strictHandler) ListMessages(w http.ResponseWriter, r *http.Request, st
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMessagesResponseObject); ok {
 		if err := validResponse.VisitListMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrderConfirmation operation middleware
+func (sh *strictHandler) GetOrderConfirmation(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId ULID) {
+	var request GetOrderConfirmationRequestObject
+
+	request.StoreId = storeId
+	request.OrderId = orderId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrderConfirmation(ctx, request.(GetOrderConfirmationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrderConfirmation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrderConfirmationResponseObject); ok {
+		if err := validResponse.VisitGetOrderConfirmationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotifications operation middleware
+func (sh *strictHandler) ListNotifications(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListNotificationsParams) {
+	var request ListNotificationsRequestObject
+
+	request.StoreId = storeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotifications(ctx, request.(ListNotificationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotifications")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationsResponseObject); ok {
+		if err := validResponse.VisitListNotificationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkNotificationsRead operation middleware
+func (sh *strictHandler) MarkNotificationsRead(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request MarkNotificationsReadRequestObject
+
+	request.StoreId = storeId
+
+	var body MarkNotificationsReadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkNotificationsRead(ctx, request.(MarkNotificationsReadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkNotificationsRead")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkNotificationsReadResponseObject); ok {
+		if err := validResponse.VisitMarkNotificationsReadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMessagingSettings operation middleware
+func (sh *strictHandler) GetMessagingSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetMessagingSettingsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessagingSettings(ctx, request.(GetMessagingSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessagingSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessagingSettingsResponseObject); ok {
+		if err := validResponse.VisitGetMessagingSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMessagingSettings operation middleware
+func (sh *strictHandler) UpdateMessagingSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request UpdateMessagingSettingsRequestObject
+
+	request.StoreId = storeId
+
+	var body UpdateMessagingSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMessagingSettings(ctx, request.(UpdateMessagingSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMessagingSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMessagingSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateMessagingSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

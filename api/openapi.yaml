@@ -2985,6 +2985,119 @@ paths:
               schema: { $ref: "#/components/schemas/MessageText" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [messaging]
+      operationId: getMessagingSettings
+      summary: The store's order confirmation settings
+      description: "Permission: messaging.read."
+      responses:
+        "200":
+          description: The settings (the defaults until the store chose).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagingSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [messaging]
+      operationId: updateMessagingSettings
+      summary: Change the order confirmation settings
+      description: |
+        Permission: messaging.manage. `confirm_cod` asks every cash-on-
+        delivery customer to confirm by message; `auto_cancel_hours` (1–72)
+        is how long after placing an order whose customer got the message
+        but did not answer is cancelled. Changes apply to orders placed
+        from now on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessagingSettings" }
+      responses:
+        "200":
+          description: The saved settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagingSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/confirmations/{order_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: order_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    get:
+      tags: [messaging]
+      operationId: getOrderConfirmation
+      summary: An order's confirmation by message
+      description: "Permission: messaging.read. 404 when the order asked for none (card orders, stores that do not confirm)."
+      responses:
+        "200":
+          description: The confirmation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderConfirmation" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/notifications:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [messaging]
+      operationId: listNotifications
+      summary: The store's notices, newest first
+      description: |
+        Permission: messaging.read. Customers' answers, orders cancelled
+        unanswered, messages that never reached the customer, and the
+        quota at 80% and 100% (also emailed to the owner and managers).
+        Kept 90 days. `unread` counts the store's unread notices.
+      parameters:
+        - { name: unread_only, in: query, schema: { type: boolean } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/notifications/read:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [messaging]
+      operationId: markNotificationsRead
+      summary: Mark notices read
+      description: "Permission: messaging.read. Unknown IDs (and other stores') change nothing."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { $ref: "#/components/schemas/ULID" }
+      responses:
+        "200":
+          description: How many were unread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [marked]
+                properties:
+                  marked: { type: integer, format: int64 }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -4892,6 +5005,55 @@ components:
         sms_body: { type: string }
         custom: { type: boolean, description: The store wrote it (else the default). }
         updated_at: { type: string, format: date-time }
+    MessagingSettings:
+      type: object
+      required: [confirm_cod, auto_cancel_hours]
+      properties:
+        confirm_cod: { type: boolean }
+        auto_cancel_hours: { type: integer, minimum: 1, maximum: 72 }
+    OrderConfirmation:
+      type: object
+      required: [order_id, status, expires_at, created_at]
+      properties:
+        order_id: { $ref: "#/components/schemas/ULID" }
+        message_id: { $ref: "#/components/schemas/ULID" }
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, expired, skipped, unreached, stale]
+          description: |
+            pending: waiting for the customer; confirmed or cancelled: the
+            customer answered; expired: cancelled unanswered; skipped: the
+            quota was used up; unreached: the message never reached the
+            customer (the merchant decides); stale: the merchant moved the
+            order first.
+        expires_at: { type: string, format: date-time, description: When an unanswered order is cancelled. }
+        answered_at: { type: string, format: date-time }
+        answered_by: { type: string, example: "customer:whatsapp" }
+        created_at: { type: string, format: date-time }
+    Notification:
+      type: object
+      required: [id, kind, read, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind:
+          type: string
+          enum: [quota_nearly, quota_reached, order_confirmed, order_cancelled, order_auto_cancelled, confirmation_unreached]
+        order_id: { $ref: "#/components/schemas/ULID" }
+        order_ref: { type: string }
+        used: { type: integer, format: int64 }
+        limit: { type: integer, format: int64 }
+        period: { type: string, example: "2026-10" }
+        read: { type: boolean }
+        created_at: { type: string, format: date-time }
+    NotificationPage:
+      type: object
+      required: [items, unread]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        unread: { type: integer, format: int64 }
+        next_cursor: { type: string }
     WebhookReceipt:
       type: object
       required: [status]

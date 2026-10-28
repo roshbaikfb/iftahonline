@@ -12,6 +12,17 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const countUnreadNotifications = `-- name: CountUnreadNotifications :one
+SELECT count(*) FROM merchant_notifications WHERE store_id = $1 AND read_at IS NULL
+`
+
+func (q *Queries) CountUnreadNotifications(ctx context.Context, storeID ulid.ID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnreadNotifications, storeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteTemplate = `-- name: DeleteTemplate :execrows
 DELETE FROM message_templates WHERE store_id = $1 AND kind = $2 AND locale = $3
 `
@@ -28,6 +39,33 @@ func (q *Queries) DeleteTemplate(ctx context.Context, arg DeleteTemplateParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getConfirmation = `-- name: GetConfirmation :one
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND order_id = $2
+`
+
+type GetConfirmationParams struct {
+	StoreID ulid.ID
+	OrderID ulid.ID
+}
+
+func (q *Queries) GetConfirmation(ctx context.Context, arg GetConfirmationParams) (OrderConfirmation, error) {
+	row := q.db.QueryRow(ctx, getConfirmation, arg.StoreID, arg.OrderID)
+	var i OrderConfirmation
+	err := row.Scan(
+		&i.StoreID,
+		&i.OrderID,
+		&i.MessageID,
+		&i.Status,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.AnsweredAt,
+		&i.AnsweredBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getMessage = `-- name: GetMessage :one
@@ -68,6 +106,46 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 	return i, err
 }
 
+const getNotification = `-- name: GetNotification :one
+SELECT store_id, id, kind, dedup_key, data, read_at, created_at FROM merchant_notifications WHERE store_id = $1 AND id = $2
+`
+
+type GetNotificationParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+func (q *Queries) GetNotification(ctx context.Context, arg GetNotificationParams) (MerchantNotification, error) {
+	row := q.db.QueryRow(ctx, getNotification, arg.StoreID, arg.ID)
+	var i MerchantNotification
+	err := row.Scan(
+		&i.StoreID,
+		&i.ID,
+		&i.Kind,
+		&i.DedupKey,
+		&i.Data,
+		&i.ReadAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getSettings = `-- name: GetSettings :one
+SELECT store_id, confirm_cod, auto_cancel_hours, updated_at FROM messaging_settings WHERE store_id = $1
+`
+
+func (q *Queries) GetSettings(ctx context.Context, storeID ulid.ID) (MessagingSetting, error) {
+	row := q.db.QueryRow(ctx, getSettings, storeID)
+	var i MessagingSetting
+	err := row.Scan(
+		&i.StoreID,
+		&i.ConfirmCod,
+		&i.AutoCancelHours,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getTemplate = `-- name: GetTemplate :one
 SELECT sms_body FROM message_templates WHERE store_id = $1 AND kind = $2 AND locale = $3
 `
@@ -83,6 +161,35 @@ func (q *Queries) GetTemplate(ctx context.Context, arg GetTemplateParams) (strin
 	var sms_body string
 	err := row.Scan(&sms_body)
 	return sms_body, err
+}
+
+const insertConfirmation = `-- name: InsertConfirmation :execrows
+INSERT INTO order_confirmations (store_id, order_id, status, token_hash, expires_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (store_id, order_id) DO NOTHING
+`
+
+type InsertConfirmationParams struct {
+	StoreID   ulid.ID
+	OrderID   ulid.ID
+	Status    string
+	TokenHash []byte
+	ExpiresAt time.Time
+}
+
+// A redelivered order.placed finds the row and does nothing.
+func (q *Queries) InsertConfirmation(ctx context.Context, arg InsertConfirmationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertConfirmation,
+		arg.StoreID,
+		arg.OrderID,
+		arg.Status,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertMessage = `-- name: InsertMessage :exec
@@ -120,6 +227,35 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.QuotaPeriod,
 	)
 	return err
+}
+
+const insertNotification = `-- name: InsertNotification :execrows
+INSERT INTO merchant_notifications (store_id, id, kind, dedup_key, data)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT ON CONSTRAINT merchant_notifications_once DO NOTHING
+`
+
+type InsertNotificationParams struct {
+	StoreID  ulid.ID
+	ID       ulid.ID
+	Kind     string
+	DedupKey string
+	Data     []byte
+}
+
+// Once per (kind, dedup_key).
+func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertNotification,
+		arg.StoreID,
+		arg.ID,
+		arg.Kind,
+		arg.DedupKey,
+		arg.Data,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listMessages = `-- name: ListMessages :many
@@ -173,6 +309,54 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.Reply,
 			&i.RepliedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNotifications = `-- name: ListNotifications :many
+SELECT store_id, id, kind, dedup_key, data, read_at, created_at FROM merchant_notifications
+WHERE store_id = $1 AND id < $2 AND (NOT $3::boolean OR read_at IS NULL)
+ORDER BY id DESC
+LIMIT $4
+`
+
+type ListNotificationsParams struct {
+	StoreID    ulid.ID
+	BeforeID   ulid.ID
+	UnreadOnly bool
+	Lim        int32
+}
+
+// Newest first (IDs are ULIDs), after a cursor; unread_only filters.
+func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]MerchantNotification, error) {
+	rows, err := q.db.Query(ctx, listNotifications,
+		arg.StoreID,
+		arg.BeforeID,
+		arg.UnreadOnly,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MerchantNotification{}
+	for rows.Next() {
+		var i MerchantNotification
+		if err := rows.Scan(
+			&i.StoreID,
+			&i.ID,
+			&i.Kind,
+			&i.DedupKey,
+			&i.Data,
+			&i.ReadAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -266,6 +450,33 @@ func (q *Queries) ListTemplates(ctx context.Context, storeID ulid.ID) ([]Message
 	return items, nil
 }
 
+const lockConfirmation = `-- name: LockConfirmation :one
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND order_id = $2 FOR UPDATE
+`
+
+type LockConfirmationParams struct {
+	StoreID ulid.ID
+	OrderID ulid.ID
+}
+
+func (q *Queries) LockConfirmation(ctx context.Context, arg LockConfirmationParams) (OrderConfirmation, error) {
+	row := q.db.QueryRow(ctx, lockConfirmation, arg.StoreID, arg.OrderID)
+	var i OrderConfirmation
+	err := row.Scan(
+		&i.StoreID,
+		&i.OrderID,
+		&i.MessageID,
+		&i.Status,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.AnsweredAt,
+		&i.AnsweredBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockMessage = `-- name: LockMessage :one
 SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
 WHERE store_id = $1 AND created_at = $2 AND id = $3
@@ -304,6 +515,42 @@ func (q *Queries) LockMessage(ctx context.Context, arg LockMessageParams) (Messa
 	return i, err
 }
 
+const markNotificationsRead = `-- name: MarkNotificationsRead :execrows
+UPDATE merchant_notifications SET read_at = now()
+WHERE store_id = $1 AND id = ANY($2::uuid[]) AND read_at IS NULL
+`
+
+type MarkNotificationsReadParams struct {
+	StoreID ulid.ID
+	Ids     []ulid.ID
+}
+
+func (q *Queries) MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markNotificationsRead, arg.StoreID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const purgeNotifications = `-- name: PurgeNotifications :exec
+DELETE FROM merchant_notifications m
+WHERE m.store_id = $1 AND m.id IN (
+  SELECT n.id FROM merchant_notifications n WHERE n.store_id = $1 AND n.created_at < $2 ORDER BY n.id LIMIT 100
+)
+`
+
+type PurgeNotificationsParams struct {
+	StoreID ulid.ID
+	Before  time.Time
+}
+
+// A few of the store's notices older than 90 days, as new ones arrive.
+func (q *Queries) PurgeNotifications(ctx context.Context, arg PurgeNotificationsParams) error {
+	_, err := q.db.Exec(ctx, purgeNotifications, arg.StoreID, arg.Before)
+	return err
+}
+
 const recordReply = `-- name: RecordReply :one
 UPDATE messages
 SET reply = $1, replied_at = $2, updated_at = now()
@@ -333,6 +580,31 @@ func (q *Queries) RecordReply(ctx context.Context, arg RecordReplyParams) (ulid.
 	return id, err
 }
 
+const saveSettings = `-- name: SaveSettings :one
+INSERT INTO messaging_settings (store_id, confirm_cod, auto_cancel_hours)
+VALUES ($1, $2, $3)
+ON CONFLICT (store_id) DO UPDATE SET confirm_cod = excluded.confirm_cod, auto_cancel_hours = excluded.auto_cancel_hours, updated_at = now()
+RETURNING store_id, confirm_cod, auto_cancel_hours, updated_at
+`
+
+type SaveSettingsParams struct {
+	StoreID         ulid.ID
+	ConfirmCod      bool
+	AutoCancelHours int32
+}
+
+func (q *Queries) SaveSettings(ctx context.Context, arg SaveSettingsParams) (MessagingSetting, error) {
+	row := q.db.QueryRow(ctx, saveSettings, arg.StoreID, arg.ConfirmCod, arg.AutoCancelHours)
+	var i MessagingSetting
+	err := row.Scan(
+		&i.StoreID,
+		&i.ConfirmCod,
+		&i.AutoCancelHours,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const saveTemplate = `-- name: SaveTemplate :exec
 INSERT INTO message_templates (store_id, kind, locale, sms_body)
 VALUES ($1, $2, $3, $4)
@@ -352,6 +624,34 @@ func (q *Queries) SaveTemplate(ctx context.Context, arg SaveTemplateParams) erro
 		arg.Kind,
 		arg.Locale,
 		arg.SmsBody,
+	)
+	return err
+}
+
+const updateConfirmation = `-- name: UpdateConfirmation :exec
+UPDATE order_confirmations
+SET message_id = $1, status = $2, answered_at = $3, answered_by = $4,
+    updated_at = now()
+WHERE store_id = $5 AND order_id = $6
+`
+
+type UpdateConfirmationParams struct {
+	MessageID  *ulid.ID
+	Status     string
+	AnsweredAt *time.Time
+	AnsweredBy string
+	StoreID    ulid.ID
+	OrderID    ulid.ID
+}
+
+func (q *Queries) UpdateConfirmation(ctx context.Context, arg UpdateConfirmationParams) error {
+	_, err := q.db.Exec(ctx, updateConfirmation,
+		arg.MessageID,
+		arg.Status,
+		arg.AnsweredAt,
+		arg.AnsweredBy,
+		arg.StoreID,
+		arg.OrderID,
 	)
 	return err
 }

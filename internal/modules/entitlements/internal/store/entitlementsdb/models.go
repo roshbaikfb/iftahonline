@@ -202,6 +202,16 @@ type InventoryLevel struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type MerchantNotification struct {
+	StoreID   ulid.ID
+	ID        ulid.ID
+	Kind      string
+	DedupKey  string
+	Data      []byte
+	ReadAt    pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
 type Message struct {
 	StoreID           ulid.ID
 	CreatedAt         pgtype.Timestamptz
@@ -231,6 +241,13 @@ type MessageTemplate struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type MessagingSetting struct {
+	StoreID         ulid.ID
+	ConfirmCod      bool
+	AutoCancelHours int32
+	UpdatedAt       pgtype.Timestamptz
+}
+
 type Order struct {
 	ID              ulid.ID
 	StoreID         ulid.ID
@@ -256,6 +273,19 @@ type Order struct {
 	CodFeeMinor     int64
 	PaymentMethod   string
 	PaymentStatus   string
+}
+
+type OrderConfirmation struct {
+	StoreID    ulid.ID
+	OrderID    ulid.ID
+	MessageID  pgtype.UUID
+	Status     string
+	TokenHash  []byte
+	ExpiresAt  pgtype.Timestamptz
+	AnsweredAt pgtype.Timestamptz
+	AnsweredBy string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type OrderEvent struct {

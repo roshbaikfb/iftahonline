@@ -78,6 +78,7 @@ const (
 )
 
 type fixture struct {
+	noticeB        ulid.ID
 	h              http.Handler
 	svc            *app.Service
 	storeA, storeB tenant.StoreID
@@ -127,6 +128,11 @@ func newFixture(t *testing.T) fixture {
 	if _, err = f.svc.SaveText(f.ctxB, domain.OrderConfirmation, "ar", textOfB); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = f.svc.SaveSettings(f.ctxB, domain.Settings{ConfirmCOD: false, AutoCancelHours: 5}); err != nil {
+		t.Fatal(err)
+	}
+	f.seedConfirmation(f.ctxB, t, f.orderB, f.msgB)
+	f.noticeB = f.seedNotice(f.ctxB, t, f.orderB)
 
 	pol, err := authz.NewPolicy(map[authz.Role][]authz.Permission{
 		authz.RoleOwner:    authz.Permissions(),
@@ -149,6 +155,32 @@ func newFixture(t *testing.T) fixture {
 	httpapi.Mount(mux, f.svc, pol, testkit.FakeStoreScope(resp, members), resp)
 	f.h = mux
 	return f
+}
+
+// seedConfirmation opens an order's confirmation as ConfirmOrder would.
+func (f fixture) seedConfirmation(ctx context.Context, t *testing.T, order, msg ulid.ID) {
+	t.Helper()
+	if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO order_confirmations (store_id, order_id, message_id, status, expires_at)
+			VALUES (app.current_store_id(), $1, $2, 'pending', now() + interval '24 hours')`, order, msg)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// seedNotice adds an order's notice.
+func (f fixture) seedNotice(ctx context.Context, t *testing.T, order ulid.ID) ulid.ID {
+	t.Helper()
+	id := ulid.NewGenerator().New()
+	if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO merchant_notifications (store_id, id, kind, dedup_key, data)
+			VALUES (app.current_store_id(), $1, 'order_confirmed', $2, jsonb_build_object('order_id', $2::text, 'order_ref', 'REF'))`, id, order.String())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func (f fixture) enqueue(ctx context.Context, t *testing.T, order *ulid.ID) ulid.ID {
@@ -387,7 +419,26 @@ func TestCrossTenant(t *testing.T) {
 		}
 	}
 	text := "/messaging/texts/order_confirmation/ar"
+	unchangedB := func(t testing.TB) {
+		t.Helper()
+		unchanged(t)
+		if st, err := f.svc.Settings(f.ctxB); err != nil || st.ConfirmCOD || st.AutoCancelHours != 5 {
+			t.Fatalf("store B's settings changed: %+v %v", st, err)
+		}
+		if p, err := f.svc.Notifications(f.ctxB, nil, true, 10); err != nil || p.Unread != 1 {
+			t.Fatalf("store B's notices changed: %+v %v", p, err)
+		}
+	}
+	leaks = append(leaks, f.noticeB.String())
+	read := `{"ids":["` + f.noticeB.String() + `"]}`
 	cases := []testkit.CrossTenantCase{
+		{OperationID: "getMessagingSettings", Request: req(t, http.MethodGet, path(b, "/messaging/settings"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "updateMessagingSettings", Request: req(t, http.MethodPut, path(b, "/messaging/settings"), tokOwnerA, `{"confirm_cod":true,"auto_cancel_hours":1}`),
+			Leaks: leaks, Unchanged: unchangedB},
+		{OperationID: "getOrderConfirmation", Request: req(t, http.MethodGet, path(b, "/messaging/confirmations/"+f.orderB.String()), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "getOrderConfirmation", Request: req(t, http.MethodGet, path(a, "/messaging/confirmations/"+f.orderB.String()), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "listNotifications", Request: req(t, http.MethodGet, path(b, "/messaging/notifications"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "markNotificationsRead", Request: req(t, http.MethodPost, path(b, "/messaging/notifications/read"), tokOwnerA, read), Leaks: leaks, Unchanged: unchangedB},
 		{OperationID: "listMessages", Request: req(t, http.MethodGet, path(b, "/messages"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "getMessageUsage", Request: req(t, http.MethodGet, path(b, "/messaging/usage"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "listMessageTexts", Request: req(t, http.MethodGet, path(b, "/messaging/texts"), tokOwnerA, ""), Leaks: leaks},
@@ -409,5 +460,81 @@ func TestCrossTenant(t *testing.T) {
 	}
 	if code, page = f.do(t, req(t, http.MethodGet, path(b, "/messages"), tokOwnerB, "")); code != http.StatusOK || len(page["items"].([]any)) != 1 {
 		t.Fatalf("B's messages = %d %v", code, page)
+	}
+	// A marking B's notice in A's own store: nothing of A's, B's unread.
+	if code, out := f.do(t, req(t, http.MethodPost, path(a, "/messaging/notifications/read"), tokOwnerA, read)); code != http.StatusOK || out["marked"] != float64(0) {
+		t.Fatalf("A marks B's notice = %d %v", code, out)
+	}
+	unchangedB(t)
+}
+
+func TestSettingsConfirmationsAndNotices(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	code, s := f.do(t, req(t, http.MethodGet, path(a, "/messaging/settings"), tokSupportA, ""))
+	if code != http.StatusOK || s["confirm_cod"] != true || s["auto_cancel_hours"] != float64(24) {
+		t.Fatalf("defaults = %d %v", code, s)
+	}
+	code, s = f.do(t, req(t, http.MethodPut, path(a, "/messaging/settings"), tokManagerA, `{"confirm_cod":false,"auto_cancel_hours":72}`))
+	if code != http.StatusOK || s["confirm_cod"] != false || s["auto_cancel_hours"] != float64(72) {
+		t.Fatalf("update = %d %v", code, s)
+	}
+	if _, s = f.do(t, req(t, http.MethodGet, path(a, "/messaging/settings"), tokSupportA, "")); s["auto_cancel_hours"] != float64(72) {
+		t.Fatalf("after update = %v", s)
+	}
+
+	order := ulid.NewGenerator().New()
+	msg := f.enqueue(f.ctxA, t, &order)
+	f.seedConfirmation(f.ctxA, t, order, msg)
+	code, c := f.do(t, req(t, http.MethodGet, path(a, "/messaging/confirmations/"+order.String()), tokSupportA, ""))
+	if code != http.StatusOK || c["status"] != "pending" || c["message_id"] != msg.String() || c["order_id"] != order.String() || c["expires_at"] == nil {
+		t.Fatalf("confirmation = %d %v", code, c)
+	}
+
+	first := f.seedNotice(f.ctxA, t, ulid.NewGenerator().New())
+	second := f.seedNotice(f.ctxA, t, order)
+	code, page := f.do(t, req(t, http.MethodGet, path(a, "/messaging/notifications?limit=1"), tokSupportA, ""))
+	items := page["items"].([]any)
+	if code != http.StatusOK || page["unread"] != float64(2) || len(items) != 1 || items[0].(map[string]any)["id"] != second.String() ||
+		items[0].(map[string]any)["order_ref"] != "REF" || items[0].(map[string]any)["read"] != false || page["next_cursor"] == nil {
+		t.Fatalf("notices = %d %v", code, page)
+	}
+	_, page = f.do(t, req(t, http.MethodGet, path(a, "/messaging/notifications?cursor="+page["next_cursor"].(string)), tokSupportA, ""))
+	if items = page["items"].([]any); len(items) != 1 || items[0].(map[string]any)["id"] != first.String() {
+		t.Fatalf("page 2 = %v", page)
+	}
+	code, out := f.do(t, req(t, http.MethodPost, path(a, "/messaging/notifications/read"), tokSupportA, `{"ids":["`+second.String()+`","nope"]}`))
+	if code != http.StatusOK || out["marked"] != float64(1) {
+		t.Fatalf("mark read = %d %v", code, out)
+	}
+	_, page = f.do(t, req(t, http.MethodGet, path(a, "/messaging/notifications?unread_only=true"), tokSupportA, ""))
+	if items = page["items"].([]any); page["unread"] != float64(1) || len(items) != 1 || items[0].(map[string]any)["id"] != first.String() {
+		t.Fatalf("unread only = %v", page)
+	}
+
+	tests := []struct {
+		name, method, path, body, token string
+		want                            int
+	}{
+		{"hours 0", http.MethodPut, "/messaging/settings", `{"confirm_cod":true,"auto_cancel_hours":0}`, tokOwnerA, http.StatusUnprocessableEntity},
+		{"hours 73", http.MethodPut, "/messaging/settings", `{"confirm_cod":true,"auto_cancel_hours":73}`, tokOwnerA, http.StatusUnprocessableEntity},
+		{"no settings body", http.MethodPut, "/messaging/settings", ``, tokOwnerA, http.StatusBadRequest},
+		{"support writes settings", http.MethodPut, "/messaging/settings", `{"confirm_cod":true,"auto_cancel_hours":5}`, tokSupportA, http.StatusForbidden},
+		{"shipping reads settings", http.MethodGet, "/messaging/settings", ``, tokShippingA, http.StatusForbidden},
+		{"shipping reads notices", http.MethodGet, "/messaging/notifications", ``, tokShippingA, http.StatusForbidden},
+		{"shipping marks notices", http.MethodPost, "/messaging/notifications/read", `{"ids":["` + first.String() + `"]}`, tokShippingA, http.StatusForbidden},
+		{"no confirmation", http.MethodGet, "/messaging/confirmations/" + ulid.NewGenerator().New().String(), ``, tokOwnerA, http.StatusNotFound},
+		{"malformed order", http.MethodGet, "/messaging/confirmations/nope", ``, tokOwnerA, http.StatusNotFound},
+		{"bad notice cursor", http.MethodGet, "/messaging/notifications?cursor=nope", ``, tokOwnerA, http.StatusUnprocessableEntity},
+		{"notice limit", http.MethodGet, "/messaging/notifications?limit=500", ``, tokOwnerA, http.StatusUnprocessableEntity},
+		{"no ids", http.MethodPost, "/messaging/notifications/read", `{"ids":[]}`, tokOwnerA, http.StatusUnprocessableEntity},
+		{"no read body", http.MethodPost, "/messaging/notifications/read", ``, tokOwnerA, http.StatusBadRequest},
+		{"no token", http.MethodGet, "/messaging/notifications", ``, "", http.StatusUnauthorized},
+	}
+	for _, tt := range tests {
+		if code, body := f.do(t, req(t, tt.method, path(a, tt.path), tt.token, tt.body)); code != tt.want {
+			t.Errorf("%s: %d %v, want %d", tt.name, code, body, tt.want)
+		}
 	}
 }

@@ -37,7 +37,20 @@ type (
 	// ReplyHandler acts on a customer's first answer, in the transaction
 	// that records it.
 	ReplyHandler = app.ReplyHandler
+	// StoreInfo is what a confirmation needs about the store: its name,
+	// locale and primary host.
+	StoreInfo = app.StoreInfo
+	// StoreSource provides it; cmd/platform adapts tenancy.
+	StoreSource = app.StoreSource
+	// Contacts returns the emails of the store's owner and managers;
+	// cmd/platform adapts identity.
+	Contacts = app.Contacts
 )
+
+// ConfirmOrdersSubscriber is the event bus subscriber name of
+// Module.OrderPlacedHandler: subscribe it to orders.EventOrderPlaced on
+// every role (publishers need the list); only the worker's handles.
+const ConfirmOrdersSubscriber = "messaging.confirm_orders"
 
 // Kinds.
 const (

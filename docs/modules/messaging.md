@@ -10,7 +10,9 @@ as the fallback. Every message:
 Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 (quotas, the platform account),
 [ADR-0039](../adr/0039-messaging-channels-and-log.md) (channels, the log,
-whose word counts).
+whose word counts),
+[ADR-0040](../adr/0040-order-confirmation-by-message.md) (order
+confirmation).
 
 ## Public API (`internal/modules/messaging/api.go`)
 
@@ -19,7 +21,9 @@ whose word counts).
 | `New(Deps)`, `Module.Mount`, `Module.RegisterWorkers` | Wiring; the merchant HTTP API (behind identity's membership middleware); the send and webhook jobs (the worker role) |
 | `Module.Sender()` → `Sender` | `EnqueueTx(ctx, tx, Outgoing)` queues a message in the caller's transaction; `Get` reads the log |
 | `Module.PlatformProviders()` | The channels' webhook providers, for `webhooks.Module.RegisterPlatform` |
-| `Module.SetReplyHandler(ReplyHandler)` | What acts on a customer's first answer, in the transaction that records it (6c: the order confirmation) |
+| `Module.OrderPlacedHandler()`, `ConfirmOrdersSubscriber` | The order confirmation; subscribe it to `orders.EventOrderPlaced` (worker role) |
+| `Deps.Orders`, `Deps.Stores`, `Deps.Contacts`, `Deps.Mailer` | The confirmation's collaborators (worker role): `orders.Fulfilment`, the store's name, locale and host, the staff emails (`identity.StaffEmails`) |
+| `Module.Fakes()` | The fake channels, for tests and demos |
 | `Outgoing` | `Kind`, `Locale` (`ar`/`en`), optional `OrderID`, `To` (E.164), `Vars` (customer and store names, order reference, total, confirm URL) |
 | `Queued` | The message's ID, its status (`queued` or `skipped_quota`), and the store's quota `Usage` after it |
 | `Message`, `Status`, `Reply`, `Answer` | The log entry and the answers |
@@ -75,6 +79,11 @@ Body, English:
 | `listMessageTexts` `GET …/messaging/texts` | messaging.read | The SMS text for every kind and locale: the store's own (`custom`), or the default |
 | `saveMessageText` `PUT …/messaging/texts/{kind}/{locale}` | messaging.manage | 1 to 400 characters, with only `{{name}}`, `{{store}}`, `{{ref}}`, `{{total}}` and `{{url}}`; an order confirmation needs `{{url}}` (422 otherwise). Audited |
 | `resetMessageText` `DELETE …/messaging/texts/{kind}/{locale}` | messaging.manage | Back to the default; returns it. Audited |
+| `getMessagingSettings` `GET …/messaging/settings` | messaging.read | `confirm_cod` (default true), `auto_cancel_hours` (default 24) |
+| `updateMessagingSettings` `PUT …/messaging/settings` | messaging.manage | Hours 1 to 72; applies to orders placed afterwards. Audited |
+| `getOrderConfirmation` `GET …/messaging/confirmations/{order}` | messaging.read | The order's confirmation: `pending`, `confirmed`, `cancelled`, `expired`, `skipped`, `unreached` or `stale`; 404 when it asked for none |
+| `listNotifications` `GET …/messaging/notifications` | messaging.read | Notices, newest first, with the unread count; `unread_only` filters |
+| `markNotificationsRead` `POST …/messaging/notifications/read` | messaging.read | Up to 100 IDs; returns how many were unread |
 
 Support reads the log (they follow up confirmations); the owner and the
 manager also write the texts. WhatsApp always sends the platform's
@@ -99,6 +108,24 @@ approved templates, so only the SMS text is the store's.
    status, code 131026). The message then falls back to SMS the same
    way. Statuses of the earlier attempt are stale from then on.
 
+## Order confirmation (ADR-0040)
+
+1. **On `orders.order.placed`:** a cash-on-delivery order still pending,
+   in a store that confirms, gets one transaction. It opens its
+   confirmation, queues the message with the SMS link
+   (`/<locale>/o/<token>`; only the token's hash is stored), and
+   schedules the deadline at `placed + auto_cancel_hours`. Past the
+   quota: `skipped`, no deadline, and a `quota_reached` notice.
+2. **The customer's tap** moves the order through
+   `orders.Fulfilment.TransitionSystemTx` (actor `customer:whatsapp`),
+   once. If the merchant moved the order first, the confirmation is
+   `stale`.
+3. **The deadline** cancels the order (actor `system:auto_cancel`) if
+   its message reached the channel. If not, the confirmation is
+   `unreached`: the merchant decides, and is told.
+4. **Notices** are made once each and kept 90 days. The quota warnings
+   are also emailed to the owner and managers.
+
 ## Webhooks
 
 Each event is placed in its store by our reference
@@ -121,6 +148,9 @@ Each event is placed in its store by our reference
 |---|---|
 | `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads the partitions' keys backwards with no sort (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
 | `message_templates` | Tenant table under RLS. The store's SMS text per `(kind, locale)`; no row means the default |
+| `messaging_settings` | Tenant table under RLS. `confirm_cod`, `auto_cancel_hours`; no row means the defaults |
+| `order_confirmations` | Tenant table under RLS. One per order (PK `(store_id, order_id)`), with its message, status, deadline, answer, and the SMS token's SHA-256 (unique per store) |
+| `merchant_notifications` | Tenant table under RLS. Unique `(store_id, kind, dedup_key)`; purged after 90 days as new ones arrive |
 
 ## Rules worth knowing
 
@@ -149,6 +179,14 @@ Each event is placed in its store by our reference
     - the plans of the message lookup and the log page.
   - `internal/httpapi` covers the happy path, validation, authorization
     and a cross-tenant test for every operation.
+  - `acceptance_test.go` (P6 acceptance) runs catalog, orders, the
+    webhooks inbox and messaging with River. It covers:
+    - the confirmation round trip with the fake channel (confirm,
+      cancel, replays, the merchant first);
+    - the deadline, whether the customer was reached or not;
+    - the quota exceeded (not sent, warned once in the dashboard and by
+      email, order unaffected);
+    - card orders and stores that opted out.
 - **Fuzzing:**
   - `domain`: `FuzzParseRef`, `FuzzParsePayload`.
   - `whatsapp`, `twilio`: `FuzzVerifyWebhook`.

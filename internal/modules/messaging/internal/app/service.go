@@ -71,6 +71,7 @@ type Service struct {
 	verify   string
 	replies  ReplyHandler
 	audit    audit.Recorder
+	conf     Confirmations
 	log      *slog.Logger
 	now      func() time.Time
 }
@@ -92,7 +93,10 @@ type Deps struct {
 	// Audit records merchant actions (identity's audit log); nil
 	// discards.
 	Audit audit.Recorder
-	Log   *slog.Logger
+	// Confirmations are the order confirmation's collaborators (the
+	// worker role).
+	Confirmations Confirmations
+	Log           *slog.Logger
 	// Now is the clock (tests); nil is time.Now.
 	Now func() time.Time
 }
@@ -106,8 +110,10 @@ func NewService(d Deps) *Service {
 	if d.Audit == nil {
 		d.Audit = audit.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, keyring: d.Keyring, quota: d.Quota, jobs: d.Jobs, channels: d.Channels, buttons: d.Buttons,
-		inbox: d.Inbox, verify: d.VerifyToken, audit: d.Audit, log: d.Log, now: now}
+	s := &Service{db: d.DB, ids: d.IDs, keyring: d.Keyring, quota: d.Quota, jobs: d.Jobs, channels: d.Channels, buttons: d.Buttons,
+		inbox: d.Inbox, verify: d.VerifyToken, audit: d.Audit, conf: d.Confirmations, log: d.Log, now: now}
+	s.replies = s // the order confirmation takes customers' answers
+	return s
 }
 
 // Outgoing is a message to queue.
