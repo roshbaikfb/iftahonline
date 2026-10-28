@@ -78,6 +78,7 @@ const (
 )
 
 type fixture struct {
+	ids            *ulid.Generator // one generator: IDs from it are ordered
 	noticeB        ulid.ID
 	h              http.Handler
 	svc            *app.Service
@@ -105,7 +106,7 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{pool: pool}
+	f := fixture{pool: pool, ids: ids}
 	f.svc = app.NewService(app.Deps{DB: pool, IDs: ids, Keyring: k, Quota: ent.Entitlements(), Jobs: testkit.NewJobs(),
 		Channels: app.Channels{WhatsApp: fake.New("fake_whatsapp", []byte("s"))}, Buttons: domain.ButtonKey("0123456789abcdef0123456789abcdef"),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
@@ -172,7 +173,7 @@ func (f fixture) seedConfirmation(ctx context.Context, t *testing.T, order, msg 
 // seedNotice adds an order's notice.
 func (f fixture) seedNotice(ctx context.Context, t *testing.T, order ulid.ID) ulid.ID {
 	t.Helper()
-	id := ulid.NewGenerator().New()
+	id := f.ids.New()
 	if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO merchant_notifications (store_id, id, kind, dedup_key, data)
 			VALUES (app.current_store_id(), $1, 'order_confirmed', $2, jsonb_build_object('order_id', $2::text, 'order_ref', 'REF'))`, id, order.String())
@@ -492,7 +493,7 @@ func TestSettingsConfirmationsAndNotices(t *testing.T) {
 		t.Fatalf("confirmation = %d %v", code, c)
 	}
 
-	first := f.seedNotice(f.ctxA, t, ulid.NewGenerator().New())
+	first := f.seedNotice(f.ctxA, t, f.ids.New())
 	second := f.seedNotice(f.ctxA, t, order)
 	code, page := f.do(t, req(t, http.MethodGet, path(a, "/messaging/notifications?limit=1"), tokSupportA, ""))
 	items := page["items"].([]any)
