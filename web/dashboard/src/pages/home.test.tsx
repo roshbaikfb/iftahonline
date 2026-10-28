@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ago, change, count } from '../lib/home';
 import { SessionContext, type Session } from '../session';
@@ -92,7 +92,14 @@ function renderHome() {
 }
 
 describe('Overview', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('shows the period, what is left to set up, what needs attention and the latest orders', async () => {
+    // Midday: "3 hours ago" stays today whenever the test runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T12:00:00'));
     const calls = routes();
     renderHome();
     const user = userEvent.setup();
