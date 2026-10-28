@@ -76,7 +76,7 @@ export function Layout({ storeId, children }: { storeId: string; children: React
                     key={it.label}
                     to={it.to}
                     className="item"
-                    aria-current={pathname.startsWith(it.to) ? 'page' : undefined}
+                    aria-current={pathname === it.to || pathname.startsWith(`${it.to}/`) ? 'page' : undefined}
                     onClick={() => {
                       setOpen(false);
                     }}
