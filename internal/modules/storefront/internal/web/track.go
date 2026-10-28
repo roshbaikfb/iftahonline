@@ -89,6 +89,13 @@ func (s *Shop) trackRoute(w http.ResponseWriter, r *http.Request, store tenant.S
 // to wait. A limiter outage refuses too (with no wait to give): the
 // limits are what stop someone guessing codes for a known phone.
 func (s *Shop) allowTrack(r *http.Request, store tenant.StoreID) (bool, time.Duration) {
+	return s.allowGuarded(r, store, "track", trackPerIP, trackPerStore)
+}
+
+// allowGuarded applies a per-IP and a per-store limit to a page that
+// guards a secret (an order code, a link's token): when limited it says
+// how long to wait, and a limiter outage refuses (with no wait to give).
+func (s *Shop) allowGuarded(r *http.Request, store tenant.StoreID, name string, perIP, perStore ratelimit.Limit) (bool, time.Duration) {
 	if s.limiter == nil {
 		return true, 0
 	}
@@ -96,10 +103,10 @@ func (s *Shop) allowTrack(r *http.Request, store tenant.StoreID) (bool, time.Dur
 	for _, c := range []struct {
 		key   string
 		limit ratelimit.Limit
-	}{{"track:ip:" + s.clientIP(r), trackPerIP}, {"track:store:" + store.String(), trackPerStore}} {
+	}{{name + ":ip:" + s.clientIP(r), perIP}, {name + ":store:" + store.String(), perStore}} {
 		res, err := s.limiter.Allow(ctx, c.key, c.limit)
 		if err != nil {
-			s.log.WarnContext(ctx, "storefront: track limiter unavailable", "err", err)
+			s.log.WarnContext(ctx, "storefront: "+name+" limiter unavailable", "err", err)
 			return false, 0
 		}
 		if !res.Allowed {
