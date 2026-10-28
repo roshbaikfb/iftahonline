@@ -176,8 +176,14 @@ func (f fixture) used(ctx context.Context, t *testing.T) int64 {
 // outcomes in order.
 func (f fixture) deliver(t *testing.T, ch *fake.Channel, events ...channel.Event) []string {
 	t.Helper()
+	return f.deliverVia(t, f.svc, ch, events...)
+}
+
+// deliverVia is deliver through svc.
+func (f fixture) deliverVia(t *testing.T, svc *app.Service, ch *fake.Channel, events ...channel.Event) []string {
+	t.Helper()
 	var provider webhooks.PlatformProvider
-	for _, p := range f.svc.PlatformProviders() {
+	for _, p := range svc.PlatformProviders() {
 		if p.Name() == ch.Name() {
 			provider = p
 		}
@@ -190,7 +196,7 @@ func (f fixture) deliver(t *testing.T, ch *fake.Channel, events ...channel.Event
 	var outcomes []string
 	for _, p := range parts {
 		id := f.inbox.Put(ch.Name(), p.Body)
-		if err = f.svc.ProcessWebhook(tenant.WithStore(t.Context(), p.Store), id, ch.Name()); err != nil {
+		if err = svc.ProcessWebhook(tenant.WithStore(t.Context(), p.Store), id, ch.Name()); err != nil {
 			t.Fatal(err)
 		}
 		outcomes = append(outcomes, f.inbox.Outcome(id))
@@ -802,4 +808,8 @@ func TestLogListPlan(t *testing.T) {
 		t.Fatalf("log page sorts or scans:\n%s", plan)
 	}
 	t.Log("\n" + plan)
+}
+
+func pgxTx(ctx context.Context, db *pgxpool.Pool, fn func(pgx.Tx) error) error {
+	return postgres.InTenantTx(ctx, db, fn)
 }

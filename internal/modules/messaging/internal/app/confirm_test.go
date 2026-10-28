@@ -1,0 +1,397 @@
+package app_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+// fakeOrders is orders.Fulfilment in memory: a move from anything but
+// pending is refused, as the state machine does for confirm and cancel.
+type fakeOrders struct {
+	mu     sync.Mutex
+	orders map[ulid.ID]orders.Order
+	moves  []string
+}
+
+func (f *fakeOrders) add(t *testing.T, ids *ulid.Generator, method orders.PaymentMethod) ulid.ID {
+	t.Helper()
+	total, err := money.New(52000, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := orders.Order{ID: ids.New(), Status: orders.StatusPending, PaymentMethod: method, Total: total, CreatedAt: time.Now().UTC()}
+	o.Contact.Name, o.Contact.Phone = "منى", customer
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.orders[o.ID] = o
+	return o.ID
+}
+
+func (f *fakeOrders) set(id ulid.ID, st orders.Status) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	o := f.orders[id]
+	o.Status = st
+	f.orders[id] = o
+}
+
+func (f *fakeOrders) Get(_ context.Context, id ulid.ID) (orders.Order, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	o, ok := f.orders[id]
+	if !ok {
+		return orders.Order{}, orders.ErrOrderNotFound
+	}
+	return o, nil
+}
+
+func (f *fakeOrders) GetTx(ctx context.Context, _ pgx.Tx, id ulid.ID) (orders.Order, error) {
+	return f.Get(ctx, id)
+}
+
+func (f *fakeOrders) TransitionSystemTx(_ context.Context, _ pgx.Tx, id ulid.ID, to orders.Status, actor, _ string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	o := f.orders[id]
+	if o.Status != orders.StatusPending {
+		return false, fmt.Errorf("%w: %s to %s", orders.ErrInvalidTransition, o.Status, to)
+	}
+	o.Status = to
+	f.orders[id] = o
+	f.moves = append(f.moves, actor+">"+string(to))
+	return true, nil
+}
+
+func (f *fakeOrders) status(id ulid.ID) orders.Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.orders[id].Status
+}
+
+type sink struct {
+	mu  sync.Mutex
+	got []mailer.Message
+}
+
+func (s *sink) Send(_ context.Context, m mailer.Message) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.got = append(s.got, m)
+	return nil
+}
+
+type cfix struct {
+	fixture
+	svc    *app.Service
+	orders *fakeOrders
+	mail   *sink
+}
+
+func newConfirmFixture(t *testing.T, o options) cfix {
+	t.Helper()
+	f := newFixture(t, o)
+	keyring, err := secretbox.ParseKeyring("1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := o.limit
+	if limit == 0 {
+		limit = 100
+	}
+	ent, err := entitlements.New(entitlements.Deps{Pool: f.pool, Config: config.Entitlements{MessagesPerMonth: limit}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := cfix{fixture: f, orders: &fakeOrders{orders: map[ulid.ID]orders.Order{}}, mail: &sink{}}
+	chans := app.Channels{WhatsApp: f.wa, SMS: f.sms}
+	if o.chans != nil {
+		chans = *o.chans
+	}
+	c.svc = app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Keyring: keyring, Quota: ent.Entitlements(), Jobs: f.jobs, Channels: chans,
+		Buttons: buttonKey, Inbox: f.inbox, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Confirmations: app.Confirmations{Orders: c.orders, Mailer: c.mail, DashboardURL: "https://app.example.com",
+			Stores: func(context.Context) (app.StoreInfo, error) {
+				return app.StoreInfo{Name: "سوق", Locale: "en", Host: "souq.example.com"}, nil
+			},
+			Contacts: func(context.Context) ([]string, error) {
+				return []string{"owner@example.com", "manager@example.com"}, nil
+			}}})
+	c.quota = ent.Entitlements()
+	return c
+}
+
+func (c cfix) jobsOf(kind string) []any {
+	var out []any
+	for _, a := range c.jobs.Args {
+		if a.Kind() == kind {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func (c cfix) confirmation(ctx context.Context, t *testing.T, order ulid.ID) domain.Confirmation {
+	t.Helper()
+	got, err := c.svc.Confirmation(ctx, order)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func (c cfix) noticeKinds(ctx context.Context, t *testing.T) string {
+	t.Helper()
+	p, err := c.svc.Notifications(ctx, nil, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, n := range p.Items {
+		kinds = append(kinds, string(n.Kind))
+	}
+	return strings.Join(kinds, ",")
+}
+
+func TestConfirmOrder(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	for range 2 { // a redelivered event changes nothing
+		if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := c.confirmation(ctx, t, id)
+	if got.Status != domain.Pending || got.MessageID == nil || time.Until(got.ExpiresAt) < 23*time.Hour {
+		t.Fatalf("confirmation = %+v", got)
+	}
+	if n := len(c.sendJobs()); n != 1 {
+		t.Fatalf("send jobs = %d", n)
+	}
+	deadlines := c.jobsOf("messaging.auto_cancel_order")
+	if len(deadlines) != 1 || deadlines[0].(app.AutoCancelArgs).OrderID != id {
+		t.Fatalf("deadline jobs = %+v", deadlines)
+	}
+	if err := c.svc.SendMessage(ctx, *got.MessageID, false); err != nil {
+		t.Fatal(err)
+	}
+	m := c.wa.Sent()[0]
+	if m.Language != "en" || m.Params[1] != "سوق" || m.Params[2] != orders.CodeOf(id) || m.Params[3] != "EGP 520.00" {
+		t.Fatalf("message = %+v", m)
+	}
+
+	// Card orders, orders no longer pending, unknown orders: nothing.
+	card := c.orders.add(t, c.ids, orders.PaymentCard)
+	moved := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.set(moved, orders.StatusConfirmed)
+	for _, other := range []ulid.ID{card, moved, c.ids.New()} {
+		if err := c.svc.ConfirmOrder(ctx, other); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.svc.Confirmation(ctx, other); !errors.Is(err, app.ErrConfirmationNotFound) {
+			t.Fatalf("confirmation of %s: %v", other, err)
+		}
+	}
+
+	// A store that turned confirmation off.
+	off := c.store(t)
+	if _, err := c.svc.SaveSettings(off, domain.Settings{ConfirmCOD: false, AutoCancelHours: 3}); err != nil {
+		t.Fatal(err)
+	}
+	quiet := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(off, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.svc.Confirmation(off, quiet); !errors.Is(err, app.ErrConfirmationNotFound) {
+		t.Fatalf("confirmation with the setting off: %v", err)
+	}
+}
+
+func TestConfirmationAnswers(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	answer := func(id ulid.ID, r domain.Reply) domain.ConfirmationStatus {
+		t.Helper()
+		var st domain.ConfirmationStatus
+		if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) (err error) {
+			st, err = c.svc.AnswerTx(ctx, tx, id, r, domain.ActorWhatsApp, time.Now())
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	yes, no, late := c.orders.add(t, c.ids, orders.PaymentCOD), c.orders.add(t, c.ids, orders.PaymentCOD), c.orders.add(t, c.ids, orders.PaymentCOD)
+	for _, id := range []ulid.ID{yes, no, late} {
+		if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if st := answer(yes, domain.Confirm); st != domain.Confirmed || c.orders.status(yes) != orders.StatusConfirmed {
+		t.Fatalf("confirm = %s, order %s", st, c.orders.status(yes))
+	}
+	if st := answer(yes, domain.Cancel); st != domain.Confirmed || c.orders.status(yes) != orders.StatusConfirmed {
+		t.Fatalf("second answer = %s, order %s", st, c.orders.status(yes))
+	}
+	if st := answer(no, domain.Cancel); st != domain.Cancelled || c.orders.status(no) != orders.StatusCancelled {
+		t.Fatalf("cancel = %s", st)
+	}
+	c.orders.set(late, orders.StatusConfirmed) // the merchant first
+	if st := answer(late, domain.Cancel); st != domain.Stale || c.orders.status(late) != orders.StatusConfirmed {
+		t.Fatalf("late = %s", st)
+	}
+	got := c.confirmation(ctx, t, yes)
+	if got.AnsweredBy != domain.ActorWhatsApp || got.AnsweredAt == nil {
+		t.Fatalf("answered = %+v", got)
+	}
+	if strings.Join(c.orders.moves, ",") != "customer:whatsapp>confirmed,customer:whatsapp>cancelled" {
+		t.Fatalf("moves = %v", c.orders.moves)
+	}
+	if kinds := c.noticeKinds(ctx, t); kinds != "order_cancelled,order_confirmed" {
+		t.Fatalf("notices = %s", kinds)
+	}
+	if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
+		_, err := c.svc.AnswerTx(ctx, tx, c.ids.New(), domain.Confirm, domain.ActorWhatsApp, time.Now())
+		return err
+	}); !errors.Is(err, app.ErrConfirmationNotFound) {
+		t.Fatalf("no confirmation: %v", err)
+	}
+	// The reply path: a tap on the message's button.
+	tapped := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, tapped); err != nil {
+		t.Fatal(err)
+	}
+	mid := *c.confirmation(ctx, t, tapped).MessageID
+	if err := c.svc.SendMessage(ctx, mid, false); err != nil {
+		t.Fatal(err)
+	}
+	msgs := c.wa.Sent()
+	payload := msgs[len(msgs)-1].Buttons[0].Payload
+	if got := c.deliverVia(t, c.svc, c.wa, channel.Event{Kind: channel.ButtonEvent, ID: "wamid.tap", Payload: payload}); got[0] != "reply_confirm" {
+		t.Fatalf("tap = %v", got)
+	}
+	if c.orders.status(tapped) != orders.StatusConfirmed {
+		t.Fatalf("tapped order = %s", c.orders.status(tapped))
+	}
+}
+
+func TestAutoCancelJob(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	reachedID, lostID, movedID := c.orders.add(t, c.ids, orders.PaymentCOD), c.orders.add(t, c.ids, orders.PaymentCOD), c.orders.add(t, c.ids, orders.PaymentCOD)
+	for _, id := range []ulid.ID{reachedID, lostID, movedID} {
+		if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []ulid.ID{reachedID, movedID} {
+		if err := c.svc.SendMessage(ctx, *c.confirmation(ctx, t, id).MessageID, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.orders.set(movedID, orders.StatusConfirmed)
+	for _, id := range []ulid.ID{reachedID, lostID, movedID, c.ids.New()} {
+		for range 2 { // a retried job changes nothing more
+			if err := c.svc.AutoCancel(ctx, id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if got := c.confirmation(ctx, t, reachedID); got.Status != domain.Expired || got.AnsweredBy != domain.ActorAutoCancel || c.orders.status(reachedID) != orders.StatusCancelled {
+		t.Fatalf("reached = %+v, order %s", got, c.orders.status(reachedID))
+	}
+	if got := c.confirmation(ctx, t, lostID); got.Status != domain.Unreached || c.orders.status(lostID) != orders.StatusPending {
+		t.Fatalf("lost = %+v", got)
+	}
+	if got := c.confirmation(ctx, t, movedID); got.Status != domain.Stale || c.orders.status(movedID) != orders.StatusConfirmed {
+		t.Fatalf("moved = %+v", got)
+	}
+	if kinds := c.noticeKinds(ctx, t); kinds != "confirmation_unreached,order_auto_cancelled" {
+		t.Fatalf("notices = %s", kinds)
+	}
+}
+
+func TestQuotaWarnings(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{limit: 5})
+	ctx := c.store(t)
+	var last ulid.ID
+	for range 7 {
+		last = c.orders.add(t, c.ids, orders.PaymentCOD)
+		if err := c.svc.ConfirmOrder(ctx, last); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := c.confirmation(ctx, t, last); got.Status != domain.QuotaSkipped {
+		t.Fatalf("over the quota = %+v", got)
+	}
+	if kinds := c.noticeKinds(ctx, t); kinds != "quota_reached,quota_nearly" {
+		t.Fatalf("notices = %s", kinds)
+	}
+	emails := c.jobsOf("messaging.email_notice")
+	if len(emails) != 2 {
+		t.Fatalf("email jobs = %d", len(emails))
+	}
+	if n := len(c.jobsOf("messaging.auto_cancel_order")); n != 5 {
+		t.Fatalf("deadline jobs = %d, want 5 (none for skipped orders)", n)
+	}
+	for _, e := range emails {
+		if err := c.svc.EmailNotice(ctx, e.(app.EmailNoticeArgs).NotificationID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(c.mail.got) != 4 || c.mail.got[0].To != "owner@example.com" || !strings.Contains(c.mail.got[0].Subject, "80%") ||
+		!strings.Contains(c.mail.got[2].Subject, "used up") {
+		t.Fatalf("emails = %+v", c.mail.got)
+	}
+	if err := c.svc.EmailNotice(ctx, c.ids.New()); err != nil {
+		t.Fatalf("missing notice: %v", err)
+	}
+}
+
+func TestConfirmWithoutChannelsOrWorker(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{chans: &app.Channels{}})
+	ctx := c.store(t)
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.confirmation(ctx, t, id); got.Status != domain.Unreached {
+		t.Fatalf("no channel = %+v", got)
+	}
+	// The api role has no orders: the worker's jobs refuse to run there.
+	api := app.NewService(app.Deps{DB: c.pool, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err := api.ConfirmOrder(ctx, id); err == nil {
+		t.Fatal("ConfirmOrder without orders")
+	}
+	if err := api.AutoCancel(ctx, id); err == nil {
+		t.Fatal("AutoCancel without orders")
+	}
+	if err := api.EmailNotice(ctx, c.ids.New()); err != nil {
+		t.Fatalf("EmailNotice without a mailer: %v", err)
+	}
+}

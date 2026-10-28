@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"context"
 	"crypto/hkdf"
 	"crypto/sha256"
 	"errors"
@@ -18,11 +19,14 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel/whatsapp"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -42,12 +46,21 @@ type Deps struct {
 	// Audit records merchant actions (identity's audit log); nil
 	// discards.
 	Audit audit.Recorder
-	Log   *slog.Logger
+	// The order confirmation's collaborators (the worker role; the api
+	// role leaves them nil): orders to read and move, the store's name,
+	// locale and host, and the staff emails and mailer for notices.
+	Orders       orders.Fulfilment
+	Stores       StoreSource
+	Contacts     Contacts
+	Mailer       mailer.Mailer
+	DashboardURL string
+	Log          *slog.Logger
 }
 
 // Module is the wired messaging module.
 type Module struct {
-	svc *app.Service
+	svc     *app.Service
+	wa, sms *fake.Channel // the fake channels, when used
 }
 
 // derive makes a key for purpose from the platform's OTP pepper, so the
@@ -71,10 +84,18 @@ func New(d Deps) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Module{svc: app.NewService(app.Deps{
+	m := &Module{svc: app.NewService(app.Deps{
 		DB: d.Pool, IDs: d.IDs, Keyring: d.Secrets.Keyring, Quota: d.Quota, Jobs: d.Jobs, Channels: chans,
 		Buttons: domain.ButtonKey(buttons), Inbox: d.Inbox, VerifyToken: d.Config.WhatsAppVerifyToken, Audit: d.Audit, Log: d.Log,
-	})}, nil
+		Confirmations: app.Confirmations{Orders: d.Orders, Stores: d.Stores, Contacts: d.Contacts, Mailer: d.Mailer, DashboardURL: d.DashboardURL},
+	})}
+	if wa, ok := chans.WhatsApp.(*fake.Channel); ok {
+		m.wa = wa
+	}
+	if sms, ok := chans.SMS.(*fake.Channel); ok {
+		m.sms = sms
+	}
+	return m, nil
 }
 
 func channels(d Deps) (app.Channels, error) {
@@ -117,12 +138,19 @@ func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(htt
 	httpapi.Mount(mux, m.svc, auth, scope, resp)
 }
 
+// OrderPlacedHandler asks a new cash-on-delivery order's customer to
+// confirm it. Subscribe it as ConfirmOrdersSubscriber to
+// orders.EventOrderPlaced (worker role).
+func (m *Module) OrderPlacedHandler() eventbus.Handler {
+	return eventbus.Typed(func(ctx context.Context, ev orders.OrderPlaced) error { return m.svc.ConfirmOrder(ctx, ev.OrderID) })
+}
+
+// Fakes returns the fake WhatsApp and SMS channels when they are used
+// (MESSAGING_FAKE_CHANNELS), for tests and demos; nil otherwise.
+func (m *Module) Fakes() (whatsapp, sms *fake.Channel) { return m.wa, m.sms }
+
 // Sender is what modules that message customers use.
 func (m *Module) Sender() Sender { return m.svc }
-
-// SetReplyHandler supplies what acts on customers' answers (at startup,
-// before jobs run).
-func (m *Module) SetReplyHandler(h ReplyHandler) { m.svc.SetReplyHandler(h) }
 
 // PlatformProviders are the channels' webhook providers, for
 // webhooks.Module.RegisterPlatform.

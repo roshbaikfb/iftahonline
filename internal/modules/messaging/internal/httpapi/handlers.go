@@ -189,3 +189,116 @@ func deref[T any](p *T) T {
 	}
 	return *p
 }
+
+// GetMessagingSettings implements StrictServerInterface.
+func (h *Handlers) GetMessagingSettings(ctx context.Context, _ GetMessagingSettingsRequestObject) (GetMessagingSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMessagingRead); err != nil {
+		return nil, err
+	}
+	s, err := h.svc.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return GetMessagingSettings200JSONResponse{ConfirmCod: s.ConfirmCOD, AutoCancelHours: s.AutoCancelHours}, nil
+}
+
+// UpdateMessagingSettings implements StrictServerInterface.
+func (h *Handlers) UpdateMessagingSettings(ctx context.Context, req UpdateMessagingSettingsRequestObject) (UpdateMessagingSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMessagingManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	s, err := h.svc.SaveSettings(ctx, domain.Settings{ConfirmCOD: req.Body.ConfirmCod, AutoCancelHours: req.Body.AutoCancelHours})
+	if err != nil {
+		return nil, err
+	}
+	return UpdateMessagingSettings200JSONResponse{ConfirmCod: s.ConfirmCOD, AutoCancelHours: s.AutoCancelHours}, nil
+}
+
+// GetOrderConfirmation implements StrictServerInterface.
+func (h *Handlers) GetOrderConfirmation(ctx context.Context, req GetOrderConfirmationRequestObject) (GetOrderConfirmationResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMessagingRead); err != nil {
+		return nil, err
+	}
+	id, err := ulid.Parse(req.OrderId)
+	if err != nil {
+		return nil, app.ErrConfirmationNotFound
+	}
+	c, err := h.svc.Confirmation(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	out := GetOrderConfirmation200JSONResponse{OrderId: c.OrderID.String(), Status: OrderConfirmationStatus(c.Status), ExpiresAt: c.ExpiresAt,
+		AnsweredAt: c.AnsweredAt, CreatedAt: c.CreatedAt}
+	if c.MessageID != nil {
+		m := c.MessageID.String()
+		out.MessageId = &m
+	}
+	if c.AnsweredBy != "" {
+		by := c.AnsweredBy
+		out.AnsweredBy = &by
+	}
+	return out, nil
+}
+
+// ListNotifications implements StrictServerInterface. The cursor is the
+// last notice's ID.
+func (h *Handlers) ListNotifications(ctx context.Context, req ListNotificationsRequestObject) (ListNotificationsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMessagingRead); err != nil {
+		return nil, err
+	}
+	var after *ulid.ID
+	if c := deref(req.Params.Cursor); c != "" {
+		id, err := ulid.Parse(c)
+		if err != nil {
+			return nil, errBadCursor
+		}
+		after = &id
+	}
+	p, err := h.svc.Notifications(ctx, after, deref(req.Params.UnreadOnly), deref(req.Params.Limit))
+	if err != nil {
+		return nil, err
+	}
+	out := ListNotifications200JSONResponse{Items: make([]Notification, len(p.Items)), Unread: p.Unread}
+	for i, n := range p.Items {
+		item := Notification{Id: n.ID.String(), Kind: NotificationKind(n.Kind), Read: n.ReadAt != nil, CreatedAt: n.CreatedAt}
+		if n.Data.OrderID != "" {
+			item.OrderId, item.OrderRef = &n.Data.OrderID, &n.Data.OrderRef
+		}
+		if n.Data.Period != "" {
+			item.Period, item.Used, item.Limit = &n.Data.Period, &n.Data.Used, &n.Data.Limit
+		}
+		out.Items[i] = item
+	}
+	if p.Next != nil {
+		c := p.Next.ID.String()
+		out.NextCursor = &c
+	}
+	return out, nil
+}
+
+// MarkNotificationsRead implements StrictServerInterface.
+func (h *Handlers) MarkNotificationsRead(ctx context.Context, req MarkNotificationsReadRequestObject) (MarkNotificationsReadResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMessagingRead); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	ids := make([]ulid.ID, 0, len(req.Body.Ids))
+	for _, s := range req.Body.Ids {
+		if id, err := ulid.Parse(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 && len(req.Body.Ids) > 0 {
+		return MarkNotificationsRead200JSONResponse{Marked: 0}, nil // nothing of ours
+	}
+	n, err := h.svc.MarkNotificationsRead(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return MarkNotificationsRead200JSONResponse{Marked: n}, nil
+}

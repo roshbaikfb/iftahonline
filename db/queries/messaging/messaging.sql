@@ -54,3 +54,60 @@ ON CONFLICT (store_id, kind, locale) DO UPDATE SET sms_body = excluded.sms_body,
 
 -- name: DeleteTemplate :execrows
 DELETE FROM message_templates WHERE store_id = @store_id AND kind = @kind AND locale = @locale;
+
+-- name: GetSettings :one
+SELECT * FROM messaging_settings WHERE store_id = @store_id;
+
+-- name: SaveSettings :one
+INSERT INTO messaging_settings (store_id, confirm_cod, auto_cancel_hours)
+VALUES (@store_id, @confirm_cod, @auto_cancel_hours)
+ON CONFLICT (store_id) DO UPDATE SET confirm_cod = excluded.confirm_cod, auto_cancel_hours = excluded.auto_cancel_hours, updated_at = now()
+RETURNING *;
+
+-- name: InsertConfirmation :execrows
+-- A redelivered order.placed finds the row and does nothing.
+INSERT INTO order_confirmations (store_id, order_id, status, token_hash, expires_at)
+VALUES (@store_id, @order_id, @status, sqlc.narg(token_hash), @expires_at)
+ON CONFLICT (store_id, order_id) DO NOTHING;
+
+-- name: LockConfirmation :one
+SELECT * FROM order_confirmations WHERE store_id = @store_id AND order_id = @order_id FOR UPDATE;
+
+-- name: GetConfirmation :one
+SELECT * FROM order_confirmations WHERE store_id = @store_id AND order_id = @order_id;
+
+-- name: UpdateConfirmation :exec
+UPDATE order_confirmations
+SET message_id = sqlc.narg(message_id), status = @status, answered_at = sqlc.narg(answered_at), answered_by = @answered_by,
+    updated_at = now()
+WHERE store_id = @store_id AND order_id = @order_id;
+
+-- name: InsertNotification :execrows
+-- Once per (kind, dedup_key).
+INSERT INTO merchant_notifications (store_id, id, kind, dedup_key, data)
+VALUES (@store_id, @id, @kind, @dedup_key, @data)
+ON CONFLICT ON CONSTRAINT merchant_notifications_once DO NOTHING;
+
+-- name: GetNotification :one
+SELECT * FROM merchant_notifications WHERE store_id = @store_id AND id = @id;
+
+-- name: ListNotifications :many
+-- Newest first (IDs are ULIDs), after a cursor; unread_only filters.
+SELECT * FROM merchant_notifications
+WHERE store_id = @store_id AND id < @before_id AND (NOT @unread_only::boolean OR read_at IS NULL)
+ORDER BY id DESC
+LIMIT @lim;
+
+-- name: CountUnreadNotifications :one
+SELECT count(*) FROM merchant_notifications WHERE store_id = @store_id AND read_at IS NULL;
+
+-- name: MarkNotificationsRead :execrows
+UPDATE merchant_notifications SET read_at = now()
+WHERE store_id = @store_id AND id = ANY(@ids::uuid[]) AND read_at IS NULL;
+
+-- name: PurgeNotifications :exec
+-- A few of the store's notices older than 90 days, as new ones arrive.
+DELETE FROM merchant_notifications m
+WHERE m.store_id = @store_id AND m.id IN (
+  SELECT n.id FROM merchant_notifications n WHERE n.store_id = @store_id AND n.created_at < @before ORDER BY n.id LIMIT 100
+);

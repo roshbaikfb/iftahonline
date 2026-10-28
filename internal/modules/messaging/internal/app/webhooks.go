@@ -313,6 +313,8 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 	return errors.Join(
 		river.AddWorkerSafely(w, &sendWorker{svc: s}),
 		river.AddWorkerSafely(w, &webhookWorker{svc: s}),
+		river.AddWorkerSafely(w, &autoCancelWorker{svc: s}),
+		river.AddWorkerSafely(w, &emailNoticeWorker{svc: s}),
 	)
 }
 
@@ -339,4 +341,22 @@ func (w *webhookWorker) Work(ctx context.Context, job *river.Job[ProcessWebhookA
 		return river.JobSnooze(earlyWait)
 	}
 	return err
+}
+
+type autoCancelWorker struct {
+	river.WorkerDefaults[AutoCancelArgs]
+	svc *Service
+}
+
+func (w *autoCancelWorker) Work(ctx context.Context, job *river.Job[AutoCancelArgs]) error {
+	return w.svc.AutoCancel(ctx, job.Args.OrderID)
+}
+
+type emailNoticeWorker struct {
+	river.WorkerDefaults[EmailNoticeArgs]
+	svc *Service
+}
+
+func (w *emailNoticeWorker) Work(ctx context.Context, job *river.Job[EmailNoticeArgs]) error {
+	return w.svc.EmailNotice(ctx, job.Args.NotificationID)
 }

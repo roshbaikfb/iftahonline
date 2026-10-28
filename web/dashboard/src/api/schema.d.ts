@@ -2651,6 +2651,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/messaging/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's order confirmation settings
+         * @description Permission: messaging.read.
+         */
+        get: operations["getMessagingSettings"];
+        /**
+         * Change the order confirmation settings
+         * @description Permission: messaging.manage. `confirm_cod` asks every cash-on-
+         *     delivery customer to confirm by message; `auto_cancel_hours` (1–72)
+         *     is how long after placing an order whose customer got the message
+         *     but did not answer is cancelled. Changes apply to orders placed
+         *     from now on.
+         */
+        put: operations["updateMessagingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/confirmations/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * An order's confirmation by message
+         * @description Permission: messaging.read. 404 when the order asked for none (card orders, stores that do not confirm).
+         */
+        get: operations["getOrderConfirmation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's notices, newest first
+         * @description Permission: messaging.read. Customers' answers, orders cancelled
+         *     unanswered, messages that never reached the customer, and the
+         *     quota at 80% and 100% (also emailed to the owner and managers).
+         *     Kept 90 days. `unread` counts the store's unread notices.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark notices read
+         * @description Permission: messaging.read. Unknown IDs (and other stores') change nothing.
+         */
+        post: operations["markNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -4276,6 +4376,56 @@ export interface components {
             custom: boolean;
             /** Format: date-time */
             updated_at?: string;
+        };
+        MessagingSettings: {
+            confirm_cod: boolean;
+            auto_cancel_hours: number;
+        };
+        OrderConfirmation: {
+            order_id: components["schemas"]["ULID"];
+            message_id?: components["schemas"]["ULID"];
+            /**
+             * @description pending: waiting for the customer; confirmed or cancelled: the
+             *     customer answered; expired: cancelled unanswered; skipped: the
+             *     quota was used up; unreached: the message never reached the
+             *     customer (the merchant decides); stale: the merchant moved the
+             *     order first.
+             * @enum {string}
+             */
+            status: "pending" | "confirmed" | "cancelled" | "expired" | "skipped" | "unreached" | "stale";
+            /**
+             * Format: date-time
+             * @description When an unanswered order is cancelled.
+             */
+            expires_at: string;
+            /** Format: date-time */
+            answered_at?: string;
+            /** @example customer:whatsapp */
+            answered_by?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Notification: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "quota_nearly" | "quota_reached" | "order_confirmed" | "order_cancelled" | "order_auto_cancelled" | "confirmation_unreached";
+            order_id?: components["schemas"]["ULID"];
+            order_ref?: string;
+            /** Format: int64 */
+            used?: number;
+            /** Format: int64 */
+            limit?: number;
+            /** @example 2026-10 */
+            period?: string;
+            read: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        NotificationPage: {
+            items: components["schemas"]["Notification"][];
+            /** Format: int64 */
+            unread: number;
+            next_cursor?: string;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -7932,6 +8082,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageText"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMessagingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings (the defaults until the store chose). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagingSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMessagingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessagingSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagingSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrderConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The confirmation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderConfirmation"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                unread_only?: boolean;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    markNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: components["schemas"]["ULID"][];
+                };
+            };
+        };
+        responses: {
+            /** @description How many were unread. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        marked: number;
+                    };
                 };
             };
             default: components["responses"]["Problem"];
