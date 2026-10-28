@@ -19,6 +19,8 @@ import (
 //   - money (cash-on-delivery reconciliation, card refunds) is the
 //     owner's and the manager's; only the owner connects the card gateway
 //     (where the store's money is paid out).
+//   - messages to customers: support reads the log (they follow up the
+//     confirmations); the owner and manager also write the texts.
 //   - shipping: fulfils orders (packs, ships, records deliveries and
 //     returns); sees the catalog and keeps stock counts right (they
 //     handle the goods), but does not edit products or confirm orders.
@@ -36,6 +38,7 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermShippingRead, authz.PermShippingManage,
 			authz.PermFinanceRead, authz.PermFinanceManage,
 			authz.PermPaymentsRefund,
+			authz.PermMessagingRead, authz.PermMessagingManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
@@ -43,6 +46,7 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermCustomersRead, authz.PermCustomersManage,
 			authz.PermOrdersRead, authz.PermOrdersManage,
 			authz.PermShippingRead,
+			authz.PermMessagingRead,
 		},
 		authz.RoleShipping: {
 			authz.PermStoreRead, authz.PermCatalogRead, authz.PermInventoryManage,

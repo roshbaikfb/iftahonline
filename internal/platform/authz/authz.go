@@ -79,6 +79,9 @@ const (
 
 	PermPaymentsManage Permission = "payments.manage" // connect a card gateway
 	PermPaymentsRefund Permission = "payments.refund" // refund card payments
+
+	PermMessagingRead   Permission = "messaging.read"   // the message log and the quota
+	PermMessagingManage Permission = "messaging.manage" // the store's message texts
 )
 
 // Permissions lists every permission.
@@ -95,6 +98,7 @@ func Permissions() []Permission {
 		PermShippingRead, PermShippingManage,
 		PermFinanceRead, PermFinanceManage,
 		PermPaymentsManage, PermPaymentsRefund,
+		PermMessagingRead, PermMessagingManage,
 	}
 }
 
