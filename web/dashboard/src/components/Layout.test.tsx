@@ -63,13 +63,16 @@ describe('Layout', () => {
     expect(within(nav).getByRole('link', { name: 'الشحنات' })).not.toHaveAttribute('aria-current');
     expect(within(nav).getByRole('link', { name: 'الدفع بالبطاقة' })).toHaveAttribute('href', `/stores/${a}/gateways`);
     // a screen not built yet is not a link, and says so
-    expect(within(nav).queryByRole('link', { name: /الدومينات/ })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: /العملاء/ })).toBeNull();
     expect(within(nav).getByRole('link', { name: 'التصميم' })).toHaveAttribute('href', `/stores/${a}/design`);
     expect(within(nav).getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', `/stores/${a}/home-page`);
     expect(within(nav).getByRole('link', { name: 'الصفحات' })).toHaveAttribute('href', `/stores/${a}/pages`);
+    expect(within(nav).getByRole('link', { name: 'الدومينات' })).toHaveAttribute('href', `/stores/${a}/domains`);
+    expect(within(nav).getByRole('link', { name: 'فريق العمل' })).toHaveAttribute('href', `/stores/${a}/team`);
+    expect(within(nav).getByRole('link', { name: 'إعدادات المتجر' })).toHaveAttribute('href', `/stores/${a}/settings`);
     expect(within(nav).getByRole('link', { name: 'التصنيفات' })).toHaveAttribute('href', `/stores/${a}/categories`);
     expect(within(nav).getByRole('link', { name: 'المنتجات' })).toHaveAttribute('href', `/stores/${a}/products`);
-    const soon = within(nav).getByText('الدومينات').closest('.item');
+    const soon = within(nav).getByText('العملاء').closest('.item');
     expect(soon).toHaveAttribute('aria-disabled', 'true');
     expect(soon).toHaveTextContent('قريبًا');
     expect(await screen.findByText('متجر منى')).toBeInTheDocument();
