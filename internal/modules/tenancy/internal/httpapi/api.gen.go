@@ -16,6 +16,30 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for DnsRecordType.
+const (
+	A     DnsRecordType = "A"
+	AAAA  DnsRecordType = "AAAA"
+	ALIAS DnsRecordType = "ALIAS"
+	CNAME DnsRecordType = "CNAME"
+)
+
+// Valid indicates whether the value is a known member of the DnsRecordType enum.
+func (e DnsRecordType) Valid() bool {
+	switch e {
+	case A:
+		return true
+	case AAAA:
+		return true
+	case ALIAS:
+		return true
+	case CNAME:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DomainFailureReason.
 const (
 	DnsError             DomainFailureReason = "dns_error"
@@ -253,6 +277,19 @@ func (e PolicySlug) Valid() bool {
 	}
 }
 
+// DnsRecord defines model for DnsRecord.
+type DnsRecord struct {
+	// Name Example: shop.example.com
+	Name string        `json:"name"`
+	Type DnsRecordType `json:"type"`
+
+	// Value Example: connect.iftahonline.com
+	Value string `json:"value"`
+}
+
+// DnsRecordType defines model for DnsRecord.Type.
+type DnsRecordType string
+
 // Domain defines model for Domain.
 type Domain struct {
 	CreatedAt     time.Time            `json:"created_at"`
@@ -262,11 +299,19 @@ type Domain struct {
 	Host string `json:"host"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id            ULID         `json:"id"`
-	IsPrimary     bool         `json:"is_primary"`
-	Kind          DomainKind   `json:"kind"`
-	LastCheckedAt *time.Time   `json:"last_checked_at,omitempty"`
-	Status        DomainStatus `json:"status"`
+	Id            ULID       `json:"id"`
+	IsPrimary     bool       `json:"is_primary"`
+	Kind          DomainKind `json:"kind"`
+	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
+
+	// Routing Where a custom domain must point so the store opens on it (ADR-0037).
+	// A subdomain (shop.example.com) takes one CNAME. An apex domain
+	// (example.com, example.com.eg) cannot have a CNAME at most DNS
+	// providers: it takes an ALIAS (ANAME, CNAME flattening) where the
+	// provider offers one, and the A and AAAA records otherwise. A and
+	// AAAA appear only when the platform has fixed addresses configured.
+	Routing *DomainRouting `json:"routing,omitempty"`
+	Status  DomainStatus   `json:"status"`
 
 	// Verification The TXT record to publish (custom domains that are not verified yet).
 	Verification *DomainVerification `json:"verification,omitempty"`
@@ -285,6 +330,18 @@ type DomainStatus string
 // DomainList defines model for DomainList.
 type DomainList struct {
 	Items []Domain `json:"items"`
+}
+
+// DomainRouting Where a custom domain must point so the store opens on it (ADR-0037).
+// A subdomain (shop.example.com) takes one CNAME. An apex domain
+// (example.com, example.com.eg) cannot have a CNAME at most DNS
+// providers: it takes an ALIAS (ANAME, CNAME flattening) where the
+// provider offers one, and the A and AAAA records otherwise. A and
+// AAAA appear only when the platform has fixed addresses configured.
+type DomainRouting struct {
+	// Apex The domain is a registrable root (its own zone apex).
+	Apex    bool        `json:"apex"`
+	Records []DnsRecord `json:"records"`
 }
 
 // DomainVerification The TXT record to publish (custom domains that are not verified yet).

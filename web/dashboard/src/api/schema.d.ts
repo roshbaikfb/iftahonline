@@ -2899,12 +2899,34 @@ export interface components {
             /** @enum {string} */
             failure_reason?: "txt_record_not_found" | "dns_error" | "domain_taken" | "verification_timed_out";
             verification?: components["schemas"]["DomainVerification"];
+            routing?: components["schemas"]["DomainRouting"];
             /** Format: date-time */
             verified_at?: string;
             /** Format: date-time */
             last_checked_at?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description Where a custom domain must point so the store opens on it (ADR-0037).
+         *     A subdomain (shop.example.com) takes one CNAME. An apex domain
+         *     (example.com, example.com.eg) cannot have a CNAME at most DNS
+         *     providers: it takes an ALIAS (ANAME, CNAME flattening) where the
+         *     provider offers one, and the A and AAAA records otherwise. A and
+         *     AAAA appear only when the platform has fixed addresses configured.
+         */
+        DomainRouting: {
+            /** @description The domain is a registrable root (its own zone apex). */
+            apex: boolean;
+            records: components["schemas"]["DnsRecord"][];
+        };
+        DnsRecord: {
+            /** @enum {string} */
+            type: "CNAME" | "ALIAS" | "A" | "AAAA";
+            /** @example shop.example.com */
+            name: string;
+            /** @example connect.iftahonline.com */
+            value: string;
         };
         /** @description The TXT record to publish (custom domains that are not verified yet). */
         DomainVerification: {

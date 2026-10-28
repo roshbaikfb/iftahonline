@@ -19,6 +19,7 @@ import (
 // Handlers implements StrictServerInterface.
 type Handlers struct {
 	svc  *app.Service
+	edge domain.Edge // where custom domains point (ADR-0037)
 	auth authz.Authorizer
 }
 
@@ -26,12 +27,12 @@ var _ StrictServerInterface = (*Handlers)(nil)
 
 // Mount registers the tenancy routes on mux. scope is the membership
 // middleware: it authenticates, returns 404 to non-members, and sets the
-// tenant and principal (ADR-0006).
-func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+// tenant and principal (ADR-0006). edge is where custom domains point.
+func Mount(mux *http.ServeMux, svc *app.Service, edge domain.Edge, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
 	badRequest := func(w http.ResponseWriter, r *http.Request, err error) {
 		resp.Write(w, r, errs.BadRequest("invalid request", err))
 	}
-	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, auth: auth}, nil, StrictHTTPServerOptions{
+	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc, edge: edge, auth: auth}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: resp.Write,
 	})
@@ -93,7 +94,7 @@ func (h *Handlers) ListDomains(ctx context.Context, _ ListDomainsRequestObject) 
 	}
 	items := make([]Domain, len(ds))
 	for i, d := range ds {
-		items[i] = toDomain(d)
+		items[i] = h.toDomain(d)
 	}
 	return ListDomains200JSONResponse{Items: items}, nil
 }
@@ -110,7 +111,7 @@ func (h *Handlers) AddDomain(ctx context.Context, req AddDomainRequestObject) (A
 	if err != nil {
 		return nil, err
 	}
-	return AddDomain201JSONResponse(toDomain(d)), nil
+	return AddDomain201JSONResponse(h.toDomain(d)), nil
 }
 
 // DeleteDomain implements StrictServerInterface.
@@ -141,7 +142,7 @@ func (h *Handlers) VerifyDomain(ctx context.Context, req VerifyDomainRequestObje
 	if err != nil {
 		return nil, err
 	}
-	return VerifyDomain202JSONResponse(toDomain(d)), nil
+	return VerifyDomain202JSONResponse(h.toDomain(d)), nil
 }
 
 // SetPrimaryDomain implements StrictServerInterface.
@@ -157,7 +158,7 @@ func (h *Handlers) SetPrimaryDomain(ctx context.Context, req SetPrimaryDomainReq
 	if err != nil {
 		return nil, err
 	}
-	return SetPrimaryDomain200JSONResponse(toDomain(d)), nil
+	return SetPrimaryDomain200JSONResponse(h.toDomain(d)), nil
 }
 
 func toStore(s domain.Store) Store {
@@ -169,7 +170,7 @@ func toStore(s domain.Store) Store {
 	}
 }
 
-func toDomain(d domain.Domain) Domain {
+func (h *Handlers) toDomain(d domain.Domain) Domain {
 	out := Domain{
 		Id: d.ID.String(), Host: d.Host, Kind: DomainKind(d.Kind), Status: DomainStatus(d.Status),
 		IsPrimary: d.IsPrimary, VerifiedAt: d.VerifiedAt, LastCheckedAt: d.LastCheckedAt, CreatedAt: d.CreatedAt,
@@ -181,6 +182,14 @@ func toDomain(d domain.Domain) Domain {
 	if d.Kind == domain.KindCustom && d.Status != domain.DomainVerified {
 		name, value := d.VerificationRecord()
 		out.Verification = &DomainVerification{RecordType: TXT, Name: name, Value: value}
+	}
+	if d.Kind == domain.KindCustom {
+		r := h.edge.RoutingFor(d.Host)
+		records := make([]DnsRecord, len(r.Records))
+		for i, rec := range r.Records {
+			records[i] = DnsRecord{Type: DnsRecordType(rec.Type), Name: rec.Name, Value: rec.Value}
+		}
+		out.Routing = &DomainRouting{Apex: r.Apex, Records: records}
 	}
 	return out
 }

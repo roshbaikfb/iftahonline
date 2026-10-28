@@ -14,6 +14,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -135,5 +136,7 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 
 // Mount registers the HTTP API. scope is identity's membership middleware.
 func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
-	httpapi.Mount(mux, m.svc, auth, scope, resp)
+	c := m.deps.Config
+	edge := domain.Edge{Target: c.DomainTarget, IPv4: c.DomainIPv4, IPv6: c.DomainIPv6}
+	httpapi.Mount(mux, m.svc, edge, auth, scope, resp)
 }
