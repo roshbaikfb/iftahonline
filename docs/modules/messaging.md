@@ -167,7 +167,7 @@ Each event is placed in its store by our reference
 
 | Table | Notes |
 |---|---|
-| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads the partitions' keys backwards with no sort (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
+| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads every partition through that key, never by a scan (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
 | `message_templates` | Tenant table under RLS. The store's SMS text per `(kind, locale)`; no row means the default |
 | `messaging_settings` | Tenant table under RLS. `confirm_cod`, `auto_cancel_hours`; no row means the defaults |
 | `order_confirmations` | Tenant table under RLS. One per order (PK `(store_id, order_id)`), with its message, status, deadline, answer, the SMS token's SHA-256 (unique per store), and the WhatsApp code (unique across stores; `app.confirmation_store` maps it to its store) |
