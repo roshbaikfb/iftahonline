@@ -16,7 +16,7 @@ whose word counts).
 
 | Symbol | Purpose |
 |---|---|
-| `New(Deps)`, `Module.RegisterWorkers` | Wiring; the send and webhook jobs (the worker role) |
+| `New(Deps)`, `Module.Mount`, `Module.RegisterWorkers` | Wiring; the merchant HTTP API (behind identity's membership middleware); the send and webhook jobs (the worker role) |
 | `Module.Sender()` → `Sender` | `EnqueueTx(ctx, tx, Outgoing)` queues a message in the caller's transaction; `Get` reads the log |
 | `Module.PlatformProviders()` | The channels' webhook providers, for `webhooks.Module.RegisterPlatform` |
 | `Module.SetReplyHandler(ReplyHandler)` | What acts on a customer's first answer, in the transaction that records it (6c: the order confirmation) |
@@ -66,6 +66,20 @@ Body, English:
 
 > Hi {{1}}, thank you for your order from {{2}}. Order {{3}}, total {{4}}. Do you confirm it?
 
+## HTTP API (tag `messaging`)
+
+| Operation | Permission | Notes |
+|---|---|---|
+| `listMessages` `GET /v1/stores/{store}/messages` | messaging.read | The log, newest first, paged by cursor; `status` filters. `order_id` gives an order's messages, without paging. Numbers are masked |
+| `getMessageUsage` `GET …/messaging/usage` | messaging.read | The month's `used`, `limit`, `remaining` and `level` (`ok`, `nearly` at 80%, `reached`) |
+| `listMessageTexts` `GET …/messaging/texts` | messaging.read | The SMS text for every kind and locale: the store's own (`custom`), or the default |
+| `saveMessageText` `PUT …/messaging/texts/{kind}/{locale}` | messaging.manage | 1 to 400 characters, with only `{{name}}`, `{{store}}`, `{{ref}}`, `{{total}}` and `{{url}}`; an order confirmation needs `{{url}}` (422 otherwise). Audited |
+| `resetMessageText` `DELETE …/messaging/texts/{kind}/{locale}` | messaging.manage | Back to the default; returns it. Audited |
+
+Support reads the log (they follow up confirmations); the owner and the
+manager also write the texts. WhatsApp always sends the platform's
+approved templates, so only the SMS text is the store's.
+
 ## Sending
 
 1. **`EnqueueTx` runs in the caller's transaction.** It consumes one
@@ -75,7 +89,8 @@ Body, English:
      is sent.
    - With no channel configured, the message is logged as failed with
      `no_channel`.
-2. **The send job tries WhatsApp first.**
+2. **The send job tries WhatsApp first.** An SMS uses the store's own
+   text for the kind and locale, or the default.
    - If WhatsApp refuses the customer, the job falls back to SMS once,
      as a new job. The fallback costs no second unit.
    - Rejected messages, refused credentials, and transient errors on the
@@ -104,7 +119,8 @@ Each event is placed in its store by our reference
 
 | Table | Notes |
 |---|---|
-| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition. `messages_store_order` serves an order's messages. `app_user` cannot delete |
+| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads the partitions' keys backwards with no sort (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
+| `message_templates` | Tenant table under RLS. The store's SMS text per `(kind, locale)`; no row means the default |
 
 ## Rules worth knowing
 
@@ -128,7 +144,11 @@ Each event is placed in its store by our reference
     - cross-tenant references and payloads;
     - statuses arriving before the send was recorded;
     - Twilio's read-back winning over the webhook;
-    - the plan of the message lookup.
+    - the store's texts (saved, used by the send job, reset, audited);
+    - paging the log;
+    - the plans of the message lookup and the log page.
+  - `internal/httpapi` covers the happy path, validation, authorization
+    and a cross-tenant test for every operation.
 - **Fuzzing:**
   - `domain`: `FuzzParseRef`, `FuzzParsePayload`.
   - `whatsapp`, `twilio`: `FuzzVerifyWebhook`.

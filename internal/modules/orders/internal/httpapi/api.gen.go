@@ -19,6 +19,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderPaymentMethod.
 const (
 	Card OrderPaymentMethod = "card"
@@ -219,6 +234,9 @@ type FieldError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // Order defines model for Order.
 type Order struct {

@@ -112,7 +112,11 @@ func (s *Service) build(ctx context.Context, m domain.Message, via domain.Channe
 		}
 		return out, nil
 	}
-	out.Text = domain.RenderSMS(domain.DefaultSMS(m.Kind, m.Locale), c.Vars)
+	body, err := s.smsBody(ctx, m.Kind, m.Locale)
+	if err != nil {
+		return channel.Message{}, err
+	}
+	out.Text = domain.RenderSMS(body, c.Vars)
 	return out, nil
 }
 

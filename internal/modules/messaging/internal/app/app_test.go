@@ -23,6 +23,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -662,6 +663,143 @@ func TestMessageLookupPlan(t *testing.T) {
 	testkit.AssertIndexCond(t, plan, "id = ")
 	if n := strings.Count(plan, " on messages_"); n != 1 && !strings.Contains(plan, "Subplans Removed") {
 		t.Fatalf("not pruned to one partition (%d scanned):\n%s", n, plan)
+	}
+	t.Log("\n" + plan)
+}
+
+// recorder keeps audit entries.
+type recorder struct {
+	mu      sync.Mutex
+	actions []string
+}
+
+func (r *recorder) RecordTx(_ context.Context, _ pgx.Tx, e audit.Entry) error {
+	if err := e.Validate(); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.actions = append(r.actions, e.Action+" "+e.TargetID)
+	return nil
+}
+
+func TestTexts(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{noWA: true})
+	rec := &recorder{}
+	keyring, err := secretbox.ParseKeyring("1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Keyring: keyring, Quota: f.quota, Jobs: f.jobs, Channels: app.Channels{SMS: f.sms},
+		Audit: rec, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	ctx := f.store(t)
+	texts, err := svc.Texts(ctx)
+	if err != nil || len(texts) != 2 || texts[0].Custom || texts[0].Locale != "ar" || texts[1].Locale != "en" {
+		t.Fatalf("defaults = %+v, %v", texts, err)
+	}
+	own := "{{store}}: {{name}}، أكّد {{ref}} هنا {{url}}"
+	saved, err := svc.SaveText(ctx, domain.OrderConfirmation, "ar", own)
+	if err != nil || !saved.Custom || saved.UpdatedAt == nil {
+		t.Fatalf("save = %+v, %v", saved, err)
+	}
+	if texts, err = svc.Texts(ctx); err != nil || !texts[0].Custom || texts[0].SMSBody != own || texts[1].Custom {
+		t.Fatalf("after save = %+v, %v", texts, err)
+	}
+	// The send job writes the store's text.
+	q := f.enqueue(ctx, t, nil)
+	if err = svc.SendMessage(ctx, q.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.sms.Sent(); len(got) != 1 || got[0].Text != "سوق: منى، أكّد 7P0R1S2T هنا https://souq.example.com/ar/o/tok" {
+		t.Fatalf("SMS = %+v", got)
+	}
+	for name, err := range map[string]error{
+		"bad body":   func() error { _, e := svc.SaveText(ctx, domain.OrderConfirmation, "ar", "no link"); return e }(),
+		"bad kind":   func() error { _, e := svc.SaveText(ctx, "promo", "ar", "{{url}}"); return e }(),
+		"bad locale": func() error { _, e := svc.ResetText(ctx, domain.OrderConfirmation, "fr"); return e }(),
+	} {
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	reset, err := svc.ResetText(ctx, domain.OrderConfirmation, "ar")
+	if err != nil || reset.Custom || reset.SMSBody != domain.DefaultSMS(domain.OrderConfirmation, "ar") {
+		t.Fatalf("reset = %+v, %v", reset, err)
+	}
+	if _, err = svc.ResetText(ctx, domain.OrderConfirmation, "ar"); err != nil {
+		t.Fatalf("second reset: %v", err)
+	}
+	if strings.Join(rec.actions, "|") != "message_text.updated order_confirmation:ar|message_text.reset order_confirmation:ar" {
+		t.Fatalf("audit = %v", rec.actions)
+	}
+}
+
+func TestLogPagesAndUsage(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{limit: 10})
+	ctx := f.store(t)
+	order := f.ids.New()
+	first := f.enqueue(ctx, t, &order)
+	for range 4 {
+		f.enqueue(ctx, t, nil)
+	}
+	if err := f.svc.SendMessage(ctx, first.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	var seen []ulid.ID
+	var after *domain.Message
+	for {
+		p, err := f.svc.Messages(ctx, after, "", 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range p.Items {
+			seen = append(seen, m.ID)
+		}
+		if p.Next == nil {
+			break
+		}
+		after = p.Next
+	}
+	if len(seen) != 5 || seen[4] != first.ID {
+		t.Fatalf("paged %v", seen)
+	}
+	if p, err := f.svc.Messages(ctx, nil, domain.Sent, 0); err != nil || len(p.Items) != 1 || p.Items[0].ID != first.ID {
+		t.Fatalf("sent only = %+v, %v", p, err)
+	}
+	if list, err := f.svc.OrderMessages(ctx, order); err != nil || len(list) != 1 || list[0].ID != first.ID {
+		t.Fatalf("order messages = %+v, %v", list, err)
+	}
+	for _, bad := range []struct {
+		status domain.Status
+		limit  int
+	}{{"lost", 10}, {"", 201}, {"", -1}} {
+		if _, err := f.svc.Messages(ctx, nil, bad.status, bad.limit); err == nil {
+			t.Errorf("%+v accepted", bad)
+		}
+	}
+	if u, err := f.svc.Usage(ctx); err != nil || u.Used != 5 || u.Limit != 10 {
+		t.Fatalf("usage = %+v, %v", u, err)
+	}
+}
+
+// TestLogListPlan: a page of the log reads each month's partition by its
+// primary key, newest first, under RLS; no sort, no scan of the table.
+func TestLogListPlan(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{})
+	pool, capture := testkit.CapturingPool(t, infra.AppURL)
+	ctx := f.store(t)
+	f.enqueue(ctx, t, nil)
+	svc := app.NewService(app.Deps{DB: pool, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if _, err := svc.Messages(ctx, nil, "", 50); err != nil {
+		t.Fatal(err)
+	}
+	plan := testkit.GenericPlan(ctx, t, pool, capture.Last(t, "FROM messages"))
+	testkit.AssertIndexCond(t, plan, "store_id = ")
+	if strings.Contains(plan, "Seq Scan") || strings.Contains(plan, "Sort") {
+		t.Fatalf("log page sorts or scans:\n%s", plan)
 	}
 	t.Log("\n" + plan)
 }

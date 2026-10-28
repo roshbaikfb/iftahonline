@@ -2,6 +2,7 @@ package domain
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -11,6 +12,9 @@ const (
 	Arabic  = "ar"
 	English = "en"
 )
+
+// Locales lists the message locales.
+func Locales() []string { return []string{Arabic, English} }
 
 // ValidLocale reports whether l is a message locale.
 func ValidLocale(l string) bool { return l == Arabic || l == English }
@@ -95,4 +99,14 @@ func RenderSMS(body string, v Vars) string {
 		"{{name}}", param(v.CustomerName), "{{store}}", param(v.StoreName), "{{ref}}", param(v.OrderRef),
 		"{{total}}", param(v.Total), "{{url}}", v.ConfirmURL,
 	).Replace(body)
+}
+
+// Text is a store's SMS text for a kind and locale: its own (Custom),
+// or the default.
+type Text struct {
+	Kind      Kind
+	Locale    string
+	SMSBody   string
+	Custom    bool
+	UpdatedAt *time.Time
 }

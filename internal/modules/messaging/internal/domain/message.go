@@ -25,6 +25,9 @@ const (
 // Valid reports whether k is a kind.
 func (k Kind) Valid() bool { return k == OrderConfirmation }
 
+// Kinds lists every kind.
+func Kinds() []Kind { return []Kind{OrderConfirmation} }
+
 // Channel is how a message went out.
 type Channel string
 

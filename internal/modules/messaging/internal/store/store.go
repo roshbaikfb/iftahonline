@@ -109,3 +109,101 @@ func toDomain(r messagingdb.Message) domain.Message {
 		Reply: domain.Reply(r.Reply), RepliedAt: r.RepliedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
+
+// List returns the log, newest first, before (beforeAt, beforeID);
+// status "" is any.
+func List(ctx context.Context, tx Tx, beforeAt time.Time, beforeID ulid.ID, status domain.Status, limit int) ([]domain.Message, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := messagingdb.New(tx).ListMessages(ctx, messagingdb.ListMessagesParams{
+		StoreID: store, BeforeAt: beforeAt, BeforeID: beforeID, Status: string(status), Lim: int32(limit), //nolint:gosec // bounded by the caller
+	})
+	if err != nil {
+		return nil, fmt.Errorf("messaging store: list: %w", err)
+	}
+	return toDomains(rows), nil
+}
+
+// OrderMessages returns an order's messages, newest first.
+func OrderMessages(ctx context.Context, tx Tx, order ulid.ID) ([]domain.Message, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := messagingdb.New(tx).ListOrderMessages(ctx, messagingdb.ListOrderMessagesParams{StoreID: store, OrderID: &order})
+	if err != nil {
+		return nil, fmt.Errorf("messaging store: order messages: %w", err)
+	}
+	return toDomains(rows), nil
+}
+
+func toDomains(rows []messagingdb.Message) []domain.Message {
+	out := make([]domain.Message, len(rows))
+	for i, r := range rows {
+		out[i] = toDomain(r)
+	}
+	return out
+}
+
+// Texts returns the store's own SMS texts.
+func Texts(ctx context.Context, tx Tx) ([]domain.Text, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := messagingdb.New(tx).ListTemplates(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("messaging store: texts: %w", err)
+	}
+	out := make([]domain.Text, len(rows))
+	for i, r := range rows {
+		at := r.UpdatedAt
+		out[i] = domain.Text{Kind: domain.Kind(r.Kind), Locale: r.Locale, SMSBody: r.SmsBody, Custom: true, UpdatedAt: &at}
+	}
+	return out, nil
+}
+
+// SMSBody returns the store's own SMS text for kind and locale; found is
+// false when it has none.
+func SMSBody(ctx context.Context, tx Tx, kind domain.Kind, locale string) (body string, found bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	body, err = messagingdb.New(tx).GetTemplate(ctx, messagingdb.GetTemplateParams{StoreID: store, Kind: string(kind), Locale: locale})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("messaging store: text: %w", err)
+	}
+	return body, true, nil
+}
+
+// SaveSMSBody sets the store's SMS text for kind and locale.
+func SaveSMSBody(ctx context.Context, tx Tx, kind domain.Kind, locale, body string) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = messagingdb.New(tx).SaveTemplate(ctx, messagingdb.SaveTemplateParams{StoreID: store, Kind: string(kind), Locale: locale, SmsBody: body}); err != nil {
+		return fmt.Errorf("messaging store: save text: %w", err)
+	}
+	return nil
+}
+
+// DeleteSMSBody goes back to the default text; it reports whether the
+// store had its own.
+func DeleteSMSBody(ctx context.Context, tx Tx, kind domain.Kind, locale string) (bool, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := messagingdb.New(tx).DeleteTemplate(ctx, messagingdb.DeleteTemplateParams{StoreID: store, Kind: string(kind), Locale: locale})
+	if err != nil {
+		return false, fmt.Errorf("messaging store: delete text: %w", err)
+	}
+	return n > 0, nil
+}

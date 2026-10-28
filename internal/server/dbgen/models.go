@@ -221,6 +221,14 @@ type Message struct {
 	UpdatedAt         pgtype.Timestamptz
 }
 
+type MessageTemplate struct {
+	StoreID   pgtype.UUID
+	Kind      string
+	Locale    string
+	SmsBody   string
+	UpdatedAt pgtype.Timestamptz
+}
+
 type Order struct {
 	ID              pgtype.UUID
 	StoreID         pgtype.UUID

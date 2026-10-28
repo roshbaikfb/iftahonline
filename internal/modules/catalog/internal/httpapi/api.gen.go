@@ -104,6 +104,21 @@ func (e ImportRequestKind) Valid() bool {
 	}
 }
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProductStatus.
 const (
 	ProductStatusActive   ProductStatus = "active"
@@ -512,6 +527,9 @@ type InventoryInput struct {
 	OnHand  int   `json:"on_hand"`
 	Tracked *bool `json:"tracked,omitempty"`
 }
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // PresignedUpload defines model for PresignedUpload.
 type PresignedUpload struct {
