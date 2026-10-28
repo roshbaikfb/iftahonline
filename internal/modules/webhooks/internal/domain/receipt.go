@@ -23,10 +23,13 @@ const (
 	ReceiptRetention = 90 * 24 * time.Hour
 	// MaxEventID bounds a provider event id.
 	MaxEventID = 200
+	// MaxPlatformBody is the largest delivery to a platform-owned
+	// account, which carries many stores' events: Meta batches up to
+	// 1,000 updates in one delivery.
+	MaxPlatformBody = 2 << 20
 	// MaxParts bounds the store events one platform delivery splits
-	// into (Meta batches up to about a thousand updates a minute per
-	// number, a few per delivery).
-	MaxParts = 100
+	// into: Meta's 1,000 updates per delivery.
+	MaxParts = 1000
 	// MaxChallenge bounds a URL handshake's echoed challenge.
 	MaxChallenge = 200
 )

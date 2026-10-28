@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -237,7 +238,20 @@ func TestPlatformRoutes(t *testing.T) {
 	if code, _ := f.post(t, "/v1/webhooks/fakeplatform", body, webhooktest.Sign([]byte("sa"), b)); code != http.StatusUnauthorized {
 		t.Fatalf("forged: %d", code)
 	}
-	big := `{"pad":"` + strings.Repeat("x", domain.MaxBody) + `"}`
+	// A platform delivery may be larger than a connection's (Meta
+	// batches 1,000 updates), up to MaxPlatformBody.
+	batch := make([]webhooktest.Event, 0, 300)
+	for i := range 300 {
+		batch = append(batch, webhooktest.Event{Store: f.storeA.String(), Connection: f.connA.String(), ID: fmt.Sprintf("wamid.batch.%03d.%s", i, strings.Repeat("p", 160))})
+	}
+	bb, _ := json.Marshal(map[string]any{"events": batch}) //nolint:errcheck // plain structs
+	if len(bb) <= domain.MaxBody {
+		t.Fatalf("batch of %d bytes is not over a connection's limit", len(bb))
+	}
+	if code, out := f.post(t, "/v1/webhooks/fakeplatform", string(bb), webhooktest.Sign([]byte(webhooktest.PlatformToken), bb)); code != http.StatusOK || out["status"] != "accepted" {
+		t.Fatalf("large batch: %d %v", code, out)
+	}
+	big := `{"pad":"` + strings.Repeat("x", domain.MaxPlatformBody) + `"}`
 	if code, _ := f.post(t, "/v1/webhooks/fakeplatform", big, webhooktest.Sign([]byte(webhooktest.PlatformToken), []byte(big))); code != http.StatusBadRequest {
 		t.Fatalf("too large: %d", code)
 	}

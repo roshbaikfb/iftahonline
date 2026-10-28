@@ -63,7 +63,7 @@ WhatsApp number (ADR-0038). Their provider gets one URL without a store,
 |---|---|
 | `receiveWebhook` `POST /v1/webhooks/{provider}/{store_id}/{connection_id}` | 200 `accepted` or `duplicate`; 401 forged; 404 unknown provider, store or connection; 400 over 64 KiB or no event id; 429 over the limits |
 | `verifyWebhook` `GET` same path | The URL handshake: 200 echoes `hub.challenge` as `text/plain` (nosniff, no-store); 401 wrong token; 404 no handshake, unknown store or connection; 400 a challenge that is not 1-200 URL-safe characters |
-| `receivePlatformWebhook` `POST /v1/webhooks/{provider}` | As `receiveWebhook`, for a platform-owned account; `duplicate` only when every placed event was a replay |
+| `receivePlatformWebhook` `POST /v1/webhooks/{provider}` | As `receiveWebhook`, for a platform-owned account, with up to 2 MiB and 1,000 events (Meta batches 1,000 updates); `duplicate` only when every placed event was a replay |
 | `verifyPlatformWebhook` `GET /v1/webhooks/{provider}` | The handshake against the platform's token |
 
 Limits: 1,200/min per client IP, 600/min per connection, 6,000/min per

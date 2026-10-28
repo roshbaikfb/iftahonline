@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
@@ -35,8 +36,6 @@ type Handlers struct {
 
 var _ ServerInterface = (*Handlers)(nil)
 
-var errTooLarge = errs.BadRequest("the webhook body is larger than 64 KiB", nil)
-
 // Mount registers the webhook route on mux.
 func Mount(mux *http.ServeMux, svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) {
 	HandlerWithOptions(&Handlers{svc: svc, resp: resp, clientIP: clientIP}, StdHTTPServerOptions{
@@ -59,7 +58,7 @@ func (h *Handlers) ReceiveWebhook(w http.ResponseWriter, r *http.Request, provid
 		h.resp.Write(w, r, app.ErrNotFound)
 		return
 	}
-	body, ok := h.readBody(w, r)
+	body, ok := h.readBody(w, r, domain.MaxBody)
 	if !ok {
 		return
 	}
@@ -75,7 +74,7 @@ func (h *Handlers) ReceiveWebhook(w http.ResponseWriter, r *http.Request, provid
 
 // ReceivePlatformWebhook implements ServerInterface.
 func (h *Handlers) ReceivePlatformWebhook(w http.ResponseWriter, r *http.Request, provider string) {
-	body, ok := h.readBody(w, r)
+	body, ok := h.readBody(w, r, domain.MaxPlatformBody)
 	if !ok {
 		return
 	}
@@ -121,14 +120,14 @@ func (h *Handlers) VerifyPlatformWebhook(w http.ResponseWriter, r *http.Request,
 	writeChallenge(w, challenge)
 }
 
-// readBody reads at most domain.MaxBody bytes; on failure it has written
-// the problem.
-func (h *Handlers) readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, domain.MaxBody))
+// readBody reads at most limit bytes; on failure it has written the
+// problem.
+func (h *Handlers) readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, bool) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			h.resp.Write(w, r, errTooLarge)
+			h.resp.Write(w, r, errs.BadRequest(fmt.Sprintf("the webhook body is larger than %d KiB", limit>>10), nil))
 			return nil, false
 		}
 		h.resp.Write(w, r, errs.BadRequest("could not read the body", err))
