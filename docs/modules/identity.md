@@ -44,6 +44,13 @@ identity. Identity's sign-up depends on tenancy, not the other way around.
 5. **Other routes:** a valid session sets the identity. A stale cookie is
    ignored, so login still works with an old cookie.
 
+## Exported helpers
+
+- `NewAuditRecorder` writes the audit log for other modules.
+- `StaffEmails(db, roles…)` lists the store's members' emails for those
+  roles; messaging uses it to email quota warnings to the owner and
+  managers.
+
 ## Roles and permissions
 
 There is one matrix, `internal/domain/rbac.go`, and `TestMatrix` pins

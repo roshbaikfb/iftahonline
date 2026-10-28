@@ -7,8 +7,16 @@
 package identity
 
 import (
+	"context"
+	"slices"
+
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -16,3 +24,22 @@ import (
 // It needs nothing but an ID generator, so it can be built before the
 // module itself.
 func NewAuditRecorder(ids *ulid.Generator) audit.Recorder { return app.NewRecorder(ids) }
+
+// StaffEmails returns a function listing the email addresses of the
+// store-in-ctx's members with one of roles, for notices other modules
+// email to the store's staff. It reads in one query.
+func StaffEmails(db postgres.Beginner, roles ...authz.Role) func(ctx context.Context) ([]string, error) {
+	return func(ctx context.Context) ([]string, error) {
+		var out []string
+		err := postgres.InTenantTx(ctx, db, func(tx pgx.Tx) error {
+			members, err := store.ListMembers(ctx, tx)
+			for _, m := range members {
+				if slices.Contains(roles, m.Role) {
+					out = append(out, m.Email)
+				}
+			}
+			return err
+		})
+		return out, err
+	}
+}

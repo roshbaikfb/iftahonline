@@ -117,6 +117,10 @@ type Shop interface {
 	Bestsellers(ctx context.Context, limit int) ([]ulid.ID, error)
 }
 
+// CodeOf is the short reference of an order shown to merchants and
+// shoppers (Order.Code).
+func CodeOf(id ulid.ID) string { return domain.CodeOf(id) }
+
 // MaxBestsellers is the most products Bestsellers returns.
 const MaxBestsellers = app.MaxBestsellers
 
