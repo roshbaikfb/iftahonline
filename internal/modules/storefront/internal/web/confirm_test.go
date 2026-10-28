@@ -13,7 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 )
 
-const confirmToken = "tok_0123456789abcdefABCD"
+const confirmToken = "aaaabbbbccccddddeeeeff"
 
 // fakeConfirms has one link, waiting for an answer.
 type fakeConfirms struct {

@@ -1,0 +1,5 @@
+# Findings gitleaks reports that are not secrets, one fingerprint each
+# (commit:file:rule:line). Never ignore a whole file or rule here.
+#
+# A test's fake SMS-link token, since replaced by a plain value.
+bf8d04fdb723d29990d6ac190c791358f234dbfb:internal/modules/storefront/internal/web/confirm_test.go:generic-api-key:16
