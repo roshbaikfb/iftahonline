@@ -393,6 +393,7 @@ test('a merchant renames the store, adds a domain and invites a teammate', async
   await page.getByRole('button', { name: 'أضف' }).click();
   await expect(page.getByText('shop.demo-e2e.test', { exact: true })).toBeVisible();
   await expect(page.getByText('_iftah-verify.shop.demo-e2e.test')).toBeVisible();
+  await expect(page.getByText(/^connect\./)).toBeVisible(); // the CNAME target (ADR-0037)
 
   await nav.getByRole('link', { name: 'فريق العمل' }).click();
   await page.getByLabel('البريد الإلكتروني').fill('helper@demo.test');

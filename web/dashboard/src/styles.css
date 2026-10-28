@@ -4045,3 +4045,9 @@ label.choice > span {
     flex-basis: 100%;
   }
 }
+.dns-options {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0;
+  padding-inline-start: 1.1rem;
+}

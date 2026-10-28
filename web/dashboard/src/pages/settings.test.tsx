@@ -29,6 +29,7 @@ const platform = { id: '01M5DOM0000000000000000001', host: 'mona.iftahonline.com
 const pending = {
   id: pendingID, host: 'shop.mona.com', kind: 'custom', status: 'failed', failure_reason: 'txt_record_not_found', is_primary: false, created_at: '',
   verification: { record_type: 'TXT', name: '_iftah-verify.shop.mona.com', value: 'iftah-verify=k3j5' },
+  routing: { apex: false, records: [{ type: 'CNAME', name: 'shop.mona.com', value: 'connect.iftahonline.com' }] },
 };
 
 function routes(over: Record<string, (c: Call) => { status: number; body?: unknown }> = {}) {
@@ -134,7 +135,8 @@ describe('Domains', () => {
     expect(within(custom).getByText(/لم نجد سجل TXT/)).toBeInTheDocument();
     expect(within(custom).getByText('_iftah-verify.shop.mona.com')).toBeInTheDocument();
     expect(within(custom).getByText('iftah-verify=k3j5')).toBeInTheDocument();
-    expect(within(custom).getByText('mona.iftahonline.com')).toBeInTheDocument(); // the CNAME target
+    expect(within(custom).getByText('connect.iftahonline.com')).toBeInTheDocument(); // the CNAME target (ADR-0037)
+    expect(within(custom).queryByText(/دومين أساسي/)).toBeNull();
     const main = screen.getAllByText('mona.iftahonline.com')[0]?.closest('li');
     if (!main) throw new Error('no platform row');
     expect(within(main).getByText('العنوان الرئيسي')).toBeInTheDocument();
@@ -150,6 +152,36 @@ describe('Domains', () => {
       expect(calls.find((c) => c.method === 'POST' && c.path === `${base}/domains`)?.body).toEqual({ host: 'store.mona.com' });
     });
     expect(await screen.findByText('store.mona.com')).toBeInTheDocument();
+  });
+
+  it('tells an apex domain to use an ALIAS, or the A and AAAA records', async () => {
+    const apex = (records: { type: string; value: string }[]) => ({
+      ...pending, id: pendingID, host: 'mona.com', status: 'pending', failure_reason: undefined,
+      routing: { apex: true, records: records.map((r) => ({ ...r, name: 'mona.com' })) },
+    });
+    routes({
+      [`GET ${base}/domains`]: () => ({
+        status: 200,
+        body: { items: [platform, apex([{ type: 'ALIAS', value: 'connect.iftahonline.com' }, { type: 'A', value: '203.0.113.10' }, { type: 'AAAA', value: '2001:db8::10' }])] },
+      }),
+    });
+    const { unmount } = renderAt(`/stores/${store}/domains`);
+    const row = (await screen.findByText('mona.com')).closest('li');
+    if (!row) throw new Error('no row');
+    expect(within(row).getByText(/هذا دومين أساسي/)).toBeInTheDocument();
+    expect(within(row).getByText('connect.iftahonline.com')).toBeInTheDocument();
+    expect(within(row).getByText('203.0.113.10')).toBeInTheDocument();
+    expect(within(row).getByText('2001:db8::10')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'انسخ سجل A' })).toBeInTheDocument();
+    unmount();
+
+    // no fixed addresses configured: only the ALIAS, and the www way out
+    routes({ [`GET ${base}/domains`]: () => ({ status: 200, body: { items: [platform, apex([{ type: 'ALIAS', value: 'connect.iftahonline.com' }])] } }) });
+    renderAt(`/stores/${store}/domains`);
+    const again = (await screen.findByText('mona.com')).closest('li');
+    if (!again) throw new Error('no row');
+    expect(within(again).queryByRole('button', { name: 'انسخ سجل A' })).toBeNull();
+    expect(within(again).getByText('إن لم تدعمه شركتك، فاستخدم دومينًا فرعيًا مثل www بدلًا منه.')).toBeInTheDocument();
   });
 
   it('makes a working domain the main one and removes another', async () => {
