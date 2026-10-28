@@ -644,6 +644,14 @@ type StorefrontPreview struct {
 	CreatedAt time.Time
 }
 
+type UsageCounter struct {
+	StoreID   ulid.ID
+	Feature   string
+	Period    pgtype.Date
+	Used      int64
+	UpdatedAt time.Time
+}
+
 type User struct {
 	ID              ulid.ID
 	Email           string

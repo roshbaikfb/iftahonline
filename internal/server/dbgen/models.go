@@ -641,6 +641,14 @@ type StorefrontPreview struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type UsageCounter struct {
+	StoreID   pgtype.UUID
+	Feature   string
+	Period    pgtype.Date
+	Used      int64
+	UpdatedAt pgtype.Timestamptz
+}
+
 type User struct {
 	ID              pgtype.UUID
 	Email           string
