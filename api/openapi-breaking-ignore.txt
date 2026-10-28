@@ -1,7 +1,7 @@
 # Breaking-change exceptions accepted on purpose (scripts/openapi-diff.sh).
 # Each line is one exact oasdiff finding: method, path and message. Only
-# what ADR-0032 allows belongs here: new values of SectionType, an
-# extensible list (clients ignore types they do not know). Anything
+# what ADR-0032 allows belongs here: new values of an extensible list
+# (SectionType; MessageKind, ADR-0041) that clients must tolerate. Anything
 # else stays an error. A line here matches nothing once main has the
 # value, so the file can be emptied after the merge.
 #
@@ -36,3 +36,6 @@ PUT /v1/stores/{store_id}/storefront/pages/{page_id} added the new `whatsapp_cta
 PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `category_tiles` enum value to the `sections/items/type` response property for the response status `200`
 PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `promo_tiles` enum value to the `sections/items/type` response property for the response status `200`
 PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `whatsapp_cta` enum value to the `sections/items/type` response property for the response status `200`
+#
+# 6c-2b (ADR-0041): order_answer_ack, the thanks to a customer who answered
+GET /v1/stores/{store_id}/messages added the new `order_answer_ack` enum value to the `items/items/kind` response property for the response status `200`

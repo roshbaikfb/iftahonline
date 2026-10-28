@@ -138,6 +138,21 @@ func (e MessageTextLocale) Valid() bool {
 	}
 }
 
+// Defines values for MessageTextKind.
+const (
+	MessageTextKindOrderConfirmation MessageTextKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageTextKind enum.
+func (e MessageTextKind) Valid() bool {
+	switch e {
+	case MessageTextKindOrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageUsageLevel.
 const (
 	Nearly  MessageUsageLevel = "nearly"
@@ -259,7 +274,11 @@ type CustomerMessage struct {
 	Fallback bool `json:"fallback"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id     ULID                  `json:"id"`
+	Id ULID `json:"id"`
+
+	// Kind What a message is for. An extensible list (ADR-0032, ADR-0041):
+	// new kinds are added within /v1, and clients must show a kind they
+	// do not know as a message, never fail on it.
 	Kind   MessageKind           `json:"kind"`
 	Locale CustomerMessageLocale `json:"locale"`
 
@@ -294,7 +313,9 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
-// MessageKind defines model for MessageKind.
+// MessageKind What a message is for. An extensible list (ADR-0032, ADR-0041):
+// new kinds are added within /v1, and clients must show a kind they
+// do not know as a message, never fail on it.
 type MessageKind string
 
 // MessagePage defines model for MessagePage.
@@ -309,8 +330,10 @@ type MessageStatus string
 // MessageText defines model for MessageText.
 type MessageText struct {
 	// Custom The store wrote it (else the default).
-	Custom    bool              `json:"custom"`
-	Kind      MessageKind       `json:"kind"`
+	Custom bool `json:"custom"`
+
+	// Kind The kinds whose SMS text a store writes.
+	Kind      MessageTextKind   `json:"kind"`
 	Locale    MessageTextLocale `json:"locale"`
 	SmsBody   string            `json:"sms_body"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
@@ -318,6 +341,9 @@ type MessageText struct {
 
 // MessageTextLocale defines model for MessageText.Locale.
 type MessageTextLocale string
+
+// MessageTextKind The kinds whose SMS text a store writes.
+type MessageTextKind string
 
 // MessageUsage defines model for MessageUsage.
 type MessageUsage struct {
@@ -517,10 +543,10 @@ type ServerInterface interface {
 	ListMessageTexts(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// ResetMessageText Go back to the default SMS text
 	// (DELETE /v1/stores/{store_id}/messaging/texts/{kind}/{locale})
-	ResetMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageKind, locale string)
+	ResetMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageTextKind, locale string)
 	// SaveMessageText Write the store's SMS text
 	// (PUT /v1/stores/{store_id}/messaging/texts/{kind}/{locale})
-	SaveMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageKind, locale string)
+	SaveMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageTextKind, locale string)
 	// GetMessageUsage The store's message quota this month
 	// (GET /v1/stores/{store_id}/messaging/usage)
 	GetMessageUsage(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -839,7 +865,7 @@ func (siw *ServerInterfaceWrapper) ResetMessageText(w http.ResponseWriter, r *ht
 	}
 
 	// ------------- Path parameter "kind" -------------
-	var kind MessageKind
+	var kind MessageTextKind
 
 	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
 	if err != nil {
@@ -883,7 +909,7 @@ func (siw *ServerInterfaceWrapper) SaveMessageText(w http.ResponseWriter, r *htt
 	}
 
 	// ------------- Path parameter "kind" -------------
-	var kind MessageKind
+	var kind MessageTextKind
 
 	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
 	if err != nil {
@@ -1356,9 +1382,9 @@ func (response ListMessageTextsdefaultApplicationProblemPlusJSONResponse) VisitL
 }
 
 type ResetMessageTextRequestObject struct {
-	StoreId StoreID     `json:"store_id"`
-	Kind    MessageKind `json:"kind"`
-	Locale  string      `json:"locale"`
+	StoreId StoreID         `json:"store_id"`
+	Kind    MessageTextKind `json:"kind"`
+	Locale  string          `json:"locale"`
 }
 
 type ResetMessageTextResponseObject interface {
@@ -1397,9 +1423,9 @@ func (response ResetMessageTextdefaultApplicationProblemPlusJSONResponse) VisitR
 }
 
 type SaveMessageTextRequestObject struct {
-	StoreId StoreID     `json:"store_id"`
-	Kind    MessageKind `json:"kind"`
-	Locale  string      `json:"locale"`
+	StoreId StoreID         `json:"store_id"`
+	Kind    MessageTextKind `json:"kind"`
+	Locale  string          `json:"locale"`
 	Body    *SaveMessageTextJSONRequestBody
 }
 
@@ -1750,7 +1776,7 @@ func (sh *strictHandler) ListMessageTexts(w http.ResponseWriter, r *http.Request
 }
 
 // ResetMessageText operation middleware
-func (sh *strictHandler) ResetMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageKind, locale string) {
+func (sh *strictHandler) ResetMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageTextKind, locale string) {
 	var request ResetMessageTextRequestObject
 
 	request.StoreId = storeId
@@ -1778,7 +1804,7 @@ func (sh *strictHandler) ResetMessageText(w http.ResponseWriter, r *http.Request
 }
 
 // SaveMessageText operation middleware
-func (sh *strictHandler) SaveMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageKind, locale string) {
+func (sh *strictHandler) SaveMessageText(w http.ResponseWriter, r *http.Request, storeId StoreID, kind MessageTextKind, locale string) {
 	var request SaveMessageTextRequestObject
 
 	request.StoreId = storeId
