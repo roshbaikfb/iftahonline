@@ -2561,7 +2561,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Answer a provider's URL handshake
+         * @description For providers that verify a webhook URL before using it (Meta:
+         *     `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`). When
+         *     the token matches the connection's, the challenge is echoed as
+         *     text; otherwise 401. Providers without a handshake, and unknown
+         *     stores and connections, are 404.
+         */
+        get: operations["verifyWebhook"];
         put?: never;
         /**
          * Receive a provider's webhook
@@ -2573,6 +2581,35 @@ export interface paths {
          *     connections are 404.
          */
         post: operations["receiveWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Answer a provider's URL handshake for a platform-owned account
+         * @description As verifyWebhook, against the platform's own token.
+         */
+        get: operations["verifyPlatformWebhook"];
+        put?: never;
+        /**
+         * Receive a webhook of a platform-owned account
+         * @description For an account the platform owns and shares between stores (one
+         *     WhatsApp number, ADR-0038). The body (at most 64 KiB) is verified
+         *     with the platform's secret, then split by the provider into the
+         *     events of each store; each event is accepted once in its store.
+         *     The status is `accepted` when any event is new, else `duplicate`.
+         *     Providers without a platform account are 404.
+         */
+        post: operations["receivePlatformWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7601,6 +7638,35 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    verifyWebhook: {
+        parameters: {
+            query?: {
+                "hub.mode"?: string;
+                "hub.verify_token"?: string;
+                "hub.challenge"?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+                store_id: components["parameters"]["StoreID"];
+                connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The challenge, echoed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     receiveWebhook: {
         parameters: {
             query?: never;
@@ -7609,6 +7675,62 @@ export interface operations {
                 provider: string;
                 store_id: components["parameters"]["StoreID"];
                 connection_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted, or recognised as a replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceipt"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyPlatformWebhook: {
+        parameters: {
+            query?: {
+                "hub.mode"?: string;
+                "hub.verify_token"?: string;
+                "hub.challenge"?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The challenge, echoed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    receivePlatformWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
             };
             cookie?: never;
         };
