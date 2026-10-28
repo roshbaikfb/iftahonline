@@ -85,7 +85,7 @@ function Gate() {
           <Route path="/stores/:storeId/design" element={<Design />} />
           <Route path="/stores/:storeId/home-page" element={<HomeEditor />} />
           <Route path="/stores/:storeId/pages" element={<Pages />} />
-          <Route path="/stores/:storeId/pages/new" element={<LandingEditor key="new" />} />
+          <Route path="/stores/:storeId/pages/new" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/:pageId" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/policies/:policy" element={<PolicyEditor />} />
           <Route path="/stores/:storeId/inventory" element={<Inventory />} />

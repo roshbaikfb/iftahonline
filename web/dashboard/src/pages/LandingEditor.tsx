@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 
 import '../shop-fonts.css';
 import { api, type components } from '../api/client';
@@ -36,19 +36,20 @@ export function LandingEditor() {
   const navigate = useNavigate();
   const narrow = useNarrow();
   const data = useShopData(storeId);
-  const location = useLocation();
   const [saved, setSaved] = useState<Page | null>(null);
   const [form, setForm] = useState<Form | null>(() => (pageId === 'new' ? blank() : null));
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState(() => form?.sections[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  // A page just created arrives here with what was done.
-  const [notice, setNotice] = useState(() => (location.state as { notice?: string } | null)?.notice ?? '');
+  const [notice, setNotice] = useState('');
+  // The page just created here: its new address shows it as it is, with
+  // no reload.
+  const created = useRef('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (pageId === 'new') return;
+    if (pageId === 'new' || pageId === created.current) return;
     let live = true;
     void api.GET('/v1/stores/{store_id}/storefront/pages/{page_id}', { params: { path: { store_id: storeId, page_id: pageId } } }).then(({ data: p, error: err }) => {
       if (!live) return;
@@ -92,9 +93,11 @@ export function LandingEditor() {
     setDirty(false);
     setErrors({});
     setError('');
-    const done = status === 'published' ? 'نُشرت الصفحة.' : 'حُفظت الصفحة كمسودة. لا يراها العملاء حتى تنشرها.';
-    setNotice(done);
-    if (!saved?.id && p.id) void navigate(`/stores/${storeId}/pages/${p.id}`, { replace: true, state: { notice: done } });
+    setNotice(status === 'published' ? 'نُشرت الصفحة.' : 'حُفظت الصفحة كمسودة. لا يراها العملاء حتى تنشرها.');
+    if (!saved?.id && p.id) {
+      created.current = p.id;
+      void navigate(`/stores/${storeId}/pages/${p.id}`, { replace: true });
+    }
   }
 
   async function remove() {
