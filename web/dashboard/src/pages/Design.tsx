@@ -247,8 +247,8 @@ export function Design() {
             <h1>التصميم</h1>
             {(dirty || save === 'saving') && <span className="status s-pending">تغييرات لم تُنشر</span>}
           </div>
-          <p className="muted">تُحفظ تلقائيًا كمسودة. العملاء يرون آخر نسخة منشورة حتى تضغط «نشر».</p>
-          <p className="save-state" role="status">
+          <p className="muted desk-only">تُحفظ تلقائيًا كمسودة. العملاء يرون آخر نسخة منشورة حتى تضغط «نشر».</p>
+          <p className="visually-hidden" role="status">
             {save === 'saving' ? 'جارٍ حفظ المسودة…' : save === 'saved' ? 'حُفظت المسودة' : save === 'error' ? 'لم تُحفظ المسودة: راجع الحقول المعلّمة' : ''}
           </p>
         </div>
@@ -282,11 +282,27 @@ export function Design() {
                   }}
                 >
                   <span className="mini" aria-hidden="true">
-                    <i className="m-brand" />
-                    <i className="m-row" />
+                    {l.id === 'soft' ? (
+                      <span className="m-dots">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    ) : (
+                      <i className="m-bar" />
+                    )}
+                    {l.id === 'soft' ? (
+                      <i className="m-pill" />
+                    ) : (
+                      <span className="m-cards">
+                        {(l.id === 'classic' ? [1, 2, 3, 4] : [1, 2]).map((n) => (
+                          <i key={n} />
+                        ))}
+                      </span>
+                    )}
                   </span>
                   <strong>{l.label}</strong>
-                  <span className="muted small">{l.hint}</span>
+                  <span className="muted small desk-only">{l.hint}</span>
                 </button>
               ))}
             </div>
@@ -344,8 +360,11 @@ export function Design() {
                       }}
                     />
                     <div className="grow">
-                      <strong>{r.label}</strong>
-                      {r.hint && <div className="muted small">{r.hint}</div>}
+                      <strong>
+                        <span className="desk-only">{r.label}</span>
+                        <span className="phone-only">{r.short}</span>
+                      </strong>
+                      {r.hint && <div className="muted small desk-only">{r.hint}</div>}
                     </div>
                     <input
                       className="hex"
@@ -365,7 +384,13 @@ export function Design() {
               })}
             </div>
             {ratio >= minContrast ? (
-              <p className="contrast ok">النص واضح على الخلفية (التباين {ratio.toFixed(1)} : 1)</p>
+              <p className="contrast ok">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                <span className="desk-only">النص واضح على الخلفية (التباين {ratio.toFixed(1)} : 1)</span>
+                <span className="phone-only">النص واضح على الخلفية</span>
+              </p>
             ) : (
               <p className="contrast bad" role="alert">
                 النص غير واضح على الخلفية (التباين {ratio.toFixed(1)} : 1، والمطلوب {minContrast} على الأقل). غيّر أحد اللونين.
@@ -395,7 +420,8 @@ export function Design() {
             </p>
             <div>
               <span className="field-label" id="radius-label">
-                زوايا الأزرار والبطاقات
+                <span className="desk-only">زوايا الأزرار والبطاقات</span>
+                <span className="phone-only">الزوايا</span>
               </span>
               <select
                 className="radius-select"
@@ -434,7 +460,8 @@ export function Design() {
               <div className="logo-box">{logoURL ? <img src={logoURL} alt="الشعار الحالي" /> : <span>{store?.name ?? ''}</span>}</div>
               <div className="logo-actions">
                 <label className="button secondary small">
-                  {logoURL ? 'تغيير الشعار' : 'ارفع الشعار'}
+                  <span className="desk-only">{logoURL ? 'تغيير الشعار' : 'ارفع الشعار'}</span>
+                  <span className="phone-only">{logoURL ? 'تغيير' : 'رفع'}</span>
                   <input type="file" accept="image/png,image/jpeg,image/webp" className="visually-hidden" onChange={(e) => void pickLogo(e)} />
                 </label>
                 {logoURL && (
@@ -445,14 +472,17 @@ export function Design() {
               </div>
             </div>
             {logoBusy && <p role="status">{logoBusy}</p>}
-            <p className="muted">PNG أو JPG أو WebP. يظهر بارتفاع 40 بكسل في رأس الصفحة.</p>
+            <p className="muted desk-only">PNG أو JPG أو WebP. يظهر بارتفاع 40 بكسل في رأس الصفحة.</p>
           </section>
 
-          <section className="card editor-card" aria-labelledby="h-text">
-            <h2 id="h-text">نصوص المتجر</h2>
+          <section className="card editor-card texts-card" aria-labelledby="h-text">
+            <h2 id="h-text">
+              <span className="desk-only">نصوص المتجر</span>
+              <span className="phone-only">النصوص والتواصل</span>
+            </h2>
             <label className="field-label">
               <span>
-                شريط الإعلان <span className="muted">(اختياري)</span>
+                شريط الإعلان <span className="muted desk-only">(اختياري)</span>
               </span>
               <input
                 value={s.announcement ?? ''}
@@ -463,7 +493,7 @@ export function Design() {
                 }}
               />
             </label>
-            <p className="muted small">سطر واحد فوق رأس الصفحة. {(s.announcement ?? '').length} من 120 حرفًا.</p>
+            <p className="muted small desk-only">سطر واحد فوق رأس الصفحة. {(s.announcement ?? '').length} من 120 حرفًا.</p>
             <label className="field-label">
               نبذة عن المتجر
               <textarea
@@ -475,11 +505,13 @@ export function Design() {
                 }}
               />
             </label>
-            <p className="muted small">تظهر في أسفل كل صفحة.</p>
+            <p className="muted small desk-only">تظهر في أسفل كل صفحة.</p>
           </section>
 
-          <section className="card editor-card" aria-labelledby="h-contact">
-            <h2 id="h-contact">التواصل وتنبيه المخزون</h2>
+          <section className="card editor-card contact-card" aria-labelledby="h-contact">
+            <h2 id="h-contact" className="desk-only">
+              التواصل وتنبيه المخزون
+            </h2>
             <div className="two-cols">
               <label className="field-label">
                 واتساب
@@ -509,9 +541,10 @@ export function Design() {
               </label>
             </div>
             {(err('contact.whatsapp') ?? err('contact.email')) && <p className="field-error">{err('contact.whatsapp') ?? err('contact.email')}</p>}
-            <p className="muted small">زر واتساب يظهر في صفحة المنتج ويفتح محادثة فيها اسم المنتج واختياراته.</p>
+            <p className="muted small desk-only">زر واتساب يظهر في صفحة المنتج ويفتح محادثة فيها اسم المنتج واختياراته.</p>
             <label className="field-label">
-              قل «باقي X قطع فقط» عندما يتبقى
+              <span className="desk-only">قل «باقي X قطع فقط» عندما يتبقى</span>
+              <span className="phone-only">«باقي X قطع» عند</span>
               <span className="inline">
                 <input
                   type="number"
@@ -523,7 +556,7 @@ export function Design() {
                     change({ ...s, low_stock: Math.max(0, Math.min(10, Number(e.target.value) || 0)) });
                   }}
                 />
-                <span className="muted">قطع أو أقل · 0 يخفي التنبيه</span>
+                <span className="muted desk-only">قطع أو أقل · 0 يخفي التنبيه</span>
               </span>
             </label>
           </section>

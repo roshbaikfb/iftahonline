@@ -65,7 +65,7 @@ describe('Design', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'التصميم' })).toBeInTheDocument();
     expect(screen.queryByText('تغييرات لم تُنشر')).toBeNull();
     for (const b of screen.getAllByRole('button', { name: 'نشر' })) expect(b).toBeDisabled(); // nothing to publish yet (head and phone bar)
-    expect(screen.getByText(/النص واضح على الخلفية/)).toBeInTheDocument();
+    expect(screen.getByText(/النص واضح على الخلفية \(التباين/)).toBeInTheDocument();
     expect(await screen.findByText('تشكيلة الشتاء وصلت')).toBeInTheDocument(); // the preview's hero
 
     await user.click(screen.getByRole('button', { name: /ناعم/ }));
