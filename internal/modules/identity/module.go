@@ -19,6 +19,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/password"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
@@ -117,16 +118,13 @@ func RegisterWorkers(w *river.Workers, d WorkerDeps) error {
 	if d.Pool == nil || d.Redis == nil || d.Secrets.Keyring == nil || d.Tenancy == nil || d.Log == nil {
 		return errors.New("identity: missing worker dependency")
 	}
-	var mailer notify.Mailer = notify.LogMailer{Log: d.Log}
-	if d.Mail.SMTPAddr != "" {
-		mailer = notify.SMTPMailer{Addr: d.Mail.SMTPAddr, Username: d.Mail.SMTPUsername, Password: d.Mail.SMTPPassword, From: d.Mail.From}
-	}
+	mail := mailer.FromConfig(d.Mail, d.Log)
 	var otp notify.OTPSender = notify.DisabledOTPSender{}
 	if OTPAvailable(d.Env) {
-		otp = notify.MailOTPSender{Mailer: mailer}
+		otp = notify.MailOTPSender{Mailer: mail}
 	}
 	return app.RegisterWorkers(w, app.WorkerDeps{
-		DB: d.Pool, Redis: d.Redis, Keyring: d.Secrets.Keyring, Mailer: mailer, OTP: otp,
+		DB: d.Pool, Redis: d.Redis, Keyring: d.Secrets.Keyring, Mailer: mail, OTP: otp,
 		Stores: d.Tenancy, DashboardURL: d.Mail.DashboardURL, Log: d.Log,
 	})
 }

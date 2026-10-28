@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -27,7 +28,7 @@ type WorkerDeps struct {
 	DB           DB
 	Redis        *redis.Client
 	Keyring      *secretbox.Keyring
-	Mailer       notify.Mailer
+	Mailer       mailer.Mailer
 	OTP          notify.OTPSender
 	Stores       tenancy.Service
 	DashboardURL string
@@ -121,7 +122,7 @@ func (w *InviteEmailWorker) Work(ctx context.Context, job *river.Job[InviteEmail
 	// The token is in the URL fragment: browsers never send it to a
 	// server, so it stays out of access logs and Referer headers.
 	link := strings.TrimRight(w.D.DashboardURL, "/") + "/invite#" + d.Text
-	msg := notify.Message{
+	msg := mailer.Message{
 		To:      inv.Email,
 		Subject: fmt.Sprintf("دعوة للانضمام إلى %s على iftahonline", st.Name),
 		Text: fmt.Sprintf("تمت دعوتك للانضمام إلى فريق متجر \"%s\" بدور: %s.\n\nلقبول الدعوة افتح الرابط التالي (صالح حتى %s):\n%s\n\n"+
@@ -160,7 +161,7 @@ func (w *DeviceAlertWorker) Work(ctx context.Context, job *river.Job[NewDeviceAl
 		device = "unknown device"
 	}
 	security := strings.TrimRight(w.D.DashboardURL, "/") + "/settings/security"
-	return w.D.Mailer.Send(ctx, notify.Message{
+	return w.D.Mailer.Send(ctx, mailer.Message{
 		To:      u.Email,
 		Subject: "تسجيل دخول جديد إلى حسابك على iftahonline",
 		Text: fmt.Sprintf("تم تسجيل الدخول إلى حسابك من جهاز جديد.\n\nالوقت: %s UTC\nالجهاز: %s\nالشبكة: %s\n\n"+
