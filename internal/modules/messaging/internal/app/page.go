@@ -12,6 +12,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // maxToken bounds an SMS link token as received (ours are 22 characters).
@@ -82,11 +83,33 @@ func (s *Service) AnswerLink(ctx context.Context, token string, answer domain.Re
 		if err != nil {
 			return err
 		}
-		if c.Status, err = s.AnswerTx(ctx, tx, c.OrderID, answer, domain.ActorSMSLink, s.now().UTC()); err != nil {
+		if c.Status, _, err = s.AnswerTx(ctx, tx, c.OrderID, answer, domain.ActorSMSLink, s.now().UTC()); err != nil {
 			return err
 		}
 		v, err = s.linkView(ctx, tx, c)
 		return err
 	})
 	return v, err
+}
+
+// WhatsAppLink is the thank-you page's "confirm on WhatsApp" link for an
+// order of the store in ctx, in locale: the platform's number with the
+// ready text carrying the order's code. It is "" when the order waits
+// for no answer, has no code, or the platform has no number.
+func (s *Service) WhatsAppLink(ctx context.Context, orderID ulid.ID, locale string) (string, error) {
+	if s.conf.Number == "" {
+		return "", nil
+	}
+	var c domain.Confirmation
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
+		c, err = store.Confirmation(ctx, tx, orderID, false)
+		return err
+	})
+	if errors.Is(err, store.ErrConfirmationNotFound) {
+		return "", nil
+	}
+	if err != nil || c.WACode == "" || (c.Status != domain.Pending && c.Status != domain.Unreached) {
+		return "", err
+	}
+	return domain.WhatsAppLink(s.conf.Number, domain.CustomerConfirmText(locale, c.WACode)), nil
 }

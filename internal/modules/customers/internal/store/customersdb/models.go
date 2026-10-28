@@ -287,6 +287,7 @@ type OrderConfirmation struct {
 	AnsweredBy string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	WaCode     *string
 }
 
 type OrderEvent struct {

@@ -65,9 +65,11 @@ ON CONFLICT (store_id) DO UPDATE SET confirm_cod = excluded.confirm_cod, auto_ca
 RETURNING *;
 
 -- name: InsertConfirmation :execrows
--- A redelivered order.placed finds the row and does nothing.
-INSERT INTO order_confirmations (store_id, order_id, status, token_hash, expires_at)
-VALUES (@store_id, @order_id, @status, sqlc.narg(token_hash), @expires_at)
+-- A redelivered order.placed finds the row and does nothing. A wa_code
+-- taken by another store's order (1 in 10^12) fails the insert with a
+-- unique violation; the caller draws another.
+INSERT INTO order_confirmations (store_id, order_id, status, token_hash, wa_code, expires_at)
+VALUES (@store_id, @order_id, @status, sqlc.narg(token_hash), sqlc.narg(wa_code), @expires_at)
 ON CONFLICT (store_id, order_id) DO NOTHING;
 
 -- name: LockConfirmation :one
@@ -114,3 +116,10 @@ WHERE m.store_id = @store_id AND m.id IN (
 
 -- name: ConfirmationByToken :one
 SELECT * FROM order_confirmations WHERE store_id = @store_id AND token_hash = @token_hash;
+
+-- name: ConfirmationStoreByCode :one
+-- The store of a WhatsApp code, across stores (SECURITY DEFINER).
+SELECT app.confirmation_store(@code::text)::uuid AS store_id;
+
+-- name: ConfirmationByCode :one
+SELECT * FROM order_confirmations WHERE store_id = @store_id AND wa_code = @wa_code;

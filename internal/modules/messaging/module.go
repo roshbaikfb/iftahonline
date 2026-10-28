@@ -87,7 +87,8 @@ func New(d Deps) (*Module, error) {
 	m := &Module{svc: app.NewService(app.Deps{
 		DB: d.Pool, IDs: d.IDs, Keyring: d.Secrets.Keyring, Quota: d.Quota, Jobs: d.Jobs, Channels: chans,
 		Buttons: domain.ButtonKey(buttons), Inbox: d.Inbox, VerifyToken: d.Config.WhatsAppVerifyToken, Audit: d.Audit, Log: d.Log,
-		Confirmations: app.Confirmations{Orders: d.Orders, Stores: d.Stores, Contacts: d.Contacts, Mailer: d.Mailer, DashboardURL: d.DashboardURL},
+		Confirmations: app.Confirmations{Number: d.Config.WhatsAppDisplayNumber, Orders: d.Orders, Stores: d.Stores, Contacts: d.Contacts,
+			Mailer: d.Mailer, DashboardURL: d.DashboardURL},
 	})}
 	if wa, ok := chans.WhatsApp.(*fake.Channel); ok {
 		m.wa = wa
@@ -141,6 +142,9 @@ func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(htt
 // LinksDeps are the SMS link page's dependencies (the storefront role,
 // which holds no secrets and sends nothing).
 type LinksDeps struct {
+	// Number is the platform's WhatsApp number (E.164) for the
+	// thank-you page's link; "" offers none.
+	Number string
 	Pool   *pgxpool.Pool
 	IDs    *ulid.Generator
 	Jobs   jobs.Inserter
@@ -153,7 +157,7 @@ func NewConfirmLinks(d LinksDeps) (ConfirmLinks, error) {
 	if d.Pool == nil || d.IDs == nil || d.Jobs == nil || d.Orders == nil || d.Log == nil {
 		return nil, errors.New("messaging: missing confirm-link dependency")
 	}
-	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Jobs: d.Jobs, Log: d.Log, Confirmations: app.Confirmations{Orders: d.Orders}}), nil
+	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Jobs: d.Jobs, Log: d.Log, Confirmations: app.Confirmations{Orders: d.Orders, Number: d.Number}}), nil
 }
 
 // OrderPlacedHandler asks a new cash-on-delivery order's customer to

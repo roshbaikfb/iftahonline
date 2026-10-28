@@ -2634,7 +2634,9 @@ export interface paths {
         get?: never;
         /**
          * Write the store's SMS text
-         * @description Permission: messaging.manage. 1 to 400 characters. Placeholders:
+         * @description Permission: messaging.manage. Only order_confirmation has an SMS
+         *     text (thanks to customers go by WhatsApp only); other kinds are 404.
+         *     1 to 400 characters. Placeholders:
          *     `{{name}}` (the customer), `{{store}}`, `{{ref}}` (the order),
          *     `{{total}}` and `{{url}}` (where the customer answers; required in
          *     an order confirmation). Anything else in braces is refused (422).
@@ -4309,7 +4311,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        MessageKind: "order_confirmation";
+        MessageKind: "order_confirmation" | "order_answer_ack";
         /** @enum {string} */
         MessageStatus: "queued" | "sent" | "delivered" | "read" | "failed" | "skipped_quota";
         CustomerMessage: {

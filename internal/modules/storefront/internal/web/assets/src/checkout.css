@@ -80,6 +80,9 @@
 .wa-ask { display: flex; gap: .5rem; align-items: center; justify-content: center; min-block-size: 3.25rem; border-radius: .75rem;
   border: 1px solid #cbd5e1; background: #fff; color: #15803d; font-weight: 700; }
 .wa-ask svg { inline-size: 1.25rem; block-size: 1.25rem; }
+.confirm-wa { border-color: #86efac; background: #f0fdf4; }
+.btn-wa { display: flex; gap: .5rem; align-items: center; justify-content: center; min-block-size: 3.25rem; background: #15803d; color: #fff; }
+.btn-wa svg { inline-size: 1.25rem; block-size: 1.25rem; }
 .steps .now .n { background: var(--c-primary); color: var(--c-on-primary); }
 .steps .now strong { color: var(--c-primary); }
 .track h1 { font-size: 1.4rem; margin: 0; }

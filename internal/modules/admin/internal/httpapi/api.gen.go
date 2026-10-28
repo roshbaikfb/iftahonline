@@ -121,12 +121,15 @@ func (e DomainVerificationRecordType) Valid() bool {
 
 // Defines values for MessageKind.
 const (
+	OrderAnswerAck    MessageKind = "order_answer_ack"
 	OrderConfirmation MessageKind = "order_confirmation"
 )
 
 // Valid indicates whether the value is a known member of the MessageKind enum.
 func (e MessageKind) Valid() bool {
 	switch e {
+	case OrderAnswerAck:
+		return true
 	case OrderConfirmation:
 		return true
 	default:

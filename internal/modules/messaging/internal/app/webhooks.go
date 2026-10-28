@@ -14,8 +14,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -67,9 +69,9 @@ func (p PlatformProvider) Name() string { return p.ch.Name() }
 
 // VerifyPlatform implements webhooks.PlatformProvider: the channel checks
 // the signature, and each event is placed in its store by our reference
-// (a status's) or our signed button payload (a reply's). Customers'
-// texts are not placed yet (6c); events that cannot be placed are left
-// out and counted in the log.
+// (a status's), our signed button payload (a reply's), or the WhatsApp
+// code a customer's text carries (ADR-0041). Events that cannot be
+// placed are left out and counted in the log.
 func (p PlatformProvider) VerifyPlatform(ctx context.Context, req webhooks.Request) ([]webhooks.Part, error) {
 	events, err := p.ch.VerifyWebhook(channel.Webhook{Header: req.Header, Query: req.Query, Body: req.Body})
 	switch {
@@ -84,24 +86,34 @@ func (p PlatformProvider) VerifyPlatform(ctx context.Context, req webhooks.Reque
 	parts := make([]webhooks.Part, 0, len(events))
 	unplaced := 0
 	for _, e := range events {
-		var ref domain.Ref
+		var store tenant.StoreID
 		ok := false
 		switch e.Kind {
 		case channel.StatusEvent:
+			var ref domain.Ref
 			ref, ok = domain.ParseRef(e.Ref)
+			store = ref.Store
 		case channel.ButtonEvent:
+			var ref domain.Ref
 			ref, _, ok = p.svc.buttons.ParsePayload(e.Payload)
+			store = ref.Store
+		case channel.TextEvent:
+			if store, ok, err = p.svc.storeOfText(ctx, e.Text); err != nil {
+				return nil, err
+			}
 		}
 		if !ok {
 			unplaced++
 			continue
 		}
-		e.From, e.Text = "", "" // only texts carry them, and texts are not placed
+		if e.Kind != channel.TextEvent {
+			e.From, e.Text = "", "" // only a text needs its sender and words
+		}
 		body, err := json.Marshal(e)
 		if err != nil {
 			return nil, err
 		}
-		parts = append(parts, webhooks.Part{Store: ref.Store, ConnectionID: PlatformConnection(), EventID: e.ID, Body: body})
+		parts = append(parts, webhooks.Part{Store: store, ConnectionID: PlatformConnection(), EventID: e.ID, Body: body})
 	}
 	if unplaced > 0 {
 		p.svc.log.InfoContext(ctx, "messaging: webhook events not placed", "channel", p.ch.Name(), "count", unplaced)
@@ -169,8 +181,72 @@ func (s *Service) ProcessWebhook(ctx context.Context, receiptID ulid.ID, provide
 		return s.applyStatus(ctx, receiptID, provider, e)
 	case channel.ButtonEvent:
 		return s.applyReply(ctx, receiptID, e)
+	case channel.TextEvent:
+		return s.applyText(ctx, receiptID, e)
 	}
 	return s.mark(ctx, receiptID, "ignored", nil)
+}
+
+// storeOfText finds the store a customer's text is for: the store of the
+// WhatsApp code in it, across stores.
+func (s *Service) storeOfText(ctx context.Context, text string) (tenant.StoreID, bool, error) {
+	code, ok := domain.FindCode(text)
+	if !ok {
+		return tenant.StoreID{}, false, nil
+	}
+	var id tenant.StoreID
+	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) (err error) {
+		id, ok, err = store.ByCode(ctx, tx, code)
+		return err
+	})
+	return id, ok, err
+}
+
+// applyText confirms an order its customer confirmed by writing to the
+// platform's number from the thank-you page's link: the text's code
+// names the order, and the sender must be the order's phone (anyone may
+// send a code; only the customer's own WhatsApp confirms). The customer
+// is thanked in the conversation they opened.
+func (s *Service) applyText(ctx context.Context, receiptID ulid.ID, e channel.Event) error {
+	if !s.conf.ready() {
+		return s.mark(ctx, receiptID, "ignored", nil)
+	}
+	code, ok := domain.FindCode(e.Text)
+	if !ok {
+		return s.mark(ctx, receiptID, "no_code", nil)
+	}
+	from, err := phone.ParseE164(e.From)
+	if err != nil {
+		return s.mark(ctx, receiptID, "bad_sender", nil)
+	}
+	at := e.At
+	if at.IsZero() {
+		at = s.now().UTC()
+	}
+	return s.mark(ctx, receiptID, "", func(tx pgx.Tx) (string, error) {
+		c, err := store.ConfirmationByCode(ctx, tx, code)
+		if errors.Is(err, store.ErrConfirmationNotFound) {
+			return "unknown_code", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		o, err := s.conf.Orders.GetTx(ctx, tx, c.OrderID)
+		if errors.Is(err, orders.ErrOrderNotFound) {
+			return "unknown_code", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if o.Contact.Phone.Unmasked() != from.Unmasked() {
+			return "phone_mismatch", nil
+		}
+		settled, moved, err := s.AnswerTx(ctx, tx, c.OrderID, domain.Confirm, domain.ActorWhatsApp, at)
+		if err != nil || !moved {
+			return "repeated_text", err
+		}
+		return "text_" + string(settled), s.ackTx(ctx, tx, c.OrderID, settled)
+	})
 }
 
 // mark records a receipt's outcome, after change (in the same

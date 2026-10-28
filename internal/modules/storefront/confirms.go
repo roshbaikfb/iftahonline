@@ -6,6 +6,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/web"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // shopConfirms adapts messaging's SMS link side to the shop's port: a
@@ -26,6 +27,14 @@ func (c shopConfirms) AnswerConfirmation(ctx context.Context, token string, conf
 		answer = messaging.Confirm
 	}
 	return toConfirmView(c.links.AnswerLink(ctx, token, answer))
+}
+
+func (c shopConfirms) WhatsAppLink(ctx context.Context, orderRef, locale string) (string, error) {
+	id, err := ulid.Parse(orderRef)
+	if err != nil {
+		return "", nil // no order has that reference
+	}
+	return c.links.WhatsAppLink(ctx, id, locale)
 }
 
 func toConfirmView(v messaging.LinkView, err error) (web.ConfirmView, error) {

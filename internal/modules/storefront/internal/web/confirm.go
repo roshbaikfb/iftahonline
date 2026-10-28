@@ -19,6 +19,9 @@ import (
 type Confirmations interface {
 	Confirmation(ctx context.Context, token string) (ConfirmView, error)
 	AnswerConfirmation(ctx context.Context, token string, confirm bool) (ConfirmView, error)
+	// WhatsAppLink is the thank-you page's "confirm on WhatsApp" link for
+	// an order (by its reference) in locale; "" when there is none.
+	WhatsAppLink(ctx context.Context, orderRef, locale string) (string, error)
 }
 
 // ErrConfirmationNotFound means there is no confirmation behind a link.

@@ -43,6 +43,10 @@ type Contacts func(ctx context.Context) ([]string, error)
 // role has them all; the api role none (it only serves settings and
 // notices).
 type Confirmations struct {
+	// Number is the platform's WhatsApp number in E.164, which customers
+	// may write to first (the thank-you page's link, ADR-0041); "" turns
+	// that off.
+	Number       string
 	Orders       orders.Fulfilment
 	Stores       StoreSource
 	Contacts     Contacts
@@ -96,15 +100,21 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 			deadline = earliest
 		}
 		c := domain.Confirmation{OrderID: o.ID, Status: domain.Pending, ExpiresAt: deadline}
-		created, err := store.InsertConfirmation(ctx, tx, c, hash)
+		created, err := s.insertConfirmation(ctx, tx, &c, hash)
 		if err != nil || !created {
 			return err
+		}
+		// With a number to confirm on, the customer may confirm for free
+		// from the thank-you page first: the paid template waits.
+		var sendAt time.Time
+		if c.WACode != "" {
+			sendAt = s.now().Add(CustomerFirst)
 		}
 		ml := money.LocaleEN
 		if locale == domain.Arabic {
 			ml = money.LocaleAR
 		}
-		q, err := s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.OrderConfirmation, Locale: locale, OrderID: &o.ID, To: o.Contact.Phone,
+		q, err := s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.OrderConfirmation, Locale: locale, OrderID: &o.ID, To: o.Contact.Phone, SendAt: sendAt,
 			Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Total: o.Total.Format(ml),
 				ConfirmURL: "https://" + info.Host + domain.ConfirmPath(locale, token)}})
 		if err != nil {
@@ -127,6 +137,47 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 		}
 		return s.quotaNoticeTx(ctx, tx, q)
 	})
+}
+
+// CustomerFirst is how long the paid confirmation template waits for a
+// customer who can confirm for free from the thank-you page (ADR-0041).
+const CustomerFirst = 10 * time.Minute
+
+// codeTries bounds drawing a WhatsApp code that no other order holds
+// (a clash is about one in 10^12 per draw).
+const codeTries = 3
+
+// insertConfirmation opens c, with a WhatsApp code when the platform has
+// a number to confirm on. Each draw runs in a savepoint, so a clash with
+// another store's code (a unique violation) leaves tx usable.
+func (s *Service) insertConfirmation(ctx context.Context, tx pgx.Tx, c *domain.Confirmation, hash []byte) (bool, error) {
+	for range codeTries {
+		code := ""
+		if s.conf.Number != "" && s.channels.WhatsApp != nil {
+			var err error
+			if code, err = domain.NewCode(); err != nil {
+				return false, err
+			}
+		}
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return false, fmt.Errorf("messaging: savepoint: %w", err)
+		}
+		created, err := store.InsertConfirmation(ctx, sp, *c, hash, code)
+		if errors.Is(err, store.ErrCodeTaken) {
+			if err = sp.Rollback(ctx); err != nil {
+				return false, err
+			}
+			continue
+		}
+		if err != nil {
+			_ = sp.Rollback(ctx) //nolint:errcheck // the insert's error is the one to report
+			return false, err
+		}
+		c.WACode = code
+		return created, sp.Commit(ctx)
+	}
+	return false, errors.New("messaging: no free WhatsApp code")
 }
 
 // quotaNoticeTx warns the merchant when a message crossed 80% or 100% of
@@ -161,7 +212,34 @@ func (s *Service) HandleReplyTx(ctx context.Context, tx pgx.Tx, r Reply) error {
 	if r.Kind != domain.OrderConfirmation || r.OrderID == nil {
 		return nil
 	}
-	_, err := s.AnswerTx(ctx, tx, *r.OrderID, r.Answer, domain.ActorWhatsApp, r.At)
+	settled, moved, err := s.AnswerTx(ctx, tx, *r.OrderID, r.Answer, domain.ActorWhatsApp, r.At)
+	if err != nil || !moved {
+		return err
+	}
+	return s.ackTx(ctx, tx, *r.OrderID, settled)
+}
+
+// ackTx thanks a customer who answered on WhatsApp, in the conversation
+// they opened (free, no quota): what became of their order. Without
+// WhatsApp or the stores (not the worker), nothing is sent.
+func (s *Service) ackTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, settled domain.ConfirmationStatus) error {
+	if s.channels.WhatsApp == nil || s.conf.Stores == nil {
+		return nil
+	}
+	o, err := s.conf.Orders.GetTx(ctx, tx, orderID)
+	if err != nil {
+		return err
+	}
+	info, err := s.conf.Stores(ctx)
+	if err != nil {
+		return err
+	}
+	locale := info.Locale
+	if !domain.ValidLocale(locale) {
+		locale = domain.Arabic
+	}
+	_, err = s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.AnswerAck, Locale: locale, OrderID: &orderID, To: o.Contact.Phone,
+		Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Outcome: string(settled)}})
 	return err
 }
 
@@ -170,19 +248,23 @@ func (s *Service) HandleReplyTx(ctx context.Context, tx pgx.Tx, r Reply) error {
 // the merchant told. An answer to a confirmation already settled, or to
 // an order the merchant moved, changes nothing (the state it settled
 // in is returned).
-func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answer domain.Reply, actor string, at time.Time) (domain.ConfirmationStatus, error) {
+// It reports whether this answer settled the confirmation (moved).
+func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answer domain.Reply, actor string, at time.Time) (
+	settled domain.ConfirmationStatus, moved bool, err error,
+) {
 	if !s.conf.ready() {
-		return "", errNoOrders
+		return "", false, errNoOrders
 	}
 	c, err := store.Confirmation(ctx, tx, orderID, true)
 	if errors.Is(err, store.ErrConfirmationNotFound) {
-		return "", ErrConfirmationNotFound
+		return "", false, ErrConfirmationNotFound
 	}
 	// An unreached customer who has the message after all may answer.
 	if err != nil || (c.Status != domain.Pending && c.Status != domain.Unreached) {
-		return c.Status, err
+		return c.Status, false, err
 	}
-	to, settled, notice, verb := orders.StatusConfirmed, domain.Confirmed, domain.OrderConfirmedNotice, "confirmed"
+	to, notice, verb := orders.StatusConfirmed, domain.OrderConfirmedNotice, "confirmed"
+	settled = domain.Confirmed
 	if answer == domain.Cancel {
 		to, settled, notice, verb = orders.StatusCancelled, domain.Cancelled, domain.OrderCancelledNotice, "cancelled"
 	}
@@ -191,16 +273,16 @@ func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answ
 		settled, err = domain.Stale, nil
 	}
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	c.Status, c.AnsweredAt, c.AnsweredBy = settled, &at, actor
 	if err = store.UpdateConfirmation(ctx, tx, c); err != nil {
-		return "", err
+		return "", false, err
 	}
 	if settled == domain.Stale {
-		return settled, nil
+		return settled, true, nil
 	}
-	return settled, s.notifyTx(ctx, tx, domain.OrderNotice(notice, orderID, orders.CodeOf(orderID)))
+	return settled, true, s.notifyTx(ctx, tx, domain.OrderNotice(notice, orderID, orders.CodeOf(orderID)))
 }
 
 // ErrConfirmationNotFound means the order asked for no confirmation.

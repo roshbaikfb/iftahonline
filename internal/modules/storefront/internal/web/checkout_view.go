@@ -61,6 +61,9 @@ type thanksView struct {
 	thumbs   map[ulid.ID]*thumb
 	place    string // "مدينة نصر، القاهرة"
 	whatsApp templ.SafeURL
+	// confirmWA is the "confirm on WhatsApp" link (ADR-0041), for a
+	// cash-on-delivery order still waiting for its customer's answer.
+	confirmWA templ.SafeURL
 }
 
 func (s *Shop) thanksView(ctx context.Context, p *pageCtx, o OrderSummary, payURL string) thanksView {
@@ -82,6 +85,15 @@ func (s *Shop) thanksView(ctx context.Context, p *pageCtx, o OrderSummary, payUR
 			v.place += p.l.T(MsgListSep)
 		}
 		v.place += a.Name(string(p.l))
+	}
+	if s.confirms != nil && !o.Card && !o.Cancelled {
+		// A failure only leaves the page without the link: the paid
+		// message goes out anyway.
+		if link, err := s.confirms.WhatsAppLink(ctx, o.Ref, string(p.l)); err == nil && link != "" {
+			v.confirmWA = templ.SafeURL(link) //nolint:gosec // our own wa.me link, the text escaped
+		} else if err != nil {
+			s.log.WarnContext(ctx, "storefront: confirm link unavailable", "err", err)
+		}
 	}
 	if wa := p.v.theme.Contact.WhatsApp; wa != "" {
 		text := fmt.Sprintf(p.l.T(MsgOrderQuestionText), o.Code)

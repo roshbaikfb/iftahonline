@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -87,7 +88,11 @@ type platform struct {
 	variant    ulid.ID
 }
 
-func newPlatform(t *testing.T, quota int64) platform {
+func newPlatform(t *testing.T, quota int64) platform { return newPlatformWith(t, quota, "") }
+
+// newPlatformWith is newPlatform with the platform's WhatsApp number
+// for customer-started confirmation ("" for none).
+func newPlatformWith(t *testing.T, quota int64, number string) platform {
 	t.Helper()
 	ctx := t.Context()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -164,7 +169,7 @@ func newPlatform(t *testing.T, quota int64) platform {
 	}
 	mail := &mails{}
 	msg, err := messaging.New(messaging.Deps{Pool: pool, IDs: ids, Secrets: config.Secrets{Keyring: keyring, OTPPepper: []byte(strings.Repeat("p", 32))},
-		Config: config.Messaging{FakeChannels: true}, Quota: ent.Entitlements(), Jobs: ins, PublicURL: "https://app.example.com",
+		Config: config.Messaging{FakeChannels: true, WhatsAppDisplayNumber: number}, Quota: ent.Entitlements(), Jobs: ins, PublicURL: "https://app.example.com",
 		Inbox: hooks.Inbox(), Log: log, Orders: ord.Fulfilment(),
 		Stores: func(context.Context) (messaging.StoreInfo, error) {
 			return messaging.StoreInfo{Name: "سوق", Locale: "ar", Host: "souq.iftahonline.test"}, nil
@@ -222,7 +227,7 @@ func newPlatform(t *testing.T, quota int64) platform {
 	public := http.NewServeMux()
 	hooks.Mount(public, resp)
 	wa, sms := msg.Fakes()
-	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Pool: pool, IDs: ids, Jobs: ins, Orders: ord.Fulfilment(), Log: log})
+	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Number: number, Pool: pool, IDs: ids, Jobs: ins, Orders: ord.Fulfilment(), Log: log})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,10 +283,14 @@ func (p platform) place(t *testing.T, phoneNumber string) string {
 }
 
 // sent is what ch sent for this test's store (River runs the jobs of
-// every test's store; another test's leftovers may go through ch).
+// every test's store; another test's leftovers may go through ch),
+// without the thank-you texts on WhatsApp: the confirmations.
 func (p platform) sent(ch *fake.Channel) []channel.Message {
 	var out []channel.Message
 	for _, m := range ch.Sent() {
+		if ch == p.wa && m.Template == "" {
+			continue
+		}
 		if strings.Contains(m.Ref, p.store.String()) {
 			out = append(out, m)
 		}
@@ -300,7 +309,13 @@ func (p platform) sentTo(t *testing.T, ch *fake.Channel, n int) channel.Message 
 // webhook URL, as WhatsApp would.
 func (p platform) tap(t *testing.T, id, payload string) {
 	t.Helper()
-	w := p.wa.Webhook(channel.Event{Kind: channel.ButtonEvent, ID: id, Payload: payload})
+	p.deliver(t, channel.Event{Kind: channel.ButtonEvent, ID: id, Payload: payload})
+}
+
+// deliver posts WhatsApp events to the platform's webhook URL.
+func (p platform) deliver(t *testing.T, events ...channel.Event) {
+	t.Helper()
+	w := p.wa.Webhook(events...)
 	rq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/webhooks/"+p.wa.Name(), strings.NewReader(string(w.Body)))
 	for k, vs := range w.Header {
 		rq.Header[k] = vs
@@ -565,5 +580,76 @@ func TestSMSRoundTrip(t *testing.T) {
 	}
 	if fallback["channel"] != "sms" || fallback["fallback"] != true {
 		t.Fatalf("log = %v", fallback)
+	}
+}
+
+// TestCustomerStartedConfirmation: the thank-you page offers a WhatsApp
+// link with the order's code; the customer sends the ready text from
+// their phone; the order is confirmed, the customer thanked, and the paid
+// template (delayed for this) never goes out, its unit returned.
+func TestCustomerStartedConfirmation(t *testing.T) {
+	p := newPlatformWith(t, 100, "+201000000000")
+	id := p.place(t, "01012345678")
+	eventually(t, "the confirmation to open", func() bool { return p.confirmation(t, id) == "pending" })
+	link, err := p.links.WhatsAppLink(p.ctx, mustID(t, id), "ar")
+	if err != nil || !strings.HasPrefix(link, "https://wa.me/201000000000?text=") {
+		t.Fatalf("link = %q, %v", link, err)
+	}
+	u, err := url.Parse(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := u.Query().Get("text")
+	if !strings.HasPrefix(ready, "أؤكد طلبي رقم ") {
+		t.Fatalf("ready text = %q", ready)
+	}
+	if n := len(p.sent(p.wa)); n != 0 {
+		t.Fatalf("the template went out at once (%d)", n)
+	}
+	used := p.call(t, http.MethodGet, "/messaging/usage", "", http.StatusOK)["used"]
+
+	// A stranger with the code changes nothing; the customer does.
+	p.deliver(t, channel.Event{Kind: channel.TextEvent, ID: "wamid.stranger", From: "+201099999999", Text: ready})
+	p.deliver(t, channel.Event{Kind: channel.TextEvent, ID: "wamid.customer", From: "+201012345678", Text: ready})
+	eventually(t, "the order to be confirmed", func() bool { got, _ := p.order(t, id); return got == "confirmed" })
+	_, actors := p.order(t, id)
+	if strings.Count(strings.Join(actors, ","), "customer:whatsapp>confirmed") != 1 {
+		t.Fatalf("actors = %v", actors)
+	}
+	eventually(t, "the thanks", func() bool {
+		for _, m := range p.wa.Sent() {
+			if strings.Contains(m.Text, "تم تأكيد طلبك") && m.To.Unmasked() == "+201012345678" {
+				return true
+			}
+		}
+		return false
+	})
+	// The template's time comes: answered first, not sent, unit back.
+	if _, err = p.owner.Exec(t.Context(), `UPDATE river_job SET scheduled_at = now(), state = 'available'
+		WHERE kind = 'messaging.send_message' AND state = 'scheduled'`); err != nil {
+		t.Fatal(err)
+	}
+	var template map[string]any
+	eventually(t, "the template to be withdrawn", func() bool {
+		for _, it := range p.call(t, http.MethodGet, "/messages?order_id="+id, "", http.StatusOK)["items"].([]any) {
+			if m := it.(map[string]any); m["kind"] == "order_confirmation" {
+				template = m
+			}
+		}
+		return template != nil && template["status"] == "failed"
+	})
+	if template["error_code"] != "answered_first" {
+		t.Fatalf("template = %v", template)
+	}
+	for _, m := range p.sent(p.wa) {
+		if m.Template != "" {
+			t.Fatalf("the template went out: %+v", m)
+		}
+	}
+	if after := p.call(t, http.MethodGet, "/messaging/usage", "", http.StatusOK)["used"]; after.(float64) != used.(float64)-1 {
+		t.Fatalf("usage %v -> %v", used, after)
+	}
+	if link, err = p.links.WhatsAppLink(p.ctx, mustID(t, id), "ar"); err != nil || link != "" {
+		t.Fatalf("link after the answer: %q %v", link, err)
 	}
 }

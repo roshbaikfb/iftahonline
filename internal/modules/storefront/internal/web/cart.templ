@@ -107,6 +107,16 @@ templ thankYouPage(p *pageCtx, v thanksView) {
 				}
 			}
 		</div>
+		if v.confirmWA != "" {
+			<section class="card-box confirm-wa">
+				<h2>{ p.l.T(MsgConfirmWATitle) }</h2>
+				<p class="muted">{ p.l.T(MsgConfirmWANote) }</p>
+				<a class="btn btn-block btn-wa" href={ v.confirmWA } rel="nofollow noopener" target="_blank">
+					@icon("chat")
+					<span>{ p.l.T(MsgConfirmWAButton) }</span>
+				</a>
+			</section>
+		}
 		if !v.o.Cancelled {
 			<section class="card-box">
 				<h2>{ p.l.T(MsgWhatsNext) }</h2>

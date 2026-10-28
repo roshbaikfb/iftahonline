@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -73,6 +75,9 @@ type Confirmation struct {
 	AnsweredAt *time.Time
 	AnsweredBy string
 	CreatedAt  time.Time
+	// WACode is the code of the customer's ready-made WhatsApp text
+	// ("" when the platform has no WhatsApp number to confirm on).
+	WACode string
 }
 
 // tokenBytes is the SMS link token's entropy: 128 bits.
@@ -169,4 +174,80 @@ func (n Notification) Email(locale, storeName, dashboardURL string) (subject, te
 		return storeName + ": استُخدم 80% من رسائل هذا الشهر",
 			"استخدم متجرك " + used + " من " + limit + " رسالة للعملاء في " + n.Data.Period + ".\n\n" + link
 	}
+}
+
+// crockford is the alphabet of WhatsApp codes (no I, L, O, U).
+const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+// CodeLen is a WhatsApp code's length: 40 bits, unique across stores.
+const CodeLen = 8
+
+// NewCode draws a WhatsApp code: the short reference a customer's
+// ready-made WhatsApp text carries, so the platform's one number knows
+// whose order it confirms.
+func NewCode() (string, error) {
+	b := make([]byte, CodeLen)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("messaging: code: %w", err)
+	}
+	for i := range b {
+		b[i] = crockford[b[i]&31]
+	}
+	return string(b), nil
+}
+
+// FindCode finds a WhatsApp code in a customer's text: the first word of
+// exactly CodeLen characters of the alphabet, in any case, with Arabic-
+// Indic digits and the usual confusions read as the digits they look
+// like (O as 0, I and L as 1). Anything else separates words.
+func FindCode(text string) (string, bool) {
+	word := make([]byte, 0, CodeLen+1)
+	for _, r := range text + " " {
+		if c, ok := codeChar(r); ok {
+			if len(word) <= CodeLen {
+				word = append(word, c)
+			}
+			continue
+		}
+		if len(word) == CodeLen {
+			return string(word), true
+		}
+		word = word[:0]
+	}
+	return "", false
+}
+
+// codeChar reads one character of a code.
+func codeChar(r rune) (byte, bool) {
+	switch {
+	case r >= 'a' && r <= 'z':
+		r -= 'a' - 'A'
+	case r >= '٠' && r <= '٩': // Arabic-Indic digits, as some keyboards type them
+		r = '0' + (r - '٠')
+	}
+	switch r {
+	case 'O':
+		return '0', true
+	case 'I', 'L':
+		return '1', true
+	}
+	if i := strings.IndexRune(crockford, r); i >= 0 {
+		return crockford[i], true
+	}
+	return 0, false
+}
+
+// CustomerConfirmText is the ready-made text a customer sends from the
+// thank-you page's link, in the page's locale: it carries the code.
+func CustomerConfirmText(locale, code string) string {
+	if locale == English {
+		return "I confirm my order " + code
+	}
+	return "أؤكد طلبي رقم " + code
+}
+
+// WhatsAppLink is the wa.me link that opens a chat with number (E.164)
+// with text ready to send.
+func WhatsAppLink(number, text string) string {
+	return "https://wa.me/" + strings.TrimPrefix(number, "+") + "?text=" + url.QueryEscape(text)
 }
