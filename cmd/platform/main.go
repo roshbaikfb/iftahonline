@@ -39,7 +39,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
@@ -332,6 +334,23 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 
 // newWebhooks builds the inbound webhook inbox. Carriers and gateways
 // register their providers on it (P5).
+// newMessaging builds the messaging module with its quotas (api and
+// worker roles). inbox is the worker's, for webhook jobs; nil in the api.
+func newMessaging(c clients, inbox webhooks.Inbox) (*messaging.Module, error) {
+	ent, err := entitlements.New(entitlements.Deps{Pool: c.pool, Config: c.cfg.Entitlements})
+	if err != nil {
+		return nil, err
+	}
+	ins, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	return messaging.New(messaging.Deps{
+		Pool: c.pool, IDs: c.ids, Secrets: c.cfg.Secrets, Config: c.cfg.Messaging, Quota: ent.Entitlements(), Jobs: ins,
+		PublicURL: c.cfg.Mail.DashboardURL, Inbox: inbox, Log: c.log,
+	})
+}
+
 func newWebhooks(c clients) (*webhooks.Module, error) {
 	limiter, err := ratelimit.New(c.rdb, "webhooks")
 	if err != nil {
@@ -472,6 +491,15 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	}
 	for _, p := range append(ship.WebhookProviders(), pay.WebhookProviders()...) {
 		if err = hooks.Register(p); err != nil {
+			return nil, err
+		}
+	}
+	msg, err := newMessaging(c, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range msg.PlatformProviders() {
+		if err = hooks.RegisterPlatform(p); err != nil {
 			return nil, err
 		}
 	}
@@ -724,6 +752,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.watchOrders.Set(pay.OrderPlacedHandler())
+	msg, err := newMessaging(c, hooks.Inbox())
+	if err != nil {
+		return err
+	}
+	if err = msg.RegisterWorkers(workers); err != nil {
+		return err
+	}
 	counter, err := orders.NewSalesCounter(orderDeps)
 	if err != nil {
 		return err

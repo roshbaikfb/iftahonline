@@ -104,7 +104,7 @@ func roleEnv(addr string) []string {
 		"SHUTDOWN_TIMEOUT=5s",
 		// Every fake on, as in development (.env.example): their webhook
 		// providers must register side by side.
-		"SHIPPING_FAKE_CARRIER=true", "PAYMENTS_FAKE_GATEWAY=true",
+		"SHIPPING_FAKE_CARRIER=true", "PAYMENTS_FAKE_GATEWAY=true", "MESSAGING_FAKE_CHANNELS=true",
 	}
 }
 

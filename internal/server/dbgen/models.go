@@ -200,6 +200,27 @@ type InventoryLevel struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type Message struct {
+	StoreID           pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	ID                pgtype.UUID
+	Kind              string
+	Locale            string
+	OrderID           pgtype.UUID
+	Status            string
+	Channel           string
+	Provider          string
+	ProviderMessageID string
+	ToMasked          string
+	Content           []byte
+	QuotaPeriod       pgtype.Date
+	Fallback          bool
+	ErrorCode         string
+	Reply             string
+	RepliedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
 type Order struct {
 	ID              pgtype.UUID
 	StoreID         pgtype.UUID
