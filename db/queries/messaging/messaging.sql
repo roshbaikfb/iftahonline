@@ -111,3 +111,6 @@ DELETE FROM merchant_notifications m
 WHERE m.store_id = @store_id AND m.id IN (
   SELECT n.id FROM merchant_notifications n WHERE n.store_id = @store_id AND n.created_at < @before ORDER BY n.id LIMIT 100
 );
+
+-- name: ConfirmationByToken :one
+SELECT * FROM order_confirmations WHERE store_id = @store_id AND token_hash = @token_hash;

@@ -395,3 +395,94 @@ func TestConfirmWithoutChannelsOrWorker(t *testing.T) {
 		t.Fatalf("EmailNotice without a mailer: %v", err)
 	}
 }
+
+// tokenOf reads the SMS link's token from a sent SMS.
+func tokenOf(t *testing.T, text string) string {
+	t.Helper()
+	_, after, ok := strings.Cut(text, "/o/")
+	if !ok || len(after) < 22 {
+		t.Fatalf("no link in %q", text)
+	}
+	return after[:22]
+}
+
+// TestSMSLink: a customer not on WhatsApp gets the SMS with the link;
+// the link's page shows the order and takes the answer (customer:sms),
+// once; another store's host finds nothing behind the token.
+func TestSMSLink(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx, other := c.store(t), c.store(t)
+	c.wa.Unreachable(customer.Unmasked())
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	mid := *c.confirmation(ctx, t, id).MessageID
+	for range 2 { // WhatsApp refuses, then the SMS goes
+		if err := c.svc.SendMessage(ctx, mid, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sms := c.sms.Sent()
+	if len(sms) != 1 || !strings.Contains(sms[0].Text, "https://souq.example.com/en/o/") {
+		t.Fatalf("SMS = %+v", sms)
+	}
+	token := tokenOf(t, sms[0].Text)
+
+	v, err := c.svc.LinkConfirmation(ctx, token)
+	if err != nil || v.OrderCode != orders.CodeOf(id) || v.FirstName != "منى" || v.Status != domain.Pending || v.Total.Amount() != 52000 {
+		t.Fatalf("view = %+v, %v", v, err)
+	}
+	for _, bad := range []struct {
+		ctx   context.Context
+		token string
+	}{{other, token}, {ctx, "nope"}, {ctx, ""}, {ctx, strings.Repeat("a", 65)}} {
+		if _, err = c.svc.LinkConfirmation(bad.ctx, bad.token); !errors.Is(err, app.ErrConfirmationNotFound) {
+			t.Errorf("%q: %v", bad.token, err)
+		}
+		if _, err = c.svc.AnswerLink(bad.ctx, bad.token, domain.Cancel); !errors.Is(err, app.ErrConfirmationNotFound) {
+			t.Errorf("answer %q: %v", bad.token, err)
+		}
+	}
+	if c.orders.status(id) != orders.StatusPending {
+		t.Fatal("a wrong token moved the order")
+	}
+	if v, err = c.svc.AnswerLink(ctx, token, domain.Confirm); err != nil || v.Status != domain.Confirmed {
+		t.Fatalf("answer = %+v, %v", v, err)
+	}
+	if v, err = c.svc.AnswerLink(ctx, token, domain.Cancel); err != nil || v.Status != domain.Confirmed {
+		t.Fatalf("second answer = %+v, %v", v, err)
+	}
+	if strings.Join(c.orders.moves, ",") != "customer:sms>confirmed" || c.confirmation(ctx, t, id).AnsweredBy != domain.ActorSMSLink {
+		t.Fatalf("moves = %v", c.orders.moves)
+	}
+	// The storefront role's side: orders only, no channels or secrets.
+	links := app.NewService(app.Deps{DB: c.pool, IDs: c.ids, Jobs: c.jobs, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Confirmations: app.Confirmations{Orders: c.orders}})
+	if v, err = links.LinkConfirmation(ctx, token); err != nil || v.Status != domain.Confirmed {
+		t.Fatalf("links view = %+v, %v", v, err)
+	}
+}
+
+// TestUnreachedMayStillAnswer: a customer whose message was reported
+// unreached, but who answers after all, settles the order.
+func TestUnreachedMayStillAnswer(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.svc.AutoCancel(ctx, id); err != nil { // the message never went: unreached
+		t.Fatal(err)
+	}
+	var st domain.ConfirmationStatus
+	if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) (err error) {
+		st, err = c.svc.AnswerTx(ctx, tx, id, domain.Confirm, domain.ActorSMSLink, time.Now())
+		return err
+	}); err != nil || st != domain.Confirmed || c.orders.status(id) != orders.StatusConfirmed {
+		t.Fatalf("late answer = %s, %v", st, err)
+	}
+}

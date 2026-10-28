@@ -138,6 +138,24 @@ func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(htt
 	httpapi.Mount(mux, m.svc, auth, scope, resp)
 }
 
+// LinksDeps are the SMS link page's dependencies (the storefront role,
+// which holds no secrets and sends nothing).
+type LinksDeps struct {
+	Pool   *pgxpool.Pool
+	IDs    *ulid.Generator
+	Jobs   jobs.Inserter
+	Orders orders.Fulfilment
+	Log    *slog.Logger
+}
+
+// NewConfirmLinks wires the SMS link page's side of the confirmation.
+func NewConfirmLinks(d LinksDeps) (ConfirmLinks, error) {
+	if d.Pool == nil || d.IDs == nil || d.Jobs == nil || d.Orders == nil || d.Log == nil {
+		return nil, errors.New("messaging: missing confirm-link dependency")
+	}
+	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Jobs: d.Jobs, Log: d.Log, Confirmations: app.Confirmations{Orders: d.Orders}}), nil
+}
+
 // OrderPlacedHandler asks a new cash-on-delivery order's customer to
 // confirm it. Subscribe it as ConfirmOrdersSubscriber to
 // orders.EventOrderPlaced (worker role).

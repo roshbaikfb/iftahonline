@@ -297,6 +297,8 @@ func (s *Shop) cartRoute(w http.ResponseWriter, r *http.Request, store tenant.St
 		s.cartPage(w, r, p, http.StatusOK, 0)
 	case rest == "/track":
 		s.trackRoute(w, r, store, p)
+	case len(rest) > len("/o/") && rest[:len("/o/")] == "/o/":
+		s.confirmRoute(w, r, store, p, rest[len("/o/"):])
 	case len(rest) > len("/thank-you/") && rest[:len("/thank-you/")] == "/thank-you/" && isRead(r):
 		s.thankYou(w, r, p, rest[len("/thank-you/"):])
 	default:

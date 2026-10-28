@@ -197,3 +197,20 @@ func toNotification(r messagingdb.MerchantNotification) (domain.Notification, er
 	}
 	return n, nil
 }
+
+// ConfirmationByToken returns the confirmation an SMS link's token opens.
+func ConfirmationByToken(ctx context.Context, tx Tx, tokenHash []byte) (domain.Confirmation, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Confirmation{}, err
+	}
+	row, err := messagingdb.New(tx).ConfirmationByToken(ctx, messagingdb.ConfirmationByTokenParams{StoreID: store, TokenHash: tokenHash})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return domain.Confirmation{}, ErrConfirmationNotFound
+	case err != nil:
+		return domain.Confirmation{}, fmt.Errorf("messaging store: confirmation by token: %w", err)
+	}
+	return domain.Confirmation{OrderID: row.OrderID, MessageID: row.MessageID, Status: domain.ConfirmationStatus(row.Status),
+		ExpiresAt: row.ExpiresAt, AnsweredAt: row.AnsweredAt, AnsweredBy: row.AnsweredBy, CreatedAt: row.CreatedAt}, nil
+}

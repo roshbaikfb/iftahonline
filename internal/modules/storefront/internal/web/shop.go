@@ -38,6 +38,9 @@ type Deps struct {
 	// orders module exists: the page is then a 404).
 	Carts  Carts
 	Orders Orders
+	// Confirmations backs the SMS link's page (/o/<token>); nil makes
+	// it a 404.
+	Confirmations Confirmations
 	// Payments offers card payment at checkout; nil means cash on
 	// delivery only.
 	Payments Payments
@@ -70,6 +73,7 @@ type Shop struct {
 	edge     string // Cache-Control of a page
 	carts    Carts
 	orders   Orders
+	confirms Confirmations
 	payments Payments
 	limiter  Limiter
 	captcha  CaptchaVerifier
@@ -102,7 +106,7 @@ func New(d Deps) (*Shop, error) {
 	}
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
-		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders,
+		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
 		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search}, nil
 }
 

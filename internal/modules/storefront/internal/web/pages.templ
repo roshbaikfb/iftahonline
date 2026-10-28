@@ -379,3 +379,29 @@ templ trackPage(p *pageCtx, v trackView) {
 		}
 	</section>
 }
+
+templ confirmPage(p *pageCtx, v ConfirmView, action templ.SafeURL) {
+	<section class="checkout track confirm">
+		<h1>{ p.l.T(MsgConfirmTitle) }</h1>
+		<section class="card-box">
+			<h2>{ p.l.T(MsgOrderNo) } <bdi dir="ltr">#{ v.Code }</bdi></h2>
+			<p class="muted">{ p.l.Price(v.Total) }</p>
+			switch v.State {
+				case ConfirmWaiting:
+					<p>{ fmt.Sprintf(p.l.T(MsgConfirmAsk), v.FirstName) }</p>
+					<form method="post" action={ action }>
+						<button class="btn btn-block" type="submit" name="answer" value="confirm">{ p.l.T(MsgConfirmYes) }</button>
+					</form>
+					<form method="post" action={ action }>
+						<button class="btn btn-block btn-ghost" type="submit" name="answer" value="cancel">{ p.l.T(MsgConfirmNo) }</button>
+					</form>
+				case ConfirmDone:
+					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmDone) }</p>
+				case ConfirmCancelled:
+					<p class="alert" role="status">{ p.l.T(MsgConfirmCancelledByYou) }</p>
+				default:
+					<p class="muted" role="status">{ p.l.T(MsgConfirmClosed) }</p>
+			}
+		</section>
+	</section>
+}

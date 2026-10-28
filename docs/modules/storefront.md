@@ -61,6 +61,7 @@ whose event does not list the products using it).
 | `/policies/{slug}` | A published policy |
 | `/search?q=&page=` | Shoppers' search (only with `MEILI_SEARCH_KEY`): cards, the count, the next page; nothing found lists the categories; `noindex` |
 | `/track` (GET, POST) | Order tracking. The form asks the order number and the phone; POST shows where the order stands (five steps, or cancelled, not delivered, returned) and its parcel. It is private and never cached, and never shows back the phone, the name or the address. It is limited to 10 tries per IP and 300 per store every 10 minutes; a limiter outage refuses. It is linked from the desktop header, the footer and the thank-you page. |
+| `/o/{token}` (GET, POST) | The SMS link of an order confirmation (ADR-0040). GET shows the order (code, total, first name) and two buttons; a same-origin POST `answer=confirm\|cancel` settles it through `messaging.ConfirmLinks` (actor `customer:sms`); afterwards the page says how it settled. Private, never cached, `noindex`; an unknown token, or another store's, is 404. Limited to 20 per IP and 600 per store every 10 minutes; a limiter outage refuses. |
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
 | `/order` (POST) | A landing page's one-step order form |

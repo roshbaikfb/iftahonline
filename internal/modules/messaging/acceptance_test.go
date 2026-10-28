@@ -81,6 +81,7 @@ type platform struct {
 	shop       orders.Shop
 	wa, sms    *fake.Channel
 	mail       *mails
+	links      messaging.ConfirmLinks
 	store      tenant.StoreID
 	ctx        context.Context
 	variant    ulid.ID
@@ -221,7 +222,12 @@ func newPlatform(t *testing.T, quota int64) platform {
 	public := http.NewServeMux()
 	hooks.Mount(public, resp)
 	wa, sms := msg.Fakes()
-	p := platform{owner: owner, app: pool, api: api, public: public, shop: ord.Shop(), wa: wa, sms: sms, mail: mail, store: store, ctx: sctx}
+	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Pool: pool, IDs: ids, Jobs: ins, Orders: ord.Fulfilment(), Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := platform{owner: owner, app: pool, api: api, public: public, shop: ord.Shop(), wa: wa, sms: sms, mail: mail, links: links,
+		store: store, ctx: sctx}
 	prod := p.call(t, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":50}]}`, http.StatusCreated)
 	if p.variant, err = ulid.Parse(prod["variants"].([]any)[0].(map[string]any)["id"].(string)); err != nil {
 		t.Fatal(err)
@@ -526,5 +532,38 @@ func TestCardOrdersAndOptOut(t *testing.T) {
 	p.call(t, http.MethodGet, "/messaging/confirmations/"+off, "", http.StatusNotFound)
 	if len(p.sent(p.wa)) != 0 {
 		t.Fatal("a message was sent with confirmation off")
+	}
+}
+
+// TestSMSRoundTrip: a customer not on WhatsApp gets the SMS with the
+// link; answering on the link's page (the storefront's side) confirms
+// the order on the customer's behalf.
+func TestSMSRoundTrip(t *testing.T) {
+	p := newPlatform(t, 100)
+	p.wa.Unreachable("+201512345678")
+	id := p.place(t, "01512345678")
+	m := p.sentTo(t, p.sms, 1)
+	_, after, ok := strings.Cut(m.Text, "https://souq.iftahonline.test/ar/o/")
+	if !ok || len(after) < 22 {
+		t.Fatalf("SMS = %q", m.Text)
+	}
+	token := after[:22]
+	v, err := p.links.LinkConfirmation(p.ctx, token)
+	if err != nil || v.Status != messaging.ConfirmationPending || v.OrderCode != orders.CodeOf(mustID(t, id)) || v.FirstName != "منى" {
+		t.Fatalf("link = %+v, %v", v, err)
+	}
+	if v, err = p.links.AnswerLink(p.ctx, token, messaging.Confirm); err != nil || v.Status != messaging.ConfirmationConfirmed {
+		t.Fatalf("answer = %+v, %v", v, err)
+	}
+	st, actors := p.order(t, id)
+	if st != "confirmed" || !strings.Contains(strings.Join(actors, ","), "customer:sms>confirmed") {
+		t.Fatalf("order = %s %v", st, actors)
+	}
+	var fallback map[string]any
+	for _, it := range p.call(t, http.MethodGet, "/messages?order_id="+id, "", http.StatusOK)["items"].([]any) {
+		fallback = it.(map[string]any)
+	}
+	if fallback["channel"] != "sms" || fallback["fallback"] != true {
+		t.Fatalf("log = %v", fallback)
 	}
 }

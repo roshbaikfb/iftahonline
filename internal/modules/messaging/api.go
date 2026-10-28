@@ -45,7 +45,38 @@ type (
 	// Contacts returns the emails of the store's owner and managers;
 	// cmd/platform adapts identity.
 	Contacts = app.Contacts
+	// LinkView is what the SMS link's page shows.
+	LinkView = app.LinkView
+	// ConfirmationStatus is where an order's confirmation stands.
+	ConfirmationStatus = domain.ConfirmationStatus
 )
+
+// Confirmation statuses.
+const (
+	ConfirmationPending   = domain.Pending
+	ConfirmationConfirmed = domain.Confirmed
+	ConfirmationCancelled = domain.Cancelled
+	ConfirmationExpired   = domain.Expired
+	ConfirmationSkipped   = domain.QuotaSkipped
+	ConfirmationUnreached = domain.Unreached
+	ConfirmationStale     = domain.Stale
+)
+
+// ErrConfirmationNotFound means there is no confirmation (for that order, or that
+// SMS link token in the store in ctx).
+var ErrConfirmationNotFound = app.ErrConfirmationNotFound
+
+// ConfirmLinks is what the storefront's SMS link page uses (the
+// storefront role). Every method acts on the store in ctx.
+type ConfirmLinks interface {
+	// LinkConfirmation shows the order a link's token names.
+	LinkConfirmation(ctx context.Context, token string) (LinkView, error)
+	// AnswerLink confirms or cancels the order (actor customer:sms);
+	// once settled, it shows how.
+	AnswerLink(ctx context.Context, token string, answer Answer) (LinkView, error)
+}
+
+var _ ConfirmLinks = (*app.Service)(nil)
 
 // ConfirmOrdersSubscriber is the event bus subscriber name of
 // Module.OrderPlacedHandler: subscribe it to orders.EventOrderPlaced on

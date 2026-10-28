@@ -12,6 +12,33 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const confirmationByToken = `-- name: ConfirmationByToken :one
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND token_hash = $2
+`
+
+type ConfirmationByTokenParams struct {
+	StoreID   ulid.ID
+	TokenHash []byte
+}
+
+func (q *Queries) ConfirmationByToken(ctx context.Context, arg ConfirmationByTokenParams) (OrderConfirmation, error) {
+	row := q.db.QueryRow(ctx, confirmationByToken, arg.StoreID, arg.TokenHash)
+	var i OrderConfirmation
+	err := row.Scan(
+		&i.StoreID,
+		&i.OrderID,
+		&i.MessageID,
+		&i.Status,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.AnsweredAt,
+		&i.AnsweredBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const countUnreadNotifications = `-- name: CountUnreadNotifications :one
 SELECT count(*) FROM merchant_notifications WHERE store_id = $1 AND read_at IS NULL
 `

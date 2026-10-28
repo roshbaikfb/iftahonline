@@ -465,15 +465,6 @@ func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (order
 		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Stores: orderStores(ten)}, nil
 }
 
-// newShopOrders builds the orders module's shopper side (storefront role).
-func newShopOrders(c clients, ten *tenancy.Module, ship *shipping.Module) (orders.Shop, error) {
-	d, err := shopOrderDeps(c, ten, ship)
-	if err != nil {
-		return nil, err
-	}
-	return orders.NewShop(d)
-}
-
 func newStorefront(c clients) (*storefront.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
@@ -632,12 +623,29 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	go ship.Listen(ctx)
-	shopOrders, err := newShopOrders(c, ten, ship)
+	orderDeps, err := shopOrderDeps(c, ten, ship)
+	if err != nil {
+		return nil, err
+	}
+	shopOrders, err := orders.NewShop(orderDeps)
+	if err != nil {
+		return nil, err
+	}
+	fulfilment, err := orders.NewFulfilment(orderDeps)
+	if err != nil {
+		return nil, err
+	}
+	ins, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Pool: c.pool, IDs: c.ids, Jobs: ins, Orders: fulfilment, Log: c.log})
 	if err != nil {
 		return nil, err
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
+		Confirmations: links,
+		Orders:        shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL, Search: c.cfg.Search.URL != "",
