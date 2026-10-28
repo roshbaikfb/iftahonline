@@ -392,6 +392,28 @@ sql:
               type: time.Time
               pointer: true
 
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/entitlements
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: entitlementsdb
+        out: internal/modules/entitlements/internal/store/entitlementsdb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: date
+            go_type: time.Time
+
 rules:
   - name: no-unbounded-delete
     message: "DELETE and UPDATE need a WHERE clause"

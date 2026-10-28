@@ -70,6 +70,17 @@ type Config struct {
 	// Payments configures the card gateways merchants connect (api,
 	// worker).
 	Payments Payments
+	// Entitlements are the per-store quotas until plans arrive in P7
+	// (api, worker).
+	Entitlements Entitlements
+}
+
+// Entitlements are the interim quotas every store gets (ADR-0038); P7
+// replaces this source with the store's plan.
+type Entitlements struct {
+	// MessagesPerMonth is how many customer messages (WhatsApp or SMS)
+	// a store may send in a calendar month (UTC). 0 sends none.
+	MessagesPerMonth int64
 }
 
 // Captcha configures Cloudflare Turnstile, which the storefront shows
@@ -351,6 +362,9 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		}
 		if c.Env == EnvProduction && c.Payments.FakeGateway {
 			r.errorf("PAYMENTS_FAKE_GATEWAY: the fake gateway is not for production")
+		}
+		c.Entitlements = Entitlements{
+			MessagesPerMonth: r.int64("ENTITLEMENTS_MESSAGES_PER_MONTH", 500, 0, 10_000_000),
 		}
 	}
 	if role == RoleAPI || role == RoleAdmin {
