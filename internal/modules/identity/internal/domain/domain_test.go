@@ -55,6 +55,9 @@ func TestMatrix(t *testing.T) {
 
 		authz.PermPaymentsManage: {O},
 		authz.PermPaymentsRefund: {O, M},
+
+		authz.PermMessagingRead:   {O, M, S},
+		authz.PermMessagingManage: {O, M},
 	}
 	pol, err := domain.NewPolicy()
 	if err != nil {

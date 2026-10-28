@@ -63,6 +63,8 @@ every cell.
 | inventory.manage | ✓ | ✓ | | ✓ |
 | imports.manage | ✓ | ✓ | | |
 | storefront.manage | ✓ | ✓ | | |
+| messaging.read | ✓ | ✓ | ✓ | |
+| messaging.manage | ✓ | ✓ | | |
 
 A store has exactly one owner, enforced by a partial unique index.
 
