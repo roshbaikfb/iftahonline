@@ -65,6 +65,7 @@ describe('Layout', () => {
     // a screen not built yet is not a link, and says so
     expect(within(nav).queryByRole('link', { name: /الصفحات/ })).toBeNull();
     expect(within(nav).getByRole('link', { name: 'التصميم' })).toHaveAttribute('href', `/stores/${a}/design`);
+    expect(within(nav).getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', `/stores/${a}/home-page`);
     expect(within(nav).getByRole('link', { name: 'التصنيفات' })).toHaveAttribute('href', `/stores/${a}/categories`);
     expect(within(nav).getByRole('link', { name: 'المنتجات' })).toHaveAttribute('href', `/stores/${a}/products`);
     const soon = within(nav).getByText('الصفحات').closest('.item');

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { fonts, radii, type ThemeSettings } from '../lib/theme';
 
@@ -21,15 +21,17 @@ interface Props {
   logo?: string | undefined;
   categories: string[];
   products: PreviewProduct[];
-  hero: PreviewHero;
+  hero?: PreviewHero | undefined;
   phone: boolean;
+  body?: ReactNode; // the page's own sections, in place of the hero and cards
 }
 
 // ThemePreview is the design screen's approximate shop (the approved
 // mockup): the announcement bar, the header for the chosen look, a hero
 // and a few cards in the draft's colours, font and corners. The real
-// shop, with every page, is the preview link.
-export function ThemePreview({ settings, storeName, logo, categories, products, hero, phone }: Props) {
+// shop, with every page, is the preview link. The home editor passes
+// its sections as the body.
+export function ThemePreview({ settings, storeName, logo, categories, products, hero, phone, body }: Props) {
   const c = settings.colors;
   const radius = radii.find((r) => r.id === settings.radius)?.css ?? '8px';
   const look = settings.look ?? 'classic';
@@ -65,23 +67,35 @@ export function ThemePreview({ settings, storeName, logo, categories, products, 
           </div>
         )}
       </div>
-      <div className="pv-hero">
-        <strong>{hero.heading}</strong>
-        {hero.sub && <span>{hero.sub}</span>}
-        {hero.button && <em>{hero.button}</em>}
-      </div>
-      <div className="pv-grid">
-        {products.slice(0, phone ? 2 : look === 'modern' ? 2 : 4).map((p) => (
-          <div key={p.title} className="pv-card">
-            <div className="pv-img">
-              {p.image && <img src={p.image} alt="" />}
-              {p.badge && <b>{p.badge}</b>}
+      {body ?? (
+        <>
+          {hero && (
+            <div className="pv-hero">
+              <strong>{hero.heading}</strong>
+              {hero.sub && <span>{hero.sub}</span>}
+              {hero.button && <em>{hero.button}</em>}
             </div>
-            <span>{p.title}</span>
-            <strong>{p.price}</strong>
+          )}
+          <PreviewCards products={products.slice(0, phone ? 2 : look === 'modern' ? 2 : 4)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function PreviewCards({ products }: { products: PreviewProduct[] }) {
+  return (
+    <div className="pv-grid">
+      {products.map((p, i) => (
+        <div key={`${p.title}-${String(i)}`} className="pv-card">
+          <div className="pv-img">
+            {p.image && <img src={p.image} alt="" />}
+            {p.badge && <b>{p.badge}</b>}
           </div>
-        ))}
-      </div>
+          <span>{p.title}</span>
+          <strong>{p.price}</strong>
+        </div>
+      ))}
     </div>
   );
 }
