@@ -76,8 +76,10 @@ func TestStats(t *testing.T) {
 	}
 
 	// A day later: nothing today; yesterday until the same hour is the
-	// previous period; the 7 days still hold them.
-	tomorrow := time.Now().Add(24 * time.Hour)
+	// previous period; the 7 days still hold them. "A day later" is the
+	// next calendar day in the store's zone, not 24 hours: the day Egypt
+	// leaves summer time (the last Thursday of October) has 25 hours.
+	tomorrow := time.Now().In(cairo).AddDate(0, 0, 1)
 	f.svc.SetClock(func() time.Time { return tomorrow })
 	if st, err = f.svc.Stats(f.ctxA, domain.RangeToday); err != nil || st.Sales != (domain.Tally{}) || st.Previous != (domain.Tally{Orders: 2, TotalMinor: sales}) {
 		t.Fatalf("next day = sales %+v previous %+v, %v", st.Sales, st.Previous, err)
