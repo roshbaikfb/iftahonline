@@ -49,6 +49,10 @@ func New(d Deps) (*Module, error) {
 // /v1/webhooks/<name>/<store>/<connection>. Names are unique.
 func (m *Module) Register(p Provider) error { return m.svc.Register(p) }
 
+// RegisterPlatform adds a provider's platform-owned account; its
+// deliveries arrive at /v1/webhooks/<name>. Names are unique.
+func (m *Module) RegisterPlatform(p PlatformProvider) error { return m.svc.RegisterPlatform(p) }
+
 // Inbox is what the providers' processing jobs use.
 func (m *Module) Inbox() Inbox { return m.svc }
 

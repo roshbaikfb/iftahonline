@@ -14,6 +14,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/internal/store/webhooksdb"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -40,6 +41,9 @@ func Accept(ctx context.Context, tx Tx, r domain.Receipt, contentType string, bo
 	n, err := q.InsertReceipt(ctx, webhooksdb.InsertReceiptParams{
 		ID: r.ID, StoreID: store, Provider: r.Provider, ConnectionID: r.ConnectionID, EventID: r.EventID, ReceivedAt: r.ReceivedAt,
 	})
+	if postgres.IsForeignKeyViolation(err, "webhook_receipts_store_id_fkey") {
+		return false, domain.ErrUnknownStore
+	}
 	if err != nil {
 		return false, fmt.Errorf("webhooks store: insert receipt: %w", err)
 	}

@@ -6,6 +6,7 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -126,14 +127,43 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// VerifyPlatformWebhookParams defines parameters for VerifyPlatformWebhook.
+type VerifyPlatformWebhookParams struct {
+	HubMode        *string `form:"hub.mode,omitempty" json:"hub.mode,omitempty"`
+	HubVerifyToken *string `form:"hub.verify_token,omitempty" json:"hub.verify_token,omitempty"`
+	HubChallenge   *string `form:"hub.challenge,omitempty" json:"hub.challenge,omitempty"`
+}
+
+// ReceivePlatformWebhookJSONBody defines parameters for ReceivePlatformWebhook.
+type ReceivePlatformWebhookJSONBody map[string]interface{}
+
+// VerifyWebhookParams defines parameters for VerifyWebhook.
+type VerifyWebhookParams struct {
+	HubMode        *string `form:"hub.mode,omitempty" json:"hub.mode,omitempty"`
+	HubVerifyToken *string `form:"hub.verify_token,omitempty" json:"hub.verify_token,omitempty"`
+	HubChallenge   *string `form:"hub.challenge,omitempty" json:"hub.challenge,omitempty"`
+}
+
 // ReceiveWebhookJSONBody defines parameters for ReceiveWebhook.
 type ReceiveWebhookJSONBody map[string]interface{}
+
+// ReceivePlatformWebhookJSONRequestBody defines body for ReceivePlatformWebhook for application/json ContentType.
+type ReceivePlatformWebhookJSONRequestBody ReceivePlatformWebhookJSONBody
 
 // ReceiveWebhookJSONRequestBody defines body for ReceiveWebhook for application/json ContentType.
 type ReceiveWebhookJSONRequestBody ReceiveWebhookJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// VerifyPlatformWebhook Answer a provider's URL handshake for a platform-owned account
+	// (GET /v1/webhooks/{provider})
+	VerifyPlatformWebhook(w http.ResponseWriter, r *http.Request, provider string, params VerifyPlatformWebhookParams)
+	// ReceivePlatformWebhook Receive a webhook of a platform-owned account
+	// (POST /v1/webhooks/{provider})
+	ReceivePlatformWebhook(w http.ResponseWriter, r *http.Request, provider string)
+	// VerifyWebhook Answer a provider's URL handshake
+	// (GET /v1/webhooks/{provider}/{store_id}/{connection_id})
+	VerifyWebhook(w http.ResponseWriter, r *http.Request, provider string, storeId StoreID, connectionId ULID, params VerifyWebhookParams)
 	// ReceiveWebhook Receive a provider's webhook
 	// (POST /v1/webhooks/{provider}/{store_id}/{connection_id})
 	ReceiveWebhook(w http.ResponseWriter, r *http.Request, provider string, storeId StoreID, connectionId ULID)
@@ -147,6 +177,186 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// VerifyPlatformWebhook operation middleware
+func (siw *ServerInterfaceWrapper) VerifyPlatformWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params VerifyPlatformWebhookParams
+
+	// ------------- Optional query parameter "hub.mode" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.mode", r.URL.Query(), &params.HubMode, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.mode"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.mode", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hub.verify_token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.verify_token", r.URL.Query(), &params.HubVerifyToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.verify_token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.verify_token", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hub.challenge" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.challenge", r.URL.Query(), &params.HubChallenge, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.challenge"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.challenge", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyPlatformWebhook(w, r, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReceivePlatformWebhook operation middleware
+func (siw *ServerInterfaceWrapper) ReceivePlatformWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReceivePlatformWebhook(w, r, provider)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyWebhook operation middleware
+func (siw *ServerInterfaceWrapper) VerifyWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", r.PathValue("connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params VerifyWebhookParams
+
+	// ------------- Optional query parameter "hub.mode" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.mode", r.URL.Query(), &params.HubMode, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.mode"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.mode", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hub.verify_token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.verify_token", r.URL.Query(), &params.HubVerifyToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.verify_token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.verify_token", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hub.challenge" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hub.challenge", r.URL.Query(), &params.HubChallenge, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hub.challenge"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hub.challenge", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyWebhook(w, r, provider, storeId, connectionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ReceiveWebhook operation middleware
 func (siw *ServerInterfaceWrapper) ReceiveWebhook(w http.ResponseWriter, r *http.Request) {
@@ -312,7 +522,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/webhooks/{provider}/{store_id}/{connection_id}", wrapper.VerifyWebhook)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/webhooks/{provider}/{store_id}/{connection_id}", wrapper.ReceiveWebhook)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/webhooks/{provider}", wrapper.VerifyPlatformWebhook)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/webhooks/{provider}", wrapper.ReceivePlatformWebhook)
 
 	return m
 }
