@@ -5,8 +5,8 @@ import { api, type components } from '../api/client';
 import { WizardFrame } from '../components/WizardFrame';
 import { toMinor } from '../lib/amounts';
 import { activities, looks, palette, tint, type Activity, type Look, type Onboarding } from '../lib/onboarding';
+import { uploadLogo } from '../lib/logo';
 import { problemMessage } from '../lib/problem';
-import { postFile } from '../lib/upload';
 import { storefrontURL } from '../lib/storefront';
 
 type ShippingConfig = components['schemas']['ShippingConfig'];
@@ -18,7 +18,6 @@ const stepShipping = 4;
 const stepReady = 5;
 
 const symbols: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' };
-const logoTypes = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 type LogoState = { kind: 'none' } | { kind: 'uploading' } | { kind: 'done'; name: string } | { kind: 'failed'; message: string };
 
@@ -93,26 +92,12 @@ export function Setup() {
   const chosen = color ?? palette(activity)[0] ?? '#0f2e52';
   const currency = symbols[ship?.currency ?? 'EGP'] ?? '';
 
-  async function uploadLogo(e: ChangeEvent<HTMLInputElement>) {
+  async function pickLogo(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const type = logoTypes.find((t) => t === file.type);
-    if (!type) {
-      setLogo({ kind: 'failed', message: 'الشعار يكون PNG أو JPG أو WebP.' });
-      return;
-    }
     setLogo({ kind: 'uploading' });
     try {
-      const { data, error: err } = await api.POST('/v1/stores/{store_id}/storefront/logo/uploads', {
-        params: { path: { store_id: storeId } },
-        body: { content_type: type },
-      });
-      if (err) throw new Error(problemMessage(err));
-      await postFile(data.upload, file, 'تعذّر رفع الملف، جرّب صورة أصغر (حتى 2 ميجابايت).');
-      const done = await api.POST('/v1/stores/{store_id}/storefront/logo/uploads/{asset_id}/complete', {
-        params: { path: { store_id: storeId, asset_id: data.asset.id } },
-      });
-      if (done.error) throw new Error(problemMessage(done.error));
+      await uploadLogo(storeId, file);
       setLogo({ kind: 'done', name: file.name });
     } catch (err) {
       setLogo({ kind: 'failed', message: problemMessage(err) });
@@ -338,7 +323,7 @@ export function Setup() {
                 {logo.kind === 'failed' && logo.message}
               </small>
             </span>
-            <input type="file" accept="image/png,image/jpeg,image/webp" className="visually-hidden" onChange={(e) => void uploadLogo(e)} />
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="visually-hidden" onChange={(e) => void pickLogo(e)} />
           </label>
           {nav(() => {
             setStep(stepShipping);

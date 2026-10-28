@@ -2856,3 +2856,432 @@ ul.imports > li {
 .cat-row .sub[dir='ltr'] {
   text-align: end;
 }
+
+/* The design screen (U6, the approved mockup): settings beside an
+   approximate shop that follows the draft. */
+.design-head .save-state {
+  margin: 0;
+  min-block-size: 1.2rem;
+  font-size: 0.8rem;
+  color: var(--subtle);
+}
+.design {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.design-settings {
+  flex: 1 1 24rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: 1.25rem;
+}
+.design-preview {
+  flex: 1 1 28rem;
+  min-inline-size: 0;
+  position: sticky;
+  inset-block-start: 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.card-head.bare {
+  padding: 0;
+  border: 0;
+}
+.segmented {
+  display: flex;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.segmented button {
+  flex: 1;
+  min-block-size: 2.6rem;
+  border: 0;
+  border-inline-start: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+}
+.segmented button:first-child {
+  border-inline-start: 0;
+}
+.segmented button:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--text);
+}
+.segmented button[aria-pressed='true'],
+.segmented button[aria-pressed='true']:hover {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+}
+.design-preview .segmented {
+  inline-size: 11.25rem;
+}
+.looks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+button.look-card {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+  padding: 0.6rem;
+  border: 2px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: start;
+  font-weight: 500;
+}
+button.look-card:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--field);
+}
+button.look-card[aria-pressed='true'] {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px #dbe5f1;
+}
+.look-card .mini {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  block-size: 4rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+}
+.look-card .mini i {
+  position: absolute;
+  display: block;
+  background: #0f766e;
+}
+.look-card .m-brand {
+  inset-block-start: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 4px;
+}
+.look-classic .m-brand {
+  inset-inline: 30%;
+}
+.look-modern .m-brand {
+  inset-inline-start: 0.5rem;
+  inline-size: 30%;
+}
+.look-soft .m-brand {
+  inset-inline: 35%;
+  border-radius: 99px;
+  background: #cbd5e1;
+  block-size: 1rem;
+}
+.look-card .m-row {
+  inset-block-end: 0.5rem;
+  inset-inline: 0.5rem;
+  block-size: 1.6rem;
+  border-radius: 3px;
+  background: repeating-linear-gradient(to left, #cbd5e1 0 22%, transparent 22% 26%);
+}
+.look-modern .m-row {
+  block-size: 1.9rem;
+  background: repeating-linear-gradient(to left, #cbd5e1 0 48%, transparent 48% 52%);
+}
+.look-soft .m-row {
+  border-radius: 10px;
+  background: #cbd5e1;
+  block-size: 1.4rem;
+}
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+button.preset {
+  min-block-size: 2.5rem;
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--field);
+  font-weight: 500;
+}
+button.preset:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--text);
+}
+.preset .dots {
+  display: inline-flex;
+}
+.preset .dots i {
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 99px;
+  border: 1px solid rgb(15 23 42 / 20%);
+  margin-inline-end: -0.3rem;
+}
+.color-rows .color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-block-size: 3.25rem;
+  border-block-end: 1px solid #f1f5f9;
+}
+.color-rows .color-row:last-child {
+  border-block-end: 0;
+}
+.color-row .grow {
+  flex: 1;
+}
+input.swatch-input {
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  min-block-size: 0;
+  padding: 0;
+  border: 1px solid rgb(15 23 42 / 20%);
+  border-radius: 99px;
+  overflow: hidden;
+  cursor: pointer;
+}
+input.swatch-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input.swatch-input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 99px;
+}
+input.hex {
+  inline-size: 7rem;
+}
+.contrast {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.contrast.ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.contrast.bad {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: var(--red);
+}
+.font-sample {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--field);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+}
+.logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+.logo-box {
+  display: grid;
+  place-items: center;
+  inline-size: 7.5rem;
+  block-size: 4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 800;
+  overflow: hidden;
+}
+.logo-box img {
+  max-inline-size: 100%;
+  max-block-size: 2.5rem;
+  object-fit: contain;
+}
+.logo-actions {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+}
+.logo-actions .button {
+  cursor: pointer;
+}
+button.danger-link {
+  color: var(--red);
+  text-decoration: none;
+}
+.two-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.field-label .inline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 400;
+}
+input.narrow-num {
+  inline-size: 5.5rem;
+}
+
+/* The approximate shop. */
+.theme-preview {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--p-bg);
+  color: var(--p-text);
+  font-size: 0.8rem;
+}
+.theme-preview.phone {
+  justify-self: center;
+  inline-size: 18.75rem;
+  border: 8px solid #0f172a;
+  border-radius: 2rem;
+}
+.pv-bar {
+  padding: 0.35rem;
+  background: var(--p-primary);
+  color: #fff;
+  text-align: center;
+  font-size: 0.75rem;
+}
+.pv-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-block-end: 1px solid rgb(15 23 42 / 10%);
+}
+.look-classic .pv-head,
+.look-soft .pv-head {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pv-brand {
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: var(--p-primary);
+}
+.pv-logo {
+  max-block-size: 2rem;
+  max-inline-size: 8rem;
+}
+.pv-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.pv-circles {
+  display: flex;
+  gap: 0.75rem;
+}
+.pv-circles span {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+}
+.pv-circles i {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 99px;
+  background: rgb(15 23 42 / 10%);
+}
+.pv-hero {
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+  margin: 0.9rem;
+  padding: 1.5rem 1.2rem;
+  border-radius: var(--p-radius);
+  background: color-mix(in srgb, var(--p-primary) 18%, var(--p-bg));
+}
+.pv-hero strong {
+  font-size: 1.3rem;
+}
+.pv-hero em {
+  font-style: normal;
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--p-radius);
+  background: var(--p-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.pv-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0 0.9rem 1rem;
+}
+.look-modern .pv-grid,
+.theme-preview.phone .pv-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pv-card {
+  display: grid;
+  gap: 0.15rem;
+}
+.pv-img {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--p-radius);
+  background: rgb(15 23 42 / 8%);
+  overflow: hidden;
+}
+.pv-img img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.pv-img b {
+  position: absolute;
+  inset-block-start: 0.35rem;
+  inset-inline-start: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 99px;
+  background: var(--p-accent);
+  color: #fff;
+  font-size: 0.65rem;
+}
+.pv-card strong {
+  color: var(--p-primary);
+}
+.sticky-actions {
+  display: none;
+}
+select.radius-select {
+  display: none;
+  inline-size: 100%;
+}
+@media (max-width: 40rem) {
+  .design-head .actions,
+  .design-preview,
+  .radius-buttons {
+    display: none;
+  }
+  select.radius-select {
+    display: block;
+  }
+  .two-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sticky-actions {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    gap: 0.5rem;
+    margin-inline: -1rem;
+    padding: 0.6rem 1rem;
+    background: var(--surface);
+    border-block-start: 1px solid var(--line);
+  }
+  .sticky-actions button {
+    flex: 1;
+  }
+}
+.two-cols input {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
