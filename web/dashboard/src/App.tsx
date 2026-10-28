@@ -7,6 +7,7 @@ import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
 import { Design } from './pages/Design';
+import { Domains } from './pages/Domains';
 import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
 import { Imports } from './pages/Imports';
@@ -27,6 +28,8 @@ import { Shipments } from './pages/Shipments';
 import { Shipping } from './pages/Shipping';
 import { Signup } from './pages/Signup';
 import { SizeCharts } from './pages/SizeCharts';
+import { StoreSettings } from './pages/StoreSettings';
+import { Team } from './pages/Team';
 import { useSession } from './session';
 import { SessionProvider } from './SessionProvider';
 
@@ -85,6 +88,9 @@ function Gate() {
           <Route path="/stores/:storeId/design" element={<Design />} />
           <Route path="/stores/:storeId/home-page" element={<HomeEditor />} />
           <Route path="/stores/:storeId/pages" element={<Pages />} />
+          <Route path="/stores/:storeId/domains" element={<Domains />} />
+          <Route path="/stores/:storeId/team" element={<Team />} />
+          <Route path="/stores/:storeId/settings" element={<StoreSettings />} />
           <Route path="/stores/:storeId/pages/new" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/:pageId" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/policies/:policy" element={<PolicyEditor />} />

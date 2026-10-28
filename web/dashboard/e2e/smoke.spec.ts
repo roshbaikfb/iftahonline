@@ -372,3 +372,32 @@ test('a merchant publishes a landing page and a policy', async ({ page }) => {
   await expect(page.getByText('نُشرت. تظهر في أسفل صفحات متجرك.')).toBeVisible();
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+test('a merchant renames the store, adds a domain and invites a teammate', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  const nav = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
+
+  await nav.getByRole('link', { name: 'إعدادات المتجر' }).click();
+  const name = page.getByLabel('اسم المتجر');
+  await name.fill('متجر التجربة');
+  await page.getByRole('button', { name: 'حفظ التغييرات' }).click();
+  await expect(page.getByText('حُفظت الإعدادات.')).toBeVisible();
+
+  await nav.getByRole('link', { name: 'الدومينات' }).click();
+  await page.getByLabel('الدومين').fill('shop.demo-e2e.test');
+  await page.getByRole('button', { name: 'أضف' }).click();
+  await expect(page.getByText('shop.demo-e2e.test', { exact: true })).toBeVisible();
+  await expect(page.getByText('_iftah-verify.shop.demo-e2e.test')).toBeVisible();
+
+  await nav.getByRole('link', { name: 'فريق العمل' }).click();
+  await page.getByLabel('البريد الإلكتروني').fill('helper@demo.test');
+  await page.getByRole('radio', { name: /^الشحن/ }).check();
+  await page.getByRole('button', { name: 'أرسل الدعوة' }).click();
+  await expect(page.getByText('أرسلنا الدعوة إلى helper@demo.test. الرابط صالح 7 أيام.')).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
