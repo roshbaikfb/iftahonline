@@ -12,7 +12,9 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 [ADR-0039](../adr/0039-messaging-channels-and-log.md) (channels, the log,
 whose word counts),
 [ADR-0040](../adr/0040-order-confirmation-by-message.md) (order
-confirmation).
+confirmation),
+[ADR-0041](../adr/0041-customer-started-confirmation.md) (customers
+confirm on WhatsApp first; thanks).
 
 ## Public API (`internal/modules/messaging/api.go`)
 
@@ -24,7 +26,7 @@ confirmation).
 | `Module.OrderPlacedHandler()`, `ConfirmOrdersSubscriber` | The order confirmation; subscribe it to `orders.EventOrderPlaced` (worker role) |
 | `Deps.Orders`, `Deps.Stores`, `Deps.Contacts`, `Deps.Mailer` | The confirmation's collaborators (worker role): `orders.Fulfilment`, the store's name, locale and host, the staff emails (`identity.StaffEmails`) |
 | `Module.Fakes()` | The fake channels, for tests and demos |
-| `NewConfirmLinks(LinksDeps)` → `ConfirmLinks` | The SMS link page's side (storefront role, no secrets): `LinkConfirmation`, `AnswerLink` by token |
+| `NewConfirmLinks(LinksDeps)` → `ConfirmLinks` | The storefront role's side (no secrets): `LinkConfirmation` and `AnswerLink` by SMS token; `WhatsAppLink` for the thank-you page |
 | `Outgoing` | `Kind`, `Locale` (`ar`/`en`), optional `OrderID`, `To` (E.164), `Vars` (customer and store names, order reference, total, confirm URL) |
 | `Queued` | The message's ID, its status (`queued` or `skipped_quota`), and the store's quota `Usage` after it |
 | `Message`, `Status`, `Reply`, `Answer` | The log entry and the answers |
@@ -40,6 +42,9 @@ when the status is `skipped_quota`.
 | `whatsapp` | WhatsApp Cloud API | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` (`WHATSAPP_GRAPH_URL` optional) | Template messages with quick-reply buttons. Webhook: `/v1/webhooks/whatsapp`, with the GET handshake |
 | `twilio` | Twilio Programmable Messaging | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (number, sender ID or `MG…` service) | Text messages. Status callback `/v1/webhooks/twilio?m=<ref>`; statuses are read back from Twilio |
 | `fake_whatsapp`, `fake_sms` | In memory | `MESSAGING_FAKE_CHANNELS=true` (not in production) | Fill whichever channel is not configured |
+
+`WHATSAPP_DISPLAY_NUMBER` (E.164, public; also read by the storefront
+role) turns on the thank-you page's "confirm on WhatsApp" link.
 
 Neither adapter has run against the real service yet: there is no Meta
 app and no Twilio account. Both pass the contract suite
@@ -128,7 +133,18 @@ approved templates, so only the SMS text is the store's.
 4. **The deadline** cancels the order (actor `system:auto_cancel`) if
    its message reached the channel. If not, the confirmation is
    `unreached`: the merchant decides, and is told.
-5. **Notices** are made once each and kept 90 days. The quota warnings
+5. **Customers first on WhatsApp** (ADR-0041, with
+   `WHATSAPP_DISPLAY_NUMBER`):
+   - Each confirmation gets an 8-character code, unique across stores.
+   - The thank-you page links to `wa.me/<number>` with «أؤكد طلبي رقم
+     <code>».
+   - The template waits 10 minutes; if the order was settled by then,
+     it is not sent and its unit comes back (`answered_first`).
+   - The customer's text is placed by its code (`app.confirmation_store`)
+     and confirms only when sent from the order's phone.
+6. **Thanks:** an answer on WhatsApp (tap or text) is thanked by a free
+   text (`order_answer_ack`): no quota, WhatsApp only, once.
+7. **Notices** are made once each and kept 90 days. The quota warnings
    are also emailed to the owner and managers.
 
 ## Webhooks
@@ -154,7 +170,7 @@ Each event is placed in its store by our reference
 | `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads the partitions' keys backwards with no sort (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
 | `message_templates` | Tenant table under RLS. The store's SMS text per `(kind, locale)`; no row means the default |
 | `messaging_settings` | Tenant table under RLS. `confirm_cod`, `auto_cancel_hours`; no row means the defaults |
-| `order_confirmations` | Tenant table under RLS. One per order (PK `(store_id, order_id)`), with its message, status, deadline, answer, and the SMS token's SHA-256 (unique per store) |
+| `order_confirmations` | Tenant table under RLS. One per order (PK `(store_id, order_id)`), with its message, status, deadline, answer, the SMS token's SHA-256 (unique per store), and the WhatsApp code (unique across stores; `app.confirmation_store` maps it to its store) |
 | `merchant_notifications` | Tenant table under RLS. Unique `(store_id, kind, dedup_key)`; purged after 90 days as new ones arrive |
 
 ## Rules worth knowing
@@ -193,7 +209,11 @@ Each event is placed in its store by our reference
       email, order unaffected);
     - card orders and stores that opted out;
     - the SMS round trip (WhatsApp unreachable, then the SMS and its
-      link confirm the order).
+      link confirm the order);
+    - the customer-started confirmation (the link's ready text from the
+      customer's phone confirms the order and is thanked; a stranger's
+      does not; the delayed template is withdrawn and its unit
+      returned).
 - **Fuzzing:**
-  - `domain`: `FuzzParseRef`, `FuzzParsePayload`.
+  - `domain`: `FuzzParseRef`, `FuzzParsePayload`, `FuzzFindCode`.
   - `whatsapp`, `twilio`: `FuzzVerifyWebhook`.

@@ -56,6 +56,15 @@ func (f *fakeConfirms) AnswerConfirmation(_ context.Context, token string, confi
 	return f.view(), nil
 }
 
+func (f *fakeConfirms) WhatsAppLink(_ context.Context, orderRef, locale string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil || f.state != web.ConfirmWaiting {
+		return "", f.err
+	}
+	return "https://wa.me/201000000000?text=" + url.QueryEscape("order "+orderRef+" "+locale), nil
+}
+
 func newConfirmFixture(t *testing.T) (checkoutFixture, *fakeConfirms) {
 	t.Helper()
 	c := &fakeConfirms{state: web.ConfirmWaiting}
@@ -148,5 +157,30 @@ func TestConfirmLimits(t *testing.T) {
 	g.limiter.fail = true
 	if rec := g.post(t, "/o/"+confirmToken, url.Values{"answer": {"confirm"}}, nil, nil); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("limiter down: %d", rec.Code)
+	}
+}
+
+// TestThankYouConfirmOnWhatsApp: a cash-on-delivery order waiting for
+// its answer offers the "confirm on WhatsApp" link; once answered, or
+// without the port, it does not.
+func TestThankYouConfirmOnWhatsApp(t *testing.T) {
+	t.Parallel()
+	f, c := newConfirmFixture(t)
+	body := f.get(t, "/thank-you/IFT-1001").Body.String()
+	wantContains(t, body, `class="card-box confirm-wa"`, "أكّد طلبك الآن على واتساب", `class="btn btn-block btn-wa" href="https://wa.me/201000000000?text=order+IFT-1001+ar"`,
+		`rel="nofollow noopener"`)
+	if en := f.get(t, "/en/thank-you/IFT-1001").Body.String(); !strings.Contains(en, "text=order+IFT-1001+en") || !strings.Contains(en, "Confirm on WhatsApp") {
+		t.Fatal("English link")
+	}
+	c.state = web.ConfirmDone
+	if strings.Contains(f.get(t, "/thank-you/IFT-1001").Body.String(), "confirm-wa") {
+		t.Fatal("link offered after the answer")
+	}
+	c.state, c.err = web.ConfirmWaiting, errors.New("db down")
+	if rec := f.get(t, "/thank-you/IFT-1001"); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "confirm-wa") {
+		t.Fatalf("outage: %d", rec.Code)
+	}
+	if strings.Contains(newCheckoutFixture(t).get(t, "/thank-you/IFT-1001").Body.String(), "confirm-wa") {
+		t.Fatal("link without the port")
 	}
 }

@@ -74,3 +74,53 @@ func TestNotices(t *testing.T) {
 		}
 	}
 }
+
+func TestCodes(t *testing.T) {
+	t.Parallel()
+	seen := map[string]bool{}
+	for range 200 {
+		c, err := domain.NewCode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := domain.FindCode("أؤكد طلبي رقم " + c); !ok || got != c || len(c) != domain.CodeLen || strings.ContainsAny(c, "ILOU") {
+			t.Fatalf("code %q found as %q %v", c, got, ok)
+		}
+		seen[c] = true
+	}
+	if len(seen) < 199 {
+		t.Fatalf("only %d distinct codes of 200", len(seen))
+	}
+	tests := map[string]string{
+		"أؤكد طلبي رقم K7Q2ABCD":       "K7Q2ABCD",
+		"confirm #k7q2abcd please":     "K7Q2ABCD",
+		"رقم الطلب: K7Q2-ABCD":         "",
+		"code ko7q2abc":                "K07Q2ABC",
+		"١٢٣٤٥٦٧٨":                     "12345678",
+		"confirmed my order K7Q2ABCD!": "K7Q2ABCD",
+		"no code here":                 "",
+		"K7Q2ABCDE":                    "",
+		"":                             "",
+		"🙂K7Q2ABCD🙂":                   "K7Q2ABCD",
+	}
+	for text, want := range tests {
+		got, ok := domain.FindCode(text)
+		if got != want || ok != (want != "") {
+			t.Errorf("FindCode(%q) = %q %v, want %q", text, got, ok, want)
+		}
+	}
+}
+
+func FuzzFindCode(f *testing.F) {
+	f.Add("أؤكد طلبي رقم K7Q2ABCD")
+	f.Add("#k7q2abcd")
+	f.Fuzz(func(t *testing.T, text string) {
+		c, ok := domain.FindCode(text)
+		if !ok {
+			return
+		}
+		if len(c) != domain.CodeLen || strings.Trim(c, "0123456789ABCDEFGHJKMNPQRSTVWXYZ") != "" {
+			t.Fatalf("found %q in %q", c, text)
+		}
+	})
+}

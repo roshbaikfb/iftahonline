@@ -74,6 +74,10 @@ type ConfirmLinks interface {
 	// AnswerLink confirms or cancels the order (actor customer:sms);
 	// once settled, it shows how.
 	AnswerLink(ctx context.Context, token string, answer Answer) (LinkView, error)
+	// WhatsAppLink is the thank-you page's "confirm on WhatsApp" link
+	// (wa.me, the platform's number, a ready text with the order's code)
+	// in locale; "" when there is none to offer.
+	WhatsAppLink(ctx context.Context, orderID ulid.ID, locale string) (string, error)
 }
 
 var _ ConfirmLinks = (*app.Service)(nil)

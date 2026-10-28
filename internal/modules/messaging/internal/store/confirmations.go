@@ -11,6 +11,8 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/store/messagingdb"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -47,20 +49,67 @@ func SaveSettings(ctx context.Context, tx Tx, s domain.Settings) error {
 	return nil
 }
 
+// ErrCodeTaken means the WhatsApp code is another order's (draw again).
+var ErrCodeTaken = errors.New("messaging store: WhatsApp code taken")
+
 // InsertConfirmation opens an order's confirmation; it reports false
-// when the order has one already.
-func InsertConfirmation(ctx context.Context, tx Tx, c domain.Confirmation, tokenHash []byte) (bool, error) {
+// when the order has one already. waCode may be empty (no WhatsApp
+// number to confirm on).
+func InsertConfirmation(ctx context.Context, tx Tx, c domain.Confirmation, tokenHash []byte, waCode string) (bool, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return false, err
 	}
+	var code *string
+	if waCode != "" {
+		code = &waCode
+	}
 	n, err := messagingdb.New(tx).InsertConfirmation(ctx, messagingdb.InsertConfirmationParams{
-		StoreID: store, OrderID: c.OrderID, Status: string(c.Status), TokenHash: tokenHash, ExpiresAt: c.ExpiresAt,
+		StoreID: store, OrderID: c.OrderID, Status: string(c.Status), TokenHash: tokenHash, WaCode: code, ExpiresAt: c.ExpiresAt,
 	})
+	if postgres.IsUniqueViolation(err, "order_confirmations_wa_code") {
+		return false, ErrCodeTaken
+	}
 	if err != nil {
 		return false, fmt.Errorf("messaging store: insert confirmation: %w", err)
 	}
 	return n == 1, nil
+}
+
+// ByCode finds the store of a WhatsApp code, across stores (the
+// platform's one number receives every store's texts). tx has no tenant.
+func ByCode(ctx context.Context, tx Tx, code string) (tenant.StoreID, bool, error) {
+	id, err := messagingdb.New(tx).ConfirmationStoreByCode(ctx, code)
+	if err != nil {
+		return tenant.StoreID{}, false, fmt.Errorf("messaging store: store by code: %w", err)
+	}
+	return tenant.StoreID{ID: id}, !id.IsZero(), nil
+}
+
+// ConfirmationByCode returns the confirmation of a WhatsApp code in the
+// store in ctx.
+func ConfirmationByCode(ctx context.Context, tx Tx, code string) (domain.Confirmation, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Confirmation{}, err
+	}
+	row, err := messagingdb.New(tx).ConfirmationByCode(ctx, messagingdb.ConfirmationByCodeParams{StoreID: store, WaCode: &code})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return domain.Confirmation{}, ErrConfirmationNotFound
+	case err != nil:
+		return domain.Confirmation{}, fmt.Errorf("messaging store: confirmation by code: %w", err)
+	}
+	return toConfirmation(row), nil
+}
+
+func toConfirmation(row messagingdb.OrderConfirmation) domain.Confirmation {
+	c := domain.Confirmation{OrderID: row.OrderID, MessageID: row.MessageID, Status: domain.ConfirmationStatus(row.Status),
+		ExpiresAt: row.ExpiresAt, AnsweredAt: row.AnsweredAt, AnsweredBy: row.AnsweredBy, CreatedAt: row.CreatedAt}
+	if row.WaCode != nil {
+		c.WACode = *row.WaCode
+	}
+	return c
 }
 
 // Confirmation returns an order's confirmation; lock holds it until tx
@@ -83,8 +132,7 @@ func Confirmation(ctx context.Context, tx Tx, order ulid.ID, lock bool) (domain.
 	case err != nil:
 		return domain.Confirmation{}, fmt.Errorf("messaging store: confirmation: %w", err)
 	}
-	return domain.Confirmation{OrderID: row.OrderID, MessageID: row.MessageID, Status: domain.ConfirmationStatus(row.Status),
-		ExpiresAt: row.ExpiresAt, AnsweredAt: row.AnsweredAt, AnsweredBy: row.AnsweredBy, CreatedAt: row.CreatedAt}, nil
+	return toConfirmation(row), nil
 }
 
 // UpdateConfirmation saves a confirmation's message, status and answer.
@@ -211,6 +259,5 @@ func ConfirmationByToken(ctx context.Context, tx Tx, tokenHash []byte) (domain.C
 	case err != nil:
 		return domain.Confirmation{}, fmt.Errorf("messaging store: confirmation by token: %w", err)
 	}
-	return domain.Confirmation{OrderID: row.OrderID, MessageID: row.MessageID, Status: domain.ConfirmationStatus(row.Status),
-		ExpiresAt: row.ExpiresAt, AnsweredAt: row.AnsweredAt, AnsweredBy: row.AnsweredBy, CreatedAt: row.CreatedAt}, nil
+	return toConfirmation(row), nil
 }

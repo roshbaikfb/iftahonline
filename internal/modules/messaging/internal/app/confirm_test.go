@@ -129,7 +129,7 @@ func newConfirmFixture(t *testing.T, o options) cfix {
 	}
 	c.svc = app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Keyring: keyring, Quota: ent.Entitlements(), Jobs: f.jobs, Channels: chans,
 		Buttons: buttonKey, Inbox: f.inbox, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Confirmations: app.Confirmations{Orders: c.orders, Mailer: c.mail, DashboardURL: "https://app.example.com",
+		Confirmations: app.Confirmations{Number: o.number, Orders: c.orders, Mailer: c.mail, DashboardURL: "https://app.example.com",
 			Stores: func(context.Context) (app.StoreInfo, error) {
 				return app.StoreInfo{Name: "سوق", Locale: "en", Host: "souq.example.com"}, nil
 			},
@@ -236,7 +236,7 @@ func TestConfirmationAnswers(t *testing.T) {
 		t.Helper()
 		var st domain.ConfirmationStatus
 		if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) (err error) {
-			st, err = c.svc.AnswerTx(ctx, tx, id, r, domain.ActorWhatsApp, time.Now())
+			st, _, err = c.svc.AnswerTx(ctx, tx, id, r, domain.ActorWhatsApp, time.Now())
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -273,7 +273,7 @@ func TestConfirmationAnswers(t *testing.T) {
 		t.Fatalf("notices = %s", kinds)
 	}
 	if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
-		_, err := c.svc.AnswerTx(ctx, tx, c.ids.New(), domain.Confirm, domain.ActorWhatsApp, time.Now())
+		_, _, err := c.svc.AnswerTx(ctx, tx, c.ids.New(), domain.Confirm, domain.ActorWhatsApp, time.Now())
 		return err
 	}); !errors.Is(err, app.ErrConfirmationNotFound) {
 		t.Fatalf("no confirmation: %v", err)
@@ -480,9 +480,156 @@ func TestUnreachedMayStillAnswer(t *testing.T) {
 	}
 	var st domain.ConfirmationStatus
 	if err := pgxTx(ctx, c.pool, func(tx pgx.Tx) (err error) {
-		st, err = c.svc.AnswerTx(ctx, tx, id, domain.Confirm, domain.ActorSMSLink, time.Now())
+		st, _, err = c.svc.AnswerTx(ctx, tx, id, domain.Confirm, domain.ActorSMSLink, time.Now())
 		return err
 	}); err != nil || st != domain.Confirmed || c.orders.status(id) != orders.StatusConfirmed {
 		t.Fatalf("late answer = %s, %v", st, err)
+	}
+}
+
+// customerFirst opens an order's confirmation in a store whose platform
+// has a WhatsApp number to confirm on.
+func customerFirst(t *testing.T) (cfix, context.Context, ulid.ID, domain.Confirmation) {
+	t.Helper()
+	c := newConfirmFixture(t, options{number: "+201000000000"})
+	ctx := c.store(t)
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	return c, ctx, id, c.confirmation(ctx, t, id)
+}
+
+func TestCustomerFirstCode(t *testing.T) {
+	t.Parallel()
+	c, ctx, id, conf := customerFirst(t)
+	if len(conf.WACode) != domain.CodeLen {
+		t.Fatalf("code = %q", conf.WACode)
+	}
+	// The paid template waits for the free path.
+	var at time.Time
+	for i, a := range c.jobs.Args {
+		if a.Kind() == "messaging.send_message" {
+			at = c.jobs.Opts[i].ScheduledAt
+		}
+	}
+	if d := time.Until(at); d < app.CustomerFirst-time.Minute || d > app.CustomerFirst {
+		t.Fatalf("template scheduled in %v", d)
+	}
+	link, err := c.svc.WhatsAppLink(ctx, id, "ar")
+	if err != nil || !strings.HasPrefix(link, "https://wa.me/201000000000?text=") || !strings.Contains(link, conf.WACode) {
+		t.Fatalf("link = %q, %v", link, err)
+	}
+	if link, err = c.svc.WhatsAppLink(ctx, c.ids.New(), "ar"); err != nil || link != "" {
+		t.Fatalf("no confirmation: %q %v", link, err)
+	}
+	// Without a number, no code and no wait.
+	plain := newConfirmFixture(t, options{})
+	pctx := plain.store(t)
+	pid := plain.orders.add(t, plain.ids, orders.PaymentCOD)
+	if err = plain.svc.ConfirmOrder(pctx, pid); err != nil {
+		t.Fatal(err)
+	}
+	if plain.confirmation(pctx, t, pid).WACode != "" {
+		t.Fatal("a code without a number")
+	}
+	if link, err = plain.svc.WhatsAppLink(pctx, pid, "ar"); err != nil || link != "" {
+		t.Fatalf("link without a number: %q %v", link, err)
+	}
+}
+
+// TestCustomerConfirmsByText: the customer sends the ready text from the
+// order's phone: the order is confirmed, they are thanked (no quota), and
+// the paid template, when its time comes, is not sent and its unit
+// comes back.
+func TestCustomerConfirmsByText(t *testing.T) {
+	t.Parallel()
+	c, ctx, id, conf := customerFirst(t)
+	text := func(from, body string) []string {
+		t.Helper()
+		return c.deliverVia(t, c.svc, c.wa, channel.Event{Kind: channel.TextEvent, ID: "wamid.txt." + from + body, From: from, Text: body})
+	}
+	// Someone else's phone with the right code: placed, refused.
+	if got := text("+201099999999", domain.CustomerConfirmText("ar", conf.WACode)); len(got) != 1 || got[0] != "phone_mismatch" {
+		t.Fatalf("other phone = %v", got)
+	}
+	// No code, or a code no order has: not placed at all.
+	if got := text(customer.Unmasked(), "مرحبا"); len(got) != 0 {
+		t.Fatalf("no code = %v", got)
+	}
+	if got := text(customer.Unmasked(), "أؤكد طلبي رقم ZZZZZZZZ"); len(got) != 0 {
+		t.Fatalf("unknown code = %v", got)
+	}
+	if c.orders.status(id) != orders.StatusPending {
+		t.Fatal("moved by the wrong sender")
+	}
+	usedBefore := c.used(ctx, t)
+	if got := text(customer.Unmasked(), "أؤكد طلبي رقم "+strings.ToLower(conf.WACode)); len(got) != 1 || got[0] != "text_confirmed" {
+		t.Fatalf("customer = %v", got)
+	}
+	if c.orders.status(id) != orders.StatusConfirmed || strings.Join(c.orders.moves, ",") != "customer:whatsapp>confirmed" {
+		t.Fatalf("order = %s %v", c.orders.status(id), c.orders.moves)
+	}
+	if got := text(customer.Unmasked(), "أؤكد طلبي رقم "+conf.WACode+" مرة أخرى"); got[0] != "repeated_text" {
+		t.Fatalf("again = %v", got)
+	}
+	// The thank-you text: free, WhatsApp, in the store's locale.
+	if c.used(ctx, t) != usedBefore {
+		t.Fatal("the thanks cost a quota unit")
+	}
+	jobs := c.sendJobs()
+	ack := jobs[len(jobs)-1]
+	if err := c.svc.SendMessage(ctx, ack.MessageID, false); err != nil {
+		t.Fatal(err)
+	}
+	sent := c.wa.Sent()
+	if last := sent[len(sent)-1]; last.Template != "" || !strings.Contains(last.Text, "is confirmed") || !strings.Contains(last.Text, orders.CodeOf(id)) {
+		t.Fatalf("thanks = %+v", last)
+	}
+	// The template's time comes: the customer answered first.
+	if err := c.svc.SendMessage(ctx, *conf.MessageID, false); err != nil {
+		t.Fatal(err)
+	}
+	m := c.message(ctx, t, *conf.MessageID)
+	if m.Status != domain.Failed || m.ErrorCode != "answered_first" || c.used(ctx, t) != usedBefore-1 {
+		t.Fatalf("template = %+v, used %d", m, c.used(ctx, t))
+	}
+	if n := len(c.wa.Sent()); n != len(sent) {
+		t.Fatal("the template went out after the answer")
+	}
+	if link, err := c.svc.WhatsAppLink(ctx, id, "ar"); err != nil || link != "" {
+		t.Fatalf("link after the answer: %q %v", link, err)
+	}
+}
+
+// TestButtonAnswerThanks: a tap on the template's button is thanked too,
+// and a thank-you never falls back to SMS.
+func TestButtonAnswerThanks(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	id := c.orders.add(t, c.ids, orders.PaymentCOD)
+	if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	mid := *c.confirmation(ctx, t, id).MessageID
+	if err := c.svc.SendMessage(ctx, mid, false); err != nil {
+		t.Fatal(err)
+	}
+	payload := c.wa.Sent()[0].Buttons[1].Payload
+	if got := c.deliverVia(t, c.svc, c.wa, channel.Event{Kind: channel.ButtonEvent, ID: "wamid.tap.cancel", Payload: payload}); got[0] != "reply_cancel" {
+		t.Fatalf("tap = %v", got)
+	}
+	jobs := c.sendJobs()
+	ack := jobs[len(jobs)-1].MessageID
+	c.wa.Unreachable(customer.Unmasked())
+	if err := c.svc.SendMessage(ctx, ack, false); err != nil {
+		t.Fatal(err)
+	}
+	if m := c.message(ctx, t, ack); m.Kind != domain.AnswerAck || m.Status != domain.Failed || m.ErrorCode != "undeliverable" {
+		t.Fatalf("thanks = %+v", m)
+	}
+	if len(c.sms.Sent()) != 0 {
+		t.Fatal("a thank-you went by SMS")
 	}
 }

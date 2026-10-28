@@ -90,8 +90,13 @@ type Messaging struct {
 	WhatsAppVerifyToken string
 	// WhatsAppGraphURL overrides Meta's Graph API base (with its version).
 	WhatsAppGraphURL string
-	TwilioAccountSID string
-	TwilioAuthToken  string
+	// WhatsAppDisplayNumber is the platform's WhatsApp number in E.164,
+	// public: the thank-you page's "confirm on WhatsApp" link writes to
+	// it (ADR-0041). Empty offers no such link. Also read by the
+	// storefront role.
+	WhatsAppDisplayNumber string
+	TwilioAccountSID      string
+	TwilioAuthToken       string
 	// TwilioFrom is the sender: an E.164 number, an alphanumeric sender
 	// ID, or a Messaging Service SID (MG…).
 	TwilioFrom    string
@@ -420,6 +425,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 
 	if role == RoleStorefront {
 		c.Media = r.delivery()
+		c.Messaging.WhatsAppDisplayNumber = r.displayNumber()
 		c.Edge.CacheTTL = r.duration("EDGE_CACHE_TTL", time.Minute)
 		if c.Edge.CacheTTL > 24*time.Hour {
 			r.errorf("EDGE_CACHE_TTL: at most 24h")
@@ -764,6 +770,7 @@ func (r *reader) messaging(env string) Messaging {
 		WhatsAppAppSecret:     r.secretOptional("WHATSAPP_APP_SECRET"),
 		WhatsAppVerifyToken:   r.secretOptional("WHATSAPP_VERIFY_TOKEN"),
 		WhatsAppGraphURL:      r.url("WHATSAPP_GRAPH_URL", false, "https", "http"),
+		WhatsAppDisplayNumber: r.displayNumber(),
 		TwilioAccountSID:      r.str("TWILIO_ACCOUNT_SID", ""),
 		TwilioAuthToken:       r.secretOptional("TWILIO_AUTH_TOKEN"),
 		TwilioFrom:            r.str("TWILIO_FROM", ""),
@@ -788,6 +795,15 @@ func (r *reader) messaging(env string) Messaging {
 		r.errorf("MESSAGING_FAKE_CHANNELS: the fake channels are not for production")
 	}
 	return m
+}
+
+// displayNumber reads WHATSAPP_DISPLAY_NUMBER: "+" and 8 to 15 digits.
+func (r *reader) displayNumber() string {
+	n := r.str("WHATSAPP_DISPLAY_NUMBER", "")
+	if n != "" && (len(n) < 9 || len(n) > 16 || n[0] != '+' || !digitsOnly(n[1:])) {
+		r.errorf("WHATSAPP_DISPLAY_NUMBER: + and 8 to 15 digits")
+	}
+	return n
 }
 
 func countSet(vs ...string) int {

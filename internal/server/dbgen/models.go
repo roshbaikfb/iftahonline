@@ -284,6 +284,7 @@ type OrderConfirmation struct {
 	AnsweredBy string
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	WaCode     pgtype.Text
 }
 
 type OrderEvent struct {

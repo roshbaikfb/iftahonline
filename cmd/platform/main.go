@@ -639,7 +639,8 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
-	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Pool: c.pool, IDs: c.ids, Jobs: ins, Orders: fulfilment, Log: c.log})
+	links, err := messaging.NewConfirmLinks(messaging.LinksDeps{Number: c.cfg.Messaging.WhatsAppDisplayNumber, Pool: c.pool, IDs: c.ids,
+		Jobs: ins, Orders: fulfilment, Log: c.log})
 	if err != nil {
 		return nil, err
 	}

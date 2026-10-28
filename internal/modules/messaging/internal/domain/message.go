@@ -20,12 +20,23 @@ const (
 	// cancel their order (P6 6c), with Confirm and Cancel buttons on
 	// WhatsApp.
 	OrderConfirmation Kind = "order_confirmation"
+	// AnswerAck thanks a customer who answered on WhatsApp, and says
+	// what became of the order: a text inside the conversation they
+	// just opened, free on WhatsApp, so it costs no quota and never goes
+	// by SMS.
+	AnswerAck Kind = "order_answer_ack"
 )
 
 // Valid reports whether k is a kind.
-func (k Kind) Valid() bool { return k == OrderConfirmation }
+func (k Kind) Valid() bool { return k == OrderConfirmation || k == AnswerAck }
 
-// Kinds lists every kind.
+// Metered reports whether a message of kind k costs a quota unit.
+func (k Kind) Metered() bool { return k != AnswerAck }
+
+// WhatsAppOnly reports whether k goes by WhatsApp only (never SMS).
+func (k Kind) WhatsAppOnly() bool { return k == AnswerAck }
+
+// Kinds lists the kinds whose SMS text a store writes.
 func Kinds() []Kind { return []Kind{OrderConfirmation} }
 
 // Channel is how a message went out.
@@ -154,6 +165,9 @@ type Vars struct {
 	Total        string `json:"total"` // formatted, e.g. "520.00 EGP"
 	// ConfirmURL is where an SMS customer confirms or cancels (6c).
 	ConfirmURL string `json:"confirm_url,omitempty"`
+	// Outcome is what an answer did (AnswerAck): confirmed, cancelled or
+	// stale.
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // CreatedAtOf is the creation time a message ID encodes; the log's

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -26,7 +27,28 @@ const (
 	codeRejected      = "rejected"
 	codeAuth          = "auth"
 	codeUnavailable   = "unavailable"
+	// codeAnsweredFirst: the customer settled the order (on the
+	// thank-you page's WhatsApp link, or the merchant did) before the
+	// confirmation went out; its unit is given back.
+	codeAnsweredFirst = "answered_first"
 )
+
+// answeredFirst reports whether m is an order confirmation whose order
+// no longer waits for an answer.
+func (s *Service) answeredFirst(ctx context.Context, m domain.Message) (bool, error) {
+	if m.Kind != domain.OrderConfirmation || m.OrderID == nil {
+		return false, nil
+	}
+	var c domain.Confirmation
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
+		c, err = store.Confirmation(ctx, tx, *m.OrderID, false)
+		return err
+	})
+	if errors.Is(err, store.ErrConfirmationNotFound) {
+		return false, nil
+	}
+	return err == nil && c.Status != domain.Pending && c.Status != domain.Unreached, err
+}
 
 // slot is the channel a message goes out on next: WhatsApp unless it
 // already fell back to SMS (or WhatsApp is not configured).
@@ -34,7 +56,7 @@ func (s *Service) slot(m domain.Message) (channel.Channel, domain.Channel) {
 	if !m.Fallback && s.channels.WhatsApp != nil {
 		return s.channels.WhatsApp, domain.WhatsApp
 	}
-	if s.channels.SMS != nil {
+	if s.channels.SMS != nil && !m.Kind.WhatsAppOnly() {
 		return s.channels.SMS, domain.SMS
 	}
 	return nil, ""
@@ -53,6 +75,13 @@ func (s *Service) SendMessage(ctx context.Context, id ulid.ID, lastTry bool) err
 	if err != nil || m.Status != domain.Queued {
 		return err
 	}
+	answered, err := s.answeredFirst(ctx, m)
+	if err != nil {
+		return err
+	}
+	if answered {
+		return s.fail(ctx, id, codeAnsweredFirst)
+	}
 	ch, via := s.slot(m)
 	if ch == nil {
 		return s.fail(ctx, id, errNoChannel)
@@ -65,7 +94,7 @@ func (s *Service) SendMessage(ctx context.Context, id ulid.ID, lastTry bool) err
 	switch {
 	case err == nil:
 		return s.markSent(ctx, id, ch.Name(), via, sent)
-	case errors.Is(err, channel.ErrUndeliverable) && via == domain.WhatsApp && s.channels.SMS != nil:
+	case errors.Is(err, channel.ErrUndeliverable) && via == domain.WhatsApp && s.channels.SMS != nil && !m.Kind.WhatsAppOnly():
 		return s.fallback(ctx, id, codeUndeliverable)
 	case errors.Is(err, channel.ErrUndeliverable):
 		return s.fail(ctx, id, codeUndeliverable)
@@ -101,6 +130,10 @@ func (s *Service) build(ctx context.Context, m domain.Message, via domain.Channe
 	}
 	ref := domain.Ref{Store: storeID, Message: m.ID}
 	out := channel.Message{To: to, Ref: ref.String()}
+	if m.Kind == domain.AnswerAck {
+		out.Text = domain.AckText(m.Locale, c.Vars)
+		return out, nil
+	}
 	if via == domain.WhatsApp {
 		tpl, ok := domain.WhatsAppTemplate(m.Kind)
 		if !ok {
@@ -183,5 +216,5 @@ func (s *Service) fallbackTx(ctx context.Context, tx pgx.Tx, m *domain.Message, 
 		return false, nil
 	}
 	m.Fallback, m.Status, m.Channel, m.Provider, m.ProviderID, m.ErrorCode = true, domain.Queued, "", "", "", text.Clip(code, 40)
-	return true, s.enqueueSendTx(ctx, tx, m.ID, true)
+	return true, s.enqueueSendTx(ctx, tx, m.ID, true, time.Time{})
 }

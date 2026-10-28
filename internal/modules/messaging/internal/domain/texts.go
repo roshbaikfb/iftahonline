@@ -110,3 +110,25 @@ type Text struct {
 	Custom    bool
 	UpdatedAt *time.Time
 }
+
+// AckText is the text thanking a customer who answered on WhatsApp, by
+// what the answer did (Vars.Outcome).
+func AckText(locale string, v Vars) string {
+	name, ref, store := param(v.CustomerName), param(v.OrderRef), param(v.StoreName)
+	if locale == English {
+		switch v.Outcome {
+		case string(Confirmed):
+			return "Thank you " + name + ", your order " + ref + " from " + store + " is confirmed. We will let you know when it ships."
+		case string(Cancelled):
+			return "Your order " + ref + " from " + store + " is cancelled."
+		}
+		return "Your order " + ref + " from " + store + " no longer needs your answer. Contact the store with any question."
+	}
+	switch v.Outcome {
+	case string(Confirmed):
+		return "شكراً " + name + "، تم تأكيد طلبك رقم " + ref + " من " + store + ". سنبلغك عند شحنه."
+	case string(Cancelled):
+		return "تم إلغاء طلبك رقم " + ref + " من " + store + "."
+	}
+	return "طلبك رقم " + ref + " من " + store + " لم يعد ينتظر ردك. للاستفسار تواصل مع المتجر."
+}

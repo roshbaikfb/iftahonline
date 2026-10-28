@@ -123,6 +123,8 @@ type Outgoing struct {
 	OrderID *ulid.ID
 	To      phone.E164
 	Vars    domain.Vars
+	// SendAt delays the send (zero: now).
+	SendAt time.Time
 }
 
 // Queued is what EnqueueTx did: the message's ID and status (queued, or
@@ -159,13 +161,17 @@ func (s *Service) EnqueueTx(ctx context.Context, tx pgx.Tx, o Outgoing) (Queued,
 		m.Status, m.ErrorCode = domain.Failed, errNoChannel
 		return Queued{ID: id, Status: m.Status}, store.Insert(ctx, tx, m)
 	}
-	usage, err := s.quota.ConsumeTx(ctx, tx, entitlements.Messages, 1)
-	if errors.Is(err, entitlements.ErrQuotaExceeded) {
-		m.Status = domain.Skipped
-		return Queued{ID: id, Status: m.Status, Usage: usage}, store.Insert(ctx, tx, m)
-	}
-	if err != nil {
-		return Queued{}, err
+	var usage entitlements.Usage
+	if o.Kind.Metered() {
+		usage, err = s.quota.ConsumeTx(ctx, tx, entitlements.Messages, 1)
+		if errors.Is(err, entitlements.ErrQuotaExceeded) {
+			m.Status = domain.Skipped
+			return Queued{ID: id, Status: m.Status, Usage: usage}, store.Insert(ctx, tx, m)
+		}
+		if err != nil {
+			return Queued{}, err
+		}
+		m.QuotaPeriod = &usage.Period
 	}
 	content, err := json.Marshal(domain.Content{To: o.To.Unmasked(), Vars: o.Vars})
 	if err != nil {
@@ -174,11 +180,11 @@ func (s *Service) EnqueueTx(ctx context.Context, tx pgx.Tx, o Outgoing) (Queued,
 	if m.Content, err = s.keyring.Seal(content, aad(storeID, id)); err != nil {
 		return Queued{}, fmt.Errorf("messaging: seal: %w", err)
 	}
-	m.Status, m.QuotaPeriod = domain.Queued, &usage.Period
+	m.Status = domain.Queued
 	if err = store.Insert(ctx, tx, m); err != nil {
 		return Queued{}, err
 	}
-	if err = s.enqueueSendTx(ctx, tx, id, false); err != nil {
+	if err = s.enqueueSendTx(ctx, tx, id, false, o.SendAt); err != nil {
 		return Queued{}, err
 	}
 	return Queued{ID: id, Status: m.Status, Usage: usage}, nil
@@ -210,13 +216,13 @@ func (SendMessageArgs) Kind() string { return "messaging.send_message" }
 // backoff spreads them over about an hour); after them it fails.
 const sendAttempts = 8
 
-func (s *Service) enqueueSendTx(ctx context.Context, tx pgx.Tx, id ulid.ID, fallback bool) error {
+func (s *Service) enqueueSendTx(ctx context.Context, tx pgx.Tx, id ulid.ID, fallback bool, at time.Time) error {
 	t, err := jobs.ForTenant(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err = s.jobs.InsertTx(ctx, tx, SendMessageArgs{TenantArgs: t, MessageID: id, Fallback: fallback},
-		&river.InsertOpts{MaxAttempts: sendAttempts, UniqueOpts: river.UniqueOpts{ByArgs: true}}); err != nil {
+		&river.InsertOpts{MaxAttempts: sendAttempts, ScheduledAt: at, UniqueOpts: river.UniqueOpts{ByArgs: true}}); err != nil {
 		return fmt.Errorf("messaging: enqueue send: %w", err)
 	}
 	return nil

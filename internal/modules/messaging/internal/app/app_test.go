@@ -65,10 +65,11 @@ type fixture struct {
 }
 
 type options struct {
-	limit int64
-	noWA  bool
-	noSMS bool
-	chans *app.Channels
+	number string // the platform's WhatsApp number (customer-started confirmation)
+	limit  int64
+	noWA   bool
+	noSMS  bool
+	chans  *app.Channels
 }
 
 func newFixture(t *testing.T, o options) fixture {

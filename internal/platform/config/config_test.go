@@ -207,8 +207,14 @@ func TestEntitlements(t *testing.T) {
 func TestMessaging(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleWorker, env(base()))
-	if err != nil || c.Messaging.WhatsApp() || c.Messaging.SMS() || c.Messaging.FakeChannels {
+	if err != nil || c.Messaging.WhatsApp() || c.Messaging.SMS() || c.Messaging.FakeChannels || c.Messaging.WhatsAppDisplayNumber != "" {
 		t.Fatalf("defaults: %v %v", c.Messaging, err)
+	}
+	for _, role := range []config.Role{config.RoleStorefront, config.RoleWorker} {
+		c, err = config.Load(role, env(with("WHATSAPP_DISPLAY_NUMBER", "+201000000000")))
+		if err != nil || c.Messaging.WhatsAppDisplayNumber != "+201000000000" {
+			t.Fatalf("%s display number: %q %v", role, c.Messaging.WhatsAppDisplayNumber, err)
+		}
 	}
 	full := []string{
 		"WHATSAPP_PHONE_NUMBER_ID", "106540352242922", "WHATSAPP_ACCESS_TOKEN", "wa-token-value", "WHATSAPP_APP_SECRET", "wa-app-secret",
@@ -230,6 +236,8 @@ func TestMessaging(t *testing.T) {
 		"twilio without sender":  {"TWILIO_ACCOUNT_SID", "AC1", "TWILIO_AUTH_TOKEN", "x"},
 		"bad account sid":        {"TWILIO_ACCOUNT_SID", "XX1", "TWILIO_AUTH_TOKEN", "x", "TWILIO_FROM", "+1"},
 		"fake in production":     {"APP_ENV", "production", "MESSAGING_FAKE_CHANNELS", "true"},
+		"display number no plus": {"WHATSAPP_DISPLAY_NUMBER", "201000000000"},
+		"display number letters": {"WHATSAPP_DISPLAY_NUMBER", "+2010abc0000"},
 		"bad graph url":          {"WHATSAPP_GRAPH_URL", "ftp://graph"},
 	}
 	for name, kv := range tests {

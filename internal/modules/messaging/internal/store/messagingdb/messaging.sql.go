@@ -12,8 +12,36 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const confirmationByCode = `-- name: ConfirmationByCode :one
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at, wa_code FROM order_confirmations WHERE store_id = $1 AND wa_code = $2
+`
+
+type ConfirmationByCodeParams struct {
+	StoreID ulid.ID
+	WaCode  *string
+}
+
+func (q *Queries) ConfirmationByCode(ctx context.Context, arg ConfirmationByCodeParams) (OrderConfirmation, error) {
+	row := q.db.QueryRow(ctx, confirmationByCode, arg.StoreID, arg.WaCode)
+	var i OrderConfirmation
+	err := row.Scan(
+		&i.StoreID,
+		&i.OrderID,
+		&i.MessageID,
+		&i.Status,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.AnsweredAt,
+		&i.AnsweredBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.WaCode,
+	)
+	return i, err
+}
+
 const confirmationByToken = `-- name: ConfirmationByToken :one
-SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND token_hash = $2
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at, wa_code FROM order_confirmations WHERE store_id = $1 AND token_hash = $2
 `
 
 type ConfirmationByTokenParams struct {
@@ -35,8 +63,21 @@ func (q *Queries) ConfirmationByToken(ctx context.Context, arg ConfirmationByTok
 		&i.AnsweredBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaCode,
 	)
 	return i, err
+}
+
+const confirmationStoreByCode = `-- name: ConfirmationStoreByCode :one
+SELECT app.confirmation_store($1::text)::uuid AS store_id
+`
+
+// The store of a WhatsApp code, across stores (SECURITY DEFINER).
+func (q *Queries) ConfirmationStoreByCode(ctx context.Context, code string) (ulid.ID, error) {
+	row := q.db.QueryRow(ctx, confirmationStoreByCode, code)
+	var store_id ulid.ID
+	err := row.Scan(&store_id)
+	return store_id, err
 }
 
 const countUnreadNotifications = `-- name: CountUnreadNotifications :one
@@ -69,7 +110,7 @@ func (q *Queries) DeleteTemplate(ctx context.Context, arg DeleteTemplateParams) 
 }
 
 const getConfirmation = `-- name: GetConfirmation :one
-SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND order_id = $2
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at, wa_code FROM order_confirmations WHERE store_id = $1 AND order_id = $2
 `
 
 type GetConfirmationParams struct {
@@ -91,6 +132,7 @@ func (q *Queries) GetConfirmation(ctx context.Context, arg GetConfirmationParams
 		&i.AnsweredBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaCode,
 	)
 	return i, err
 }
@@ -191,8 +233,8 @@ func (q *Queries) GetTemplate(ctx context.Context, arg GetTemplateParams) (strin
 }
 
 const insertConfirmation = `-- name: InsertConfirmation :execrows
-INSERT INTO order_confirmations (store_id, order_id, status, token_hash, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO order_confirmations (store_id, order_id, status, token_hash, wa_code, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (store_id, order_id) DO NOTHING
 `
 
@@ -201,16 +243,20 @@ type InsertConfirmationParams struct {
 	OrderID   ulid.ID
 	Status    string
 	TokenHash []byte
+	WaCode    *string
 	ExpiresAt time.Time
 }
 
-// A redelivered order.placed finds the row and does nothing.
+// A redelivered order.placed finds the row and does nothing. A wa_code
+// taken by another store's order (1 in 10^12) fails the insert with a
+// unique violation; the caller draws another.
 func (q *Queries) InsertConfirmation(ctx context.Context, arg InsertConfirmationParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertConfirmation,
 		arg.StoreID,
 		arg.OrderID,
 		arg.Status,
 		arg.TokenHash,
+		arg.WaCode,
 		arg.ExpiresAt,
 	)
 	if err != nil {
@@ -478,7 +524,7 @@ func (q *Queries) ListTemplates(ctx context.Context, storeID ulid.ID) ([]Message
 }
 
 const lockConfirmation = `-- name: LockConfirmation :one
-SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at FROM order_confirmations WHERE store_id = $1 AND order_id = $2 FOR UPDATE
+SELECT store_id, order_id, message_id, status, token_hash, expires_at, answered_at, answered_by, created_at, updated_at, wa_code FROM order_confirmations WHERE store_id = $1 AND order_id = $2 FOR UPDATE
 `
 
 type LockConfirmationParams struct {
@@ -500,6 +546,7 @@ func (q *Queries) LockConfirmation(ctx context.Context, arg LockConfirmationPara
 		&i.AnsweredBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaCode,
 	)
 	return i, err
 }
