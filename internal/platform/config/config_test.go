@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"net/netip"
 	"strings"
@@ -199,6 +200,43 @@ func TestEntitlements(t *testing.T) {
 	for _, v := range []string{"-1", "many", "10000001"} {
 		if _, err = config.Load(config.RoleAPI, env(with("ENTITLEMENTS_MESSAGES_PER_MONTH", v))); err == nil {
 			t.Errorf("%q accepted", v)
+		}
+	}
+}
+
+func TestMessaging(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || c.Messaging.WhatsApp() || c.Messaging.SMS() || c.Messaging.FakeChannels {
+		t.Fatalf("defaults: %v %v", c.Messaging, err)
+	}
+	full := []string{
+		"WHATSAPP_PHONE_NUMBER_ID", "106540352242922", "WHATSAPP_ACCESS_TOKEN", "wa-token-value", "WHATSAPP_APP_SECRET", "wa-app-secret",
+		"WHATSAPP_VERIFY_TOKEN", "wa-verify", "TWILIO_ACCOUNT_SID", "AC00000000000000000000000000000001", "TWILIO_AUTH_TOKEN", "tw-token-value",
+		"TWILIO_FROM", "+15005550006",
+	}
+	c, err = config.Load(config.RoleAPI, env(with(full...)))
+	if err != nil || !c.Messaging.WhatsApp() || !c.Messaging.SMS() || c.Messaging.WhatsAppVerifyToken != "wa-verify" {
+		t.Fatalf("full: %v %v", c.Messaging, err)
+	}
+	for _, out := range []string{fmt.Sprint(c.Messaging), fmt.Sprintf("%+v", c.Messaging)} {
+		if strings.Contains(out, "wa-token-value") || strings.Contains(out, "tw-token-value") || strings.Contains(out, "wa-app-secret") {
+			t.Fatalf("prints a secret: %s", out)
+		}
+	}
+	tests := map[string][]string{
+		"whatsapp without token": {"WHATSAPP_PHONE_NUMBER_ID", "106540352242922"},
+		"bad phone number id":    append(append([]string{}, full[:8]...), "WHATSAPP_PHONE_NUMBER_ID", "abc"),
+		"twilio without sender":  {"TWILIO_ACCOUNT_SID", "AC1", "TWILIO_AUTH_TOKEN", "x"},
+		"bad account sid":        {"TWILIO_ACCOUNT_SID", "XX1", "TWILIO_AUTH_TOKEN", "x", "TWILIO_FROM", "+1"},
+		"fake in production":     {"APP_ENV", "production", "MESSAGING_FAKE_CHANNELS", "true"},
+		"bad graph url":          {"WHATSAPP_GRAPH_URL", "ftp://graph"},
+	}
+	for name, kv := range tests {
+		if _, err = config.Load(config.RoleAPI, env(with(kv...))); err == nil {
+			t.Errorf("%s: accepted", name)
+		} else if strings.Contains(err.Error(), "wa-token-value") {
+			t.Errorf("%s: error leaks a secret", name)
 		}
 	}
 }

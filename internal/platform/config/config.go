@@ -73,7 +73,48 @@ type Config struct {
 	// Entitlements are the per-store quotas until plans arrive in P7
 	// (api, worker).
 	Entitlements Entitlements
+	// Messaging configures the platform's WhatsApp number and SMS account
+	// (api, worker).
+	Messaging Messaging
 }
+
+// Messaging configures the platform's own messaging accounts
+// (ADR-0038, ADR-0039). Each is optional, all or nothing: without
+// WhatsApp, messages go by SMS; without either, they fail as
+// "no_channel". Secrets never print.
+type Messaging struct {
+	WhatsAppPhoneNumberID string
+	WhatsAppAccessToken   string
+	WhatsAppAppSecret     string
+	// WhatsAppVerifyToken answers Meta's webhook URL handshake.
+	WhatsAppVerifyToken string
+	// WhatsAppGraphURL overrides Meta's Graph API base (with its version).
+	WhatsAppGraphURL string
+	TwilioAccountSID string
+	TwilioAuthToken  string
+	// TwilioFrom is the sender: an E.164 number, an alphanumeric sender
+	// ID, or a Messaging Service SID (MG…).
+	TwilioFrom    string
+	TwilioBaseURL string
+	// FakeChannels sends through in-memory channels (development and
+	// demos) when the real ones are not configured. Refused in
+	// production.
+	FakeChannels bool
+}
+
+// WhatsApp reports whether the WhatsApp number is configured.
+func (m Messaging) WhatsApp() bool { return m.WhatsAppPhoneNumberID != "" }
+
+// SMS reports whether the Twilio account is configured.
+func (m Messaging) SMS() bool { return m.TwilioAccountSID != "" }
+
+// String implements fmt.Stringer without the secrets.
+func (m Messaging) String() string {
+	return fmt.Sprintf("config.Messaging{WhatsApp:%v SMS:%v Fake:%v}", m.WhatsApp(), m.SMS(), m.FakeChannels)
+}
+
+// LogValue implements slog.LogValuer without the secrets.
+func (m Messaging) LogValue() slog.Value { return slog.StringValue(m.String()) }
 
 // Entitlements are the interim quotas every store gets (ADR-0038); P7
 // replaces this source with the store's plan.
@@ -366,6 +407,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		c.Entitlements = Entitlements{
 			MessagesPerMonth: r.int64("ENTITLEMENTS_MESSAGES_PER_MONTH", 500, 0, 10_000_000),
 		}
+		c.Messaging = r.messaging(c.Env)
 	}
 	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
@@ -711,4 +753,58 @@ func (r *reader) prefixes(key string) []netip.Prefix {
 		out = append(out, p.Masked())
 	}
 	return out
+}
+
+// messaging reads the platform's messaging accounts: each all or
+// nothing.
+func (r *reader) messaging(env string) Messaging {
+	m := Messaging{
+		WhatsAppPhoneNumberID: r.str("WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppAccessToken:   r.secretOptional("WHATSAPP_ACCESS_TOKEN"),
+		WhatsAppAppSecret:     r.secretOptional("WHATSAPP_APP_SECRET"),
+		WhatsAppVerifyToken:   r.secretOptional("WHATSAPP_VERIFY_TOKEN"),
+		WhatsAppGraphURL:      r.url("WHATSAPP_GRAPH_URL", false, "https", "http"),
+		TwilioAccountSID:      r.str("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:       r.secretOptional("TWILIO_AUTH_TOKEN"),
+		TwilioFrom:            r.str("TWILIO_FROM", ""),
+		TwilioBaseURL:         r.url("TWILIO_BASE_URL", false, "https", "http"),
+		FakeChannels:          r.oneOf("MESSAGING_FAKE_CHANNELS", "false", "true", "false") == "true",
+	}
+	wa := []string{m.WhatsAppPhoneNumberID, m.WhatsAppAccessToken, m.WhatsAppAppSecret, m.WhatsAppVerifyToken}
+	if set := countSet(wa...); set != 0 && set != len(wa) {
+		r.errorf("WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN go together")
+	}
+	if m.WhatsAppPhoneNumberID != "" && !digitsOnly(m.WhatsAppPhoneNumberID) {
+		r.errorf("WHATSAPP_PHONE_NUMBER_ID: digits only")
+	}
+	tw := []string{m.TwilioAccountSID, m.TwilioAuthToken, m.TwilioFrom}
+	if set := countSet(tw...); set != 0 && set != len(tw) {
+		r.errorf("TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM go together")
+	}
+	if m.TwilioAccountSID != "" && !strings.HasPrefix(m.TwilioAccountSID, "AC") {
+		r.errorf("TWILIO_ACCOUNT_SID: starts with AC")
+	}
+	if env == EnvProduction && m.FakeChannels {
+		r.errorf("MESSAGING_FAKE_CHANNELS: the fake channels are not for production")
+	}
+	return m
+}
+
+func countSet(vs ...string) int {
+	n := 0
+	for _, v := range vs {
+		if v != "" {
+			n++
+		}
+	}
+	return n
+}
+
+func digitsOnly(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
