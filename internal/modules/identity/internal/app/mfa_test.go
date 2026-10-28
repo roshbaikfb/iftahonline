@@ -13,9 +13,9 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
-	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/totp"
@@ -26,7 +26,7 @@ import (
 type capture struct {
 	mu   sync.Mutex
 	sms  map[string]string // E.164 -> last text
-	mail []notify.Message
+	mail []mailer.Message
 }
 
 func (c *capture) SendOTP(_ context.Context, to phone.E164, text string) error {
@@ -39,7 +39,7 @@ func (c *capture) SendOTP(_ context.Context, to phone.E164, text string) error {
 	return nil
 }
 
-func (c *capture) Send(_ context.Context, m notify.Message) error {
+func (c *capture) Send(_ context.Context, m mailer.Message) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.mail = append(c.mail, m)

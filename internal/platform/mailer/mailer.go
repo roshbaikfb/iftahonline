@@ -1,16 +1,12 @@
-// Package notify sends email and one-time codes. Providers are not chosen
-// yet (ADR-0005), so:
-//
-//   - Mail goes over SMTP, which every provider (and Mailpit in local
-//     development) speaks; with no SMTP_ADDR it only logs a masked notice.
-//   - SMS/WhatsApp codes have no production sender yet. Outside production
-//     they are delivered as email to <digits>@sms.invalid, so developers
-//     read them in Mailpit and codes never reach logs. In production,
-//     phone OTP is unavailable (503) until a provider is wired.
+// Package mailer sends plain-text email. No provider is chosen yet
+// (ADR-0005), so mail goes over SMTP, which every provider (and Mailpit in
+// local development) speaks; with no SMTP_ADDR it only logs a masked
+// notice. It lives in platform because identity and messaging both send
+// mail (ADR-0038).
 //
 // Every send runs in a River job, never in a request (CLAUDE.md
 // performance rules), and has its own timeout.
-package notify
+package mailer
 
 import (
 	"context"
@@ -25,8 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
-	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 )
 
 // Message is a plain-text email.
@@ -40,14 +35,6 @@ type Message struct {
 type Mailer interface {
 	Send(ctx context.Context, m Message) error
 }
-
-// OTPSender delivers a one-time code to a phone.
-type OTPSender interface {
-	SendOTP(ctx context.Context, to phone.E164, text string) error
-}
-
-// ErrOTPUnavailable means no phone channel is configured.
-var ErrOTPUnavailable = errs.Unavailable(time.Minute, errors.New("notify: no SMS provider configured"))
 
 // SMTPMailer sends through an SMTP server, upgrading to TLS with STARTTLS
 // when offered (required when credentials are set).
@@ -63,14 +50,14 @@ type SMTPMailer struct {
 func (m SMTPMailer) Send(ctx context.Context, msg Message) error {
 	from, err := mail.ParseAddress(m.From)
 	if err != nil {
-		return fmt.Errorf("notify: from address: %w", err)
+		return fmt.Errorf("mailer: from address: %w", err)
 	}
 	to, err := mail.ParseAddress(msg.To)
 	if err != nil {
-		return fmt.Errorf("notify: to address: %w", err)
+		return fmt.Errorf("mailer: to address: %w", err)
 	}
 	if strings.ContainsAny(msg.Subject, "\r\n") {
-		return errors.New("notify: subject contains a line break")
+		return errors.New("mailer: subject contains a line break")
 	}
 	timeout := m.Timeout
 	if timeout <= 0 {
@@ -81,53 +68,53 @@ func (m SMTPMailer) Send(ctx context.Context, msg Message) error {
 
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", m.Addr)
 	if err != nil {
-		return fmt.Errorf("notify: dial: %w", err)
+		return fmt.Errorf("mailer: dial: %w", err)
 	}
 	if dl, ok := ctx.Deadline(); ok {
 		if err = conn.SetDeadline(dl); err != nil {
 			_ = conn.Close()
-			return fmt.Errorf("notify: deadline: %w", err)
+			return fmt.Errorf("mailer: deadline: %w", err)
 		}
 	}
 	host, _, err := net.SplitHostPort(m.Addr)
 	if err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("notify: smtp address: %w", err)
+		return fmt.Errorf("mailer: smtp address: %w", err)
 	}
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("notify: smtp: %w", err)
+		return fmt.Errorf("mailer: smtp: %w", err)
 	}
 	defer func() { _ = c.Close() }()
 
 	if ok, _ := c.Extension("STARTTLS"); ok {
 		if err = c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
-			return fmt.Errorf("notify: starttls: %w", err)
+			return fmt.Errorf("mailer: starttls: %w", err)
 		}
 	} else if m.Username != "" {
-		return errors.New("notify: refusing to send credentials without TLS")
+		return errors.New("mailer: refusing to send credentials without TLS")
 	}
 	if m.Username != "" {
 		if err = c.Auth(smtp.PlainAuth("", m.Username, m.Password, host)); err != nil {
-			return fmt.Errorf("notify: auth: %w", err)
+			return fmt.Errorf("mailer: auth: %w", err)
 		}
 	}
 	if err = c.Mail(from.Address); err != nil {
-		return fmt.Errorf("notify: mail from: %w", err)
+		return fmt.Errorf("mailer: mail from: %w", err)
 	}
 	if err = c.Rcpt(to.Address); err != nil {
-		return fmt.Errorf("notify: rcpt: %w", err)
+		return fmt.Errorf("mailer: rcpt: %w", err)
 	}
 	w, err := c.Data()
 	if err != nil {
-		return fmt.Errorf("notify: data: %w", err)
+		return fmt.Errorf("mailer: data: %w", err)
 	}
 	if _, err := w.Write(compose(from, to, msg)); err != nil {
-		return fmt.Errorf("notify: write: %w", err)
+		return fmt.Errorf("mailer: write: %w", err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("notify: send: %w", err)
+		return fmt.Errorf("mailer: send: %w", err)
 	}
 	return c.Quit()
 }
@@ -153,7 +140,7 @@ type LogMailer struct{ Log *slog.Logger }
 
 // Send implements Mailer.
 func (l LogMailer) Send(ctx context.Context, m Message) error {
-	l.Log.InfoContext(ctx, "notify: mail not sent (no SMTP configured)", "to", MaskEmail(m.To), "subject", m.Subject)
+	l.Log.InfoContext(ctx, "mailer: mail not sent (no SMTP configured)", "to", MaskEmail(m.To), "subject", m.Subject)
 	return nil
 }
 
@@ -166,18 +153,10 @@ func MaskEmail(addr string) string {
 	return local[:1] + "***@" + domain
 }
 
-// MailOTPSender delivers codes by email to <digits>@sms.invalid; for
-// development and tests only (cmd/platform never uses it in production).
-type MailOTPSender struct{ Mailer Mailer }
-
-// SendOTP implements OTPSender.
-func (s MailOTPSender) SendOTP(ctx context.Context, to phone.E164, text string) error {
-	digits := strings.TrimPrefix(to.Unmasked(), "+")
-	return s.Mailer.Send(ctx, Message{To: digits + "@sms.invalid", Subject: "SMS to " + to.Masked(), Text: text})
+// FromConfig returns an SMTPMailer when SMTP_ADDR is set, else a LogMailer.
+func FromConfig(c config.Mail, log *slog.Logger) Mailer {
+	if c.SMTPAddr == "" {
+		return LogMailer{Log: log}
+	}
+	return SMTPMailer{Addr: c.SMTPAddr, Username: c.SMTPUsername, Password: c.SMTPPassword, From: c.From}
 }
-
-// DisabledOTPSender refuses: phone OTP is unavailable.
-type DisabledOTPSender struct{}
-
-// SendOTP implements OTPSender.
-func (DisabledOTPSender) SendOTP(context.Context, phone.E164, string) error { return ErrOTPUnavailable }
