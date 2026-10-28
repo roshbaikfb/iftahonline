@@ -2603,7 +2603,8 @@ export interface paths {
         /**
          * Receive a webhook of a platform-owned account
          * @description For an account the platform owns and shares between stores (one
-         *     WhatsApp number, ADR-0038). The body (at most 64 KiB) is verified
+         *     WhatsApp number, ADR-0038). The body (at most 2 MiB: Meta batches
+         *     up to 1,000 updates) is verified
          *     with the platform's secret, then split by the provider into the
          *     events of each store; each event is accepted once in its store.
          *     The status is `accepted` when any event is new, else `duplicate`.
