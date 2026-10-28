@@ -1,7 +1,8 @@
-// Package webhooks receives inbound webhooks from carriers and payment
-// gateways (ADR-0024): it verifies each delivery through its provider,
-// stores the raw body, and lets each provider event through once, to a
-// processing job of the provider's module. This file is the module's
+// Package webhooks receives inbound webhooks from carriers, payment
+// gateways and messaging channels (ADR-0024, ADR-0038): it verifies each
+// delivery through its provider, stores the raw body, and lets each
+// provider event through once, to a processing job of the provider's
+// module. This file is the module's
 // only exported surface (ADR-0001); see docs/modules/webhooks.md.
 package webhooks
 
@@ -30,6 +31,15 @@ type (
 	Receipt = domain.Receipt
 	// Limits are the request budgets per client IP and per connection.
 	Limits = app.Limits
+	// Challenger is a Provider that also answers a GET URL handshake
+	// (Meta's hub.challenge) for its connections.
+	Challenger = app.Challenger
+	// PlatformProvider is a provider's side for an account the platform
+	// owns and shares between stores (one WhatsApp number, ADR-0038).
+	PlatformProvider = app.PlatformProvider
+	// Part is one store's event out of a platform-owned account's
+	// delivery.
+	Part = domain.Part
 )
 
 // MaxBody is the largest delivery accepted.
@@ -39,6 +49,9 @@ const MaxBody = domain.MaxBody
 var (
 	ErrForged            = domain.ErrForged
 	ErrUnknownConnection = domain.ErrUnknownConnection
+	// ErrUnknownStore: a platform delivery's part names no store; the
+	// part is dropped.
+	ErrUnknownStore = domain.ErrUnknownStore
 	// ErrReceiptNotFound is Get's error for a missing receipt.
 	ErrReceiptNotFound = app.ErrReceiptAbsent
 )
@@ -61,4 +74,10 @@ var _ Inbox = (*app.Service)(nil)
 // receiveWebhook route), under the platform's public origin.
 func URL(publicURL, provider string, store tenant.StoreID, connection ulid.ID) string {
 	return strings.TrimRight(publicURL, "/") + "/v1/webhooks/" + provider + "/" + store.String() + "/" + connection.String()
+}
+
+// PlatformURL is where a provider sends the webhooks of its
+// platform-owned account (the receivePlatformWebhook route).
+func PlatformURL(publicURL, provider string) string {
+	return strings.TrimRight(publicURL, "/") + "/v1/webhooks/" + provider
 }

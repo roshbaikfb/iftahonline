@@ -33,6 +33,7 @@ var (
 	ErrNotFound      = errs.NotFound("webhook_not_found", "no such webhook endpoint")
 	ErrForged        = errs.Unauthenticated("the webhook signature does not verify")
 	ErrBadEventID    = errs.BadRequest("the webhook carries no usable event id", nil)
+	ErrBadChallenge  = errs.BadRequest("the handshake carries no usable challenge", nil)
 	ErrReceiptAbsent = errs.NotFound("webhook_receipt_not_found", "webhook receipt not found")
 )
 
@@ -58,6 +59,40 @@ type Provider interface {
 	AcceptTx(ctx context.Context, tx pgx.Tx, r domain.Receipt) error
 }
 
+// Challenger is a Provider that proves ownership of a connection's URL
+// with a GET handshake before using it (Meta's hub.challenge).
+type Challenger interface {
+	// Challenge checks the handshake's query against the store's
+	// connection (the store is in ctx) and returns the challenge to
+	// echo. It returns domain.ErrForged for a wrong token and
+	// domain.ErrUnknownConnection.
+	Challenge(ctx context.Context, connectionID ulid.ID, query url.Values) (string, error)
+}
+
+// PlatformProvider is the side of a provider whose account the platform
+// owns and shares between stores (one WhatsApp number, ADR-0038): its
+// deliveries arrive at one URL without a store.
+type PlatformProvider interface {
+	// Name is the provider's path segment, e.g. "whatsapp".
+	Name() string
+	// VerifyPlatform checks a delivery with the platform's secret and
+	// splits it into the events of each store. It drops events it cannot
+	// place (logging them), returns domain.ErrForged, or another error
+	// when it could not decide (the provider will retry).
+	VerifyPlatform(ctx context.Context, req Request) ([]domain.Part, error)
+	// ChallengePlatform answers the URL handshake against the platform's
+	// token (domain.ErrForged when it does not match).
+	ChallengePlatform(ctx context.Context, query url.Values) (string, error)
+	// AcceptTx enqueues the processing job of a part's receipt, in the
+	// transaction of the part's store that stores it.
+	AcceptTx(ctx context.Context, tx pgx.Tx, r domain.Receipt) error
+}
+
+// acceptor enqueues a receipt's processing job.
+type acceptor interface {
+	AcceptTx(ctx context.Context, tx pgx.Tx, r domain.Receipt) error
+}
+
 // Limiter is the shared rate limiter.
 type Limiter interface {
 	Allow(ctx context.Context, key string, lim ratelimit.Limit) (ratelimit.Result, error)
@@ -67,6 +102,9 @@ type Limiter interface {
 type Limits struct {
 	PerIP         ratelimit.Limit
 	PerConnection ratelimit.Limit
+	// PerPlatform bounds one platform-owned account's deliveries, which
+	// carry every store's events.
+	PerPlatform ratelimit.Limit
 }
 
 // DefaultLimits leave room for a provider's bursts (a carrier sends one
@@ -75,6 +113,7 @@ func DefaultLimits() Limits {
 	return Limits{
 		PerIP:         ratelimit.Limit{Burst: 1200, Period: time.Minute},
 		PerConnection: ratelimit.Limit{Burst: 600, Period: time.Minute},
+		PerPlatform:   ratelimit.Limit{Burst: 6000, Period: time.Minute},
 	}
 }
 
@@ -88,6 +127,7 @@ type Service struct {
 
 	mu        sync.RWMutex
 	providers map[string]Provider
+	platform  map[string]PlatformProvider
 }
 
 // Deps are the service's dependencies.
@@ -101,7 +141,8 @@ type Deps struct {
 
 // NewService builds the service.
 func NewService(d Deps) *Service {
-	return &Service{db: d.DB, ids: d.IDs, limiter: d.Limiter, limits: d.Limits, log: d.Log, providers: map[string]Provider{}}
+	return &Service{db: d.DB, ids: d.IDs, limiter: d.Limiter, limits: d.Limits, log: d.Log, providers: map[string]Provider{},
+		platform: map[string]PlatformProvider{}}
 }
 
 // Register adds a provider. Names are unique.
@@ -117,6 +158,30 @@ func (s *Service) Register(p Provider) error {
 	}
 	s.providers[name] = p
 	return nil
+}
+
+// RegisterPlatform adds a platform-owned account's provider. Names are
+// unique among them; a provider may also be registered with Register for
+// its merchants' own accounts.
+func (s *Service) RegisterPlatform(p PlatformProvider) error {
+	name := p.Name()
+	if !domain.ValidProvider(name) {
+		return fmt.Errorf("webhooks: invalid provider name %q", name)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, dup := s.platform[name]; dup {
+		return fmt.Errorf("webhooks: platform provider %q registered twice", name)
+	}
+	s.platform[name] = p
+	return nil
+}
+
+func (s *Service) platformProvider(name string) (PlatformProvider, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.platform[name]
+	return p, ok
 }
 
 func (s *Service) provider(name string) (Provider, bool) {
@@ -164,15 +229,21 @@ func (s *Service) Receive(ctx context.Context, provider string, conn ulid.ID, re
 		return false, ErrBadEventID
 	}
 
+	return s.accept(ctx, p, provider, conn, v.EventID, req.Header.Get("Content-Type"), req.Body)
+}
+
+// accept stores one event of the store in ctx once, with its processing
+// job, and reports whether it was a replay.
+func (s *Service) accept(ctx context.Context, p acceptor, provider string, conn ulid.ID, eventID, contentType string, body []byte) (duplicate bool, err error) {
 	id := s.ids.New()
-	r := domain.Receipt{ID: id, Provider: provider, ConnectionID: conn, EventID: v.EventID, ReceivedAt: domain.ReceivedAtOf(id)}
+	r := domain.Receipt{ID: id, Provider: provider, ConnectionID: conn, EventID: eventID, ReceivedAt: domain.ReceivedAtOf(id)}
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		// Expired receipts go first, so an event id older than the
 		// retention counts as new.
 		if txErr := store.Purge(ctx, tx, r.ReceivedAt.Add(-domain.ReceiptRetention)); txErr != nil {
 			return txErr
 		}
-		accepted, txErr := store.Accept(ctx, tx, r, req.Header.Get("Content-Type"), req.Body)
+		accepted, txErr := store.Accept(ctx, tx, r, contentType, body)
 		if txErr != nil || !accepted {
 			duplicate = !accepted
 			return txErr
@@ -182,9 +253,122 @@ func (s *Service) Receive(ctx context.Context, provider string, conn ulid.ID, re
 	if err != nil {
 		return false, err
 	}
+	storeID, _ := tenant.FromContext(ctx) //nolint:errcheck // the transaction above needed it
 	s.log.InfoContext(ctx, "webhook received", "provider", provider, "store_id", storeID.String(),
 		"connection_id", conn.String(), "receipt_id", id.String(), "duplicate", duplicate)
 	return duplicate, nil
+}
+
+// Challenge answers a provider's URL handshake for a connection of the
+// store in ctx. Providers without one are ErrNotFound.
+func (s *Service) Challenge(ctx context.Context, provider string, conn ulid.ID, query url.Values, ip netip.Addr) (string, error) {
+	storeID, err := tenant.FromContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	p, ok := s.provider(provider)
+	if !ok {
+		return "", ErrNotFound
+	}
+	c, ok := p.(Challenger)
+	if !ok {
+		return "", ErrNotFound
+	}
+	if err = s.allow(ctx, "ip:"+ip.String(), s.limits.PerIP); err != nil {
+		return "", err
+	}
+	challenge, err := c.Challenge(ctx, conn, query)
+	switch {
+	case errors.Is(err, domain.ErrForged):
+		s.reject(ctx, "handshake", provider, storeID, conn, Request{}, ip)
+		return "", ErrForged
+	case errors.Is(err, domain.ErrUnknownConnection):
+		s.reject(ctx, "unknown_connection", provider, storeID, conn, Request{}, ip)
+		return "", ErrNotFound
+	case err != nil:
+		return "", fmt.Errorf("webhooks: challenge %s: %w", provider, err)
+	}
+	if !domain.ValidChallenge(challenge) {
+		return "", ErrBadChallenge
+	}
+	return challenge, nil
+}
+
+// ChallengePlatform answers a provider's URL handshake for its
+// platform-owned account.
+func (s *Service) ChallengePlatform(ctx context.Context, provider string, query url.Values, ip netip.Addr) (string, error) {
+	p, ok := s.platformProvider(provider)
+	if !ok {
+		return "", ErrNotFound
+	}
+	if err := s.allow(ctx, "ip:"+ip.String(), s.limits.PerIP); err != nil {
+		return "", err
+	}
+	challenge, err := p.ChallengePlatform(ctx, query)
+	switch {
+	case errors.Is(err, domain.ErrForged):
+		s.reject(ctx, "handshake", provider, tenant.StoreID{}, ulid.ID{}, Request{}, ip)
+		return "", ErrForged
+	case err != nil:
+		return "", fmt.Errorf("webhooks: challenge %s: %w", provider, err)
+	}
+	if !domain.ValidChallenge(challenge) {
+		return "", ErrBadChallenge
+	}
+	return challenge, nil
+}
+
+// ReceivePlatform handles one delivery to a platform-owned account: it
+// is verified as a whole, then each store's event is accepted once in
+// that store, in its own transaction. It reports a replay when every
+// event it placed was a replay. A failure part-way returns the error, so the provider retries
+// the delivery; the events already accepted are then replays.
+func (s *Service) ReceivePlatform(ctx context.Context, provider string, req Request, ip netip.Addr) (duplicate bool, err error) {
+	p, ok := s.platformProvider(provider)
+	if !ok {
+		return false, ErrNotFound
+	}
+	if err = s.allow(ctx, "ip:"+ip.String(), s.limits.PerIP); err != nil {
+		return false, err
+	}
+	if err = s.allow(ctx, "platform:"+provider, s.limits.PerPlatform); err != nil {
+		return false, err
+	}
+	parts, err := p.VerifyPlatform(ctx, req)
+	switch {
+	case errors.Is(err, domain.ErrForged):
+		s.reject(ctx, "signature", provider, tenant.StoreID{}, ulid.ID{}, req, ip)
+		return false, ErrForged
+	case err != nil:
+		return false, fmt.Errorf("webhooks: verify %s: %w", provider, err)
+	}
+	if len(parts) > domain.MaxParts {
+		s.reject(ctx, "too_many_parts", provider, tenant.StoreID{}, ulid.ID{}, req, ip)
+		return false, ErrBadEventID
+	}
+	for _, part := range parts {
+		if !part.Valid() {
+			s.reject(ctx, "part", provider, part.Store, part.ConnectionID, req, ip)
+			return false, ErrBadEventID
+		}
+	}
+	news, dups := 0, 0
+	for _, part := range parts {
+		dup, err := s.accept(tenant.WithStore(ctx, part.Store), p, provider, part.ConnectionID, part.EventID, "application/json", part.Body)
+		if errors.Is(err, domain.ErrUnknownStore) {
+			s.log.WarnContext(ctx, "webhook part for no store dropped", "provider", provider, "store_id", part.Store.String())
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if dup {
+			dups++
+		} else {
+			news++
+		}
+	}
+	return dups > 0 && news == 0, nil
 }
 
 func (s *Service) allow(ctx context.Context, key string, lim ratelimit.Limit) error {

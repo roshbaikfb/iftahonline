@@ -1,6 +1,10 @@
 // Package webhooktest has a provider for the webhooks module's tests: an
 // HMAC-SHA256 signature over the body with a secret per connection, and
-// the event id in the body's "id".
+// the event id in the body's "id". Its URL handshake echoes
+// hub.challenge when hub.verify_token is the connection's secret.
+//
+// Its platform-owned account signs with PlatformToken; a delivery is
+// {"events":[{"store":…,"connection":…,"id":…}]}, one part per event.
 package webhooktest
 
 import (
@@ -9,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +26,10 @@ import (
 
 // SignatureHeader carries the fake provider's signature.
 const SignatureHeader = "X-Fake-Signature"
+
+// PlatformToken signs the platform-owned account's deliveries and is
+// its handshake token.
+const PlatformToken = "fake-platform-secret"
 
 // Provider is the fake provider.
 type Provider struct {
@@ -95,4 +104,83 @@ func (p *Provider) Accepted() []domain.Receipt {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]domain.Receipt(nil), p.accepted...)
+}
+
+// Challenge implements app.Challenger.
+func (p *Provider) Challenge(ctx context.Context, conn ulid.ID, query url.Values) (string, error) {
+	store, err := tenant.FromContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	p.mu.Lock()
+	secret, ok := p.secrets[store.String()+"/"+conn.String()]
+	p.mu.Unlock()
+	if !ok {
+		return "", domain.ErrUnknownConnection
+	}
+	return challenge(secret, query)
+}
+
+func challenge(secret []byte, query url.Values) (string, error) {
+	if query.Get("hub.mode") != "subscribe" || !hmac.Equal([]byte(query.Get("hub.verify_token")), secret) {
+		return "", domain.ErrForged
+	}
+	return query.Get("hub.challenge"), nil
+}
+
+// Platform is the fake provider's platform-owned account. It shares the
+// accepted receipts of the connections' Provider.
+type Platform struct{ *Provider }
+
+// Name implements app.PlatformProvider.
+func (Platform) Name() string { return "fakeplatform" }
+
+// Event is one store's event in a platform delivery.
+type Event struct {
+	Store      string `json:"store"`
+	Connection string `json:"connection"`
+	ID         string `json:"id"`
+}
+
+// VerifyPlatform implements app.PlatformProvider: events whose store or
+// connection does not parse are dropped.
+func (Platform) VerifyPlatform(_ context.Context, req app.Request) ([]domain.Part, error) {
+	got, err := hex.DecodeString(req.Header.Get(SignatureHeader))
+	if err != nil || !hmac.Equal(got, mac([]byte(PlatformToken), req.Body)) {
+		return nil, domain.ErrForged
+	}
+	var body struct {
+		Events []Event `json:"events"`
+	}
+	if err = json.Unmarshal(req.Body, &body); err != nil {
+		return nil, nil
+	}
+	parts := make([]domain.Part, 0, len(body.Events))
+	for _, e := range body.Events {
+		store, err := tenant.ParseStoreID(e.Store)
+		if err != nil {
+			continue
+		}
+		conn, err := ulid.Parse(e.Connection)
+		if err != nil {
+			continue
+		}
+		b, err := json.Marshal(e)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, domain.Part{Store: store, ConnectionID: conn, EventID: e.ID, Body: b})
+	}
+	return parts, nil
+}
+
+// ChallengePlatform implements app.PlatformProvider.
+func (Platform) ChallengePlatform(_ context.Context, query url.Values) (string, error) {
+	return challenge([]byte(PlatformToken), query)
+}
+
+func mac(secret, body []byte) []byte {
+	m := hmac.New(sha256.New, secret)
+	m.Write(body)
+	return m.Sum(nil)
 }

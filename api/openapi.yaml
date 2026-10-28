@@ -112,6 +112,14 @@ tags:
       event id (a replay is 200 `duplicate`); processing re-queries the
       provider before any order or payment changes. Rate-limited per
       client IP and per connection.
+
+      An account the platform owns and shares between stores (one
+      WhatsApp number, ADR-0038) has a single URL without a store: the
+      provider verifies a delivery with the platform's secret and splits
+      it into the events of each store, and each event is then accepted
+      in its own store exactly as above. Providers that prove ownership
+      of a URL with a GET handshake (Meta's `hub.challenge`) get it on
+      both routes.
   - name: onboarding
     description: |
       The new store's setup wizard (ADR-0034). Signing up opens it; the
@@ -2898,6 +2906,109 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WebhookReceipt" }
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [webhooks]
+      operationId: verifyWebhook
+      summary: Answer a provider's URL handshake
+      description: |
+        For providers that verify a webhook URL before using it (Meta:
+        `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`). When
+        the token matches the connection's, the challenge is echoed as
+        text; otherwise 401. Providers without a handshake, and unknown
+        stores and connections, are 404.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+        - $ref: "#/components/parameters/StoreID"
+        - name: connection_id
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: hub.mode
+          in: query
+          required: false
+          schema: { type: string, maxLength: 32 }
+        - name: hub.verify_token
+          in: query
+          required: false
+          schema: { type: string, maxLength: 256 }
+        - name: hub.challenge
+          in: query
+          required: false
+          schema: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: The challenge, echoed.
+          content:
+            text/plain:
+              schema: { type: string }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/webhooks/{provider}:
+    post:
+      tags: [webhooks]
+      operationId: receivePlatformWebhook
+      summary: Receive a webhook of a platform-owned account
+      description: |
+        For an account the platform owns and shares between stores (one
+        WhatsApp number, ADR-0038). The body (at most 64 KiB) is verified
+        with the platform's secret, then split by the provider into the
+        events of each store; each event is accepted once in its store.
+        The status is `accepted` when any event is new, else `duplicate`.
+        Providers without a platform account are 404.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Accepted, or recognised as a replay.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookReceipt" }
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [webhooks]
+      operationId: verifyPlatformWebhook
+      summary: Answer a provider's URL handshake for a platform-owned account
+      description: As verifyWebhook, against the platform's own token.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+        - name: hub.mode
+          in: query
+          required: false
+          schema: { type: string, maxLength: 32 }
+        - name: hub.verify_token
+          in: query
+          required: false
+          schema: { type: string, maxLength: 256 }
+        - name: hub.challenge
+          in: query
+          required: false
+          schema: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: The challenge, echoed.
+          content:
+            text/plain:
+              schema: { type: string }
         default:
           $ref: "#/components/responses/Problem"
 components:

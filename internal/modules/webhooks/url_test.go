@@ -19,3 +19,12 @@ func TestURL(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformURL(t *testing.T) {
+	t.Parallel()
+	for _, base := range []string{"https://app.example.com", "https://app.example.com/"} {
+		if got := webhooks.PlatformURL(base, "whatsapp"); got != "https://app.example.com/v1/webhooks/whatsapp" {
+			t.Errorf("PlatformURL(%q) = %q", base, got)
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -62,6 +63,71 @@ func FuzzValidEventID(f *testing.F) {
 	f.Fuzz(func(t *testing.T, id string) {
 		if domain.ValidEventID(id) && (len(id) > domain.MaxEventID || strings.ContainsAny(id, " \t\r\n\x00")) {
 			t.Fatalf("accepted %q", id)
+		}
+	})
+}
+
+func TestValidChallenge(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{
+		"1158201444":             true,
+		"abc-DEF_1.2~":           true,
+		strings.Repeat("9", 200): true,
+		"":                       false,
+		strings.Repeat("9", 201): false,
+		"<script>":               false,
+		"a b":                    false,
+		"1\r\nX: y":              false,
+		"١٢٣":                    false,
+	}
+	for c, want := range tests {
+		if got := domain.ValidChallenge(c); got != want {
+			t.Errorf("ValidChallenge(%q) = %v, want %v", c, got, want)
+		}
+	}
+}
+
+func TestPartValid(t *testing.T) {
+	t.Parallel()
+	ids := ulid.NewGenerator()
+	ok := domain.Part{Store: tenant.StoreID{ID: ids.New()}, ConnectionID: ids.New(), EventID: "wamid.1", Body: []byte(`{}`)}
+	if !ok.Valid() {
+		t.Fatal("valid part refused")
+	}
+	tests := map[string]func(p *domain.Part){
+		"no store":      func(p *domain.Part) { p.Store = tenant.StoreID{} },
+		"no connection": func(p *domain.Part) { p.ConnectionID = ulid.ID{} },
+		"bad event id":  func(p *domain.Part) { p.EventID = "a b" },
+		"empty body":    func(p *domain.Part) { p.Body = nil },
+		"big body":      func(p *domain.Part) { p.Body = make([]byte, domain.MaxBody+1) },
+	}
+	for name, change := range tests {
+		p := ok
+		change(&p)
+		if p.Valid() {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// FuzzValidChallenge: whatever a handshake carries, an accepted
+// challenge is safe to echo: 1-200 URL-safe ASCII characters.
+func FuzzValidChallenge(f *testing.F) {
+	for _, s := range []string{"1158201444", "", "<script>", "a\r\nb", strings.Repeat("9", 201), "١٢٣"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		if !domain.ValidChallenge(s) {
+			return
+		}
+		if len(s) == 0 || len(s) > domain.MaxChallenge {
+			t.Fatalf("accepted length %d", len(s))
+		}
+		for _, r := range s {
+			safe := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._~-", r)
+			if !safe {
+				t.Fatalf("accepted %q", r)
+			}
 		}
 	})
 }
