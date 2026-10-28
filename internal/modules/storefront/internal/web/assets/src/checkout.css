@@ -84,5 +84,8 @@
 .steps .now strong { color: var(--c-primary); }
 .track h1 { font-size: 1.4rem; margin: 0; }
 .track .order { display: grid; gap: .25rem; }
+.confirm form { margin-block-start: .75rem; }
+.confirm .btn-ghost { inline-size: 100%; background: none; border: 0; color: var(--c-text); font: inherit; font-weight: 700; cursor: pointer; }
+.confirm-ok { padding: .75rem 1rem; border-radius: .75rem; background: #dcfce7; color: #14532d; }
 .parcel { margin: .25rem 0 0; font-size: .9rem; }
 .keep { text-align: center; }

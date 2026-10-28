@@ -50,16 +50,18 @@ type Confirmations struct {
 	DashboardURL string
 }
 
-func (c Confirmations) ready() bool { return c.Orders != nil && c.Stores != nil }
+// ready reports whether orders can be read and moved (the worker and
+// the storefront roles).
+func (c Confirmations) ready() bool { return c.Orders != nil }
 
-var errNoOrders = errors.New("messaging: order confirmation needs the orders and stores (worker role)")
+var errNoOrders = errors.New("messaging: order confirmation needs the orders (and, to ask, the stores): worker role")
 
 // ConfirmOrder handles orders.order.placed: a cash-on-delivery order
 // still pending, in a store that confirms, gets its confirmation and
 // message in one transaction, and its deadline job. Redeliveries of the
 // event do nothing (one confirmation per order).
 func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
-	if !s.conf.ready() {
+	if !s.conf.ready() || s.conf.Stores == nil {
 		return errNoOrders
 	}
 	o, err := s.conf.Orders.Get(ctx, orderID)
@@ -176,7 +178,8 @@ func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answ
 	if errors.Is(err, store.ErrConfirmationNotFound) {
 		return "", ErrConfirmationNotFound
 	}
-	if err != nil || c.Status != domain.Pending {
+	// An unreached customer who has the message after all may answer.
+	if err != nil || (c.Status != domain.Pending && c.Status != domain.Unreached) {
 		return c.Status, err
 	}
 	to, settled, notice, verb := orders.StatusConfirmed, domain.Confirmed, domain.OrderConfirmedNotice, "confirmed"

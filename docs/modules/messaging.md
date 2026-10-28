@@ -24,6 +24,7 @@ confirmation).
 | `Module.OrderPlacedHandler()`, `ConfirmOrdersSubscriber` | The order confirmation; subscribe it to `orders.EventOrderPlaced` (worker role) |
 | `Deps.Orders`, `Deps.Stores`, `Deps.Contacts`, `Deps.Mailer` | The confirmation's collaborators (worker role): `orders.Fulfilment`, the store's name, locale and host, the staff emails (`identity.StaffEmails`) |
 | `Module.Fakes()` | The fake channels, for tests and demos |
+| `NewConfirmLinks(LinksDeps)` → `ConfirmLinks` | The SMS link page's side (storefront role, no secrets): `LinkConfirmation`, `AnswerLink` by token |
 | `Outgoing` | `Kind`, `Locale` (`ar`/`en`), optional `OrderID`, `To` (E.164), `Vars` (customer and store names, order reference, total, confirm URL) |
 | `Queued` | The message's ID, its status (`queued` or `skipped_quota`), and the store's quota `Usage` after it |
 | `Message`, `Status`, `Reply`, `Answer` | The log entry and the answers |
@@ -120,10 +121,14 @@ approved templates, so only the SMS text is the store's.
    `orders.Fulfilment.TransitionSystemTx` (actor `customer:whatsapp`),
    once. If the merchant moved the order first, the confirmation is
    `stale`.
-3. **The deadline** cancels the order (actor `system:auto_cancel`) if
+3. **The SMS link** (`/<locale>/o/<token>` on the store's host) shows the
+   order and takes the answer through `ConfirmLinks.AnswerLink` (actor
+   `customer:sms`). The token is found by its hash in the host's store
+   only. A customer marked unreached may still answer.
+4. **The deadline** cancels the order (actor `system:auto_cancel`) if
    its message reached the channel. If not, the confirmation is
    `unreached`: the merchant decides, and is told.
-4. **Notices** are made once each and kept 90 days. The quota warnings
+5. **Notices** are made once each and kept 90 days. The quota warnings
    are also emailed to the owner and managers.
 
 ## Webhooks
@@ -186,7 +191,9 @@ Each event is placed in its store by our reference
     - the deadline, whether the customer was reached or not;
     - the quota exceeded (not sent, warned once in the dashboard and by
       email, order unaffected);
-    - card orders and stores that opted out.
+    - card orders and stores that opted out;
+    - the SMS round trip (WhatsApp unreachable, then the SMS and its
+      link confirm the order).
 - **Fuzzing:**
   - `domain`: `FuzzParseRef`, `FuzzParsePayload`.
   - `whatsapp`, `twilio`: `FuzzVerifyWebhook`.
