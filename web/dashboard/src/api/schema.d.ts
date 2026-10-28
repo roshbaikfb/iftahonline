@@ -2554,6 +2554,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's customer messages, newest first
+         * @description Permission: messaging.read. With `order_id`, that order's messages (no paging).
+         */
+        get: operations["listMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's message quota this month
+         * @description Permission: messaging.read. Months are calendar months in UTC.
+         */
+        get: operations["getMessageUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's SMS texts, one per message kind and locale
+         * @description Permission: messaging.read. A text the store did not write is the default (`custom: false`).
+         */
+        get: operations["listMessageTexts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/messaging/texts/{kind}/{locale}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                kind: components["schemas"]["MessageKind"];
+                locale: "ar" | "en";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Write the store's SMS text
+         * @description Permission: messaging.manage. 1 to 400 characters. Placeholders:
+         *     `{{name}}` (the customer), `{{store}}`, `{{ref}}` (the order),
+         *     `{{total}}` and `{{url}}` (where the customer answers; required in
+         *     an order confirmation). Anything else in braces is refused (422).
+         */
+        put: operations["saveMessageText"];
+        post?: never;
+        /**
+         * Go back to the default SMS text
+         * @description Permission: messaging.manage.
+         */
+        delete: operations["resetMessageText"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -4110,6 +4207,75 @@ export interface components {
                 line: number;
                 message: string;
             }[];
+        };
+        /** @enum {string} */
+        MessageKind: "order_confirmation";
+        /** @enum {string} */
+        MessageStatus: "queued" | "sent" | "delivered" | "read" | "failed" | "skipped_quota";
+        CustomerMessage: {
+            id: components["schemas"]["ULID"];
+            kind: components["schemas"]["MessageKind"];
+            /** @enum {string} */
+            locale: "ar" | "en";
+            order_id?: components["schemas"]["ULID"];
+            status: components["schemas"]["MessageStatus"];
+            /**
+             * @description Set once sent.
+             * @enum {string}
+             */
+            channel?: "whatsapp" | "sms";
+            /**
+             * @description The customer's number, masked.
+             * @example +2010******78
+             */
+            to: string;
+            /** @description Sent by SMS after WhatsApp could not reach the customer. */
+            fallback: boolean;
+            /** @description Why it failed: the channel's code, or undeliverable, rejected, unavailable, no_channel. */
+            error_code?: string;
+            /**
+             * @description The customer's first answer by button.
+             * @enum {string}
+             */
+            reply?: "confirm" | "cancel";
+            /** Format: date-time */
+            replied_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MessagePage: {
+            items: components["schemas"]["CustomerMessage"][];
+            next_cursor?: string;
+        };
+        MessageUsage: {
+            /**
+             * Format: date
+             * @description The month's first day (UTC).
+             */
+            period: string;
+            /** Format: int64 */
+            used: number;
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            remaining: number;
+            /**
+             * @description nearly: 80% used; reached: the limit.
+             * @enum {string}
+             */
+            level: "ok" | "nearly" | "reached";
+        };
+        MessageText: {
+            kind: components["schemas"]["MessageKind"];
+            /** @enum {string} */
+            locale: "ar" | "en";
+            sms_body: string;
+            /** @description The store wrote it (else the default). */
+            custom: boolean;
+            /** Format: date-time */
+            updated_at?: string;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -7635,6 +7801,138 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMessages: {
+        parameters: {
+            query?: {
+                order_id?: components["schemas"]["ULID"];
+                status?: components["schemas"]["MessageStatus"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMessageUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's usage. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageUsage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMessageTexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every kind and locale. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MessageText"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveMessageText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                kind: components["schemas"]["MessageKind"];
+                locale: "ar" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sms_body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The saved text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageText"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resetMessageText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                kind: components["schemas"]["MessageKind"];
+                locale: "ar" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The default text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageText"];
+                };
             };
             default: components["responses"]["Problem"];
         };

@@ -12,6 +12,24 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const deleteTemplate = `-- name: DeleteTemplate :execrows
+DELETE FROM message_templates WHERE store_id = $1 AND kind = $2 AND locale = $3
+`
+
+type DeleteTemplateParams struct {
+	StoreID ulid.ID
+	Kind    string
+	Locale  string
+}
+
+func (q *Queries) DeleteTemplate(ctx context.Context, arg DeleteTemplateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTemplate, arg.StoreID, arg.Kind, arg.Locale)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMessage = `-- name: GetMessage :one
 SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
 WHERE store_id = $1 AND created_at = $2 AND id = $3
@@ -50,6 +68,23 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 	return i, err
 }
 
+const getTemplate = `-- name: GetTemplate :one
+SELECT sms_body FROM message_templates WHERE store_id = $1 AND kind = $2 AND locale = $3
+`
+
+type GetTemplateParams struct {
+	StoreID ulid.ID
+	Kind    string
+	Locale  string
+}
+
+func (q *Queries) GetTemplate(ctx context.Context, arg GetTemplateParams) (string, error) {
+	row := q.db.QueryRow(ctx, getTemplate, arg.StoreID, arg.Kind, arg.Locale)
+	var sms_body string
+	err := row.Scan(&sms_body)
+	return sms_body, err
+}
+
 const insertMessage = `-- name: InsertMessage :exec
 INSERT INTO messages (store_id, created_at, id, kind, locale, order_id, status, error_code, to_masked, content, quota_period)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
@@ -85,6 +120,150 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.QuotaPeriod,
 	)
 	return err
+}
+
+const listMessages = `-- name: ListMessages :many
+SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
+WHERE store_id = $1 AND (created_at, id) < ($2::timestamptz, $3::uuid)
+  AND ($4::text = '' OR status = $4::text)
+ORDER BY created_at DESC, id DESC
+LIMIT $5
+`
+
+type ListMessagesParams struct {
+	StoreID  ulid.ID
+	BeforeAt time.Time
+	BeforeID ulid.ID
+	Status   string
+	Lim      int32
+}
+
+// The log, newest first, after a keyset cursor; status ” is any.
+func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMessages,
+		arg.StoreID,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.Status,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.StoreID,
+			&i.CreatedAt,
+			&i.ID,
+			&i.Kind,
+			&i.Locale,
+			&i.OrderID,
+			&i.Status,
+			&i.Channel,
+			&i.Provider,
+			&i.ProviderMessageID,
+			&i.ToMasked,
+			&i.Content,
+			&i.QuotaPeriod,
+			&i.Fallback,
+			&i.ErrorCode,
+			&i.Reply,
+			&i.RepliedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderMessages = `-- name: ListOrderMessages :many
+SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
+WHERE store_id = $1 AND order_id = $2
+ORDER BY created_at DESC, id DESC
+LIMIT 50
+`
+
+type ListOrderMessagesParams struct {
+	StoreID ulid.ID
+	OrderID *ulid.ID
+}
+
+// An order's messages, newest first (an order has a few).
+func (q *Queries) ListOrderMessages(ctx context.Context, arg ListOrderMessagesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listOrderMessages, arg.StoreID, arg.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.StoreID,
+			&i.CreatedAt,
+			&i.ID,
+			&i.Kind,
+			&i.Locale,
+			&i.OrderID,
+			&i.Status,
+			&i.Channel,
+			&i.Provider,
+			&i.ProviderMessageID,
+			&i.ToMasked,
+			&i.Content,
+			&i.QuotaPeriod,
+			&i.Fallback,
+			&i.ErrorCode,
+			&i.Reply,
+			&i.RepliedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTemplates = `-- name: ListTemplates :many
+SELECT store_id, kind, locale, sms_body, updated_at FROM message_templates WHERE store_id = $1 ORDER BY kind, locale
+`
+
+func (q *Queries) ListTemplates(ctx context.Context, storeID ulid.ID) ([]MessageTemplate, error) {
+	rows, err := q.db.Query(ctx, listTemplates, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MessageTemplate{}
+	for rows.Next() {
+		var i MessageTemplate
+		if err := rows.Scan(
+			&i.StoreID,
+			&i.Kind,
+			&i.Locale,
+			&i.SmsBody,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockMessage = `-- name: LockMessage :one
@@ -152,6 +331,29 @@ func (q *Queries) RecordReply(ctx context.Context, arg RecordReplyParams) (ulid.
 	var id ulid.ID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const saveTemplate = `-- name: SaveTemplate :exec
+INSERT INTO message_templates (store_id, kind, locale, sms_body)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (store_id, kind, locale) DO UPDATE SET sms_body = excluded.sms_body, updated_at = now()
+`
+
+type SaveTemplateParams struct {
+	StoreID ulid.ID
+	Kind    string
+	Locale  string
+	SmsBody string
+}
+
+func (q *Queries) SaveTemplate(ctx context.Context, arg SaveTemplateParams) error {
+	_, err := q.db.Exec(ctx, saveTemplate,
+		arg.StoreID,
+		arg.Kind,
+		arg.Locale,
+		arg.SmsBody,
+	)
+	return err
 }
 
 const updateMessage = `-- name: UpdateMessage :exec

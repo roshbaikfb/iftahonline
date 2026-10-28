@@ -61,6 +61,21 @@ func (e LogoUploadRequestContentType) Valid() bool {
 	}
 }
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PageKind.
 const (
 	Home    PageKind = "home"
@@ -321,6 +336,9 @@ type LogoUploadRequest struct {
 
 // LogoUploadRequestContentType defines model for LogoUploadRequest.ContentType.
 type LogoUploadRequestContentType string
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // Page defines model for Page.
 type Page struct {

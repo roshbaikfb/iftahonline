@@ -20,6 +20,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -69,6 +70,7 @@ type Service struct {
 	inbox    webhooks.Inbox
 	verify   string
 	replies  ReplyHandler
+	audit    audit.Recorder
 	log      *slog.Logger
 	now      func() time.Time
 }
@@ -87,7 +89,10 @@ type Deps struct {
 	Inbox webhooks.Inbox
 	// VerifyToken answers WhatsApp's webhook URL handshake.
 	VerifyToken string
-	Log         *slog.Logger
+	// Audit records merchant actions (identity's audit log); nil
+	// discards.
+	Audit audit.Recorder
+	Log   *slog.Logger
 	// Now is the clock (tests); nil is time.Now.
 	Now func() time.Time
 }
@@ -98,8 +103,11 @@ func NewService(d Deps) *Service {
 	if now == nil {
 		now = time.Now
 	}
+	if d.Audit == nil {
+		d.Audit = audit.Nop{}
+	}
 	return &Service{db: d.DB, ids: d.IDs, keyring: d.Keyring, quota: d.Quota, jobs: d.Jobs, channels: d.Channels, buttons: d.Buttons,
-		inbox: d.Inbox, verify: d.VerifyToken, log: d.Log, now: now}
+		inbox: d.Inbox, verify: d.VerifyToken, audit: d.Audit, log: d.Log, now: now}
 }
 
 // Outgoing is a message to queue.

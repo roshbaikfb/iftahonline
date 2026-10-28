@@ -120,6 +120,16 @@ tags:
       in its own store exactly as above. Providers that prove ownership
       of a URL with a GET handshake (Meta's `hub.challenge`) get it on
       both routes.
+  - name: messaging
+    description: |
+      Customer messages sent on the store's behalf from the platform's
+      WhatsApp number, with SMS as the fallback (ADR-0039). The log shows
+      each message's delivery status and the customer's answer, with the
+      number masked. Every message costs a unit of the store's monthly
+      quota; past it, messages are skipped and the store's orders go on.
+      WhatsApp sends the platform's approved templates; the store writes
+      its own SMS texts. Reading needs messaging.read, writing texts
+      messaging.manage.
   - name: onboarding
     description: |
       The new store's setup wizard (ADR-0034). Signing up opens it; the
@@ -2872,6 +2882,109 @@ paths:
             Location: { schema: { type: string } }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [messaging]
+      operationId: listMessages
+      summary: The store's customer messages, newest first
+      description: "Permission: messaging.read. With `order_id`, that order's messages (no paging)."
+      parameters:
+        - { name: order_id, in: query, schema: { $ref: "#/components/schemas/ULID" } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/MessageStatus" } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagePage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/usage:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [messaging]
+      operationId: getMessageUsage
+      summary: The store's message quota this month
+      description: "Permission: messaging.read. Months are calendar months in UTC."
+      responses:
+        "200":
+          description: The month's usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageUsage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/texts:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [messaging]
+      operationId: listMessageTexts
+      summary: The store's SMS texts, one per message kind and locale
+      description: "Permission: messaging.read. A text the store did not write is the default (`custom: false`)."
+      responses:
+        "200":
+          description: Every kind and locale.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MessageText" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/messaging/texts/{kind}/{locale}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: kind, in: path, required: true, schema: { $ref: "#/components/schemas/MessageKind" } }
+      - { name: locale, in: path, required: true, schema: { type: string, enum: [ar, en] } }
+    put:
+      tags: [messaging]
+      operationId: saveMessageText
+      summary: Write the store's SMS text
+      description: |
+        Permission: messaging.manage. 1 to 400 characters. Placeholders:
+        `{{name}}` (the customer), `{{store}}`, `{{ref}}` (the order),
+        `{{total}}` and `{{url}}` (where the customer answers; required in
+        an order confirmation). Anything else in braces is refused (422).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sms_body]
+              properties:
+                sms_body: { type: string, minLength: 1, maxLength: 1600 }
+      responses:
+        "200":
+          description: The saved text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageText" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [messaging]
+      operationId: resetMessageText
+      summary: Go back to the default SMS text
+      description: "Permission: messaging.manage."
+      responses:
+        "200":
+          description: The default text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageText" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -4734,6 +4847,51 @@ components:
             properties:
               line: { type: integer }
               message: { type: string }
+    MessageKind: { type: string, enum: [order_confirmation] }
+    MessageStatus: { type: string, enum: [queued, sent, delivered, read, failed, skipped_quota] }
+    CustomerMessage:
+      type: object
+      required: [id, kind, locale, status, to, fallback, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { $ref: "#/components/schemas/MessageKind" }
+        locale: { type: string, enum: [ar, en] }
+        order_id: { $ref: "#/components/schemas/ULID" }
+        status: { $ref: "#/components/schemas/MessageStatus" }
+        channel: { type: string, enum: [whatsapp, sms], description: Set once sent. }
+        to: { type: string, description: "The customer's number, masked.", example: "+2010******78" }
+        fallback: { type: boolean, description: Sent by SMS after WhatsApp could not reach the customer. }
+        error_code: { type: string, description: "Why it failed: the channel's code, or undeliverable, rejected, unavailable, no_channel." }
+        reply: { type: string, enum: [confirm, cancel], description: The customer's first answer by button. }
+        replied_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MessagePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerMessage" }
+        next_cursor: { type: string }
+    MessageUsage:
+      type: object
+      required: [period, used, limit, remaining, level]
+      properties:
+        period: { type: string, format: date, description: "The month's first day (UTC)." }
+        used: { type: integer, format: int64 }
+        limit: { type: integer, format: int64 }
+        remaining: { type: integer, format: int64 }
+        level: { type: string, enum: [ok, nearly, reached], description: "nearly: 80% used; reached: the limit." }
+    MessageText:
+      type: object
+      required: [kind, locale, sms_body, custom]
+      properties:
+        kind: { $ref: "#/components/schemas/MessageKind" }
+        locale: { type: string, enum: [ar, en] }
+        sms_body: { type: string }
+        custom: { type: boolean, description: The store wrote it (else the default). }
+        updated_at: { type: string, format: date-time }
     WebhookReceipt:
       type: object
       required: [status]

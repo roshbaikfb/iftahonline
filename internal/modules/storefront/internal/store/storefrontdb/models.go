@@ -223,6 +223,14 @@ type Message struct {
 	UpdatedAt         time.Time
 }
 
+type MessageTemplate struct {
+	StoreID   ulid.ID
+	Kind      string
+	Locale    string
+	SmsBody   string
+	UpdatedAt time.Time
+}
+
 type Order struct {
 	ID              ulid.ID
 	StoreID         ulid.ID

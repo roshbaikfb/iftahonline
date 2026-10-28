@@ -16,6 +16,21 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OnboardingStatus.
 const (
 	Completed  OnboardingStatus = "completed"
@@ -148,6 +163,9 @@ type FieldError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // Onboarding defines model for Onboarding.
 type Onboarding struct {

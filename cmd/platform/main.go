@@ -347,7 +347,7 @@ func newMessaging(c clients, inbox webhooks.Inbox) (*messaging.Module, error) {
 	}
 	return messaging.New(messaging.Deps{
 		Pool: c.pool, IDs: c.ids, Secrets: c.cfg.Secrets, Config: c.cfg.Messaging, Quota: ent.Entitlements(), Jobs: ins,
-		PublicURL: c.cfg.Mail.DashboardURL, Inbox: inbox, Log: c.log,
+		PublicURL: c.cfg.Mail.DashboardURL, Inbox: inbox, Audit: identity.NewAuditRecorder(c.ids), Log: c.log,
 	})
 }
 
@@ -525,6 +525,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		ord.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		ship.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		pay.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		msg.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
 			c.log.Error("card checkout not mounted", "err", mountErr)
 		}

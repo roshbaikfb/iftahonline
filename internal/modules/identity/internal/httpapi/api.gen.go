@@ -71,6 +71,21 @@ func (e MemberRoleUpdateRole) Valid() bool {
 	}
 }
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NewInvitationRole.
 const (
 	NewInvitationRoleManager  NewInvitationRole = "manager"
@@ -417,6 +432,9 @@ type Membership struct {
 	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	StoreId ULID `json:"store_id"`
 }
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // NewInvitation defines model for NewInvitation.
 type NewInvitation struct {

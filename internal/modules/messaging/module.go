@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -16,9 +17,13 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel/twilio"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel/whatsapp"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -34,6 +39,9 @@ type Deps struct {
 	PublicURL string
 	// Inbox reads accepted webhooks (the worker role; nil in the api).
 	Inbox webhooks.Inbox
+	// Audit records merchant actions (identity's audit log); nil
+	// discards.
+	Audit audit.Recorder
 	Log   *slog.Logger
 }
 
@@ -65,7 +73,7 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{
 		DB: d.Pool, IDs: d.IDs, Keyring: d.Secrets.Keyring, Quota: d.Quota, Jobs: d.Jobs, Channels: chans,
-		Buttons: domain.ButtonKey(buttons), Inbox: d.Inbox, VerifyToken: d.Config.WhatsAppVerifyToken, Log: d.Log,
+		Buttons: domain.ButtonKey(buttons), Inbox: d.Inbox, VerifyToken: d.Config.WhatsAppVerifyToken, Audit: d.Audit, Log: d.Log,
 	})}, nil
 }
 
@@ -101,6 +109,12 @@ func channels(d Deps) (app.Channels, error) {
 		}
 	}
 	return out, nil
+}
+
+// Mount registers the merchant API (the message log, the quota, the
+// store's texts). scope is identity's membership middleware.
+func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+	httpapi.Mount(mux, m.svc, auth, scope, resp)
 }
 
 // Sender is what modules that message customers use.

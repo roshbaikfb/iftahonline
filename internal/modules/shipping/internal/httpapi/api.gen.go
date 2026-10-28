@@ -36,6 +36,21 @@ func (e CarrierConnectionStatus) Valid() bool {
 	}
 }
 
+// Defines values for MessageKind.
+const (
+	OrderConfirmation MessageKind = "order_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageKind enum.
+func (e MessageKind) Valid() bool {
+	switch e {
+	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ShipmentEventSource.
 const (
 	Api      ShipmentEventSource = "api"
@@ -270,6 +285,9 @@ type HeldCODPage struct {
 	Items      []HeldCOD `json:"items"`
 	NextCursor *string   `json:"next_cursor,omitempty"`
 }
+
+// MessageKind defines model for MessageKind.
+type MessageKind string
 
 // Problem defines model for Problem.
 type Problem struct {
