@@ -5,14 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionContext, type Session } from '../session';
 import { mockAPI, type Call } from '../test/api';
+import { sectionTypeList as sectionTypes } from '../test/sections';
 import { HomeEditor } from './HomeEditor';
-
-// The server's own section schemas, so the form is tested against what
-// the API serves.
-const schemaFiles = import.meta.glob<Record<string, unknown>>('../../../../internal/modules/storefront/internal/sections/schemas/*.json', { eager: true, import: 'default' });
-const sectionTypes = Object.entries(schemaFiles)
-  .map(([path, schema]) => ({ type: path.replace(/^.*\/|\.json$/g, ''), schema }))
-  .filter((t) => t.type !== 'defs');
 
 const store = '01M5STORE0000000000000000A';
 const base = `/v1/stores/${store}`;

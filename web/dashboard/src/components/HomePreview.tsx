@@ -157,6 +157,25 @@ export function HomePreview({ theme, storeName, logo, sections, selected, catego
           </div>
         );
         break;
+      case 'product_landing': {
+        const p = products.find((x) => x.id === str('product_id'));
+        inner = (
+          <div className="pv-landing">
+            <div className="pv-img">{p?.image && <img src={p.image} alt="" />}</div>
+            <strong>{str('headline') || (p?.title ?? '—')}</strong>
+            {p && <span className="price">{p.price}</span>}
+            {Array.isArray(v['highlights']) && (
+              <ul>
+                {(v['highlights'] as string[]).map((h, j) => (
+                  <li key={j}>{h}</li>
+                ))}
+              </ul>
+            )}
+            <em>{str('cta_label') || defaults.order}</em>
+          </div>
+        );
+        break;
+      }
       default:
         inner = <p className="pv-unknown">{s.type}</p>;
     }

@@ -38,14 +38,22 @@ export const sectionTypes: { type: string; label: string; hint: string; icon: st
   { type: 'whatsapp_cta', label: 'زر واتساب', hint: '«محتاج مساعدة؟» يفتح محادثة', icon: 'whatsapp' },
 ];
 
-export const homeOnly = (type: string) => type !== 'product_landing';
+// The landing pages' own type, offered first on them.
+const landingType = { type: 'product_landing', label: 'منتج واحد', hint: 'صفحة بيع لمنتج: صوره وسعره ومميزاته وزر الطلب', icon: 'bag' };
+
+export const homeTypes = sectionTypes.map((t) => t.type);
+export const landingTypes = [landingType.type, ...homeTypes];
+
+export function typeInfo(type: string): { type: string; label: string; hint: string; icon: string } | undefined {
+  return type === landingType.type ? landingType : sectionTypes.find((t) => t.type === type);
+}
 
 export function typeLabel(type: string): string {
-  return sectionTypes.find((t) => t.type === type)?.label ?? (type === 'product_landing' ? 'منتج واحد' : type);
+  return typeInfo(type)?.label ?? type;
 }
 
 export function typeIcon(type: string): string {
-  return sectionTypes.find((t) => t.type === type)?.icon ?? 'grid';
+  return typeInfo(type)?.icon ?? 'grid';
 }
 
 // Field names in Arabic; a field the server adds later shows its key.
@@ -78,6 +86,11 @@ const fieldLabels: Record<string, string> = {
   rating: 'التقييم (1–5)',
   text: 'النص',
   icon: 'الرمز',
+  product_id: 'المنتج',
+  headline: 'العنوان الرئيسي',
+  highlights: 'المميزات',
+  show_description: 'اعرض وصف المنتج',
+  cta_label: 'نص زر الطلب',
 };
 
 export function fieldLabel(key: string): string {
@@ -101,7 +114,7 @@ export function enumLabel(key: string, value: string): string {
 export const optionalNote = (key: string) => key === 'badge';
 
 // What the shop shows for a field left empty, as its placeholder.
-export const placeholders: Record<string, string> = { button_label: 'تسوّق الآن' };
+export const placeholders: Record<string, string> = { button_label: 'تسوّق الآن', cta_label: 'اطلب الآن' };
 
 // The extra line under a hero's image field (the approved mockup).
 export const fieldNotes: Record<string, string> = {
@@ -142,6 +155,8 @@ export function summary(s: Section): string {
       return str('title');
     case 'whatsapp_cta':
       return str('title') || defaults.whatsapp;
+    case 'product_landing':
+      return str('headline');
   }
   return '';
 }
@@ -150,6 +165,7 @@ export function summary(s: Section): string {
 // catalogue), so the list and the preview say what shoppers will see.
 export const defaults = {
   button: 'تسوّق الآن',
+  order: 'اطلب الآن',
   categories: 'تسوّق حسب التصنيف',
   reviews: 'آراء العملاء',
   faq: 'الأسئلة الشائعة',
@@ -194,12 +210,13 @@ export function itemStarter(schema: Schema | undefined): Settings {
 }
 
 // kindOf names how a field is edited, from its schema and key.
-export type FieldKind = 'text' | 'longtext' | 'link' | 'product' | 'category' | 'products' | 'categories' | 'enum' | 'segmented' | 'number' | 'bool' | 'datetime' | 'items';
+export type FieldKind = 'text' | 'longtext' | 'link' | 'product' | 'category' | 'products' | 'categories' | 'lines' | 'enum' | 'segmented' | 'number' | 'bool' | 'datetime' | 'items';
 
 export function kindOf(key: string, p: Schema): FieldKind {
   const ref = p.$ref ?? '';
   if (p.type === 'array') {
     if (p.items?.properties) return 'items';
+    if (!(p.items?.$ref ?? '').endsWith('/id')) return 'lines';
     return key.startsWith('category') ? 'categories' : 'products';
   }
   if (ref.endsWith('/link')) return 'link';
@@ -234,7 +251,10 @@ function errorText(f: FieldError): string {
     case 'dependentRequired':
       return link ? 'اختر أين يفتح الزر' : 'مطلوب';
     case 'maxLength':
+    case 'length':
       return 'أطول من المسموح';
+    case 'taken':
+      return 'صفحة أخرى تستخدم هذا الرابط';
     case 'pattern':
       return link ? 'رابط غير مقبول: يبدأ بـ / أو https://' : 'فيه رموز غير مسموحة (مثل سطر جديد)';
     case 'minimum':
@@ -250,7 +270,7 @@ function errorText(f: FieldError): string {
     case 'too_large':
       return 'محتوى الأقسام أكبر من المسموح';
   }
-  return 'قيمة غير مقبولة';
+  return f.field === 'slug' ? 'حروف وأرقام وشرطات (-) فقط، بلا مسافات' : 'قيمة غير مقبولة';
 }
 
 // sectionErrors is one section's errors, named from its settings

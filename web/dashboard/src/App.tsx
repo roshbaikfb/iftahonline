@@ -11,11 +11,14 @@ import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
+import { LandingEditor } from './pages/LandingEditor';
 import { Login } from './pages/Login';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
+import { Pages } from './pages/Pages';
 import { Payments } from './pages/Payments';
+import { PolicyEditor } from './pages/PolicyEditor';
 import { ProductEditor } from './pages/ProductEditor';
 import { Products } from './pages/Products';
 import { Setup } from './pages/Setup';
@@ -81,6 +84,10 @@ function Gate() {
           <Route path="/stores/:storeId/categories" element={<Categories />} />
           <Route path="/stores/:storeId/design" element={<Design />} />
           <Route path="/stores/:storeId/home-page" element={<HomeEditor />} />
+          <Route path="/stores/:storeId/pages" element={<Pages />} />
+          <Route path="/stores/:storeId/pages/new" element={<LandingEditor key="new" />} />
+          <Route path="/stores/:storeId/pages/:pageId" element={<LandingEditor />} />
+          <Route path="/stores/:storeId/pages/policies/:policy" element={<PolicyEditor />} />
           <Route path="/stores/:storeId/inventory" element={<Inventory />} />
           <Route path="/stores/:storeId/imports" element={<Imports />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />

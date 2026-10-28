@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react';
 
-import { sectionTypes } from '../lib/sections';
+import { typeInfo } from '../lib/sections';
 import { SectionIcon } from './SectionIcon';
 
 interface Props {
-  types: string[]; // the types the server offers for the home page
+  types: string[]; // the types to offer, in order
+  landingNote?: boolean; // say where «منتج واحد» is (the home page)
   onPick: (type: string) => void;
   onClose: () => void;
 }
 
 // AddSectionDialog lists the section types to add (the approved mockup):
 // each with its icon and a line on what it shows. Escape or × closes it.
-export function AddSectionDialog({ types, onPick, onClose }: Props) {
+export function AddSectionDialog({ types, landingNote = false, onPick, onClose }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => {
@@ -29,8 +30,6 @@ export function AddSectionDialog({ types, onPick, onClose }: Props) {
       back?.focus();
     };
   }, []);
-  const known = sectionTypes.filter((t) => types.includes(t.type));
-  const others = types.filter((t) => t !== 'product_landing' && !sectionTypes.some((k) => k.type === t));
   return (
     <div
       className="modal-backdrop"
@@ -47,43 +46,29 @@ export function AddSectionDialog({ types, onPick, onClose }: Props) {
         </div>
         <p className="muted">يُضاف في أسفل الصفحة، ثم تنقله حيث تريد.</p>
         <div className="types">
-          {known.map((t) => (
-            <button
-              key={t.type}
-              type="button"
-              className="type"
-              onClick={() => {
-                onPick(t.type);
-              }}
-            >
-              <span className="ic">
-                <SectionIcon icon={t.icon} size={20} />
-              </span>
-              <span>
-                <strong>{t.label}</strong>
-                <span className="muted">{t.hint}</span>
-              </span>
-            </button>
-          ))}
-          {others.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className="type"
-              onClick={() => {
-                onPick(t);
-              }}
-            >
-              <span className="ic">
-                <SectionIcon icon="grid" size={20} />
-              </span>
-              <span>
-                <strong>{t}</strong>
-              </span>
-            </button>
-          ))}
+          {types.map((type) => {
+            const t = typeInfo(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                className="type"
+                onClick={() => {
+                  onPick(type);
+                }}
+              >
+                <span className="ic">
+                  <SectionIcon icon={t?.icon ?? 'grid'} size={20} />
+                </span>
+                <span>
+                  <strong>{t?.label ?? type}</strong>
+                  {t && <span className="muted">{t.hint}</span>}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        {types.includes('product_landing') && <p className="muted">«منتج واحد» لصفحات الهبوط فقط، تجده في «الصفحات».</p>}
+        {landingNote && <p className="muted">«منتج واحد» لصفحات الهبوط فقط، تجده في «الصفحات».</p>}
       </div>
     </div>
   );

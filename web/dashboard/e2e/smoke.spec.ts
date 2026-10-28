@@ -344,3 +344,31 @@ test('a merchant adds a home page section as a draft and publishes it', async ({
   await expect(page.locator('.sec-list .name strong').last()).toHaveText('أسئلة شائعة');
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+test('a merchant publishes a landing page and a policy', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الصفحات' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('الصفحات');
+
+  await page.getByRole('link', { name: '+ صفحة جديدة' }).click();
+  await page.getByLabel('العنوان', { exact: true }).fill('عرض الشتاء');
+  const product = page.getByLabel('المنتج', { exact: true });
+  await expect(product.locator('option')).not.toHaveCount(1);
+  await product.selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'نشر' }).click();
+  await expect(page.getByText('نُشرت الصفحة.')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('عرض الشتاء');
+
+  await page.getByRole('link', { name: '→ الصفحات' }).click();
+  await expect(page.getByRole('link', { name: 'عرض الشتاء' })).toBeVisible();
+  await page.getByRole('link', { name: 'سياسة الاسترجاع' }).click();
+  await page.getByLabel('النص').fill('يمكنك إرجاع المنتج خلال 14 يومًا من الاستلام.');
+  await page.getByRole('button', { name: 'نشر' }).click();
+  await expect(page.getByText('نُشرت. تظهر في أسفل صفحات متجرك.')).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});

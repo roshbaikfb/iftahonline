@@ -3803,3 +3803,85 @@ button.type .muted {
   border-radius: var(--p-radius);
   text-align: center;
 }
+
+/* Landing pages and policies (U6c). */
+.page-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.page-rows li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-block-size: 3.5rem;
+  padding-block: 0.5rem;
+  border-block-end: 1px solid #f1f5f9;
+}
+.page-rows li:last-child {
+  border-block-end: 0;
+}
+.page-rows .grow {
+  flex: 1;
+  min-inline-size: 0;
+  display: grid;
+}
+.page-meta {
+  margin-block-end: 1.25rem;
+}
+.slug-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.slug-input .muted {
+  padding-inline: 0.6rem 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-inline-size: 55%;
+}
+.slug-input input {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  border-radius: 0;
+}
+.policy-card textarea {
+  inline-size: 100%;
+  line-height: 1.8;
+}
+.section-form .lines {
+  display: grid;
+  gap: 0.4rem;
+}
+.pv-landing {
+  display: grid;
+  gap: 0.35rem;
+}
+.pv-landing .pv-img {
+  aspect-ratio: 4 / 3;
+}
+.pv-landing .price {
+  color: var(--p-primary);
+  font-weight: 700;
+}
+.pv-landing ul {
+  margin: 0;
+  padding-inline-start: 1rem;
+  font-size: 0.7rem;
+}
+.pv-landing em {
+  justify-self: stretch;
+  padding: 0.45rem;
+  border-radius: var(--p-radius);
+  background: var(--p-primary);
+  color: #fff;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+}

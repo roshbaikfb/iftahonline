@@ -195,7 +195,7 @@ function Field({ name, id, schema, value, error, errors, choices, onChange }: Fi
             onChange(e.target.value);
           }}
         >
-          <option value="">{kind === 'product' ? 'بلا صورة' : '— اختر —'}</option>
+          <option value="">{name === 'image_product_id' ? 'بلا صورة' : '— اختر —'}</option>
           {(kind === 'product' ? choices.products : choices.categories).map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
@@ -207,6 +207,9 @@ function Field({ name, id, schema, value, error, errors, choices, onChange }: Fi
     case 'products':
     case 'categories':
       control = <IDList id={id} value={value} options={kind === 'products' ? choices.products : choices.categories} max={schema.maxItems} onChange={onChange} />;
+      break;
+    case 'lines':
+      control = <Lines id={id} value={value} max={schema.maxItems} maxLength={schema.items?.maxLength} onChange={onChange} />;
       break;
     case 'link':
       control = <LinkPicker id={id} value={str} choices={choices} onChange={onChange} />;
@@ -303,6 +306,31 @@ function LinkPicker({ id, value, choices, onChange }: { id: string; value: strin
         />
       )}
     </>
+  );
+}
+
+// Lines edits a short list of text lines (a product's highlights).
+function Lines({ id, value, max, maxLength, onChange }: { id: string; value: unknown; max?: number | undefined; maxLength?: number | undefined; onChange: (v: unknown) => void }) {
+  const lines = Array.isArray(value) ? (value as string[]) : [];
+  const shown = max === undefined || lines.length < max ? [...lines, ''] : lines;
+  return (
+    <div className="lines">
+      {shown.map((l, i) => (
+        <input
+          key={i}
+          id={i === 0 ? id : undefined}
+          aria-label={i === 0 ? undefined : `السطر ${String(i + 1)}`}
+          maxLength={maxLength}
+          value={l}
+          placeholder={i === lines.length ? '+ أضف سطرًا' : undefined}
+          onChange={(e) => {
+            const next = [...lines];
+            next[i] = e.target.value;
+            onChange(next.filter((x) => x.trim() !== ''));
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
