@@ -75,6 +75,13 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'عرض المتجر' })).toHaveAttribute('href', 'http://mona.iftahonline.localhost:18081');
   });
 
+  it('marks only the screen whose address it is, not one that shares its start', () => {
+    renderAt(`/stores/${a}/home-page`, session([a]));
+    const nav = screen.getByRole('navigation', { name: 'القائمة الرئيسية' });
+    expect(within(nav).getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'الرئيسية' })).not.toHaveAttribute('aria-current');
+  });
+
   it('switches stores and signs out from the user menu', async () => {
     const s = session([a, b]);
     renderAt(`/stores/${a}/payments`, s);
