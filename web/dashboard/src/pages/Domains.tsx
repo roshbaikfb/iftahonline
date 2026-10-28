@@ -1,4 +1,4 @@
-import { useEffect, useState, type SubmitEvent } from 'react';
+import { Fragment, useEffect, useState, type SubmitEvent } from 'react';
 import { useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
@@ -8,6 +8,7 @@ import { problemMessage } from '../lib/problem';
 import { domainStatus, failureReasons, maxCustomDomains, useRole } from '../lib/settings';
 
 type Domain = components['schemas']['Domain'];
+type Routing = components['schemas']['DomainRouting'];
 
 // Domains is the store's addresses (U6d): the platform's, which always
 // works, and the merchant's own, verified by a TXT record (checked by
@@ -90,7 +91,6 @@ export function Domains() {
     });
   }
 
-  const platform = domains?.find((d) => d.kind === 'subdomain');
   const custom = domains?.filter((d) => d.kind === 'custom') ?? [];
 
   const copyRow = (label: string, value: string) => (
@@ -157,12 +157,7 @@ export function Domains() {
                             {copyRow('الاسم', d.verification.name)}
                             {copyRow('القيمة', d.verification.value)}
                           </li>
-                          {platform && (
-                            <li>
-                              وأضف سجلًا من نوع <code dir="ltr">CNAME</code> للدومين نفسه يشير إلى رابط المنصة:
-                              {copyRow('يشير إلى', platform.host)}
-                            </li>
-                          )}
+                          {d.routing && <RoutingStep routing={d.routing} copyRow={copyRow} />}
                           <li>نتحقق تلقائيًا لمدة 3 أيام تقريبًا، وقد يستغرق ظهور السجلات ساعات.</li>
                         </ol>
                         <div className="actions">
@@ -212,5 +207,44 @@ export function Domains() {
         </>
       )}
     </Layout>
+  );
+}
+
+// RoutingStep is where the domain must point (ADR-0037): one CNAME for a
+// subdomain; for an apex domain, which most providers do not let have a
+// CNAME, an ALIAS where the provider has one, else the A/AAAA records.
+function RoutingStep({ routing, copyRow }: { routing: Routing; copyRow: (label: string, value: string) => React.ReactNode }) {
+  const of = (type: string) => routing.records.filter((r) => r.type === type);
+  const [cname] = of('CNAME');
+  const [alias] = of('ALIAS');
+  const addrs = [...of('A'), ...of('AAAA')];
+  if (!routing.apex) {
+    return (
+      <li>
+        وأضف سجلًا من نوع <code dir="ltr">CNAME</code> للدومين نفسه يشير إلى:
+        {cname && copyRow('يشير إلى', cname.value)}
+      </li>
+    );
+  }
+  return (
+    <li>
+      هذا دومين أساسي، وأغلب الشركات لا تقبل فيه سجل CNAME. أضف للدومين نفسه (يُكتب غالبًا <code dir="ltr">@</code>):
+      <ul className="dns-options">
+        <li>
+          إن كانت شركتك تدعم <code dir="ltr">ALIAS</code> أو <code dir="ltr">ANAME</code>: سجلًا منه يشير إلى:
+          {alias && copyRow('يشير إلى', alias.value)}
+        </li>
+        {addrs.length > 0 ? (
+          <li>
+            وإلا فأضف {addrs.length === 1 ? 'هذا السجل' : 'هذه السجلات'}:
+            {addrs.map((r) => (
+              <Fragment key={r.value}>{copyRow(r.type === 'A' ? 'سجل A' : 'سجل AAAA', r.value)}</Fragment>
+            ))}
+          </li>
+        ) : (
+          <li>إن لم تدعمه شركتك، فاستخدم دومينًا فرعيًا مثل www بدلًا منه.</li>
+        )}
+      </ul>
+    </li>
   );
 }
