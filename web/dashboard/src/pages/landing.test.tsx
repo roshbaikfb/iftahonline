@@ -14,6 +14,9 @@ const store = '01M5STORE0000000000000000A';
 const base = `/v1/stores/${store}`;
 const hoodie = '01M5PROD000000000000000001';
 const pageID = '01M5PAGE000000000000000001';
+// Waits after a screen change, which loads the next screen's data: a
+// busy CI machine needs more than the default second.
+const slow = { timeout: 3000 };
 
 function session(): Session {
   return {
@@ -116,9 +119,9 @@ describe('LandingEditor', () => {
         title: 'عرض الشتاء', slug: '', status: 'published', version: 0,
         sections: [{ type: 'product_landing', settings: { product_id: hoodie, highlights: ['قطن 100%'] } }],
       });
-    });
-    expect(await screen.findByText('نُشرت الصفحة.')).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { level: 1, name: 'عرض الشتاء' })).toBeInTheDocument();
+    }, slow);
+    expect(await screen.findByText('نُشرت الصفحة.', {}, slow)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'عرض الشتاء' }, slow)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'عرض في المتجر' })).toHaveAttribute('href', expect.stringMatching(/\/pages\/winter$/) as string);
   });
 
@@ -148,7 +151,10 @@ describe('LandingEditor', () => {
     await user.click(screen.getByRole('button', { name: 'حذف الصفحة' }));
     await waitFor(() => {
       expect(calls.some((c) => c.method === 'DELETE' && c.path.endsWith(pageID))).toBe(true);
-    });
+    }, slow);
+    // back on the list, once its requests are answered
+    expect(await screen.findByRole('heading', { level: 1, name: 'الصفحات' }, slow)).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'سياسة الاسترجاع' }, slow)).toBeInTheDocument();
   });
 });
 
@@ -169,7 +175,7 @@ describe('PolicyEditor', () => {
     await user.click(screen.getByRole('button', { name: 'نشر' }));
     await waitFor(() => {
       expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ title: '', body: 'يمكنك إرجاع المنتج خلال 14 يومًا.', status: 'published', version: 0 });
-    });
+    }, slow);
     expect(await screen.findByText('نُشرت. تظهر في أسفل صفحات متجرك.')).toBeInTheDocument();
     expect(screen.getByText('منشورة')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'إلغاء النشر' })).toBeEnabled();
