@@ -41,7 +41,7 @@ test('a merchant signs in, confirms orders in bulk, ships one and exports', asyn
   await expect(page.getByRole('heading', { level: 1 })).toContainText('يا منى');
   await expect(page.getByRole('heading', { name: 'آخر الطلبات' })).toBeVisible();
   const side = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
-  await expect(side.getByRole('link', { name: 'الرئيسية' })).toHaveAttribute('aria-current', 'page');
+  await expect(side.getByRole('link', { name: 'الرئيسية', exact: true })).toHaveAttribute('aria-current', 'page');
   await side.getByRole('link', { name: 'الطلبات' }).click();
   await expect(page).toHaveURL(/\/stores\/[0-9A-Z]{26}\/orders$/);
   await expect(page.locator('.top .store-name')).toHaveText('متجر منى');
@@ -317,5 +317,30 @@ test('a merchant edits the look as a draft and publishes it', async ({ page }) =
   await expect(page.getByText('تغييرات لم تُنشر')).toBeHidden();
   await page.reload();
   await expect(page.getByLabel('كود اللون الأساسي')).toHaveValue('#0F766E');
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
+
+test('a merchant adds a home page section as a draft and publishes it', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الصفحة الرئيسية' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('الصفحة الرئيسية');
+  await expect(page.getByText(/^القسم 1 من \d+$/)).toBeVisible();
+
+  await page.getByRole('button', { name: '+ أضف قسمًا' }).click();
+  await page.getByRole('dialog', { name: 'أضف قسمًا' }).getByRole('button', { name: /أسئلة شائعة/ }).click();
+  await page.getByLabel('السؤال').fill('متى يصل طلبي؟');
+  await page.getByLabel('الجواب').fill('خلال 3 أيام عمل');
+  await expect(page.getByText('حُفظت المسودة')).toBeAttached();
+  await expect(page.getByText('تغييرات لم تُنشر')).toBeVisible();
+
+  await page.locator('.design-head').getByRole('button', { name: 'نشر' }).click();
+  await expect(page.getByText('تغييرات لم تُنشر')).toBeHidden();
+  await page.reload();
+  await expect(page.locator('.sec-list .name strong').last()).toHaveText('أسئلة شائعة');
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });

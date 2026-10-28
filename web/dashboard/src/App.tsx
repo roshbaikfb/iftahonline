@@ -8,6 +8,7 @@ import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
 import { Design } from './pages/Design';
 import { Gateways } from './pages/Gateways';
+import { HomeEditor } from './pages/HomeEditor';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
@@ -79,6 +80,7 @@ function Gate() {
           <Route path="/stores/:storeId/size-charts" element={<SizeCharts />} />
           <Route path="/stores/:storeId/categories" element={<Categories />} />
           <Route path="/stores/:storeId/design" element={<Design />} />
+          <Route path="/stores/:storeId/home-page" element={<HomeEditor />} />
           <Route path="/stores/:storeId/inventory" element={<Inventory />} />
           <Route path="/stores/:storeId/imports" element={<Imports />} />
           <Route path="/stores/:storeId/shipments" element={<Shipments />} />

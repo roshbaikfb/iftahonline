@@ -3361,3 +3361,445 @@ select.radius-select {
     padding-block-start: 0.5rem;
   }
 }
+
+/* The home page editor (U6, the approved mockup): the sections, the
+   chosen one's fields and the draft page side by side; on phones each
+   section opens in place. */
+.home-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.home-editor .sections-card {
+  flex: 1 1 17.5rem;
+  min-inline-size: 0;
+}
+.home-editor .section-card {
+  flex: 1 1 21.25rem;
+  min-inline-size: 0;
+}
+.home-editor .design-preview {
+  flex: 1 1 23.75rem;
+}
+.sec-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sec {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 3.5rem;
+  padding-inline: 0.25rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.625rem;
+  background: var(--surface);
+}
+.sec.on {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px #dbe5f1;
+}
+.sec.has-error,
+.sec-details.has-error {
+  border-color: var(--red);
+}
+.sec-icon,
+button.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--muted);
+}
+button.icon-only:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: var(--text);
+}
+.sec button.name {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: start;
+  font-weight: 400;
+}
+.sec button.name:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+.sec .name .muted {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-inline-size: 100%;
+}
+button.add-section-button {
+  inline-size: 100%;
+  justify-content: center;
+}
+.section-form {
+  display: grid;
+  gap: 0.75rem;
+}
+.section-form fieldset.items {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.section-form legend {
+  padding-inline: 0.3rem;
+  font-weight: 600;
+}
+.section-form .item {
+  display: grid;
+  gap: 0.5rem;
+  padding-block-end: 0.75rem;
+  border-block-end: 1px dashed var(--line);
+}
+.section-form .item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.section-form select,
+.section-form textarea,
+.section-form input:not([type='checkbox']) {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.section-form input.narrow-num {
+  inline-size: 5.5rem;
+}
+.section-form .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.section-form .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-block-size: 2.25rem;
+  padding-inline: 0.75rem 0.25rem;
+  border: 1px solid var(--field);
+  border-radius: 999px;
+  font-weight: 400;
+}
+.muted.center {
+  text-align: center;
+}
+
+/* The add-section dialog. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2.5rem 1.5rem;
+  overflow-y: auto;
+  background: rgb(15 23 42 / 45%);
+}
+.modal {
+  display: grid;
+  gap: 1rem;
+  inline-size: 100%;
+  max-inline-size: 52rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: 0 24px 48px rgb(15 23 42 / 25%);
+}
+.modal h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.modal .muted {
+  margin: 0;
+}
+button.icon-button {
+  inline-size: 2.75rem;
+  padding: 0;
+  justify-content: center;
+}
+.add-section .types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+button.type {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: start;
+  font-weight: 400;
+}
+button.type:hover:not(:disabled),
+button.type:focus-visible {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px #dbe5f1;
+}
+button.type .ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 0.625rem;
+  background: #eef3f9;
+  color: var(--navy);
+}
+button.type .muted {
+  display: block;
+}
+
+/* Phones: each section a card that opens in place. */
+.phone-sections {
+  display: grid;
+  gap: 0.6rem;
+}
+.sec-details {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.sec-details summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 3.5rem;
+  padding: 0 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.sec-details summary::-webkit-details-marker {
+  display: none;
+}
+.sec-details summary strong {
+  flex: 1;
+}
+.sec-details button.icon-only {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+}
+.sec-details .sec-body {
+  padding: 0 0.75rem 0.875rem;
+}
+@media (max-width: 40rem) {
+  .add-section .types {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .modal-backdrop {
+    padding: 1rem;
+  }
+}
+
+/* The draft page's sections. */
+.pv-section {
+  margin: 0.6rem;
+  border-radius: var(--p-radius);
+}
+.pv-section.pv-on {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+.pv-section > .pv-hero {
+  margin: 0;
+}
+.pv-section h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+}
+.pv-section .pv-grid {
+  padding: 0;
+}
+.pv-hero {
+  position: relative;
+  overflow: hidden;
+}
+.pv-hero.center {
+  justify-items: center;
+  text-align: center;
+}
+.pv-hero b {
+  padding: 0.05rem 0.5rem;
+  border-radius: 99px;
+  background: var(--p-accent);
+  color: #fff;
+  font-size: 0.65rem;
+}
+.pv-hero.with-image > img {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  opacity: 0.25;
+}
+.pv-hero > :not(img) {
+  position: relative;
+}
+.pv-tiles {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.pv-tiles span {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+}
+.pv-tiles i {
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 0.75rem;
+  background: rgb(15 23 42 / 10%);
+  overflow: hidden;
+}
+.pv-tiles img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.pv-quotes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.5rem;
+}
+.pv-quotes blockquote {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.6rem;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: var(--p-radius);
+  font-size: 0.7rem;
+}
+.pv-quotes .stars {
+  color: #f59e0b;
+}
+.pv-quotes cite {
+  font-style: normal;
+  font-weight: 700;
+}
+.pv-faq {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pv-faq li {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: var(--p-radius);
+}
+.pv-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 0.9rem;
+  padding: 0.5rem 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.pv-countdown,
+.pv-whatsapp {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  padding: 0.9rem;
+  border-radius: var(--p-radius);
+  text-align: center;
+}
+.pv-countdown {
+  background: color-mix(in srgb, var(--p-accent) 15%, var(--p-bg));
+}
+.pv-countdown .boxes {
+  display: flex;
+  gap: 0.3rem;
+}
+.pv-countdown i {
+  min-inline-size: 2rem;
+  padding: 0.2rem;
+  border-radius: 0.375rem;
+  background: var(--p-text);
+  color: var(--p-bg);
+  font-style: normal;
+  font-weight: 700;
+}
+.pv-whatsapp {
+  background: #dcfce7;
+  color: #14532d;
+}
+.pv-promos {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.4rem;
+}
+.pv-promos span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 0.6rem;
+  border-radius: var(--p-radius);
+}
+.pv-promos small {
+  font-size: 0.65rem;
+}
+.pv-promos .tone-amber {
+  background: #fef3c7;
+  color: #78350f;
+}
+.pv-promos .tone-green {
+  background: #dcfce7;
+  color: #14532d;
+}
+.pv-promos .tone-blue {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+.pv-promos .tone-primary {
+  background: var(--p-primary);
+  color: #fff;
+}
+.pv-unknown {
+  margin: 0;
+  padding: 0.6rem;
+  border: 1px dashed rgb(15 23 42 / 25%);
+  border-radius: var(--p-radius);
+  text-align: center;
+}
