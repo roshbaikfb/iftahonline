@@ -104,17 +104,14 @@ func (e ImportRequestKind) Valid() bool {
 	}
 }
 
-// Defines values for MessageKind.
+// Defines values for MessageTextKind.
 const (
-	OrderAnswerAck    MessageKind = "order_answer_ack"
-	OrderConfirmation MessageKind = "order_confirmation"
+	OrderConfirmation MessageTextKind = "order_confirmation"
 )
 
-// Valid indicates whether the value is a known member of the MessageKind enum.
-func (e MessageKind) Valid() bool {
+// Valid indicates whether the value is a known member of the MessageTextKind enum.
+func (e MessageTextKind) Valid() bool {
 	switch e {
-	case OrderAnswerAck:
-		return true
 	case OrderConfirmation:
 		return true
 	default:
@@ -531,8 +528,8 @@ type InventoryInput struct {
 	Tracked *bool `json:"tracked,omitempty"`
 }
 
-// MessageKind defines model for MessageKind.
-type MessageKind string
+// MessageTextKind The kinds whose SMS text a store writes.
+type MessageTextKind string
 
 // PresignedUpload defines model for PresignedUpload.
 type PresignedUpload struct {

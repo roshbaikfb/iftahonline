@@ -179,7 +179,7 @@ func toMessages(list []domain.Message) []CustomerMessage {
 }
 
 func toText(t domain.Text) MessageText {
-	return MessageText{Kind: MessageKind(t.Kind), Locale: MessageTextLocale(t.Locale), SmsBody: t.SMSBody, Custom: t.Custom, UpdatedAt: t.UpdatedAt}
+	return MessageText{Kind: MessageTextKind(t.Kind), Locale: MessageTextLocale(t.Locale), SmsBody: t.SMSBody, Custom: t.Custom, UpdatedAt: t.UpdatedAt}
 }
 
 func deref[T any](p *T) T {

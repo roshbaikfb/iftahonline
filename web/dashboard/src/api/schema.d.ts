@@ -2626,7 +2626,7 @@ export interface paths {
             header?: never;
             path: {
                 store_id: components["parameters"]["StoreID"];
-                kind: components["schemas"]["MessageKind"];
+                kind: components["schemas"]["MessageTextKind"];
                 locale: "ar" | "en";
             };
             cookie?: never;
@@ -2634,9 +2634,7 @@ export interface paths {
         get?: never;
         /**
          * Write the store's SMS text
-         * @description Permission: messaging.manage. Only order_confirmation has an SMS
-         *     text (thanks to customers go by WhatsApp only); other kinds are 404.
-         *     1 to 400 characters. Placeholders:
+         * @description Permission: messaging.manage. 1 to 400 characters. Placeholders:
          *     `{{name}}` (the customer), `{{store}}`, `{{ref}}` (the order),
          *     `{{total}}` and `{{url}}` (where the customer answers; required in
          *     an order confirmation). Anything else in braces is refused (422).
@@ -4310,8 +4308,18 @@ export interface components {
                 message: string;
             }[];
         };
-        /** @enum {string} */
+        /**
+         * @description What a message is for. An extensible list (ADR-0032, ADR-0041):
+         *     new kinds are added within /v1, and clients must show a kind they
+         *     do not know as a message, never fail on it.
+         * @enum {string}
+         */
         MessageKind: "order_confirmation" | "order_answer_ack";
+        /**
+         * @description The kinds whose SMS text a store writes.
+         * @enum {string}
+         */
+        MessageTextKind: "order_confirmation";
         /** @enum {string} */
         MessageStatus: "queued" | "sent" | "delivered" | "read" | "failed" | "skipped_quota";
         CustomerMessage: {
@@ -4370,7 +4378,7 @@ export interface components {
             level: "ok" | "nearly" | "reached";
         };
         MessageText: {
-            kind: components["schemas"]["MessageKind"];
+            kind: components["schemas"]["MessageTextKind"];
             /** @enum {string} */
             locale: "ar" | "en";
             sms_body: string;
@@ -8039,7 +8047,7 @@ export interface operations {
             header?: never;
             path: {
                 store_id: components["parameters"]["StoreID"];
-                kind: components["schemas"]["MessageKind"];
+                kind: components["schemas"]["MessageTextKind"];
                 locale: "ar" | "en";
             };
             cookie?: never;
@@ -8070,7 +8078,7 @@ export interface operations {
             header?: never;
             path: {
                 store_id: components["parameters"]["StoreID"];
-                kind: components["schemas"]["MessageKind"];
+                kind: components["schemas"]["MessageTextKind"];
                 locale: "ar" | "en";
             };
             cookie?: never;

@@ -63,6 +63,16 @@ that order's customer may confirm it.
      settled the confirmation.
    - Answers on the SMS link get the page instead.
 
+6. **`MessageKind` becomes an extensible list** (ADR-0032's rule).
+   `order_answer_ack` appears in the message log (`listMessages`), so the
+   gate counts a new value in a response as breaking. It is accepted by
+   one line in `api/openapi-breaking-ignore.txt`. Clients must show a
+   kind they do not know as a message, and the description says so.
+   Today the only client is our dashboard, which is generated from the
+   same file and does not show the log yet.
+   - The SMS text endpoints keep their own kind, `MessageTextKind`
+     (`order_confirmation` only), so their contract does not change.
+
 ## Consequences
 
 - An order whose customer confirms in the first 10 minutes costs no
