@@ -61,7 +61,7 @@ function renderAt(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/stores/:storeId/pages" element={<Pages />} />
-          <Route path="/stores/:storeId/pages/new" element={<LandingEditor key="new" />} />
+          <Route path="/stores/:storeId/pages/new" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/:pageId" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/policies/:policy" element={<PolicyEditor />} />
         </Routes>
@@ -99,8 +99,7 @@ describe('Pages', () => {
 describe('LandingEditor', () => {
   it('starts a page with one product and publishes it', async () => {
     const calls = routes({
-      [`POST ${base}/storefront/pages`]: (c) => ({ status: 201, body: { ...landing({ status: 'published', title: 'عرض الشتاء', slug: 'winter' }), ...(c.body as object), id: pageID, version: 1 } }),
-      [`GET ${base}/storefront/pages/${pageID}`]: () => ({ status: 200, body: landing({ status: 'published', title: 'عرض الشتاء', slug: 'winter' }) }),
+      [`POST ${base}/storefront/pages`]: (c) => ({ status: 201, body: { ...landing(), ...(c.body as object), slug: 'winter', id: pageID, version: 1 } }), // the server derives the address from the title
     });
     renderAt(`/stores/${store}/pages/new`);
     const user = userEvent.setup();
@@ -123,6 +122,9 @@ describe('LandingEditor', () => {
     expect(await screen.findByText('نُشرت الصفحة.', {}, slow)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 1, name: 'عرض الشتاء' }, slow)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'عرض في المتجر' })).toHaveAttribute('href', expect.stringMatching(/\/pages\/winter$/) as string);
+    // the new address keeps the screen: no reload of what was just saved
+    expect(calls.filter((c) => c.method === 'GET' && c.path.endsWith(`/storefront/pages/${pageID}`))).toHaveLength(0);
+    expect(screen.getByText('نُشرت الصفحة.')).toBeInTheDocument();
   });
 
   it('offers «منتج واحد» first, says what the server refused, and deletes the page', async () => {
