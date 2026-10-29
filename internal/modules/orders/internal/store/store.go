@@ -45,7 +45,7 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		ID: o.ID, StoreID: store, CreatedAt: o.CreatedAt, Source: string(o.Source), CustomerID: o.CustomerID,
 		Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City, Address: c.Address, Notes: c.Notes,
 		Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(), ShippingMinor: o.Shipping.Amount(),
-		CodFeeMinor: o.CODFee.Amount(), PaymentMethod: string(o.PaymentMethod), PaymentStatus: string(o.PaymentStatus), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
+		CodFeeMinor: o.CODFee.Amount(), DiscountMinor: discountMinor(o), CouponCode: couponCode(o), PaymentMethod: string(o.PaymentMethod), PaymentStatus: string(o.PaymentStatus), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -336,6 +336,20 @@ func SetPaymentStatus(ctx context.Context, tx Tx, id ulid.ID, st domain.PaymentS
 	return nil
 }
 
+func discountMinor(o domain.Order) int64 {
+	if o.Discount.Currency() == "" {
+		return 0
+	}
+	return o.Discount.Amount()
+}
+
+func couponCode(o domain.Order) *string {
+	if o.CouponCode == "" {
+		return nil
+	}
+	return &o.CouponCode
+}
+
 func toOrder(r ordersdb.Order) (domain.Order, error) {
 	cur := money.Currency(r.Currency)
 	sub, err := money.New(r.SubtotalMinor, cur)
@@ -354,6 +368,14 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: %w", err)
 	}
+	discount, err := money.New(r.DiscountMinor, cur)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("orders store: %w", err)
+	}
+	code := ""
+	if r.CouponCode != nil {
+		code = *r.CouponCode
+	}
 	p, err := phone.ParseE164(r.Phone)
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: stored phone: %w", err)
@@ -361,7 +383,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	return domain.Order{
 		ID: r.ID, Status: domain.Status(r.Status), Version: int(r.Version), Source: domain.Source(r.Source), CustomerID: r.CustomerID,
 		Contact:  domain.Contact{Name: r.Name, Phone: p, Governorate: r.Governorate, City: r.City, Address: r.Address, Notes: r.Notes},
-		Subtotal: sub, Shipping: ship, CODFee: cod, Total: total, ItemCount: int(r.ItemCount),
+		Subtotal: sub, Shipping: ship, CODFee: cod, Discount: discount, CouponCode: code, Total: total, ItemCount: int(r.ItemCount),
 		PaymentMethod: domain.PaymentMethod(r.PaymentMethod), PaymentStatus: domain.PaymentStatus(r.PaymentStatus),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 	}, nil

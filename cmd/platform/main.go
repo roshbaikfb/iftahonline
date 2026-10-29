@@ -45,6 +45,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
+	"github.com/roshbaikfb/iftahonline/internal/modules/promotions"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -185,6 +186,9 @@ type clients struct {
 	// confirmOrders handles orders.order.placed for messaging (the
 	// order confirmation); the worker sets it.
 	confirmOrders *lateHandler
+	// releaseCoupons handles orders.order.status_changed for promotions
+	// (a cancelled order's coupon use); the worker sets it.
+	releaseCoupons *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -237,8 +241,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderPlaced, messaging.ConfirmOrdersSubscriber, confirm.Handle); err != nil {
 		return clients{}, err
 	}
+	// A cancelled order gives its coupon's use back (ADR-0042).
+	release := &lateHandler{}
+	if err = bus.Subscribe(orders.EventOrderStatusChanged, promotions.ReleaseCouponsSubscriber, release.Handle); err != nil {
+		return clients{}, err
+	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales,
-		confirmOrders: confirm}, nil
+		confirmOrders: confirm, releaseCoupons: release}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -418,10 +427,12 @@ func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 	})
 }
 
-func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, ship *shipping.Module, auth authz.Authorizer) (*orders.Module, error) {
+func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, ship *shipping.Module, prom *promotions.Module,
+	auth authz.Authorizer) (*orders.Module, error) {
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Auth: auth, Stores: orderStores(ten),
+		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Auth: auth,
+		Stores: orderStores(ten),
 	})
 }
 
@@ -461,8 +472,12 @@ func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (order
 	if err != nil {
 		return orders.ShopDeps{}, err
 	}
+	prom, err := newPromotions(c)
+	if err != nil {
+		return orders.ShopDeps{}, err
+	}
 	return orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Stores: orderStores(ten)}, nil
+		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten)}, nil
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
@@ -508,7 +523,11 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		return nil, err
 	}
 	go ship.Listen(ctx)
-	ord, err := newOrders(c, ten, cat, cust, ship, id.Authorizer())
+	prom, err := newPromotions(c)
+	if err != nil {
+		return nil, err
+	}
+	ord, err := newOrders(c, ten, cat, cust, ship, prom, id.Authorizer())
 	if err != nil {
 		return nil, err
 	}
@@ -558,6 +577,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		ship.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		pay.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		msg.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
 			c.log.Error("card checkout not mounted", "err", mountErr)
 		}
@@ -814,6 +834,11 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.confirmOrders.Set(msg.OrderPlacedHandler())
+	prom, err := newPromotions(c)
+	if err != nil {
+		return err
+	}
+	c.releaseCoupons.Set(prom.OrderStatusHandler())
 	counter, err := orders.NewSalesCounter(orderDeps)
 	if err != nil {
 		return err

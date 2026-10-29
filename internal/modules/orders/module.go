@@ -35,6 +35,9 @@ type Deps struct {
 	Customers customers.Customers
 	// Shipping quotes each order's delivery rate and COD fee.
 	Shipping shipping.Quoter
+	// Coupons applies coupon codes (promotions, adapted by cmd/platform);
+	// nil makes every code not_found.
+	Coupons Coupons
 	// Stores gives the store's currency, country and time zone.
 	Stores StoreSource
 	// Auth checks each transition's own permission.
@@ -53,7 +56,7 @@ func New(d Deps) (*Module, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: d.Auth})}, nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth})}, nil
 }
 
 // Fulfilment is the API courier integrations use.
@@ -75,6 +78,7 @@ type ShopDeps struct {
 	Catalog   catalog.Catalog
 	Customers customers.Customers
 	Shipping  shipping.Quoter
+	Coupons   Coupons // nil: every code is not_found
 	Stores    StoreSource
 }
 
@@ -128,7 +132,7 @@ func withoutPermissions(d ShopDeps) (*app.Service, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Stores: d.Stores, Auth: denyAll{}}), nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}}), nil
 }
 
 // denyAll refuses every permission.
