@@ -11,6 +11,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
@@ -77,6 +78,9 @@ func TestPurgeTags(t *testing.T) {
 		{"gateway connected", delivery(t, store, payments.EventConnectionChanged, func(m event.Meta) event.Event {
 			return payments.ConnectionChanged{Meta: m}
 		}), []string{"s-" + s}}, // every footer lists the payment methods
+		{"pixels changed", delivery(t, store, marketing.EventPixelsChanged, func(m event.Meta) event.Event {
+			return marketing.PixelsChanged{Meta: m, Provider: marketing.Meta}
+		}), []string{"s-" + s}}, // every page loads the store's tags
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

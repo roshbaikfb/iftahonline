@@ -33,12 +33,14 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -101,6 +103,9 @@ func run(addr string, load bool) error {
 	}
 	if err = seed(ctx, pool, ten, api, load); err != nil {
 		return fmt.Errorf("seed: %w", err)
+	}
+	if err = seedPixels(ctx, pool, ten, api); err != nil {
+		return fmt.Errorf("seed pixels: %w", err)
 	}
 
 	tel, err := otel.Setup(ctx, otel.Options{})
@@ -223,8 +228,16 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	if err != nil {
 		return nil, demo{}, nil, err
 	}
+	sealer, err := envelope.New(envelope.FromKeyring(keyring))
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
+	mkt, err := marketing.New(marketing.Deps{Pool: pool, IDs: ids, Sealer: sealer, Events: bus})
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig(), Orders: shopOrders,
+		Cache: storefront.DefaultCacheConfig(), Orders: shopOrders, Pixels: mkt.Pixels(),
 		ClientIP: func(r *http.Request) string {
 			if ip, ok := middleware.ClientIP(r.Context()); ok {
 				return ip.String()
@@ -244,23 +257,29 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	cat.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
 	look.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
 	ship.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
+	mkt.Mount(mux, pol, testkit.FakeStoreScope(resp, members), resp)
 	return shop, demo{h: mux, members: members}, ten, nil
 }
 
-func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, load bool) error {
+// apiCall calls the merchant API as a store's owner.
+type apiCall func(method, path, body string) (string, error)
+
+// newStore creates an Egyptian store at slug and returns its owner's API.
+func newStore(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, slug, name string) (apiCall, error) {
 	id := tenant.StoreID{ID: ulid.NewGenerator().New()}
 	sctx := tenant.WithStore(ctx, id)
 	err := postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
-		_, err := ten.Service().CreateStoreTx(sctx, tx, tenancy.NewStore{Slug: "souq", Name: "متجر العرض", Currency: "EGP", Locale: "ar", Timezone: "Africa/Cairo"})
+		_, err := ten.Service().CreateStoreTx(sctx, tx, tenancy.NewStore{Slug: slug, Name: name, Currency: "EGP", Locale: "ar", Timezone: "Africa/Cairo"})
 		return err
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	d.members["owner"] = testkit.FakeMember{UserID: ulid.NewGenerator().New(), Roles: map[tenant.StoreID]authz.Role{id: authz.RoleOwner}}
-	call := func(method, path, body string) (string, error) {
+	token := "owner-" + slug
+	d.members[token] = testkit.FakeMember{UserID: ulid.NewGenerator().New(), Roles: map[tenant.StoreID]authz.Role{id: authz.RoleOwner}}
+	return func(method, path, body string) (string, error) {
 		rq := httptest.NewRequestWithContext(ctx, method, "/v1/stores/"+id.String()+path, strings.NewReader(body))
-		rq.Header.Set("Authorization", "Bearer owner")
+		rq.Header.Set("Authorization", "Bearer "+token)
 		rq.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		d.h.ServeHTTP(rec, rq)
@@ -268,6 +287,38 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, 
 			return "", fmt.Errorf("%s %s: %d %s", method, path, rec.Code, rec.Body.String())
 		}
 		return rec.Body.String(), nil
+	}, nil
+}
+
+// seedPixels makes the store pixels.localhost: one product, delivery
+// everywhere, every ad provider connected, and consent asked first
+// (ADR-0043). Browser tests stand in for the providers' scripts.
+func seedPixels(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo) error {
+	call, err := newStore(ctx, pool, ten, d, "pixels", "متجر البكسلات")
+	if err != nil {
+		return err
+	}
+	for _, s := range []struct{ method, path, body string }{
+		{http.MethodPost, "/products", `{"title":"عطر المسك","slug":"musk","status":"active","variants":[{"price_minor":25000,"on_hand":1000}]}`},
+		{http.MethodPost, "/shipping/zones", `{"name":"كل المحافظات","areas":` + otherAreas() + `,"rate_minor":5000}`},
+		{http.MethodPut, "/marketing/pixels/meta", `{"pixel_id":"123456789012345","enabled":true,"version":0}`},
+		{http.MethodPut, "/marketing/pixels/tiktok", `{"pixel_id":"C4ABCDEF1234567890AB","enabled":true,"version":0}`},
+		{http.MethodPut, "/marketing/pixels/snap", `{"pixel_id":"0f8fad5b-d9cb-469f-a165-70867728950e","enabled":true,"version":0}`},
+		{http.MethodPut, "/marketing/pixels/google_ads", `{"pixel_id":"AW-123456789","label":"AbC-123_xyz","enabled":true,"version":0}`},
+		{http.MethodPut, "/marketing/pixels/ga4", `{"pixel_id":"G-ABC123XYZ","enabled":true,"version":0}`},
+		{http.MethodPut, "/marketing/settings", `{"consent":"required","version":0}`},
+	} {
+		if _, err = call(s.method, s.path, s.body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, load bool) error {
+	call, err := newStore(ctx, pool, ten, d, "souq", "متجر العرض")
+	if err != nil {
+		return err
 	}
 	if _, err = call(http.MethodPost, "/categories", `{"name":"عطور","slug":"perfumes"}`); err != nil {
 		return err

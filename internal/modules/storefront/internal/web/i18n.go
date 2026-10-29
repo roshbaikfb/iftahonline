@@ -262,6 +262,9 @@ const (
 	MsgCouponUsedUp
 	MsgCouponPerCustomer
 	MsgCouponChanged
+	MsgConsentText
+	MsgConsentYes
+	MsgConsentNo
 	msgCount
 )
 
@@ -481,6 +484,9 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgCouponUsedUp:          {"نفدت استخدامات هذا الكود", "This code has been used up"},
 	MsgCouponPerCustomer:     {"استخدمت هذا الكود من قبل", "You have already used this code"},
 	MsgCouponChanged:         {"تغيّرت شروط هذا الكود، راجع الإجمالي ثم أكّد الطلب", "This code changed; check the total and place the order again"},
+	MsgConsentText:           {"نستخدم ملفات تعريف الارتباط لقياس الإعلانات وتحسين عروضنا. هل توافق؟", "We use cookies to measure our ads and improve our offers. Do you agree?"},
+	MsgConsentYes:            {"موافق", "Accept"},
+	MsgConsentNo:             {"لا، شكرًا", "No, thanks"},
 }
 
 // T returns the message in l.

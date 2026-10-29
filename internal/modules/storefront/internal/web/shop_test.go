@@ -518,8 +518,10 @@ func wantContains(t *testing.T, body string, wants ...string) {
 }
 
 var (
-	styleRE   = regexp.MustCompile(`(?s)<style>(.*?)</style>`)
-	handlerRE = regexp.MustCompile(`<[a-z][^>]*\son[a-z]+=`)
+	styleRE = regexp.MustCompile(`(?s)<style>(.*?)</style>`)
+	// script-src is our origin, plus a store's pixels' https origins.
+	scriptSrcRE = regexp.MustCompile(`script-src 'self'( https://[a-z0-9.*-]+)*;`)
+	handlerRE   = regexp.MustCompile(`<[a-z][^>]*\son[a-z]+=`)
 )
 
 // checkCSP proves the inline stylesheet is exactly what the CSP allows,
@@ -533,11 +535,15 @@ func checkCSP(t *testing.T, rec *httptest.ResponseRecorder) {
 	sum := sha256.Sum256([]byte(m[1]))
 	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 	policy := rec.Header().Get("Content-Security-Policy")
-	if !strings.Contains(policy, "style-src 'self' "+want) || !strings.Contains(policy, "script-src 'self';") || strings.Contains(policy, "unsafe") {
+	if !strings.Contains(policy, "style-src 'self' "+want) || !scriptSrcRE.MatchString(policy) || strings.Contains(policy, "unsafe") {
 		t.Fatalf("CSP %q does not allow exactly the inline style %s", policy, want)
 	}
-	if n := strings.Count(rec.Body.String(), "<script"); n > 2 { // our module + structured data
-		t.Fatalf("%d script elements", n)
+	// Our modules (app.js, and px.js on stores with pixels); every other
+	// script element is a data block, never run.
+	body := rec.Body.String()
+	if n := strings.Count(body, `<script type="module" src="/assets/`); n != strings.Count(body, "<script")-strings.Count(body, `<script type="application/ld+json">`)-
+		strings.Count(body, `<script type="application/json" id="px">`) || n > 2 {
+		t.Fatalf("%d module scripts among %d script elements", n, strings.Count(body, "<script"))
 	}
 	if strings.Contains(rec.Body.String(), "<script>") || handlerRE.MatchString(rec.Body.String()) {
 		t.Fatal("inline script or event handler in the page")

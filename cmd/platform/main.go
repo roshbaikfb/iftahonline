@@ -41,6 +41,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -225,6 +226,14 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 		return clients{}, err
 	}
 	if err = bus.Subscribe(payments.EventConnectionChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
+		return clients{}, err
+	}
+	// A pixel or the consent mode changed: every page of the store loads
+	// other tags (ADR-0043).
+	if err = bus.Subscribe(marketing.EventPixelsChanged, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
+	if err = bus.Subscribe(marketing.EventPixelsChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
 		return clients{}, err
 	}
 	watch := &lateHandler{}
@@ -669,9 +678,13 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
+	mkt, err := newMarketing(c)
+	if err != nil {
+		return nil, err
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Confirmations: links,
-		Orders:        shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
+		Confirmations: links, Pixels: mkt.Pixels(),
+		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL, Search: c.cfg.Search.URL != "",

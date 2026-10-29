@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Deps are the shop's dependencies.
@@ -57,6 +58,8 @@ type Deps struct {
 	Now func() time.Time
 	// Search is true when Catalog.Search works: pages show the search box.
 	Search bool
+	// Pixels are the store's ad pixels (ADR-0043); nil loads none.
+	Pixels Pixels
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
@@ -81,6 +84,8 @@ type Shop struct {
 	clientIP func(*http.Request) string
 	now      func() time.Time
 	searchOn bool // Catalog.Search works: pages show the search box
+	pixels   Pixels
+	ids      *ulid.Generator // event IDs of conversions (ADR-0043)
 }
 
 // New builds the shop.
@@ -107,7 +112,8 @@ func New(d Deps) (*Shop, error) {
 	edge := "public, max-age=0, s-maxage=" + strconv.Itoa(int(d.EdgeTTL/time.Second))
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
-		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search}, nil
+		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search,
+		pixels: d.Pixels, ids: ulid.NewGenerator()}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -141,7 +147,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rest = "/"
 		}
 	}
-	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, fonts: s.assets.fontPreload(v.theme, l),
+	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, pxURL: s.assets.pxURL, fonts: s.assets.fontPreload(v.theme, l),
 		search: s.searchOn, track: s.orders != nil}
 	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
 		return
@@ -286,6 +292,9 @@ func (s *Shop) product(ctx context.Context, p *pageCtx, slug string) (result, er
 		p.image = img.src
 	}
 	p.jsonLD = productLD(p, pr, crumb)
+	if from := pr.PriceFrom(); len(pr.Variants) > 0 {
+		p.event(EventViewContent, "", from.Price, []string{from.ID.String()})
+	}
 	return s.render(p, http.StatusOK, productPage(p, crumb, s.productView(p, pr, related)))
 }
 
@@ -356,7 +365,7 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 		return result{}, fmt.Errorf("web: render: %w", err)
 	}
 	html := buf.Bytes()
-	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, language: p.l, private: p.preview != ""}
+	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, px: p.v.pxSources(), language: p.l, private: p.preview != ""}
 	if p.css != "" {
 		c.pageStyle = styleHash(p.css)
 	}
@@ -417,7 +426,7 @@ func (s *Shop) writeHeaders(w http.ResponseWriter, c cached) {
 	if c.challenge {
 		h.Set("Content-Security-Policy", csp.StorefrontChallenge(hashes...))
 	} else {
-		h.Set("Content-Security-Policy", csp.Storefront(hashes...))
+		h.Set("Content-Security-Policy", csp.StorefrontWith(c.px, hashes...))
 	}
 	h.Set("Content-Language", string(c.language))
 }

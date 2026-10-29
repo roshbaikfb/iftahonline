@@ -392,3 +392,12 @@ main { display: block; min-block-size: 50vh; }
   [data-look="soft"] .tiles i { display: flex; align-items: center; justify-content: center; inline-size: 4.75rem; aspect-ratio: 1; border-radius: 50%;
     background: var(--tint); color: var(--c-primary); font-style: normal; font-size: 1.75rem; font-weight: 700; }
 }
+
+/* The consent banner (ADR-0043): fixed at the bottom, so showing it
+   shifts nothing. */
+.consent { position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
+  padding: .875rem 1rem; background: var(--c-bg); color: var(--c-text); border-block-start: 1px solid #e2e8f0; box-shadow: 0 -4px 16px rgb(15 23 42 / .08); }
+.consent[hidden] { display: none; }
+.consent p { flex: 1 1 16rem; margin: 0; font-size: .9rem; }
+.consent-do { display: flex; gap: .5rem; }
+.consent-no { padding: .5rem .875rem; border: 1px solid #cbd5e1; border-radius: var(--radius); background: transparent; color: inherit; font: inherit; cursor: pointer; }

@@ -21,6 +21,7 @@ type pageCtx struct {
 	base      string // scheme://host
 	path      string // without the language prefix, e.g. /p/shirt
 	jsURL     string
+	pxURL     string   // px.js, on stores with pixels
 	cssURL    string   // a stylesheet the page links besides the inlined one
 	pageJS    string   // a script the page loads besides app.js
 	fonts     []string // preloaded
@@ -43,6 +44,7 @@ type pageCtx struct {
 	css       string // the page's own rules (a product's merchant colours), after the store's
 	preview   string // a live preview token (ADR-0036): links keep it; nothing is cached
 	homeDraft *domain.HomeDraft
+	events    []pxEvent // conversions for the store's pixels (ADR-0043)
 }
 
 // head is the short header a page shows on phones instead of the full

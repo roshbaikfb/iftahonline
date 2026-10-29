@@ -378,6 +378,9 @@ func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.St
 	if n, err := s.carts.CartUnits(r.Context(), tok); err == nil {
 		s.setUnitsCookie(w, n)
 	}
+	if choose { // an add, not an update: the cart page reports it
+		s.setAdded(w, p, id, qty)
+	}
 	w.Header().Set("Cache-Control", noStore)
 	http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
 }
@@ -414,6 +417,16 @@ func (s *Shop) cartPage(w http.ResponseWriter, r *http.Request, p *pageCtx, stat
 		msg = p.l.T(problem)
 	}
 	p.soft, p.cssURL = true, s.assets.checkoutURL
+	if id, variant, qty, ok := takeAdded(w, r); ok {
+		for _, l := range view.Lines {
+			if l.VariantID == variant {
+				if value, mulErr := l.Price.MulInt(int64(qty)); mulErr == nil {
+					p.event(EventAddToCart, id, value, []string{variant.String()})
+				}
+				break
+			}
+		}
+	}
 	s.writePrivate(w, r, p, status, cartPage(p, view, s.cartLines(view), msg))
 }
 
@@ -443,6 +456,15 @@ func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref 
 		}
 	}
 	p.head, p.soft, p.cssURL = headThanks, true, s.assets.checkoutURL
+	if !o.Cancelled {
+		ids := make([]string, len(o.Lines))
+		for i, l := range o.Lines {
+			ids[i] = l.VariantID.String()
+		}
+		if e := p.event(EventPurchase, PurchaseEventID(o.Ref), o.Total, ids); e != nil {
+			e.Ref = o.Ref
+		}
+	}
 	s.writePrivate(w, r, p, http.StatusOK, thankYouPage(p, s.thanksView(r.Context(), p, o, payURL)))
 }
 
@@ -458,7 +480,7 @@ func (s *Shop) writePrivate(w http.ResponseWriter, r *http.Request, p *pageCtx, 
 		s.unavailable(w, r, err)
 		return
 	}
-	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, language: p.l, challenge: p.challenge}
+	c := cached{status: status, body: buf.Bytes(), styleHash: p.v.styleHash, px: p.v.pxSources(), language: p.l, challenge: p.challenge}
 	if acceptsGzip(r) {
 		c.gz = compress(c.body)
 	}

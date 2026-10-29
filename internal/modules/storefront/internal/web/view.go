@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -61,6 +62,8 @@ type storeView struct {
 	categories []catalog.Category
 	policies   []domain.Page
 	cards      bool // checkout offers card payment: the footer says so
+	pixels     marketing.Browser
+	askConsent bool // ask the shopper before loading the pixels
 }
 
 type logoView struct {
@@ -123,6 +126,7 @@ func (s *Shop) buildView(ctx context.Context) (*storeView, error) {
 		categories: cats, policies: content.Policies,
 	}
 	v.cards = s.cardOffered(ctx, false)
+	v.pixels, v.askConsent = s.pixelsOf(ctx, country)
 	v.css = s.assets.themeCSS(content.Theme)
 	v.styleHash = styleHash(v.css)
 	if lg := content.Logo; lg != nil {
