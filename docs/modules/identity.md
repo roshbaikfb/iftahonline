@@ -73,6 +73,7 @@ every cell.
 | messaging.read | ✓ | ✓ | ✓ | |
 | messaging.manage | ✓ | ✓ | | |
 | promotions.manage | ✓ | ✓ | | |
+| marketing.manage | ✓ | ✓ | | |
 
 A store has exactly one owner, enforced by a partial unique index.
 
