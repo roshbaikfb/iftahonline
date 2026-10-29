@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/capi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -16,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -23,6 +25,10 @@ import (
 
 // module names the sealed tokens' associated data.
 const module = "marketing"
+
+// errNoSealer is a role without the platform's keys asked to seal or
+// open a token.
+var errNoSealer = errors.New("marketing: no sealer on this role")
 
 // Errors the HTTP layer renders.
 var (
@@ -41,11 +47,14 @@ var _ Sealer = (*envelope.Sealer)(nil)
 
 // Service implements the use cases.
 type Service struct {
-	db     postgres.Beginner
-	ids    *ulid.Generator
-	sealer Sealer
-	events eventbus.Publisher
-	audit  audit.Recorder
+	db      postgres.Beginner
+	ids     *ulid.Generator
+	sealer  Sealer
+	events  eventbus.Publisher
+	audit   audit.Recorder
+	jobs    jobs.Inserter
+	orders  Orders
+	senders map[domain.Provider]capi.Sender
 }
 
 // Deps are the service's dependencies.
@@ -57,6 +66,11 @@ type Deps struct {
 	Events eventbus.Publisher
 	// Audit records merchant actions; nil discards.
 	Audit audit.Recorder
+	// Jobs enqueues the server-side conversions; Orders reads an order's
+	// Purchase; Senders send to each provider (nil: none are sent).
+	Jobs    jobs.Inserter
+	Orders  Orders
+	Senders map[domain.Provider]capi.Sender
 }
 
 // NewService builds the service.
@@ -67,7 +81,7 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, sealer: d.Sealer, events: d.Events, audit: d.Audit}
+	return &Service{db: d.DB, ids: d.IDs, sealer: d.Sealer, events: d.Events, audit: d.Audit, jobs: d.Jobs, orders: d.Orders, senders: d.Senders}
 }
 
 func spec(p domain.Provider) (domain.Spec, error) {
@@ -115,6 +129,9 @@ func (s *Service) SavePixel(ctx context.Context, p domain.Provider, in domain.Pi
 	storeID, err := tenant.FromContext(ctx)
 	if err != nil {
 		return domain.Pixel{}, fmt.Errorf("marketing: %w", err)
+	}
+	if s.sealer == nil {
+		return domain.Pixel{}, errNoSealer
 	}
 	var out domain.Pixel
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
