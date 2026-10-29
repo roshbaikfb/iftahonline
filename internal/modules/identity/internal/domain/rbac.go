@@ -21,7 +21,8 @@ import (
 //     (where the store's money is paid out).
 //   - messages to customers: support reads the log (they follow up the
 //     confirmations); the owner and manager also write the texts.
-//   - coupons are the owner's and the manager's (they set prices).
+//   - coupons are the owner's and the manager's (they set prices), and
+//     so are the ad pixels (they run the store's ads).
 //   - shipping: fulfils orders (packs, ships, records deliveries and
 //     returns); sees the catalog and keeps stock counts right (they
 //     handle the goods), but does not edit products or confirm orders.
@@ -40,7 +41,7 @@ func Matrix() map[authz.Role][]authz.Permission {
 			authz.PermFinanceRead, authz.PermFinanceManage,
 			authz.PermPaymentsRefund,
 			authz.PermMessagingRead, authz.PermMessagingManage,
-			authz.PermPromotionsManage,
+			authz.PermPromotionsManage, authz.PermMarketingManage,
 		},
 		authz.RoleSupport: {
 			authz.PermStoreRead, authz.PermDomainsRead, authz.PermMembersRead,
