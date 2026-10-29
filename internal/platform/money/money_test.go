@@ -376,3 +376,26 @@ func TestCurrencyInfo(t *testing.T) {
 		t.Error("XXX must be invalid")
 	}
 }
+
+func TestDecimal(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		minor int64
+		units int
+		want  string
+	}{
+		{125050, 2, "1250.50"}, {5, 2, "0.05"}, {0, 2, "0.00"}, {-5, 2, "-0.05"}, {-125050, 2, "-1250.50"},
+		{1234, 0, "1234"}, {1001, 3, "1.001"}, {math.MinInt64, 2, "-92233720368547758.08"},
+	} {
+		if got := money.Decimal(tc.minor, tc.units); got != tc.want {
+			t.Errorf("Decimal(%d, %d) = %q, want %q", tc.minor, tc.units, got, tc.want)
+		}
+	}
+	m, err := money.New(45050, money.SAR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Decimal(); got != "450.50" {
+		t.Fatalf("Money.Decimal = %q", got)
+	}
+}

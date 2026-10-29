@@ -18,9 +18,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 )
 
 // Conversion names, as the storefront reports them.
@@ -90,24 +91,9 @@ func hash(s string) string {
 // normalized form.
 func phoneDigits(e164 string) string { return strings.TrimPrefix(e164, "+") }
 
-// value is the amount in decimal, as JSON: "450.00" for 45000 minor
-// units of a two-digit currency.
-func value(minor int64, units int) json.Number {
-	s := strconv.FormatInt(minor, 10)
-	if units <= 0 {
-		return json.Number(s)
-	}
-	neg := strings.HasPrefix(s, "-")
-	s = strings.TrimPrefix(s, "-")
-	for len(s) <= units {
-		s = "0" + s
-	}
-	s = s[:len(s)-units] + "." + s[len(s)-units:]
-	if neg {
-		s = "-" + s
-	}
-	return json.Number(s)
-}
+// value is the amount in decimal, as JSON: 450.00 for 45000 minor units
+// of a two-digit currency.
+func value(minor int64, units int) json.Number { return json.Number(money.Decimal(minor, units)) }
 
 // post sends body as JSON and maps the answer: 2xx is sent; 4xx but 408
 // and 429 is ErrRejected; anything else may be retried.
