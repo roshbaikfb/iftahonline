@@ -190,6 +190,9 @@ type clients struct {
 	// releaseCoupons handles orders.order.status_changed for promotions
 	// (a cancelled order's coupon use); the worker sets it.
 	releaseCoupons *lateHandler
+	// reportPurchases handles orders.order.placed for marketing (the
+	// server-side Purchase); the worker sets it.
+	reportPurchases *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -255,8 +258,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderStatusChanged, promotions.ReleaseCouponsSubscriber, release.Handle); err != nil {
 		return clients{}, err
 	}
+	// A placed order's Purchase goes to the store's ad providers (ADR-0043).
+	purchases := &lateHandler{}
+	if err = bus.Subscribe(orders.EventOrderPlaced, marketing.PurchasesSubscriber, purchases.Handle); err != nil {
+		return clients{}, err
+	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales,
-		confirmOrders: confirm, releaseCoupons: release}, nil
+		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -558,7 +566,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	mkt, err := newMarketing(c)
+	mkt, err := newMarketing(c, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -678,12 +686,12 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
-	mkt, err := newMarketing(c)
+	mkt, err := newMarketing(c, nil)
 	if err != nil {
 		return nil, err
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Confirmations: links, Pixels: mkt.Pixels(),
+		Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(),
 		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
@@ -857,6 +865,18 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.releaseCoupons.Set(prom.OrderStatusHandler())
+	convOrders, err := orders.NewConversions(orderDeps)
+	if err != nil {
+		return err
+	}
+	mkt, err := newMarketing(c, convOrders)
+	if err != nil {
+		return err
+	}
+	if err = mkt.AddWorkers(workers); err != nil {
+		return err
+	}
+	c.reportPurchases.Set(mkt.OrderPlacedHandler())
 	counter, err := orders.NewSalesCounter(orderDeps)
 	if err != nil {
 		return err

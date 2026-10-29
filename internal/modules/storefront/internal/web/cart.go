@@ -423,6 +423,7 @@ func (s *Shop) cartPage(w http.ResponseWriter, r *http.Request, p *pageCtx, stat
 			if l.VariantID == variant {
 				if value, mulErr := l.Price.MulInt(int64(qty)); mulErr == nil {
 					p.event(EventAddToCart, id, value, []string{variant.String()})
+					s.track(r, p, EventAddToCart, id, value, []string{variant.String()})
 				}
 				break
 			}
@@ -462,7 +463,7 @@ func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref 
 		for i, l := range o.Lines {
 			ids[i] = l.VariantID.String()
 		}
-		if e := p.event(EventPurchase, PurchaseEventID(o.Ref), o.Total, ids); e != nil {
+		if e := p.event(EventPurchase, purchaseEventID(o.Ref), o.Total, ids); e != nil {
 			e.Ref = o.Ref
 		}
 	}

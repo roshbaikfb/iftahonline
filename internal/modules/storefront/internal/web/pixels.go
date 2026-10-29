@@ -22,6 +22,31 @@ type Pixels interface {
 	Browser(ctx context.Context) (marketing.Browser, error)
 }
 
+// Conversions reports conversions from the server too
+// (marketing.Conversions, ADR-0043).
+type Conversions interface {
+	Track(ctx context.Context, c marketing.Conversion) error
+}
+
+// track reports a conversion the page also reports, from the server,
+// with the same event_id, when the shopper's visit allows ad signals
+// (the store has pixels, and consent where it asks). A failure costs the
+// event, never the page.
+func (s *Shop) track(r *http.Request, p *pageCtx, name, id string, value money.Money, items []string) {
+	if s.conversions == nil || id == "" {
+		return
+	}
+	v := s.visit(r, p)
+	if v.IP == "" { // not allowed: the visit carries no signals
+		return
+	}
+	c := marketing.Conversion{Name: name, EventID: id, Time: s.now(), Value: value, Items: items, URL: p.abs(p.l, p.path),
+		User: marketing.User{IP: v.IP, UserAgent: v.UserAgent, FBP: v.FBP, FBC: v.FBC, TTP: v.TTP, TTCLID: v.TTCLID, ScCID: v.ScCID}}
+	if err := s.conversions.Track(r.Context(), c); err != nil {
+		s.log.WarnContext(r.Context(), "storefront: conversion", "event", name, "err", err)
+	}
+}
+
 // Browser events a page reports to the store's pixels. The provider
 // names are px.js's to map.
 const (
@@ -31,9 +56,14 @@ const (
 	EventPurchase         = "Purchase"
 )
 
-// PurchaseEventID is the event_id of an order's Purchase: the browser
-// and the server send the same one, so each provider counts it once.
-func PurchaseEventID(order string) string { return "purchase:" + order }
+// purchaseEventID is the event_id of an order's Purchase: the thank-you
+// page and the server's event carry the same one (marketing owns it).
+func purchaseEventID(ref string) string {
+	if id, err := ulid.Parse(ref); err == nil {
+		return marketing.PurchaseEventID(id)
+	}
+	return "purchase:" + ref // not an order ID: the browser's alone
+}
 
 // pxPixel is one provider's tag, as px.js reads it.
 type pxPixel struct {

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -222,8 +223,7 @@ func TestCheckoutConversions(t *testing.T) {
 	}
 
 	ty, _ := px(t, f.get(t, "/thank-you/IFT-1001").Body.String())
-	if len(ty.Events) != 1 || ty.Events[0].N != web.EventPurchase || ty.Events[0].ID != web.PurchaseEventID("IFT-1001") ||
-		ty.Events[0].ID != "purchase:IFT-1001" || ty.Events[0].Ref != "IFT-1001" || ty.Events[0].V == 0 {
+	if len(ty.Events) != 1 || ty.Events[0].N != web.EventPurchase || ty.Events[0].ID != "purchase:IFT-1001" || ty.Events[0].Ref != "IFT-1001" || ty.Events[0].V == 0 {
 		t.Fatalf("thank-you events %+v", ty.Events)
 	}
 }
@@ -322,4 +322,67 @@ func TestOrderVisit(t *testing.T) {
 			t.Fatalf("visit %+v", v)
 		}
 	})
+}
+
+// tracked keeps the conversions the server reported, and fails with err.
+type tracked struct {
+	mu  sync.Mutex
+	got []marketing.Conversion
+	err error
+}
+
+func (c *tracked) Track(_ context.Context, cv marketing.Conversion) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.got = append(c.got, cv)
+	return c.err
+}
+
+func (c *tracked) all() []marketing.Conversion {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]marketing.Conversion(nil), c.got...)
+}
+
+// TestServerConversions (ADR-0043): the cart's and checkout's
+// conversions go to the server with the event_id the page reports, with
+// the visit's signals; never without consent where the store asks; a
+// failure costs the event, not the page.
+func TestServerConversions(t *testing.T) {
+	t.Parallel()
+	conv := &tracked{}
+	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)), func(d *web.Deps) { d.Conversions = conv })
+	variant := f.shirt.Variants[0].ID.String()
+	add := f.post(t, "/cart", url.Values{"variant": {variant}, "qty": {"2"}}, nil, nil)
+	cart, added := cookie(add, "__Host-cart"), cookie(add, "__Host-px_add")
+	page, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart, added, {Name: "_fbp", Value: "fb.1.2.3"}}).Body.String())
+	checkout, _ := px(t, f.getWith(t, "/checkout", []*http.Cookie{cart}).Body.String())
+	got := conv.all()
+	if len(got) != 2 || len(page.Events) != 1 || len(checkout.Events) != 1 {
+		t.Fatalf("server %+v, pages %+v %+v", got, page.Events, checkout.Events)
+	}
+	if got[0].Name != marketing.AddToCart || got[0].EventID != page.Events[0].ID || got[0].Value.Amount() != 30000 || got[0].Items[0] != variant ||
+		got[0].User.FBP != "fb.1.2.3" || got[0].User.IP == "" || got[0].URL != "https://"+host+"/cart" {
+		t.Fatalf("AddToCart %+v (page %+v)", got[0], page.Events[0])
+	}
+	if got[1].Name != marketing.InitiateCheckout || got[1].EventID != checkout.Events[0].ID || got[1].Value.Amount() != 30000 {
+		t.Fatalf("InitiateCheckout %+v (page %+v)", got[1], checkout.Events[0])
+	}
+
+	// A failure: the page renders all the same.
+	conv.err = errors.New("db down")
+	if rec := f.getWith(t, "/checkout", []*http.Cookie{cart}); rec.Code != http.StatusOK {
+		t.Fatalf("checkout with a failing report = %d", rec.Code)
+	}
+
+	// Consent asked and not given: the page reports, the server does not.
+	quiet := &tracked{}
+	g := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentRequired)), func(d *web.Deps) { d.Conversions = quiet })
+	cookies, _ := checkoutCart(t, g)
+	if c, _ := px(t, g.getWith(t, "/checkout", cookies).Body.String()); len(c.Events) != 1 || len(quiet.all()) != 0 {
+		t.Fatalf("without consent: page %+v, server %+v", c.Events, quiet.all())
+	}
+	if g.getWith(t, "/checkout", append(cookies, &http.Cookie{Name: "px_c", Value: "yes"})); len(quiet.all()) != 1 {
+		t.Fatalf("with consent: server %+v", quiet.all())
+	}
 }

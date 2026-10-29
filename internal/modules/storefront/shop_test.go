@@ -23,12 +23,14 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/envelope"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -89,7 +91,10 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	if err = bus.Subscribe(shipping.EventRatesChanged, shipping.InvalidateSubscriber, shipping.InvalidateHandler(rdb)); err != nil {
 		t.Fatal(err)
 	}
-	startWorker(t, pool, bus, log)
+	purchases := &laterHandler{}
+	if err = bus.Subscribe(orders.EventOrderPlaced, marketing.PurchasesSubscriber, purchases.handle); err != nil {
+		t.Fatal(err)
+	}
 
 	ten, err := tenancy.New(tenancy.Deps{
 		Pool: pool, Redis: rdb, Jobs: ins, IDs: ids, Log: log, DNS: &net.Resolver{PreferGo: true},
@@ -149,18 +154,40 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
+	orderDeps := orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
 		Shipping: ship.Quoter(),
 		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
 			st, getErr := stores.GetStore(ctx)
 			c, _ := geo.CountryOf(st.Currency)
 			return orders.StoreInfo{Currency: st.Currency, Country: c, Location: time.UTC}, getErr
-		}})
+		}}
+	shopOrders, err := orders.NewShop(orderDeps)
 	if err != nil {
 		t.Fatal(err)
 	}
+	convOrders, err := orders.NewConversions(orderDeps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealer, err := envelope.New(envelope.FromKeyring(keyring))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One module for every role here: the api's pixels, the storefront's
+	// conversions and the worker's sends, to the stand-in Meta.
+	mkt, err := marketing.New(marketing.Deps{Pool: pool, IDs: ids, Sealer: sealer, Events: bus, Jobs: ins, Orders: convOrders,
+		Endpoints: marketing.Endpoints{Meta: metaSink().URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	purchases.set(mkt.OrderPlacedHandler())
+	startWorker(t, pool, bus, log, mkt.AddWorkers)
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig(), HTTPS: true, Orders: shopOrders})
+		Cache: storefront.DefaultCacheConfig(), HTTPS: true, Orders: shopOrders, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(),
+		ClientIP: func(r *http.Request) string {
+			host, _, _ := net.SplitHostPort(r.RemoteAddr)
+			return host
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,22 +208,29 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	look.Mount(apiMux, pol, scope, resp)
 	cust.Mount(apiMux, pol, scope, resp)
 	ship.Mount(apiMux, pol, scope, resp)
+	mkt.Mount(apiMux, pol, scope, resp)
 	shopMux := http.NewServeMux()
 	server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())(server.Routes{Mux: shopMux, Problems: resp, Log: log})
 	return platform{api: apiMux, shop: shopMux, ten: ten, pool: pool}, members
 }
 
-// startWorker runs event deliveries as the worker role does.
-func startWorker(t *testing.T, pool *pgxpool.Pool, bus *eventbus.Bus, log *slog.Logger) {
+// startWorker runs event deliveries, and the jobs add registers, as the
+// worker role does.
+func startWorker(t *testing.T, pool *pgxpool.Pool, bus *eventbus.Bus, log *slog.Logger, add ...func(*river.Workers) error) {
 	t.Helper()
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, bus.Worker()); err != nil {
 		t.Fatal(err)
 	}
+	for _, a := range add {
+		if err := a(workers); err != nil {
+			t.Fatal(err)
+		}
+	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger: log, Workers: workers, Middleware: jobs.Middleware(), TestOnly: true,
-		// Only event deliveries are registered: the catalog's search jobs
-		// are not this test's business and simply wait.
+		// Only event deliveries and the conversions are registered: the
+		// catalog's search jobs are not this test's business and wait.
 		Queues: map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 4}},
 	})
 	if err != nil {
