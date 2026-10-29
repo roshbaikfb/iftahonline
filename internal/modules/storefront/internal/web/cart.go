@@ -48,6 +48,8 @@ type OrderSummary struct {
 	Subtotal      money.Money
 	Shipping      money.Money
 	CODFee        money.Money
+	Discount      money.Money // the coupon's; zero without one
+	CouponCode    string
 	Total         money.Money
 	// What the thank-you page says to the shopper: the first name only and
 	// where it goes, never the street (the page's link may be shared).
@@ -112,6 +114,7 @@ type QuoteRequest struct {
 	Governorate, City string
 	Card              bool // paid online: no cash-on-delivery fee
 	Lines             []OrderRequestLine
+	Coupon            string // a coupon code; may be empty
 }
 
 // QuoteView is what an order would cost.
@@ -124,6 +127,9 @@ type QuoteView struct {
 	Total        money.Money
 	FreeOver     *money.Money  // the free-shipping threshold in force; nil: none
 	Days         *DeliveryDays // how long delivery takes; nil: the store did not say
+	// Discount is the coupon's (zero without one), Coupon its code.
+	Discount money.Money
+	Coupon   string
 }
 
 // DeliveryDays is how long delivery takes, in days.
@@ -137,6 +143,7 @@ type OrderRequest struct {
 	Name, Phone, Governorate, City, Address, Notes string
 	Card                                           bool // paid online, not cash on delivery
 	Lines                                          []OrderRequestLine
+	Coupon                                         string // a coupon code; may be empty
 }
 
 // Payment states an OrderSummary reports.
@@ -176,6 +183,10 @@ type OrderInvalidError struct {
 	Fields []string // name, phone, governorate, city, address, notes, lines
 	// NotDelivered: the store does not deliver to the governorate.
 	NotDelivered bool
+	// Coupon is why the coupon code does not apply (not_found, inactive,
+	// not_started, expired, min_subtotal, used_up, per_customer,
+	// changed); "" when it does.
+	Coupon string
 }
 
 func (e *OrderInvalidError) Error() string {

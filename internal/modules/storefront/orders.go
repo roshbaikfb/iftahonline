@@ -30,7 +30,7 @@ var _ web.Orders = shopOrders{}
 
 func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (string, error) {
 	in := orders.NewOrder{IdempotencyKey: req.Key, Source: orders.SourceStorefront, PaymentMethod: method(req.Card), Name: req.Name,
-		Phone: req.Phone, Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes}
+		Phone: req.Phone, Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes, CouponCode: req.Coupon}
 	for _, l := range req.Lines {
 		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
 	}
@@ -62,6 +62,9 @@ func invalidOrder(e *errs.Error) *web.OrderInvalidError {
 		}
 		if name == "governorate" && f.Code == "not_delivered" {
 			inv.NotDelivered = true
+		}
+		if name == "coupon_code" {
+			inv.Coupon = f.Code
 		}
 		inv.Fields = append(inv.Fields, name)
 	}
@@ -102,7 +105,7 @@ func (p shopPayments) PayURL(store, orderRef, back string) string {
 }
 
 func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteView, error) {
-	in := orders.QuoteInput{Governorate: req.Governorate, City: req.City, PaymentMethod: method(req.Card)}
+	in := orders.QuoteInput{Governorate: req.Governorate, City: req.City, PaymentMethod: method(req.Card), CouponCode: req.Coupon}
 	for _, l := range req.Lines {
 		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
 	}
@@ -111,7 +114,7 @@ func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteV
 	switch {
 	case err == nil:
 		v := web.QuoteView{Deliverable: q.Deliverable, FreeShipping: q.FreeShipping, Subtotal: q.Subtotal, Shipping: q.Shipping,
-			CODFee: q.CODFee, Total: q.Total}
+			CODFee: q.CODFee, Total: q.Total, Discount: q.Discount, Coupon: q.CouponCode}
 		if q.FreeOverMinor != nil {
 			if m, mErr := money.New(*q.FreeOverMinor, q.Subtotal.Currency()); mErr == nil {
 				v.FreeOver = &m
@@ -168,7 +171,8 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 		return web.OrderSummary{}, err
 	}
 	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Card: ord.PaymentMethod == orders.PaymentCard, PaymentStatus: string(ord.PaymentStatus),
-		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee, Total: ord.Total,
+		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee,
+		Discount: ord.Discount, CouponCode: ord.CouponCode, Total: ord.Total,
 		Governorate: ord.Contact.Governorate, City: ord.Contact.City}
 	if f := strings.Fields(ord.Contact.Name); len(f) > 0 {
 		s.FirstName = f[0]

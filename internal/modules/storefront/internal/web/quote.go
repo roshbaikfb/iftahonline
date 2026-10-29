@@ -26,7 +26,31 @@ type quoteResponse struct {
 	Shipping    string `json:"shipping,omitempty"` // "الشحن 50 ج.م · مجاني فوق 1,000 ج.م"
 	// Amounts are checkout's totals card, each on its own line.
 	Amounts *quoteAmounts `json:"amounts,omitempty"`
+	// Coupon says how the code the shopper typed went, when one was sent.
+	Coupon *quoteCoupon `json:"coupon,omitempty"`
 }
+
+// quoteCoupon is the coupon field's answer: applied, or why not (the
+// amounts are then without it).
+type quoteCoupon struct {
+	OK      bool   `json:"ok"`
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message"`
+}
+
+// couponReason is the message for why a code does not apply.
+func couponReason(reason string) Msg {
+	m := map[string]Msg{"inactive": MsgCouponInactive, "not_started": MsgCouponNotStarted, "expired": MsgCouponExpired,
+		"min_subtotal": MsgCouponMinSubtotal, "used_up": MsgCouponUsedUp, "per_customer": MsgCouponPerCustomer,
+		"changed": MsgCouponChanged}[reason]
+	if m == 0 {
+		m = MsgCouponNotFound
+	}
+	return m
+}
+
+// couponMessage says why a code does not apply, in the page's language.
+func couponMessage(l Locale, reason string) string { return l.T(couponReason(reason)) }
 
 type quoteAmounts struct {
 	Subtotal  string `json:"subtotal"`
@@ -35,6 +59,7 @@ type quoteAmounts struct {
 	CODFee    string `json:"cod_fee,omitempty"`  // absent: no fee (or paid by card)
 	Total     string `json:"total"`              //
 	CODNote   string `json:"cod_note,omitempty"` // the cash choice's note with its fee
+	Discount  string `json:"discount,omitempty"` // "− 50 ج.م"; absent: no discount
 }
 
 // quoteOrder answers the order form's script (POST /order/quote) with
@@ -71,7 +96,8 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 		}
 	}
 
-	req := QuoteRequest{Governorate: r.PostForm.Get("governorate"), City: r.PostForm.Get("city"), Card: r.PostForm.Get("pay_method") == "card"}
+	req := QuoteRequest{Governorate: r.PostForm.Get("governorate"), City: r.PostForm.Get("city"), Card: r.PostForm.Get("pay_method") == "card",
+		Coupon: strings.TrimSpace(r.PostForm.Get("coupon"))}
 	if req.Governorate == "" {
 		writeQuote(w, quoteResponse{Deliverable: true})
 		return
@@ -101,6 +127,15 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 
 	q, err := s.orders.Quote(ctx, req)
 	var invalid *OrderInvalidError
+	var coupon *quoteCoupon
+	if errors.As(err, &invalid) && invalid.Coupon != "" {
+		// The code does not apply: say why, and quote without it.
+		coupon = &quoteCoupon{Message: couponMessage(p.l, invalid.Coupon)}
+		req.Coupon = ""
+		q, err = s.orders.Quote(ctx, req)
+	} else if err == nil && req.Coupon != "" {
+		coupon = &quoteCoupon{OK: true, Code: q.Coupon, Message: p.l.T(MsgCouponApplied)}
+	}
 	switch {
 	case errors.As(err, &invalid), errors.Is(err, ErrOrderUnavailable):
 		writeQuote(w, quoteResponse{Deliverable: true}) // the form's own checks explain it on submit
@@ -114,7 +149,7 @@ func (s *Shop) quoteOrder(w http.ResponseWriter, r *http.Request, p *pageCtx) {
 	}
 	writeQuote(w, quoteResponse{Text: quoteText(p.l, q), Deliverable: true,
 		Delivery: deliveryLine(p.l, p.v.country, req.Governorate, q.Days), Shipping: shippingLine(p.l, q),
-		Amounts: amounts(p.l, p.v.country, req, q)})
+		Amounts: amounts(p.l, p.v.country, req, q), Coupon: coupon})
 }
 
 // amounts are the quote line by line, in the page's language.
@@ -127,6 +162,9 @@ func amounts(l Locale, country geo.Country, req QuoteRequest, q QuoteView) *quot
 	}
 	if !q.CODFee.IsZero() {
 		out.CODFee = l.Price(q.CODFee)
+	}
+	if q.Discount.Currency() != "" && !q.Discount.IsZero() {
+		out.Discount = "− " + l.Price(q.Discount)
 	}
 	if !req.Card {
 		out.CODNote = l.T(MsgCODCash)

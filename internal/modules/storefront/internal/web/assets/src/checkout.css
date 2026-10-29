@@ -81,6 +81,12 @@
   border: 1px solid #cbd5e1; background: #fff; color: #15803d; font-weight: 700; }
 .wa-ask svg { inline-size: 1.25rem; block-size: 1.25rem; }
 .confirm-wa { border-color: #86efac; background: #f0fdf4; }
+.coupon-row { display: flex; gap: .5rem; }
+.coupon-row input { flex: 1; text-transform: uppercase; }
+.coupon-row .btn-ghost { flex: none; border: 1px solid #cbd5e1; border-radius: .75rem; background: #fff; padding-inline: 1rem; cursor: pointer; }
+.coupon-msg { margin: .5rem 0 0; font-size: .9rem; }
+.coupon-msg.ok, .row.discount span:last-child { color: #15803d; }
+.coupon.bad .coupon-msg, .coupon-msg.bad { color: #b91c1c; }
 .btn-wa { display: flex; gap: .5rem; align-items: center; justify-content: center; min-block-size: 3.25rem; background: #15803d; color: #fff; }
 .btn-wa svg { inline-size: 1.25rem; block-size: 1.25rem; }
 .steps .now .n { background: var(--c-primary); color: var(--c-on-primary); }

@@ -150,11 +150,11 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 	}
 	ctx := r.Context()
 	f := &orderForm{action: "/order", areas: geo.Areas(p.v.country), values: map[string]string{}, errors: map[string]Msg{}}
-	for _, k := range append([]string{"key", "pay_method"}, formFields...) {
+	for _, k := range append([]string{"key", "pay_method", "coupon"}, formFields...) {
 		f.values[k] = r.PostForm.Get(k)
 	}
 	req := OrderRequest{Key: f.values["key"], Name: f.values["name"], Phone: f.values["phone"], Governorate: f.values["governorate"],
-		City: f.values["city"], Address: f.values["address"], Notes: f.values["notes"]}
+		City: f.values["city"], Address: f.values["address"], Notes: f.values["notes"], Coupon: strings.TrimSpace(f.values["coupon"])}
 
 	var view app.CartView
 	if fromCart {
@@ -234,8 +234,14 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 		if invalid.NotDelivered {
 			msgs["governorate"] = MsgErrNotDelivered
 		}
+		if invalid.Coupon != "" {
+			msgs["coupon_code"] = couponReason(invalid.Coupon)
+		}
 		for _, name := range invalid.Fields {
 			if m, ok := msgs[name]; ok {
+				if name == "coupon_code" {
+					name = "coupon" // the form's field
+				}
 				f.errors[name] = m
 			} else {
 				f.problem = p.l.T(MsgErrUnavailable) // the lines: an item stopped selling

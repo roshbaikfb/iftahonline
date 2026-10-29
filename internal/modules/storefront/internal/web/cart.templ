@@ -166,6 +166,9 @@ templ thankYouPage(p *pageCtx, v thanksView) {
 				}
 			</ul>
 			<p class="row subtotal"><span>{ p.l.T(MsgSubtotal) }</span><span>{ p.l.Price(v.o.Subtotal) }</span></p>
+			if v.o.Discount.Currency() != "" && !v.o.Discount.IsZero() {
+				<p class="row discount"><span>{ p.l.T(MsgDiscount) } <bdi dir="ltr">{ v.o.CouponCode }</bdi></span><span>− { p.l.Price(v.o.Discount) }</span></p>
+			}
 			if !v.o.Shipping.IsZero() {
 				<p class="row shipping muted"><span>{ p.l.T(MsgShipping) }</span><span>{ p.l.Price(v.o.Shipping) }</span></p>
 			}
