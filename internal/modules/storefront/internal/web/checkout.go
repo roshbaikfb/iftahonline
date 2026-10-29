@@ -127,6 +127,13 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 	if f.card && s.cardFirst(r.Context()) {
 		f.values = map[string]string{"pay_method": "card"} // the merchant's choice; the shopper can switch
 	}
+	if view.Subtotal != nil {
+		ids := make([]string, len(view.Lines))
+		for i, l := range view.Lines {
+			ids[i] = l.VariantID.String()
+		}
+		p.event(EventInitiateCheckout, s.ids.New().String(), *view.Subtotal, ids)
+	}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }
 

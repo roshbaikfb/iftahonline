@@ -11,9 +11,11 @@ The storefront renders them through `Pixels`. Design:
 [ADR-0043](../adr/0043-ad-pixels-and-conversions.md).
 
 **Status:**
-- 6e-1 (this): the pixels, the consent mode and their API.
-- 6e-2: the storefront's tags (`px.js`, CSP per store, consent banner),
-  UTM and the order's signals.
+- 6e-1: the pixels, the consent mode and their API.
+- 6e-2a: the storefront's tags (`px.js`, CSP per store, consent banner,
+  the browser's conversions with their `event_id`s); see
+  [storefront](storefront.md).
+- 6e-2b: UTM and the order's signals.
 - 6e-3: the server-side conversions.
 
 ## Public API (`internal/modules/marketing/api.go`)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
 
@@ -36,9 +37,10 @@ type cached struct {
 	status    int
 	body      []byte
 	styleHash string
-	pageStyle string // the CSP hash of the page's own style; empty for none
-	private   bool   // a preview: never stored by the edge or the browser, never indexed
-	tags      string // Cache-Tag header
+	pageStyle string      // the CSP hash of the page's own style; empty for none
+	px        csp.Sources // the origins of the store's pixels (ADR-0043)
+	private   bool        // a preview: never stored by the edge or the browser, never indexed
+	tags      string      // Cache-Tag header
 	language  Locale
 	challenge bool   // the page shows a Turnstile challenge (CSP)
 	gz        []byte // body, gzip-compressed once when the page is cached

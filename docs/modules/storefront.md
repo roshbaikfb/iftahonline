@@ -234,6 +234,42 @@ Styles, scripts and fonts:
 - Sources are in `internal/web/assets/src` and are minified by esbuild
   at `make gen`. Font provenance and licenses are in `assets/fonts`.
 
+Ad pixels (ADR-0043, `internal/web/pixels.go`). The storefront reads the
+store's pixels from `marketing.Pixels`, once per store view (dropped on
+`marketing.pixels.changed`, which also purges the edge). If the read
+fails, the view has no pixels; the pages still render.
+
+On a store with pixels:
+- **What every page carries:**
+  - a JSON data block, `<script type="application/json" id="px">`,
+    with each provider's public IDs, whether to ask first, and the
+    page's conversions;
+  - `px.js` (3.8 KB, from our origin).
+
+  `px.js` loads each provider's official tag after `load`, when the
+  browser is idle. Google Ads and GA4 share one gtag.
+- **The CSP** adds exactly those providers' origins to `script-src`,
+  `connect-src` and `frame-src`. `platform/csp` drops any source that
+  is not a plain https origin.
+- **Consent.** The page asks first when the mode is `required`, or
+  `auto` in a Saudi store. A bottom banner (fixed, so it shifts nothing)
+  stays hidden until `px.js` shows it, and the choice is kept on the
+  device. Declined, no tag loads.
+- **Conversions.** Each one's `event_id` is the one the server sends
+  (6e-3). Item IDs are variant IDs.
+
+  | Event | Page | `event_id` |
+  |---|---|---|
+  | ViewContent | product | none (browser only) |
+  | AddToCart | the cart page after an add | a ULID the cart's form post made, carried by `__Host-px_add` (60 s, HttpOnly, read once) |
+  | InitiateCheckout | checkout | a ULID made at render |
+  | Purchase | thank-you (not for a cancelled order) | `purchase:<order ID>` |
+
+  A reload sends no conversion twice: `px.js` remembers the last 20
+  `event_id`s on the device.
+
+A store without pixels carries none of this, and its CSP is unchanged.
+
 ## Section types
 
 Each type has a schema in `internal/sections/schemas/<type>.json`, with

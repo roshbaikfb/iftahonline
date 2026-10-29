@@ -12,6 +12,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
@@ -142,6 +143,8 @@ type ShopDeps struct {
 	// Confirmations backs the SMS link's page (/o/<token>, ADR-0040); nil
 	// makes it a 404.
 	Confirmations messaging.ConfirmLinks
+	// Pixels are the stores' ad pixels (ADR-0043); nil loads none.
+	Pixels marketing.Pixels
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -191,7 +194,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays, Confirmations: confirms,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels,
 	})
 	if err != nil {
 		return nil, err
