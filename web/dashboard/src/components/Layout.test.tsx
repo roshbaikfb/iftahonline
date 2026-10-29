@@ -59,7 +59,8 @@ describe('Layout', () => {
     const titles = [...nav.querySelectorAll('.group-title')].map((el) => el.textContent);
     expect(titles).toEqual(['المبيعات', 'التسويق', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
     expect(within(nav).getByRole('link', { name: 'رسائل العملاء' })).toHaveAttribute('href', `/stores/${a}/messages`);
-    for (const next of ['الكوبونات', 'بكسلات الإعلانات', 'كتالوج المنتجات']) {
+    expect(within(nav).getByRole('link', { name: 'الكوبونات' })).toHaveAttribute('href', `/stores/${a}/coupons`);
+    for (const next of ['بكسلات الإعلانات', 'كتالوج المنتجات']) {
       expect(within(nav).getByText(next).closest('.item')).toHaveAttribute('aria-disabled', 'true');
     }
     // an order's page belongs to the orders screen

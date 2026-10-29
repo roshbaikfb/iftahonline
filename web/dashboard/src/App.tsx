@@ -7,6 +7,8 @@ import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
 import { Design } from './pages/Design';
+import { CouponEditor } from './pages/CouponEditor';
+import { Coupons } from './pages/Coupons';
 import { Domains } from './pages/Domains';
 import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
@@ -105,6 +107,9 @@ function Gate() {
           <Route path="/stores/:storeId/cod" element={<COD />} />
           <Route path="/stores/:storeId/payments" element={<Payments />} />
           <Route path="/stores/:storeId/messages" element={<Messages />} />
+          <Route path="/stores/:storeId/coupons" element={<Coupons />} />
+          <Route path="/stores/:storeId/coupons/new" element={<CouponEditor />} />
+          <Route path="/stores/:storeId/coupons/:couponId" element={<CouponEditor key="edit" />} />
           <Route path="/stores/:storeId/messages/log" element={<MessageLog />} />
           <Route path="/stores/:storeId/gateways" element={<Gateways />} />
           <Route path="*" element={<Navigate to="/" replace />} />
