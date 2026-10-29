@@ -229,6 +229,13 @@ type InventoryLevel struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type MarketingSetting struct {
+	StoreID   pgtype.UUID
+	Consent   string
+	Version   int32
+	UpdatedAt pgtype.Timestamptz
+}
+
 type MerchantNotification struct {
 	StoreID   pgtype.UUID
 	ID        pgtype.UUID
@@ -706,6 +713,20 @@ type StorePage struct {
 	Sections    []byte
 	Body        string
 	Status      string
+	Version     int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type StorePixel struct {
+	StoreID     pgtype.UUID
+	Provider    string
+	ID          pgtype.UUID
+	PixelID     string
+	Label       string
+	TestCode    string
+	Enabled     bool
+	ServerToken []byte
 	Version     int32
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
