@@ -170,6 +170,9 @@ type StorefrontImage struct {
 	Width      int // of the master
 	Height     int
 	Renditions []Rendition // every format × size, smallest first per format
+	// FeedURL is the image for product feeds (a JPEG up to
+	// media.FeedSize), on StorefrontQuery.Feed pages only.
+	FeedURL string
 }
 
 // Rendition is one delivery URL with the pixel size it is served at.
@@ -210,6 +213,8 @@ type StorefrontQuery struct {
 	CategoryID *ulid.ID
 	Cursor     string
 	Limit      int
+	// Feed fills each image's FeedURL (a product feed's page).
+	Feed bool
 }
 
 // StorefrontPage is one page of products.
@@ -239,7 +244,7 @@ func (s *Storefront) ProductBySlug(ctx context.Context, productSlug string) (Sto
 	if err != nil {
 		return StorefrontProduct{}, notFound(err, ErrProductNotFound)
 	}
-	v := s.view(p)
+	v := s.view(p, false)
 	if len(v.Variants) == 0 {
 		return StorefrontProduct{}, ErrProductNotFound // every variant hidden: nothing to sell or price
 	}
@@ -273,7 +278,7 @@ func (s *Storefront) ProductsByIDs(ctx context.Context, ids []ulid.ID) ([]Storef
 	if err != nil {
 		return nil, err
 	}
-	return s.views(ps), nil
+	return s.views(ps, false), nil
 }
 
 // ListProducts returns a page of active products in a constant number of
@@ -289,7 +294,7 @@ func (s *Storefront) ListProducts(ctx context.Context, q StorefrontQuery) (Store
 	if err != nil {
 		return StorefrontPage{}, err
 	}
-	return StorefrontPage{Items: s.views(page.Items), NextCursor: page.NextCursor}, nil
+	return StorefrontPage{Items: s.views(page.Items, q.Feed), NextCursor: page.NextCursor}, nil
 }
 
 // SellableVariants is Service.SellableVariants for the storefront role
@@ -308,17 +313,18 @@ func (s *Storefront) Categories(ctx context.Context) ([]domain.Category, error) 
 	return out, err
 }
 
-func (s *Storefront) views(ps []domain.Product) []StorefrontProduct {
+// views are ps as shoppers see them; feed adds the feed images.
+func (s *Storefront) views(ps []domain.Product, feed bool) []StorefrontProduct {
 	out := make([]StorefrontProduct, 0, len(ps))
 	for _, p := range ps {
-		if v := s.view(p); len(v.Variants) > 0 { // a product without shown variants cannot be sold or priced
+		if v := s.view(p, feed); len(v.Variants) > 0 { // a product without shown variants cannot be sold or priced
 			out = append(out, v)
 		}
 	}
 	return out
 }
 
-func (s *Storefront) view(p domain.Product) StorefrontProduct {
+func (s *Storefront) view(p domain.Product, feed bool) StorefrontProduct {
 	v := StorefrontProduct{
 		ID: p.ID, Slug: p.Slug, Title: p.Title, Description: p.Description, Options: p.Options,
 		CategoryIDs: p.CategoryIDs, Sample: p.Sample, UpdatedAt: p.UpdatedAt,
@@ -339,14 +345,17 @@ func (s *Storefront) view(p domain.Product) StorefrontProduct {
 	}
 	for _, img := range p.Images {
 		if img.Status == domain.ImageReady {
-			v.Images = append(v.Images, s.image(img))
+			v.Images = append(v.Images, s.image(img, feed))
 		}
 	}
 	return v
 }
 
-func (s *Storefront) image(img domain.Image) StorefrontImage {
+func (s *Storefront) image(img domain.Image, feed bool) StorefrontImage {
 	out := StorefrontImage{Alt: img.Alt, Width: img.Width, Height: img.Height}
+	if feed {
+		out.FeedURL = s.signer.URL(img.ObjectKey, media.FeedSize, media.FeedFormat)
+	}
 	for _, f := range media.Formats() {
 		last := 0
 		for _, p := range media.Presets() {
