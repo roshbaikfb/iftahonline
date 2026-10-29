@@ -41,7 +41,8 @@ Checkout starts on card when the store chose it and takes cards
 delivery.
 
 The module consumes `catalog.product.changed`, `catalog.product.deleted`,
-`catalog.category.changed`, `catalog.size_chart.changed`, `payments.connection.changed`, `payments.settings.changed` and its own
+`catalog.category.changed`, `catalog.size_chart.changed`, `payments.connection.changed`, `payments.settings.changed`,
+`marketing.pixels.changed`, `marketing.feed.changed` (purge only: the feeds) and its own
 two events: the subscriber
 `storefront.invalidate_pages` publishes the store ID on the Redis
 channel `storefront:invalidate`, and every storefront instance drops that
@@ -287,6 +288,23 @@ When an order is placed, `Visit` carries:
 
 Orders keep the UTM on the order and the rest in `order_signals`, for
 one month.
+
+**Product feeds** (ADR-0044, `internal/web/feed.go`).
+`/feeds/google.xml?key=…` and `/feeds/meta.xml?key=…` serve the store's
+products as RSS 2.0 with Google's `g:` elements, one item per variant,
+for Google Merchant Center and Meta Commerce Manager:
+- **The key.** It is checked with `marketing.Feeds.FeedAllowed` before
+  anything is read. A wrong or missing key, feeds that are off, and an
+  unknown feed are all a `no-store` 404. Checks are rate-limited per IP
+  (`feed:ip:`, 20 a minute).
+- **Streaming.** The feed streams a catalog page at a time
+  (`StorefrontQuery.Feed`: the same products, with each picture's JPEG),
+  gzipped when the client takes it. A failure on the first page is a
+  503; a later one aborts the response.
+- **Edge cache.** One hour (`s-maxage=3600`), tagged `s-`, `l-` and
+  `f-<store>`. `marketing.feed.changed` purges `f-`.
+- **The product page.** It opens on the variant `?variant=<id>` names
+  (`app.js`): the feeds link each item there.
 
 ## Section types
 

@@ -81,6 +81,9 @@ func TestPurgeTags(t *testing.T) {
 		{"pixels changed", delivery(t, store, marketing.EventPixelsChanged, func(m event.Meta) event.Event {
 			return marketing.PixelsChanged{Meta: m, Provider: marketing.Meta}
 		}), []string{"s-" + s}}, // every page loads the store's tags
+		{"feed key changed", delivery(t, store, marketing.EventFeedChanged, func(m event.Meta) event.Event {
+			return marketing.FeedChanged{Meta: m}
+		}), []string{"f-" + s}}, // the feeds under the old key
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -239,6 +239,11 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(marketing.EventPixelsChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
 		return clients{}, err
 	}
+	// The product feeds' key changed: the edge's copies under the old one
+	// go (ADR-0044).
+	if err = bus.Subscribe(marketing.EventFeedChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
+		return clients{}, err
+	}
 	watch := &lateHandler{}
 	if err = bus.Subscribe(orders.EventOrderPlaced, payments.WatchOrdersSubscriber, watch.Handle); err != nil {
 		return clients{}, err
@@ -691,7 +696,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(),
+		Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(), Feeds: mkt.Feeds(),
 		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,

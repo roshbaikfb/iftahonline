@@ -49,6 +49,9 @@ type fakeCatalog struct {
 	products []catalog.StorefrontProduct // newest first
 	cats     []catalog.Category
 	calls    map[string]int
+	// listErr fails the ListProducts calls after the first failList.
+	listErr  error
+	failList int
 }
 
 func (c *fakeCatalog) count(name string) {
@@ -88,9 +91,20 @@ func (c *fakeCatalog) ProductsByIDs(_ context.Context, ids []ulid.ID) ([]catalog
 
 func (c *fakeCatalog) ListProducts(_ context.Context, q catalog.StorefrontQuery) (catalog.StorefrontPage, error) {
 	c.count("list")
+	if c.listErr != nil && c.calls0("list") > c.failList {
+		return catalog.StorefrontPage{}, c.listErr
+	}
 	var items []catalog.StorefrontProduct
 	for _, p := range c.products {
 		if q.CategoryID == nil || containsID(p.CategoryIDs, *q.CategoryID) {
+			if q.Feed { // the feed's JPEG, as the catalog signs it
+				imgs := make([]catalog.StorefrontImage, len(p.Images))
+				for i, img := range p.Images {
+					img.FeedURL = "https://img.test/" + p.Slug + "-" + strconv.Itoa(i) + ".jpg"
+					imgs[i] = img
+				}
+				p.Images = imgs
+			}
 			items = append(items, p)
 		}
 	}
