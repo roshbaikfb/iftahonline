@@ -20,19 +20,25 @@ fetched 2026-10-20; licenses from `github.com/google/fonts/ofl/<family>`.
 The theme font `ibm-plex-sans-arabic` is served as Iftah Sans Arabic.
 
 - **Arabic files.** They are IBM Plex Sans Arabic (© IBM Corp.), modified
-  by `scripts/build-iftah-sans.py` from the Fontsource files above. The
-  script:
-  - keeps the Arabic block, the joiners, punctuation and digits, and
-    every layout feature;
-  - drops the Arabic Supplement, the presentation forms and the hinting.
+  by `scripts/build-iftah-sans.py` from the Google Fonts release
+  (`github.com/google/fonts/tree/main/ofl/ibmplexsansarabic`, fetched
+  2026-10-29). The script:
+  - keeps the Arabic letters, marks and digits Egyptian and Gulf stores
+    type, ASCII and the common symbols, and every layout feature;
+  - drops the rest of the Arabic block, the presentation forms and the
+    hinting.
 
-  That takes each weight from 43 KB to 22 KB, which keeps the
-  storefront's LCP within its 1.5 s budget on a slow phone network.
+  Each weight is 24 KB. Because the Arabic files hold ASCII, a page in
+  either language needs only these two files (the stylesheet declares
+  the Arabic face after the Latin one, so it wins where they overlap,
+  and both are preloaded): a phone on a slow network fetches two fonts,
+  not four, before the largest paint.
 - **The name.** The license reserves the name "Plex" for the original,
   so the modified fonts are named "Iftah Sans Arabic" in every name
   record. They keep IBM's copyright notice and the license, and credit
   the original in their description.
 - **Latin files.** They are Fontsource's unmodified files, renamed on
   disk to share the family's prefix.
-- **What is outside the subset.** A character outside the subset (rare
-  in Egyptian and Gulf stores) falls back to the system font.
+- **What is outside the subset.** A Latin character outside ASCII (an
+  accented letter) comes from the Latin file; any other character falls
+  back to the system font.

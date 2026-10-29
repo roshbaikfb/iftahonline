@@ -63,6 +63,13 @@ theme, their page sections and the catalog's read side (ADR-0015).
      Arabic, Noto Kufi Arabic; OFL), in Arabic and Latin subsets. Only
      the theme's font is declared, and its regular weight in the
      shopper's script is preloaded. The `system` font downloads nothing.
+     *Amended 2026-10-29:* both weights in the shopper's script are
+     preloaded (headings and labels are bold, and a face found only in
+     the stylesheet cost the largest paint a round trip). Iftah Sans
+     Arabic's Arabic files also hold ASCII and the common symbols, and
+     their face is declared after the Latin one, so a page in either
+     language fetches two font files, not four. Late Latin files had
+     made the Lighthouse LCP swing between 1.35 s and 1.5 s.
    - Scripts and fonts are embedded in the binary under content-hashed
      names and served with `immutable` caching. esbuild (a Go tool,
      build time only) minifies the sources at `make gen`.

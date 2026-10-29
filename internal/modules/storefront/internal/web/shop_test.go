@@ -855,6 +855,47 @@ func TestSystemFontDownloadsNothing(t *testing.T) {
 	}
 }
 
+// TestFontPreload: a page preloads both weights it paints with, so a
+// bold heading never waits for a face found only in the stylesheet.
+// Iftah Sans's Arabic files hold ASCII too: every page needs only them,
+// and their face comes after the Latin one so it wins the overlap.
+func TestFontPreload(t *testing.T) {
+	t.Parallel()
+	preloads := regexp.MustCompile(`<link rel="preload" href="/assets/([a-z-]+-\d00)\.[0-9a-f]{8}\.woff2"`)
+	for _, tc := range []struct {
+		font domain.Font
+		path string
+		want string
+	}{
+		{domain.FontPlexArabic, "/", "iftah-sans-arabic-arabic-400 iftah-sans-arabic-arabic-700"},
+		{domain.FontPlexArabic, "/en/", "iftah-sans-arabic-arabic-400 iftah-sans-arabic-arabic-700"},
+		{domain.FontCairo, "/", "cairo-arabic-400 cairo-arabic-700"},
+		{domain.FontCairo, "/en/", "cairo-latin-400 cairo-latin-700"},
+	} {
+		t.Run(string(tc.font)+tc.path, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t)
+			f.content.shop.Theme.Font = tc.font
+			body := f.get(t, tc.path).Body.String()
+			var got []string
+			for _, m := range preloads.FindAllStringSubmatch(body, -1) {
+				got = append(got, m[1])
+			}
+			if strings.Join(got, " ") != tc.want {
+				t.Fatalf("preloads %v, want %s", got, tc.want)
+			}
+		})
+	}
+
+	f := newFixture(t)
+	_, css, _ := strings.Cut(f.get(t, "/").Body.String(), "<style>")
+	latin := strings.Index(css, "url(/assets/iftah-sans-arabic-latin-400.")
+	arabic := strings.Index(css, "url(/assets/iftah-sans-arabic-arabic-400.")
+	if latin < 0 || arabic < latin || !strings.Contains(css[arabic:], "unicode-range:U+0600-06FF") || !strings.Contains(css[arabic:], ",U+0020-007E,") {
+		t.Fatal("the Arabic face must follow the Latin one and cover ASCII")
+	}
+}
+
 func TestEdgeTTLAndTags(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, func(d *web.Deps) { d.EdgeTTL = 10 * time.Minute })
