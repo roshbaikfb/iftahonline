@@ -22,7 +22,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 | `ErrReservationRefUsed` | The ref already holds a different set of lines |
 | `Storefront.ProductBySlug(ctx, slug)` | The active product at `slug` with its size chart (`SizeChart`, one more query when it has one; [ADR-0035](../adr/0035-size-charts-and-option-colours.md)), variants (`Available`, and `Left`: the units left only when there are 1 to `MaxShownLeft` (10), never higher counts) and signed image renditions, or `ErrProductNotFound`; a malformed slug costs no query |
 | `Storefront.ProductsByIDs(ctx, ids)` | Active products among `ids` in the given order (≤ `MaxStorefrontIDs` = 50), others skipped |
-| `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48 |
+| `Storefront.ListProducts(ctx, q)` | Active products newest first, optional category, cursor, ≤ `MaxStorefrontLimit` = 48; with `q.Feed` each image also carries `FeedURL`, a signed JPEG at 1600 px for product feeds (ADR-0044) |
 | `Storefront.Categories(ctx)` | The category tree, by position |
 | `Storefront.Search(ctx, q)` | Shoppers' search: active products matching the text (≤ 100 characters, normalized), 24 a page, ≤ 20 pages, in the index's order, read from the database in one query; `ErrSearchUnavailable` without a search key (ADR-0033) |
 | `Storefront.SellableVariants(ctx, ids)` | A cart's variants in one query, with the product's first ready picture (`ImageKey`) for thumbnails |

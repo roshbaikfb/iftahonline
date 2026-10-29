@@ -24,6 +24,13 @@ func Presets() []Preset {
 // <picture>, so the CDN never varies on Accept.
 func Formats() []string { return []string{"avif", "webp"} }
 
+// Product feeds' images (ADR-0044): the largest preset as a JPEG, the one
+// format every ad platform's catalog takes.
+const (
+	FeedFormat = "jpg"
+	FeedSize   = 1600
+)
+
 // Signer builds signed imgproxy URLs for masters in one bucket. imgproxy
 // refuses unsigned or altered URLs, so nobody can make it resize
 // arbitrary sources or sizes.

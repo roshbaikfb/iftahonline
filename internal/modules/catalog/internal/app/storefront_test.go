@@ -7,6 +7,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -91,6 +92,30 @@ func TestStorefrontProductBySlug(t *testing.T) {
 	}
 	if r := im.Renditions[7]; r.Format != "webp" || r.Width != 1000 || r.Height != 500 {
 		t.Fatalf("last rendition %+v (large preset must not enlarge)", r)
+	}
+	if im.FeedURL != "" {
+		t.Fatalf("a page's image carries a feed URL: %q", im.FeedURL)
+	}
+	// A feed's page: the same products, each image with its JPEG.
+	feed, err := sf.ListProducts(ctx, app.StorefrontQuery{Limit: 10, Feed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fp := range feed.Items {
+		if fp.ID == p.ID && (len(fp.Images) != 1 || fp.Images[0].FeedURL != (fakeSigner{}).URL(key, media.FeedSize, media.FeedFormat)) {
+			t.Fatalf("feed images %+v", fp.Images)
+		}
+	}
+	plain, err := sf.ListProducts(ctx, app.StorefrontQuery{Limit: 10})
+	if err != nil || len(plain.Items) != len(feed.Items) {
+		t.Fatalf("list %+v %v", plain.Items, err)
+	}
+	for _, pp := range plain.Items {
+		for _, img := range pp.Images {
+			if img.FeedURL != "" {
+				t.Fatalf("a page's list carries feed URLs: %+v", pp.Images)
+			}
+		}
 	}
 
 	// Not shown: drafts, archived, deleted, other stores, malformed slugs.
