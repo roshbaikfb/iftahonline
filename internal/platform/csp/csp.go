@@ -14,7 +14,7 @@ const API = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-a
 // keeps them cacheable, since the same page always has the same hash
 // (ADR-0018).
 func Storefront(styleHashes ...string) string {
-	return storefront("", styleHashes)
+	return StorefrontWith(Sources{}, styleHashes...)
 }
 
 // turnstile is Cloudflare Turnstile's origin.
@@ -24,31 +24,65 @@ const turnstile = "https://challenges.cloudflare.com"
 // and frame, for the one private response that shows a challenge
 // (ADR-0022). Cached pages never carry it.
 func StorefrontChallenge(styleHashes ...string) string {
-	return storefront(turnstile, styleHashes)
+	return StorefrontWith(Sources{Script: []string{turnstile}, Frame: []string{turnstile}}, styleHashes...)
 }
 
-func storefront(extra string, styleHashes []string) string {
+// Sources are third-party origins a page may load scripts from, send
+// requests to and frame: a store's ad pixels (ADR-0043), or Turnstile.
+type Sources struct {
+	Script, Connect, Frame []string
+}
+
+// StorefrontWith is Storefront plus src. Each source must be a plain
+// https origin (wildcard host allowed); anything else is dropped, so a
+// source can never end a directive or add a keyword.
+func StorefrontWith(src Sources, styleHashes ...string) string {
 	style := "style-src 'self'"
 	for _, h := range styleHashes {
 		style += " " + h
 	}
-	script, frame := "script-src 'self'", "frame-ancestors 'none'"
 	directives := []string{}
-	if extra != "" {
-		script += " " + extra
-		directives = append(directives, "frame-src "+extra)
+	if frame := origins(src.Frame); frame != "" {
+		directives = append(directives, "frame-src"+frame)
 	}
 	return strings.Join(append([]string{
 		"default-src 'self'",
-		script,
+		"script-src 'self'" + origins(src.Script),
 		style,
 		"img-src 'self' https: data:",
 		"font-src 'self'",
-		"connect-src 'self'",
+		"connect-src 'self'" + origins(src.Connect),
 		"object-src 'none'",
 		"base-uri 'none'",
 		"form-action 'self'",
-		frame,
+		"frame-ancestors 'none'",
 		"upgrade-insecure-requests",
 	}, directives...), "; ")
+}
+
+// origins joins the plain https origins of list, each after a space.
+func origins(list []string) string {
+	var b strings.Builder
+	for _, o := range list {
+		if plainOrigin(o) {
+			b.WriteString(" " + o)
+		}
+	}
+	return b.String()
+}
+
+// plainOrigin reports whether o is "https://" and a host of letters,
+// digits, dots and dashes, optionally starting with "*.".
+func plainOrigin(o string) bool {
+	host, ok := strings.CutPrefix(o, "https://")
+	host = strings.TrimPrefix(host, "*.")
+	if !ok || host == "" {
+		return false
+	}
+	for _, r := range host {
+		if ok := r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '-'; !ok {
+			return false
+		}
+	}
+	return true
 }
