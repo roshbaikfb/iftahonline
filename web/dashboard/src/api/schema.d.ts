@@ -2751,6 +2751,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/coupons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's coupons, newest first
+         * @description Permission: promotions.manage.
+         */
+        get: operations["listCoupons"];
+        put?: never;
+        /**
+         * Add a coupon
+         * @description Permission: promotions.manage. The code is stored in upper case; 409 when another coupon has it.
+         */
+        post: operations["createCoupon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/coupons/{coupon_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                coupon_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A coupon
+         * @description Permission: promotions.manage.
+         */
+        get: operations["getCoupon"];
+        /**
+         * Change a coupon's terms
+         * @description Permission: promotions.manage. Every field is replaced. The code
+         *     cannot change once an order held the coupon (409).
+         */
+        put: operations["updateCoupon"];
+        post?: never;
+        /**
+         * Delete a coupon no order held
+         * @description Permission: promotions.manage. 409 when an order held it: turn it off instead.
+         */
+        delete: operations["deleteCoupon"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -3544,9 +3602,16 @@ export interface components {
             payment_status: "unpaid" | "awaiting" | "paid" | "partially_refunded" | "refunded";
             /**
              * Format: int64
-             * @description subtotal + shipping + COD fee.
+             * @description subtotal − discount + shipping + COD fee.
              */
             total_minor: number;
+            /**
+             * Format: int64
+             * @description The coupon's discount, off the items (ADR-0042); 0 without one.
+             */
+            discount_minor?: number;
+            /** @description The coupon the order took. */
+            coupon_code?: string;
             item_count: number;
             /** Format: date-time */
             created_at: string;
@@ -3649,6 +3714,8 @@ export interface components {
             address: string;
             /** @default  */
             notes: string;
+            /** @description A coupon to apply (ADR-0042); 422 on coupon_code when it does not. */
+            coupon_code?: string;
             lines: {
                 variant_id: components["schemas"]["ULID"];
                 qty: number;
@@ -4436,6 +4503,45 @@ export interface components {
             /** Format: int64 */
             unread: number;
             next_cursor?: string;
+        };
+        CouponInput: {
+            /**
+             * @description A-Z, 0-9, - and _; any case.
+             * @example SUMMER10
+             */
+            code: string;
+            /** @enum {string} */
+            kind: "percent" | "fixed" | "free_shipping";
+            /** @description For percent. */
+            percent?: number;
+            /**
+             * Format: int64
+             * @description For fixed: off the items, at most their subtotal; in the store's currency.
+             */
+            amount_minor?: number;
+            /**
+             * Format: int64
+             * @description The least items' subtotal it applies to.
+             */
+            min_subtotal_minor?: number;
+            /** @description Uses by every customer; absent is no bound. */
+            max_uses?: number;
+            /** @description Uses by one phone number; absent is no bound. */
+            max_per_customer?: number;
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            active: boolean;
+        };
+        Coupon: components["schemas"]["CouponInput"] & {
+            id: components["schemas"]["ULID"];
+            /** @description Orders holding it. */
+            uses: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -8226,6 +8332,132 @@ export interface operations {
                         marked: number;
                     };
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCoupons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every coupon (a store keeps tens). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Coupon"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponInput"];
+            };
+        };
+        responses: {
+            /** @description The coupon. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                coupon_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The coupon. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                coupon_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponInput"];
+            };
+        };
+        responses: {
+            /** @description The coupon. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                coupon_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

@@ -130,6 +130,15 @@ tags:
       WhatsApp sends the platform's approved templates; the store writes
       its own SMS texts. Reading needs messaging.read, writing texts
       messaging.manage.
+  - name: promotions
+    description: |
+      The store's coupons (ADR-0042). A coupon takes a percent or a fixed
+      amount off the items, or waives the delivery rate; it may need a
+      minimum subtotal, open and close at set times, and be limited in
+      uses (in all, and per customer). An order takes one coupon, in the
+      transaction that places it; an order cancelled before it ships
+      gives its use back. A coupon an order held keeps its code and
+      cannot be deleted, only turned off. Permission: promotions.manage.
   - name: onboarding
     description: |
       The new store's setup wizard (ADR-0034). Signing up opens it; the
@@ -3098,6 +3107,93 @@ paths:
                   marked: { type: integer, format: int64 }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/coupons:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [promotions]
+      operationId: listCoupons
+      summary: The store's coupons, newest first
+      description: "Permission: promotions.manage."
+      responses:
+        "200":
+          description: Every coupon (a store keeps tens).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Coupon" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [promotions]
+      operationId: createCoupon
+      summary: Add a coupon
+      description: "Permission: promotions.manage. The code is stored in upper case; 409 when another coupon has it."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CouponInput" }
+      responses:
+        "201":
+          description: The coupon.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Coupon" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/coupons/{coupon_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: coupon_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    get:
+      tags: [promotions]
+      operationId: getCoupon
+      summary: A coupon
+      description: "Permission: promotions.manage."
+      responses:
+        "200":
+          description: The coupon.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Coupon" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [promotions]
+      operationId: updateCoupon
+      summary: Change a coupon's terms
+      description: |
+        Permission: promotions.manage. Every field is replaced. The code
+        cannot change once an order held the coupon (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CouponInput" }
+      responses:
+        "200":
+          description: The coupon.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Coupon" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [promotions]
+      operationId: deleteCoupon
+      summary: Delete a coupon no order held
+      description: "Permission: promotions.manage. 409 when an order held it: turn it off instead."
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -4115,7 +4211,9 @@ components:
           type: string
           enum: [unpaid, awaiting, paid, partially_refunded, refunded]
           description: COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
-        total_minor: { type: integer, format: int64, description: subtotal + shipping + COD fee. }
+        total_minor: { type: integer, format: int64, description: subtotal − discount + shipping + COD fee. }
+        discount_minor: { type: integer, format: int64, description: "The coupon's discount, off the items (ADR-0042); 0 without one." }
+        coupon_code: { type: string, description: The coupon the order took. }
         item_count: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -4215,6 +4313,7 @@ components:
         city: { type: string, maxLength: 80, example: سموحة }
         address: { type: string, maxLength: 300 }
         notes: { type: string, maxLength: 500, default: "" }
+        coupon_code: { type: string, maxLength: 32, description: "A coupon to apply (ADR-0042); 422 on coupon_code when it does not." }
         lines:
           type: array
           minItems: 1
@@ -5064,6 +5163,30 @@ components:
           items: { $ref: "#/components/schemas/Notification" }
         unread: { type: integer, format: int64 }
         next_cursor: { type: string }
+    CouponInput:
+      type: object
+      required: [code, kind, active]
+      properties:
+        code: { type: string, minLength: 3, maxLength: 32, example: SUMMER10, description: "A-Z, 0-9, - and _; any case." }
+        kind: { type: string, enum: [percent, fixed, free_shipping] }
+        percent: { type: integer, minimum: 1, maximum: 100, description: For percent. }
+        amount_minor: { type: integer, format: int64, minimum: 1, description: "For fixed: off the items, at most their subtotal; in the store's currency." }
+        min_subtotal_minor: { type: integer, format: int64, minimum: 0, description: The least items' subtotal it applies to. }
+        max_uses: { type: integer, minimum: 1, description: Uses by every customer; absent is no bound. }
+        max_per_customer: { type: integer, minimum: 1, description: Uses by one phone number; absent is no bound. }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        active: { type: boolean }
+    Coupon:
+      allOf:
+        - $ref: "#/components/schemas/CouponInput"
+        - type: object
+          required: [id, uses, created_at, updated_at]
+          properties:
+            id: { $ref: "#/components/schemas/ULID" }
+            uses: { type: integer, description: Orders holding it. }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
     WebhookReceipt:
       type: object
       required: [status]

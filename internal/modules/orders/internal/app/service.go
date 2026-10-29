@@ -65,6 +65,73 @@ type Shipping interface {
 	Quote(ctx context.Context, req shipping.QuoteRequest) (shipping.Quote, error)
 }
 
+// Coupons is what orders use of promotions (ADR-0042); cmd/platform
+// adapts the promotions module to it. A code that does not apply is a
+// *CouponRejected.
+type Coupons interface {
+	// Preview is what code would take off items costing subtotal.
+	Preview(ctx context.Context, code string, subtotal money.Money) (CouponDiscount, error)
+	// RedeemTx takes code's use for an order of customer, in tx.
+	RedeemTx(ctx context.Context, tx pgx.Tx, code string, subtotal money.Money, customer, order ulid.ID) (CouponDiscount, error)
+}
+
+// CouponDiscount is what a coupon takes off an order: Amount off the
+// items, and the delivery rate when FreeShipping.
+type CouponDiscount struct {
+	Amount       money.Money
+	FreeShipping bool
+}
+
+// CouponRejected is a code that does not apply: Reason as promotions
+// names it (not_found, inactive, not_started, expired, min_subtotal,
+// used_up, per_customer).
+type CouponRejected struct {
+	Reason           string
+	MinSubtotalMinor int64
+}
+
+func (e *CouponRejected) Error() string { return "orders: coupon rejected: " + e.Reason }
+
+// couponMessages say why a code does not apply, for the field error.
+var couponMessages = map[string]string{ //nolint:gochecknoglobals // constant table
+	"inactive": "this code is not active", "not_started": "this code is not valid yet", "expired": "this code has expired",
+	"min_subtotal": "the order is below this code's minimum", "used_up": "this code has been used up",
+	"per_customer": "you have already used this code",
+}
+
+// couponError turns a rejected code into the order's field error; other
+// errors pass through.
+func couponError(err error) error {
+	var r *CouponRejected
+	if !errors.As(err, &r) {
+		return err
+	}
+	msg, ok := couponMessages[r.Reason]
+	if !ok {
+		r.Reason, msg = "not_found", "this code does not exist"
+	}
+	return errs.Validation(errs.FieldError{Field: "coupon_code", Code: r.Reason, Message: msg})
+}
+
+// errCouponChanged: the coupon's terms changed between the order's
+// quote and its placing; the shopper submits again.
+var errCouponChanged = errs.Validation(errs.FieldError{Field: "coupon_code", Code: "changed", Message: "this code changed; submit again"})
+
+// previewCoupon is what the order's code takes off; nil without a code.
+func (s *Service) previewCoupon(ctx context.Context, code string, subtotal money.Money) (*CouponDiscount, error) {
+	if code == "" {
+		return nil, nil
+	}
+	if s.coupons == nil {
+		return nil, couponError(&CouponRejected{Reason: "not_found"})
+	}
+	d, err := s.coupons.Preview(ctx, code, subtotal)
+	if err != nil {
+		return nil, couponError(err)
+	}
+	return &d, nil
+}
+
 // StoreInfo is what orders need to know about the store in ctx.
 type StoreInfo struct {
 	Currency money.Currency
@@ -85,6 +152,7 @@ type Service struct {
 	catalog   Catalog
 	customers Customers
 	shipping  Shipping
+	coupons   Coupons
 	stores    StoreSource
 	auth      authz.Authorizer
 	now       func() time.Time
@@ -101,7 +169,9 @@ type Deps struct {
 	// Shipping quotes the delivery rate and COD fee; nil charges nothing
 	// (tests that are not about money).
 	Shipping Shipping
-	Stores   StoreSource
+	// Coupons applies coupon codes; nil makes every code not_found.
+	Coupons Coupons
+	Stores  StoreSource
 	// Auth checks each transition's own permission (domain.Step).
 	Auth authz.Authorizer
 }
@@ -115,7 +185,7 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
-		shipping: d.Shipping, stores: d.Stores, auth: d.Auth, now: time.Now}
+		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, now: time.Now}
 }
 
 // SetClock replaces the clock (tests of the duplicate window).
@@ -173,12 +243,12 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 	if blocked {
 		return Placement{}, customers.ErrCustomerBlocked
 	}
-	o, err := s.price(ctx, d, info.Currency)
+	o, coupon, err := s.price(ctx, d, info.Currency)
 	if err != nil {
 		return Placement{}, err
 	}
 
-	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.placeTx(ctx, tx, d, &o) })
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.placeTx(ctx, tx, d, &o, coupon) })
 	var placed errAlreadyPlaced
 	switch {
 	case errors.As(err, &placed) && placed.duplicate:
@@ -193,7 +263,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 	return Placement{Order: o}, nil
 }
 
-func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *domain.Order) error {
+func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *domain.Order, coupon *CouponDiscount) error {
 	if d.Source == domain.SourceStorefront {
 		if err := store.LockPhone(ctx, tx, d.Contact.Phone); err != nil {
 			return err
@@ -223,6 +293,18 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 		return err
 	}
 	o.CustomerID = c.ID
+	if coupon != nil {
+		// The code's use is taken under the coupon's lock, now that the
+		// customer is known (the per-customer limit); terms that changed
+		// since the quote send the shopper back.
+		got, rErr := s.coupons.RedeemTx(ctx, tx, d.CouponCode, o.Subtotal, c.ID, o.ID)
+		if rErr != nil {
+			return couponError(rErr)
+		}
+		if got.Amount.Amount() != coupon.Amount.Amount() || got.FreeShipping != coupon.FreeShipping {
+			return errCouponChanged
+		}
+	}
 	if _, err = s.catalog.ReserveStockTx(ctx, tx, catalog.ReserveRequest{Ref: stockRef(o.ID), Lines: reserveLines(d.Lines), Hold: true}); err != nil {
 		return err
 	}
@@ -264,27 +346,35 @@ func (s *Service) mustReplay(ctx context.Context, d domain.Draft) (Placement, er
 // price builds the order from the catalog's current prices (every line
 // must still be for sale, in the store's currency) and the delivery
 // quote for its address.
-func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency) (domain.Order, error) {
+// The coupon it previews (nil without one) is what placing must redeem.
+func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency) (domain.Order, *CouponDiscount, error) {
 	id := s.ids.New()
 	o := domain.Order{ID: id, Status: domain.StatusPending, Version: 1, Source: d.Source, Contact: d.Contact, CreatedAt: domain.CreatedAtOf(id)}
 	o.UpdatedAt, o.StatusChangedAt = o.CreatedAt, o.CreatedAt
 	var err error
 	if o.Lines, o.Subtotal, o.ItemCount, err = s.priceLines(ctx, d.Lines, cur); err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, nil, err
 	}
-	q, err := s.charges(ctx, d.Contact.Governorate, d.Contact.City, o.Subtotal, d.PaymentMethod)
+	coupon, err := s.previewCoupon(ctx, d.CouponCode, o.Subtotal)
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, nil, err
+	}
+	q, err := s.charges(ctx, d.Contact.Governorate, d.Contact.City, o.Subtotal, d.PaymentMethod, coupon)
+	if err != nil {
+		return domain.Order{}, nil, err
 	}
 	if !q.Deliverable {
-		return domain.Order{}, errNotDelivered
+		return domain.Order{}, nil, errNotDelivered
 	}
-	o.Shipping, o.CODFee, o.Total = q.Shipping, q.CODFee, q.Total
+	o.Shipping, o.CODFee, o.Discount, o.Total = q.Shipping, q.CODFee, q.Discount, q.Total
+	if coupon != nil {
+		o.CouponCode = d.CouponCode
+	}
 	o.PaymentMethod, o.PaymentStatus = d.PaymentMethod, domain.PaymentUnpaid
 	if d.PaymentMethod == domain.PaymentCard {
 		o.PaymentStatus = domain.PaymentAwaiting
 	}
-	return o, nil
+	return o, coupon, nil
 }
 
 // priceLines prices lines from the catalog's current prices.
@@ -336,7 +426,10 @@ func (s *Service) priceLines(ctx context.Context, in []domain.LineInput, cur mon
 // Quote is what an order would cost: its lines at today's prices and
 // its delivery to an address.
 type Quote struct {
-	Subtotal     money.Money
+	Subtotal money.Money
+	// Discount is the coupon's, off the items; CouponCode the code.
+	Discount     money.Money
+	CouponCode   string
 	Shipping     money.Money
 	CODFee       money.Money
 	Total        money.Money
@@ -350,13 +443,22 @@ type Quote struct {
 
 // charges quotes delivering subtotal's order to governorate and city; a
 // card order pays no cash-on-delivery fee.
-func (s *Service) charges(ctx context.Context, governorate, city string, subtotal money.Money, method domain.PaymentMethod) (Quote, error) {
+// A coupon takes its amount off the items, and waives the delivery rate
+// when it gives free shipping (the COD fee stays).
+func (s *Service) charges(ctx context.Context, governorate, city string, subtotal money.Money, method domain.PaymentMethod,
+	coupon *CouponDiscount) (Quote, error) {
 	q := Quote{Subtotal: subtotal, Total: subtotal, Deliverable: true}
 	var err error
 	if q.Shipping, err = money.Zero(subtotal.Currency()); err != nil {
 		return Quote{}, err
 	}
-	q.CODFee = q.Shipping
+	q.CODFee, q.Discount = q.Shipping, q.Shipping
+	if coupon != nil {
+		q.Discount = coupon.Amount
+		if q.Total, err = q.Total.Sub(coupon.Amount); err != nil {
+			return Quote{}, err
+		}
+	}
 	if s.shipping == nil {
 		return q, nil
 	}
@@ -370,6 +472,12 @@ func (s *Service) charges(ctx context.Context, governorate, city string, subtota
 	}
 	q.Shipping, q.FreeShipping = sq.Shipping, sq.FreeShipping
 	q.FreeOverMinor, q.Delivery = sq.FreeOverMinor, sq.Delivery
+	if coupon != nil && coupon.FreeShipping {
+		if q.Shipping, err = money.Zero(subtotal.Currency()); err != nil {
+			return Quote{}, err
+		}
+		q.FreeShipping = true
+	}
 	if method != domain.PaymentCard {
 		q.CODFee = sq.CODFee
 	}
@@ -397,7 +505,15 @@ func (s *Service) Quote(ctx context.Context, in domain.QuoteInput) (Quote, error
 	if err != nil {
 		return Quote{}, err
 	}
-	return s.charges(ctx, q.Governorate, q.City, subtotal, q.PaymentMethod)
+	coupon, err := s.previewCoupon(ctx, q.CouponCode, subtotal)
+	if err != nil {
+		return Quote{}, err
+	}
+	out, err := s.charges(ctx, q.Governorate, q.City, subtotal, q.PaymentMethod, coupon)
+	if coupon != nil {
+		out.CouponCode = q.CouponCode
+	}
+	return out, err
 }
 
 // SetPaymentStatusTx records a card order's payment status on the

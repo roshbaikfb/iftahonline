@@ -26,7 +26,9 @@ The module uses these other modules, each through its `api.go`:
 - `customers.Customers`: recording the customer and refusing blocked
   ones;
 - `shipping.Quoter`: the delivery rate and the COD fee for the order's
-  address ([ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md)).
+  address ([ADR-0025](../adr/0025-shipping-zones-rates-cod-fee.md));
+- `Coupons` (a port `cmd/platform` adapts to promotions): a coupon's
+  discount ([ADR-0042](../adr/0042-coupons.md)).
 
 ## State machine
 
@@ -58,7 +60,7 @@ month on the order's creation time, which its ULID encodes.
 
 | Table | Notes |
 |---|---|
-| `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal + shipping + cod_fee`, all fixed at placement. Indexes per list driver: status, phone, customer. |
+| `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal − discount + shipping + cod_fee`, all fixed at placement; `coupon_code` the coupon taken. Indexes per list driver: status, phone, customer. |
 | `order_items` | Copied titles and prices. Primary key on the order's partition key. |
 | `order_events` | The timeline; append-only. `actor` names a system that made a move (`carrier:bosta`). |
 | `product_sales` | Bestsellers: units per `(store_id, product_id, day)` from confirmed orders, the day being the order's; index `(store_id, day)`; days older than 40 pruned (00037) |
@@ -99,6 +101,13 @@ confirm, order page with moves, CSV export) use this API; see
   the store's zones is a validation error on `governorate`, code
   `not_delivered`. `Shop.Quote` prices an order the same way without
   placing it, for the storefront form.
+- **Coupons** (ADR-0042). An order, or a quote, may name a
+  `coupon_code`. Its discount comes off the items; free shipping waives
+  the rate. The code is previewed when pricing and redeemed in the
+  placing transaction once the customer is known. A code that does not
+  apply is a field error on `coupon_code` with the reason; terms that
+  changed in between are `changed`; nothing is placed. A replayed order
+  redeems nothing.
 
 - **A customer's order history** is `listOrders?customer_id=…`.
 - **Shoppers** (P4c, the storefront) will place orders through the same

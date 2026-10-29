@@ -155,7 +155,8 @@ func (h *Handlers) CreateOrder(ctx context.Context, req CreateOrderRequestObject
 	}
 	b := req.Body
 	in := domain.NewOrder{IdempotencyKey: deref(req.Params.IdempotencyKey), Source: domain.SourceMerchant,
-		Name: b.Name, Phone: b.Phone, Governorate: b.Governorate, City: b.City, Address: b.Address, Notes: deref(b.Notes)}
+		Name: b.Name, Phone: b.Phone, Governorate: b.Governorate, City: b.City, Address: b.Address, Notes: deref(b.Notes),
+		CouponCode: deref(b.CouponCode)}
 	for i, l := range b.Lines {
 		id, err := ulid.Parse(l.VariantId)
 		if err != nil {
@@ -315,7 +316,16 @@ func errorDetail(err error) string {
 
 func toOrder(o domain.Order) Order {
 	c := o.Contact
+	var code *string
+	if o.CouponCode != "" {
+		code = &o.CouponCode
+	}
+	discount := int64(0)
+	if o.Discount.Currency() != "" {
+		discount = o.Discount.Amount()
+	}
 	return Order{
+		DiscountMinor: &discount, CouponCode: code,
 		Id: o.ID.String(), Code: o.Code(), Status: OrderStatus(o.Status), Version: o.Version, Source: OrderSource(o.Source),
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,
 		Address: c.Address, Notes: c.Notes, Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(),

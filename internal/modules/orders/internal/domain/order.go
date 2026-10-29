@@ -109,6 +109,9 @@ type NewOrder struct {
 	Address       string
 	Notes         string
 	Lines         []LineInput
+	// CouponCode is a coupon to apply (promotions decides whether it
+	// does). Optional.
+	CouponCode string
 }
 
 // Draft is a validated NewOrder.
@@ -118,6 +121,7 @@ type Draft struct {
 	PaymentMethod  PaymentMethod
 	Contact        Contact
 	Lines          []LineInput // sorted by variant, no repeats
+	CouponCode     string      // upper case, "" for none
 	// Fingerprint identifies the request: the same key with another
 	// fingerprint is a reused key, not a retry.
 	Fingerprint [32]byte
@@ -171,6 +175,9 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 	add(err)
 	c.Notes, err = text.Clean(in.Notes, "notes", 0, MaxNotesLen)
 	add(err)
+	if d.CouponCode, err = CleanCouponCode(in.CouponCode); err != nil {
+		add(err)
+	}
 
 	lines, lineErrs := validateLines(in.Lines)
 	fields = append(fields, lineErrs...)
@@ -181,6 +188,19 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 	d.LinesHash = hashLines(lines)
 	d.Fingerprint = fingerprint(d)
 	return d, nil
+}
+
+// MaxCouponCodeLen bounds the coupon code a shopper may type.
+const MaxCouponCodeLen = 32
+
+// CleanCouponCode trims and upper-cases a coupon code ("" is none);
+// whether it names a coupon is promotions' question.
+func CleanCouponCode(s string) (string, error) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if len(s) > MaxCouponCodeLen || strings.ContainsAny(s, " \t\r\n") {
+		return "", errs.Validation(errs.FieldError{Field: "coupon_code", Code: "not_found", Message: "this code does not exist"})
+	}
+	return s, nil
 }
 
 // validateLines checks an order's lines and returns them sorted by
@@ -213,6 +233,7 @@ type QuoteInput struct {
 	City          string // may be empty: then the zone's rate applies
 	Lines         []LineInput
 	PaymentMethod PaymentMethod // cod (default) or card: card pays no COD fee
+	CouponCode    string        // optional
 }
 
 // ValidateQuote cleans and checks in for a store in country.
@@ -236,6 +257,9 @@ func ValidateQuote(in QuoteInput, country geo.Country) (QuoteInput, error) {
 		fields = append(fields, e.Fields...)
 	}
 	out.City = city
+	if out.CouponCode, err = CleanCouponCode(in.CouponCode); errors.As(err, &e) {
+		fields = append(fields, e.Fields...)
+	}
 	var lineErrs []errs.FieldError
 	out.Lines, lineErrs = validateLines(in.Lines)
 	fields = append(fields, lineErrs...)
@@ -273,6 +297,9 @@ func fingerprint(d Draft) [32]byte {
 	if d.PaymentMethod != PaymentCOD { // COD fingerprints stay as they were before payment methods
 		h.Write([]byte("payment:" + string(d.PaymentMethod)))
 	}
+	if d.CouponCode != "" { // fingerprints without a coupon stay as they were
+		h.Write([]byte("coupon:" + d.CouponCode))
+	}
 	var out [32]byte
 	copy(out[:], h.Sum(nil))
 	return out
@@ -289,7 +316,9 @@ type Order struct {
 	Subtotal        money.Money
 	Shipping        money.Money // the delivery rate quoted when placed (ADR-0025)
 	CODFee          money.Money // the cash-on-delivery fee quoted when placed (0 for card orders)
-	Total           money.Money // Subtotal + Shipping + CODFee
+	Discount        money.Money // the coupon's, off the items (ADR-0042)
+	CouponCode      string      // the coupon the order took, "" for none
+	Total           money.Money // Subtotal - Discount + Shipping + CODFee
 	PaymentMethod   PaymentMethod
 	PaymentStatus   PaymentStatus
 	ItemCount       int

@@ -47,3 +47,4 @@ supersedes it.
 | [0039](0039-messaging-channels-and-log.md) | Messaging channels, the message log, and WhatsApp's word | Accepted |
 | [0040](0040-order-confirmation-by-message.md) | Order confirmation by message | Accepted |
 | [0041](0041-customer-started-confirmation.md) | Customers confirm on WhatsApp first, and are thanked | Accepted |
+| [0042](0042-coupons.md) | Coupons | Accepted |

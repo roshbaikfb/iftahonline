@@ -249,14 +249,20 @@ type Order struct {
 	// Code Short reference for people (the ID's last 8 characters).
 	//
 	// Example: 7P0R1S2T
-	Code      string    `json:"code"`
-	CreatedAt time.Time `json:"created_at"`
+	Code string `json:"code"`
+
+	// CouponCode The coupon the order took.
+	CouponCode *string   `json:"coupon_code,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 
 	// Currency Example: EGP
 	Currency string `json:"currency"`
 
 	// CustomerId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	CustomerId ULID `json:"customer_id"`
+
+	// DiscountMinor The coupon's discount, off the items (ADR-0042); 0 without one.
+	DiscountMinor *int64 `json:"discount_minor,omitempty"`
 
 	// Governorate Example: EG-C
 	Governorate string `json:"governorate"`
@@ -281,7 +287,7 @@ type Order struct {
 	StatusChangedAt time.Time   `json:"status_changed_at"`
 	SubtotalMinor   int64       `json:"subtotal_minor"`
 
-	// TotalMinor subtotal + shipping + COD fee.
+	// TotalMinor subtotal − discount + shipping + COD fee.
 	TotalMinor int64     `json:"total_minor"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	Version    int       `json:"version"`
@@ -340,6 +346,9 @@ type OrderInput struct {
 
 	// City Example: سموحة
 	City string `json:"city"`
+
+	// CouponCode A coupon to apply (ADR-0042); 422 on coupon_code when it does not.
+	CouponCode *string `json:"coupon_code,omitempty"`
 
 	// Governorate Example: EG-ALX
 	Governorate string `json:"governorate"`

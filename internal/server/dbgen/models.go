@@ -177,6 +177,35 @@ type CodSettlement struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type Coupon struct {
+	StoreID          pgtype.UUID
+	ID               pgtype.UUID
+	Code             string
+	Kind             string
+	Percent          int32
+	AmountMinor      int64
+	MinSubtotalMinor int64
+	MaxUses          pgtype.Int4
+	MaxPerCustomer   pgtype.Int4
+	StartsAt         pgtype.Timestamptz
+	EndsAt           pgtype.Timestamptz
+	Active           bool
+	Uses             int32
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type CouponRedemption struct {
+	StoreID       pgtype.UUID
+	OrderID       pgtype.UUID
+	CouponID      pgtype.UUID
+	CustomerID    pgtype.UUID
+	DiscountMinor int64
+	FreeShipping  bool
+	ReleasedAt    pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
 type Customer struct {
 	ID          pgtype.UUID
 	StoreID     pgtype.UUID
@@ -271,6 +300,8 @@ type Order struct {
 	CodFeeMinor     int64
 	PaymentMethod   string
 	PaymentStatus   string
+	DiscountMinor   int64
+	CouponCode      pgtype.Text
 }
 
 type OrderConfirmation struct {

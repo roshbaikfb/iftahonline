@@ -51,6 +51,14 @@ type (
 	// Quote is what it would cost: subtotal, shipping, COD fee, total.
 	Quote = app.Quote
 
+	// Coupons applies coupon codes (ADR-0042): cmd/platform adapts the
+	// promotions module to it.
+	Coupons = app.Coupons
+	// CouponDiscount is what a coupon takes off an order.
+	CouponDiscount = app.CouponDiscount
+	// CouponRejected is a code that does not apply, with its reason.
+	CouponRejected = app.CouponRejected
+
 	// StoreInfo is what orders need about the store in ctx.
 	StoreInfo = app.StoreInfo
 	// StoreSource provides it; cmd/platform adapts tenancy.

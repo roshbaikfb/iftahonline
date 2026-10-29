@@ -3,11 +3,11 @@
 
 -- name: InsertOrder :exec
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
-                    currency, subtotal_minor, shipping_minor, cod_fee_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at,
-                    payment_method, payment_status)
+                    currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
+                    updated_at, status_changed_at, payment_method, payment_status)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
-        @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @total_minor, @item_count, @lines_hash, @created_at, @created_at,
-        @payment_method, @payment_status);
+        @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @discount_minor, sqlc.narg(coupon_code), @total_minor, @item_count,
+        @lines_hash, @created_at, @created_at, @payment_method, @payment_status);
 
 -- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,
