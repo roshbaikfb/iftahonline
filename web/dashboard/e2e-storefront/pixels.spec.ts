@@ -84,7 +84,8 @@ test('pixels wait for consent, then report the journey with the server’s event
   const { loads, strays } = await standIn(page);
 
   // Nothing loads before the shopper answers.
-  const res = await page.goto(`${store}/p/musk`);
+  // The shopper comes from an ad: app.js keeps its campaign for the order.
+  const res = await page.goto(`${store}/p/musk?utm_source=e2e&utm_campaign=eid&fbclid=IwAR0`);
   expect(res?.headers()['content-security-policy']).toContain('script-src \'self\' https://connect.facebook.net');
   const banner = page.locator('[data-consent]');
   await expect(banner).toBeVisible();
@@ -94,6 +95,11 @@ test('pixels wait for consent, then report the journey with the server’s event
   // Accepting loads every provider once, with the page view and the product.
   await banner.getByRole('button', { name: 'موافق' }).click();
   await expect(banner).toBeHidden();
+  const cookies = Object.fromEntries((await page.context().cookies(store)).map((c) => [c.name, c.value]));
+  expect(cookies.px_c, 'the answer reaches the server').toBe('yes');
+  const source = new URLSearchParams(decodeURIComponent(cookies.ift_src ?? ''));
+  expect([source.get('utm_source'), source.get('utm_campaign'), source.get('fbclid')]).toEqual(['e2e', 'eid', 'IwAR0']);
+  expect(source.get('ts')).toMatch(/^\d{13}$/);
   await expect.poll(async () => (await metaEventIDs(page, 'ViewContent')).length).toBe(1);
   expect(Object.values(loads), 'each tag once; Google Ads and GA4 share gtag').toEqual([1, 1, 1, 1]);
   const all = await calls(page);

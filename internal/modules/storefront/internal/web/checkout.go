@@ -161,7 +161,8 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 		f.values[k] = r.PostForm.Get(k)
 	}
 	req := OrderRequest{Key: f.values["key"], Name: f.values["name"], Phone: f.values["phone"], Governorate: f.values["governorate"],
-		City: f.values["city"], Address: f.values["address"], Notes: f.values["notes"], Coupon: strings.TrimSpace(f.values["coupon"])}
+		City: f.values["city"], Address: f.values["address"], Notes: f.values["notes"], Coupon: strings.TrimSpace(f.values["coupon"]),
+		Visit: s.visit(r, p)}
 
 	var view app.CartView
 	if fromCart {

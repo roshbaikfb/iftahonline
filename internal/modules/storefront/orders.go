@@ -31,6 +31,9 @@ var _ web.Orders = shopOrders{}
 func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (string, error) {
 	in := orders.NewOrder{IdempotencyKey: req.Key, Source: orders.SourceStorefront, PaymentMethod: method(req.Card), Name: req.Name,
 		Phone: req.Phone, Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes, CouponCode: req.Coupon}
+	v := req.Visit
+	in.Attribution = orders.Attribution{Source: v.UTMSource, Medium: v.UTMMedium, Campaign: v.UTMCampaign, Content: v.UTMContent, Term: v.UTMTerm}
+	in.Signals = orders.Signals{FBP: v.FBP, FBC: v.FBC, TTP: v.TTP, TTCLID: v.TTCLID, ScCID: v.ScCID, GCLID: v.GCLID, IP: v.IP, UserAgent: v.UserAgent}
 	for _, l := range req.Lines {
 		in.Lines = append(in.Lines, orders.LineInput{VariantID: l.VariantID, Qty: l.Qty})
 	}

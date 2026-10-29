@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -160,4 +161,55 @@ func takeAdded(w http.ResponseWriter, r *http.Request) (id string, variant ulid.
 		return "", ulid.ID{}, 0, false
 	}
 	return parts[0], variant, qty, true
+}
+
+// Visit is where an order's shopper came from (ADR-0043): the campaign's
+// UTM parameters, and, on a store whose pixels may run for this shopper,
+// the ad providers' cookies and click IDs, the IP address and the user
+// agent. Orders clean every field; none is required.
+type Visit struct {
+	UTMSource, UTMMedium, UTMCampaign, UTMContent, UTMTerm string
+	FBP, FBC, TTP, TTCLID, ScCID, GCLID                    string
+	IP, UserAgent                                          string
+}
+
+// Cookies the browser keeps for the order: app.js writes sourceCookie
+// from the landing URL (pages are cached, so the server never sees it);
+// px.js writes consentCookie with the shopper's answer.
+const (
+	sourceCookie  = "ift_src"
+	consentCookie = "px_c"
+)
+
+// visit reads the order's Visit from the request.
+func (s *Shop) visit(r *http.Request, p *pageCtx) Visit {
+	src := url.Values{}
+	if c, err := r.Cookie(sourceCookie); err == nil {
+		if raw, unErr := url.QueryUnescape(c.Value); unErr == nil {
+			if q, qErr := url.ParseQuery(raw); qErr == nil {
+				src = q
+			}
+		}
+	}
+	v := Visit{UTMSource: src.Get("utm_source"), UTMMedium: src.Get("utm_medium"), UTMCampaign: src.Get("utm_campaign"),
+		UTMContent: src.Get("utm_content"), UTMTerm: src.Get("utm_term")}
+	if !p.v.hasPixels() {
+		return v // no provider to send them to: keep none
+	}
+	if c, err := r.Cookie(consentCookie); p.v.askConsent && (err != nil || c.Value != "yes") {
+		return v // not agreed (or not asked yet)
+	}
+	cookie := func(name string) string {
+		if c, err := r.Cookie(name); err == nil {
+			return c.Value
+		}
+		return ""
+	}
+	v.FBP, v.FBC, v.TTP = cookie("_fbp"), cookie("_fbc"), cookie("_ttp")
+	if fbclid, ts := src.Get("fbclid"), src.Get("ts"); v.FBC == "" && fbclid != "" && ts != "" {
+		v.FBC = "fb.1." + ts + "." + fbclid // Meta's format, when its tag has not written _fbc yet
+	}
+	v.TTCLID, v.ScCID, v.GCLID = src.Get("ttclid"), src.Get("ScCid"), src.Get("gclid")
+	v.IP, v.UserAgent = s.clientIP(r), r.UserAgent()
+	return v
 }
