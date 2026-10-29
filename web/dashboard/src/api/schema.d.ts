@@ -2809,6 +2809,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/marketing/pixels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The providers a store can connect, and its pixels
+         * @description Permission: marketing.manage.
+         */
+        get: operations["listPixels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/marketing/pixels/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                /** @description A provider's name; 404 for one we do not know. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Connect a provider, or change its pixel
+         * @description Permission: marketing.manage. Saves over the version read (0 for
+         *     a provider not connected yet); 409 when it changed since. Absent
+         *     server_token keeps the saved token, "" removes it.
+         */
+        put: operations["savePixel"];
+        post?: never;
+        /**
+         * Disconnect a provider, with its token
+         * @description Permission: marketing.manage.
+         */
+        delete: operations["deletePixel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/marketing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's consent mode
+         * @description Permission: marketing.manage. Version 0 until the store saves it.
+         */
+        get: operations["getMarketingSettings"];
+        /**
+         * Change the consent mode
+         * @description Permission: marketing.manage. Saves over the version read; 409 when it changed since.
+         */
+        put: operations["saveMarketingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -4542,6 +4620,61 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /**
+         * @description An ad or analytics provider. An extensible list (ADR-0032,
+         *     ADR-0043): new providers are added within /v1, and clients must
+         *     skip a provider they do not know, never fail on it.
+         * @enum {string}
+         */
+        PixelProviderName: "meta" | "tiktok" | "snap" | "google_ads" | "ga4";
+        PixelProvider: {
+            provider: components["schemas"]["PixelProviderName"];
+            /** @description It needs the purchase conversion's label (Google Ads). */
+            label: boolean;
+            /** @description It takes a test event code. */
+            test_code: boolean;
+            /** @description We also send its conversions from the server (its Conversions API), with a token. */
+            server: boolean;
+        };
+        PixelInput: {
+            /**
+             * @description The provider's pixel or measurement ID: Meta's digits, TikTok's code, Snap's UUID, AW-…, G-….
+             * @example 123456789012345
+             */
+            pixel_id: string;
+            /** @description Google Ads' purchase conversion label; others take none. */
+            label?: string;
+            /** @description A test event code (Meta, TikTok): events show in the provider's test tool. */
+            test_code?: string;
+            enabled: boolean;
+            /** @description The Conversions API token. Absent keeps the saved one; "" removes it. Never returned. */
+            server_token?: string;
+            /** @description The version read; 0 for a provider not connected yet. */
+            version: number;
+        };
+        Pixel: {
+            provider: components["schemas"]["PixelProviderName"];
+            pixel_id: string;
+            label: string;
+            test_code: string;
+            enabled: boolean;
+            /** @description A Conversions API token is saved. */
+            has_server_token: boolean;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MarketingSettings: {
+            /**
+             * @description When pages may load the pixels: auto asks the shopper first
+             *     where the store's country requires it (Saudi Arabia), required
+             *     always asks, off never asks.
+             * @enum {string}
+             */
+            consent: "auto" | "required" | "off";
+            /** @description The version read; 0 before the first save. */
+            version: number;
         };
         WebhookReceipt: {
             /** @enum {string} */
@@ -8458,6 +8591,134 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPixels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every provider, and the store's saved pixels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        providers: components["schemas"]["PixelProvider"][];
+                        items: components["schemas"]["Pixel"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    savePixel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                /** @description A provider's name; 404 for one we do not know. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PixelInput"];
+            };
+        };
+        responses: {
+            /** @description The pixel. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pixel"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deletePixel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                /** @description A provider's name; 404 for one we do not know. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMarketingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketingSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveMarketingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarketingSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketingSettings"];
+                };
             };
             default: components["responses"]["Problem"];
         };

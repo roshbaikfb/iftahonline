@@ -549,6 +549,10 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	mkt, err := newMarketing(c)
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range msg.PlatformProviders() {
 		if err = hooks.RegisterPlatform(p); err != nil {
 			return nil, err
@@ -578,6 +582,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		pay.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		msg.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		mkt.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
 			c.log.Error("card checkout not mounted", "err", mountErr)
 		}

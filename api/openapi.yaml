@@ -139,6 +139,16 @@ tags:
       transaction that places it; an order cancelled before it ships
       gives its use back. A coupon an order held keeps its code and
       cannot be deleted, only turned off. Permission: promotions.manage.
+  - name: marketing
+    description: |
+      The store's ad pixels and the shopper's consent (ADR-0043). A store
+      connects each provider it measures with (Meta, TikTok, Snapchat,
+      Google Ads, GA4) by its public IDs; the list is closed, and no
+      merchant script reaches a page. A Conversions API token, where the
+      provider has one, is sealed and never read back: a pixel only says
+      whether one is saved. The consent mode says when pages may load the
+      pixels: auto asks where the store's country requires it. Permission:
+      marketing.manage.
   - name: onboarding
     description: |
       The new store's setup wizard (ADR-0034). Signing up opens it; the
@@ -3194,6 +3204,100 @@ paths:
           description: Deleted.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/marketing/pixels:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [marketing]
+      operationId: listPixels
+      summary: The providers a store can connect, and its pixels
+      description: "Permission: marketing.manage."
+      responses:
+        "200":
+          description: Every provider, and the store's saved pixels.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers, items]
+                properties:
+                  providers:
+                    type: array
+                    items: { $ref: "#/components/schemas/PixelProvider" }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Pixel" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/marketing/pixels/{provider}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: provider, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9_]{2,32}$" }, description: "A provider's name; 404 for one we do not know." }
+    put:
+      tags: [marketing]
+      operationId: savePixel
+      summary: Connect a provider, or change its pixel
+      description: |
+        Permission: marketing.manage. Saves over the version read (0 for
+        a provider not connected yet); 409 when it changed since. Absent
+        server_token keeps the saved token, "" removes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PixelInput" }
+      responses:
+        "200":
+          description: The pixel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pixel" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [marketing]
+      operationId: deletePixel
+      summary: Disconnect a provider, with its token
+      description: "Permission: marketing.manage."
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/marketing/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [marketing]
+      operationId: getMarketingSettings
+      summary: The store's consent mode
+      description: "Permission: marketing.manage. Version 0 until the store saves it."
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [marketing]
+      operationId: saveMarketingSettings
+      summary: Change the consent mode
+      description: "Permission: marketing.manage. Saves over the version read; 409 when it changed since."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarketingSettings" }
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketingSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -5187,6 +5291,55 @@ components:
             uses: { type: integer, description: Orders holding it. }
             created_at: { type: string, format: date-time }
             updated_at: { type: string, format: date-time }
+    PixelProviderName:
+      type: string
+      enum: [meta, tiktok, snap, google_ads, ga4]
+      description: |
+        An ad or analytics provider. An extensible list (ADR-0032,
+        ADR-0043): new providers are added within /v1, and clients must
+        skip a provider they do not know, never fail on it.
+    PixelProvider:
+      type: object
+      required: [provider, label, test_code, server]
+      properties:
+        provider: { $ref: "#/components/schemas/PixelProviderName" }
+        label: { type: boolean, description: It needs the purchase conversion's label (Google Ads). }
+        test_code: { type: boolean, description: It takes a test event code. }
+        server: { type: boolean, description: "We also send its conversions from the server (its Conversions API), with a token." }
+    PixelInput:
+      type: object
+      required: [pixel_id, enabled, version]
+      properties:
+        pixel_id: { type: string, maxLength: 64, example: "123456789012345", description: "The provider's pixel or measurement ID: Meta's digits, TikTok's code, Snap's UUID, AW-…, G-…." }
+        label: { type: string, maxLength: 40, description: Google Ads' purchase conversion label; others take none. }
+        test_code: { type: string, maxLength: 40, description: "A test event code (Meta, TikTok): events show in the provider's test tool." }
+        enabled: { type: boolean }
+        server_token: { type: string, maxLength: 1024, writeOnly: true, description: 'The Conversions API token. Absent keeps the saved one; "" removes it. Never returned.' }
+        version: { type: integer, minimum: 0, description: The version read; 0 for a provider not connected yet. }
+    Pixel:
+      type: object
+      required: [provider, pixel_id, label, test_code, enabled, has_server_token, version, updated_at]
+      properties:
+        provider: { $ref: "#/components/schemas/PixelProviderName" }
+        pixel_id: { type: string }
+        label: { type: string }
+        test_code: { type: string }
+        enabled: { type: boolean }
+        has_server_token: { type: boolean, description: A Conversions API token is saved. }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    MarketingSettings:
+      type: object
+      required: [consent, version]
+      properties:
+        consent:
+          type: string
+          enum: [auto, required, off]
+          description: |
+            When pages may load the pixels: auto asks the shopper first
+            where the store's country requires it (Saudi Arabia), required
+            always asks, off never asks.
+        version: { type: integer, minimum: 0, description: The version read; 0 before the first save. }
     WebhookReceipt:
       type: object
       required: [status]
