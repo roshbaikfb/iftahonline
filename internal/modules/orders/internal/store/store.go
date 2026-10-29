@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"net/netip"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,8 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City, Address: c.Address, Notes: c.Notes,
 		Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(), ShippingMinor: o.Shipping.Amount(),
 		CodFeeMinor: o.CODFee.Amount(), DiscountMinor: discountMinor(o), CouponCode: couponCode(o), PaymentMethod: string(o.PaymentMethod), PaymentStatus: string(o.PaymentStatus), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
+		UtmSource: orNil(o.Attribution.Source), UtmMedium: orNil(o.Attribution.Medium), UtmCampaign: orNil(o.Attribution.Campaign),
+		UtmContent: orNil(o.Attribution.Content), UtmTerm: orNil(o.Attribution.Term),
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -343,11 +346,39 @@ func discountMinor(o domain.Order) int64 {
 	return o.Discount.Amount()
 }
 
-func couponCode(o domain.Order) *string {
-	if o.CouponCode == "" {
+func couponCode(o domain.Order) *string { return orNil(o.CouponCode) }
+
+// orNil is NULL for "".
+func orNil(s string) *string {
+	if s == "" {
 		return nil
 	}
-	return &o.CouponCode
+	return &s
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// InsertSignals writes an order's signals (ADR-0043), in its
+// transaction.
+func InsertSignals(ctx context.Context, tx Tx, o domain.Order, s domain.Signals) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	p := ordersdb.InsertOrderSignalsParams{StoreID: store, OrderCreatedAt: o.CreatedAt, OrderID: o.ID, Fbp: s.FBP, Fbc: s.FBC, Ttp: s.TTP,
+		Ttclid: s.TTCLID, Sccid: s.ScCID, Gclid: s.GCLID, UserAgent: s.UserAgent}
+	if ip, ipErr := netip.ParseAddr(s.IP); ipErr == nil {
+		p.Ip = &ip
+	}
+	if err = ordersdb.New(tx).InsertOrderSignals(ctx, p); err != nil {
+		return fmt.Errorf("orders store: insert signals: %w", err)
+	}
+	return nil
 }
 
 func toOrder(r ordersdb.Order) (domain.Order, error) {
@@ -372,10 +403,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: %w", err)
 	}
-	code := ""
-	if r.CouponCode != nil {
-		code = *r.CouponCode
-	}
+	code := deref(r.CouponCode)
 	p, err := phone.ParseE164(r.Phone)
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: stored phone: %w", err)
@@ -384,6 +412,8 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 		ID: r.ID, Status: domain.Status(r.Status), Version: int(r.Version), Source: domain.Source(r.Source), CustomerID: r.CustomerID,
 		Contact:  domain.Contact{Name: r.Name, Phone: p, Governorate: r.Governorate, City: r.City, Address: r.Address, Notes: r.Notes},
 		Subtotal: sub, Shipping: ship, CODFee: cod, Discount: discount, CouponCode: code, Total: total, ItemCount: int(r.ItemCount),
+		Attribution: domain.Attribution{Source: deref(r.UtmSource), Medium: deref(r.UtmMedium), Campaign: deref(r.UtmCampaign),
+			Content: deref(r.UtmContent), Term: deref(r.UtmTerm)},
 		PaymentMethod: domain.PaymentMethod(r.PaymentMethod), PaymentStatus: domain.PaymentStatus(r.PaymentStatus),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 	}, nil

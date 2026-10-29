@@ -241,7 +241,12 @@ type MessageTextKind string
 // Order defines model for Order.
 type Order struct {
 	Address string `json:"address"`
-	City    string `json:"city"`
+
+	// Attribution The campaign that brought the order (ADR-0043): the UTM parameters
+	// of the shopper's visit, as their link carried them (each at most
+	// 100 characters). Absent when the visit had none.
+	Attribution *OrderAttribution `json:"attribution,omitempty"`
+	City        string            `json:"city"`
 
 	// CodFeeMinor The cash-on-delivery fee quoted when the order was placed.
 	CodFeeMinor int64 `json:"cod_fee_minor"`
@@ -301,6 +306,21 @@ type OrderPaymentStatus string
 
 // OrderSource defines model for Order.Source.
 type OrderSource string
+
+// OrderAttribution The campaign that brought the order (ADR-0043): the UTM parameters
+// of the shopper's visit, as their link carried them (each at most
+// 100 characters). Absent when the visit had none.
+type OrderAttribution struct {
+	Campaign *string `json:"campaign,omitempty"`
+	Content  *string `json:"content,omitempty"`
+
+	// Medium Example: paid_social
+	Medium *string `json:"medium,omitempty"`
+
+	// Source Example: facebook
+	Source *string `json:"source,omitempty"`
+	Term   *string `json:"term,omitempty"`
+}
 
 // OrderCounts defines model for OrderCounts.
 type OrderCounts struct {

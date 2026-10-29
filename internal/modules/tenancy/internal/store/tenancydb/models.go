@@ -7,6 +7,7 @@ package tenancydb
 import (
 	"database/sql/driver"
 	"fmt"
+	"net/netip"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -311,6 +312,11 @@ type Order struct {
 	PaymentStatus   string
 	DiscountMinor   int64
 	CouponCode      pgtype.Text
+	UtmSource       pgtype.Text
+	UtmMedium       pgtype.Text
+	UtmCampaign     pgtype.Text
+	UtmContent      pgtype.Text
+	UtmTerm         pgtype.Text
 }
 
 type OrderConfirmation struct {
@@ -366,6 +372,20 @@ type OrderItem struct {
 type OrderSalesCounted struct {
 	StoreID ulid.ID
 	OrderID ulid.ID
+}
+
+type OrderSignal struct {
+	StoreID        ulid.ID
+	OrderCreatedAt time.Time
+	OrderID        ulid.ID
+	Fbp            string
+	Fbc            string
+	Ttp            string
+	Ttclid         string
+	Sccid          string
+	Gclid          string
+	Ip             *netip.Addr
+	UserAgent      string
 }
 
 type Payment struct {

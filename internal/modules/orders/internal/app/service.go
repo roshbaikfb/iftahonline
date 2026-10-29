@@ -311,6 +311,11 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 	if err = store.Insert(ctx, tx, *o, d.LinesHash); err != nil {
 		return err
 	}
+	if !d.Signals.IsZero() { // with the order, so its conversions find them (ADR-0043)
+		if err = store.InsertSignals(ctx, tx, *o, d.Signals); err != nil {
+			return err
+		}
+	}
 	return s.recordTx(ctx, tx, *o, "", domain.StatusPending, "", "", "order.placed", domain.EventOrderPlaced,
 		func(m event.Meta) event.Event { return domain.OrderPlaced{Meta: m, OrderID: o.ID, Source: o.Source} })
 }
@@ -349,7 +354,8 @@ func (s *Service) mustReplay(ctx context.Context, d domain.Draft) (Placement, er
 // The coupon it previews (nil without one) is what placing must redeem.
 func (s *Service) price(ctx context.Context, d domain.Draft, cur money.Currency) (domain.Order, *CouponDiscount, error) {
 	id := s.ids.New()
-	o := domain.Order{ID: id, Status: domain.StatusPending, Version: 1, Source: d.Source, Contact: d.Contact, CreatedAt: domain.CreatedAtOf(id)}
+	o := domain.Order{ID: id, Status: domain.StatusPending, Version: 1, Source: d.Source, Contact: d.Contact, Attribution: d.Attribution,
+		CreatedAt: domain.CreatedAtOf(id)}
 	o.UpdatedAt, o.StatusChangedAt = o.CreatedAt, o.CreatedAt
 	var err error
 	if o.Lines, o.Subtotal, o.ItemCount, err = s.priceLines(ctx, d.Lines, cur); err != nil {

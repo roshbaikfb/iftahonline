@@ -4,10 +4,17 @@
 -- name: InsertOrder :exec
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
                     currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
-                    updated_at, status_changed_at, payment_method, payment_status)
+                    updated_at, status_changed_at, payment_method, payment_status,
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
         @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @discount_minor, sqlc.narg(coupon_code), @total_minor, @item_count,
-        @lines_hash, @created_at, @created_at, @payment_method, @payment_status);
+        @lines_hash, @created_at, @created_at, @payment_method, @payment_status,
+        sqlc.narg(utm_source), sqlc.narg(utm_medium), sqlc.narg(utm_campaign), sqlc.narg(utm_content), sqlc.narg(utm_term));
+
+-- name: InsertOrderSignals :exec
+-- In the order's transaction (ADR-0043); kept one month.
+INSERT INTO order_signals (store_id, order_created_at, order_id, fbp, fbc, ttp, ttclid, sccid, gclid, ip, user_agent)
+VALUES (@store_id, @order_created_at, @order_id, @fbp, @fbc, @ttp, @ttclid, @sccid, @gclid, sqlc.narg(ip), @user_agent);
 
 -- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,

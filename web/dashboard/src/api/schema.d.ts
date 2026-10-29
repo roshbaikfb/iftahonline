@@ -3690,6 +3690,7 @@ export interface components {
             discount_minor?: number;
             /** @description The coupon the order took. */
             coupon_code?: string;
+            attribution?: components["schemas"]["OrderAttribution"];
             item_count: number;
             /** Format: date-time */
             created_at: string;
@@ -4675,6 +4676,20 @@ export interface components {
             consent: "auto" | "required" | "off";
             /** @description The version read; 0 before the first save. */
             version: number;
+        };
+        /**
+         * @description The campaign that brought the order (ADR-0043): the UTM parameters
+         *     of the shopper's visit, as their link carried them (each at most
+         *     100 characters). Absent when the visit had none.
+         */
+        OrderAttribution: {
+            /** @example facebook */
+            source?: string;
+            /** @example paid_social */
+            medium?: string;
+            campaign?: string;
+            content?: string;
+            term?: string;
         };
         WebhookReceipt: {
             /** @enum {string} */

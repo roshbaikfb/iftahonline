@@ -55,16 +55,18 @@ each order's current status ([ADR-0033](../adr/0033-shop-search-and-bestsellers.
 
 ## Tables
 
-All are tenant tables under RLS. The first three are partitioned by
-month on the order's creation time, which its ULID encodes.
+All are tenant tables under RLS. The first three, and `order_signals`,
+are partitioned by month on the order's creation time, which its ULID
+encodes.
 
 | Table | Notes |
 |---|---|
-| `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal − discount + shipping + cod_fee`, all fixed at placement; `coupon_code` the coupon taken. Indexes per list driver: status, phone, customer. |
+| `orders` | Contact, `lines_hash` for the duplicate window, amounts in minor units: `total = subtotal − discount + shipping + cod_fee`, all fixed at placement; `coupon_code` the coupon taken; `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term` the campaign that brought it (00052, nullable). Indexes per list driver: status, phone, customer. |
 | `order_items` | Copied titles and prices. Primary key on the order's partition key. |
 | `order_events` | The timeline; append-only. `actor` names a system that made a move (`carrier:bosta`). |
 | `product_sales` | Bestsellers: units per `(store_id, product_id, day)` from confirmed orders, the day being the order's; index `(store_id, day)`; days older than 40 pruned (00037) |
 | `order_sales_counted` | Which orders are counted, so counting is idempotent (00037) |
+| `order_signals` | One row per storefront order that has any (ADR-0043): Meta's `_fbp`/`_fbc`, TikTok's `_ttp` and click ID, Snapchat's and Google's click IDs, the IP address and user agent. Written in the placing transaction; `app_user` cannot change or delete rows; partitions dropped after one month (00052). Never shown in the API. |
 | `order_idempotency` | `(store_id, key)` → fingerprint and order. Kept a week, purged per store by keyed orders. |
 
 ## HTTP API (tag `orders`)
@@ -108,6 +110,13 @@ confirm, order page with moves, CSV export) use this API; see
   apply is a field error on `coupon_code` with the reason; terms that
   changed in between are `changed`; nothing is placed. A replayed order
   redeems nothing.
+- **Attribution and signals** (ADR-0043). `NewOrder.Attribution` (UTM)
+  and `NewOrder.Signals` come from the shopper's browser. They are
+  cleaned, never refused: anything too long is cut, and an ID that is not
+  one printable word, or an IP that does not parse, is dropped (a fuzz
+  test covers this). They are not part of the idempotency fingerprint.
+  The order shows `attribution`; the signals stay for the server-side
+  conversions (6e-3).
 
 - **A customer's order history** is `listOrders?customer_id=…`.
 - **Shoppers** (P4c, the storefront) will place orders through the same
