@@ -82,6 +82,8 @@ const (
 
 	PermMessagingRead   Permission = "messaging.read"   // the message log and the quota
 	PermMessagingManage Permission = "messaging.manage" // the store's message texts
+
+	PermPromotionsManage Permission = "promotions.manage" // coupons
 )
 
 // Permissions lists every permission.
@@ -99,6 +101,7 @@ func Permissions() []Permission {
 		PermFinanceRead, PermFinanceManage,
 		PermPaymentsManage, PermPaymentsRefund,
 		PermMessagingRead, PermMessagingManage,
+		PermPromotionsManage,
 	}
 }
 

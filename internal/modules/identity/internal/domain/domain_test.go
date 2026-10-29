@@ -58,6 +58,8 @@ func TestMatrix(t *testing.T) {
 
 		authz.PermMessagingRead:   {O, M, S},
 		authz.PermMessagingManage: {O, M},
+
+		authz.PermPromotionsManage: {O, M},
 	}
 	pol, err := domain.NewPolicy()
 	if err != nil {
