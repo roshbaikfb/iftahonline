@@ -117,3 +117,26 @@ func asciiDigit(r rune) (uint64, bool) {
 		return 0, false
 	}
 }
+
+// Decimal writes m as a plain decimal in its currency's digits ("1250.50",
+// "-0.05"): no grouping, no symbol, for machines (structured data,
+// spreadsheets, feeds, ad platforms).
+func (m Money) Decimal() string { return Decimal(m.amount, m.currency.MinorUnits()) }
+
+// Decimal writes minor units as a plain decimal with units digits after
+// the point.
+func Decimal(minor int64, units int) string {
+	s := strconv.FormatInt(minor, 10)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	if units > 0 {
+		if len(s) <= units {
+			s = strings.Repeat("0", units-len(s)+1) + s
+		}
+		s = s[:len(s)-units] + "." + s[len(s)-units:]
+	}
+	if neg {
+		s = "-" + s
+	}
+	return s
+}

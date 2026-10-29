@@ -15,7 +15,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
-	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 )
 
@@ -137,7 +136,7 @@ func exportRow(o domain.Order, country geo.Country, loc *time.Location) []string
 	}
 	row := []string{o.Code(), o.CreatedAt.In(loc).Format(exportTimeStamp), string(o.Status), c.Name, c.Phone.Unmasked(), gov,
 		c.City, c.Address, c.Notes, strings.Join(items, "; "), strconv.Itoa(o.ItemCount),
-		decimal(o.Subtotal), decimal(o.Shipping), decimal(o.Total), string(o.Total.Currency()), decimal(o.CODFee),
+		o.Subtotal.Decimal(), o.Shipping.Decimal(), o.Total.Decimal(), string(o.Total.Currency()), o.CODFee.Decimal(),
 		string(o.PaymentMethod), string(o.PaymentStatus)}
 	for i := range row {
 		row[i] = cell(row[i])
@@ -151,28 +150,6 @@ func exportRow(o domain.Order, country geo.Country, loc *time.Location) []string
 func cell(s string) string {
 	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
 		return "'" + s
-	}
-	return s
-}
-
-// decimal writes an amount as a plain decimal ("1234.50"): no grouping,
-// no symbol, so spreadsheets read it as a number.
-func decimal(m money.Money) string {
-	units := m.Currency().MinorUnits()
-	a := m.Amount()
-	neg := a < 0
-	if neg {
-		a = -a
-	}
-	s := strconv.FormatInt(a, 10)
-	if units > 0 {
-		if len(s) <= units {
-			s = strings.Repeat("0", units-len(s)+1) + s
-		}
-		s = s[:len(s)-units] + "." + s[len(s)-units:]
-	}
-	if neg {
-		s = "-" + s
 	}
 	return s
 }
