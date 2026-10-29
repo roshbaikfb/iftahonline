@@ -478,3 +478,38 @@ test('a merchant makes a coupon, turns it off and deletes it', async ({ page }) 
   await expect(row).toHaveCount(0);
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// Ad pixels and product feeds (6g) against the real API: connect Meta with
+// a Conversions API token (sealed, never shown again), ask every shopper
+// for consent, and turn the product feeds on and off.
+test('a merchant connects a pixel and turns the product feeds on', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  const nav = page.getByRole('navigation', { name: 'القائمة الرئيسية' });
+
+  await nav.getByRole('link', { name: 'بكسلات الإعلانات' }).click();
+  await page.getByLabel('معرّف البكسل (Pixel ID)').fill('123456789012345');
+  await page.getByLabel('رمز Conversions API').fill('EAAB-e2e-token-123');
+  await page.getByRole('button', { name: 'ربط', exact: true }).click();
+  await expect(page.getByText('رُبط Meta (فيسبوك وإنستجرام).')).toBeVisible();
+  await expect(page.getByText('محفوظ ومشفّر · لا يظهر مرة أخرى')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Meta/ })).toContainText('من المتصفح ومن الخادم');
+  await page.getByRole('radio', { name: /اسأل دائمًا/ }).check();
+  await expect(page.getByText('حُفظ.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('radio', { name: /اسأل دائمًا/ })).toBeChecked();
+  await expect(page.getByLabel('معرّف البكسل (Pixel ID)')).toHaveValue('123456789012345');
+
+  await nav.getByRole('link', { name: 'كتالوج المنتجات' }).click();
+  await page.getByRole('button', { name: 'تشغيل الكتالوج' }).click();
+  await expect(page.getByLabel('رابط الكتالوج').first()).toHaveValue(/\/feeds\/google\.xml\?key=[a-z2-7]{32}$/);
+  await expect(page.getByLabel('رابط الكتالوج').nth(1)).toHaveValue(/\/feeds\/meta\.xml\?key=[a-z2-7]{32}$/);
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('button', { name: 'إيقاف الكتالوج' }).click();
+  await expect(page.getByRole('heading', { name: 'الكتالوج متوقف' })).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});

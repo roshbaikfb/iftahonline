@@ -94,6 +94,28 @@ All of them:
   `marketing_settings.updated`, `product_feed.key_renewed`,
   `product_feed.disabled`), without the token or the key.
 
+## Dashboard (6g)
+
+Built to the approved 6g mockups:
+- **بكسلات الإعلانات** (`/stores/{id}/pixels`):
+  - **The providers.** Each provider the API lists (one this build does not
+    know is skipped) with its state:
+    - not connected;
+    - paused;
+    - connected from the browser alone;
+    - connected from the server too.
+  - **The panel.** It edits the chosen one: its ID, checked as the server
+    checks it; Google Ads' label; a test code where taken; the server token,
+    write-only ("saved and sealed", replaceable, never shown); on or off;
+    disconnect.
+  - **Consent.** The consent mode is a choice that saves at once (and goes
+    back if the save fails).
+- **كتالوج المنتجات** (`…/feeds`):
+  - turns the feeds on, and shows the Google and Meta links on the store's
+    domain with where to paste each;
+  - renews the key (the old links stop) and turns the feeds off, each after
+    a confirm.
+
 ## Tables
 
 | Table | Notes |
