@@ -473,6 +473,12 @@ type ProductCategory struct {
 	CategoryID ulid.ID
 }
 
+type ProductFeed struct {
+	StoreID   ulid.ID
+	Key       string
+	CreatedAt pgtype.Timestamptz
+}
+
 type ProductImage struct {
 	ID            ulid.ID
 	StoreID       ulid.ID

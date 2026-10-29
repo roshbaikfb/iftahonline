@@ -28,6 +28,10 @@ type (
 	BrowserPixel = domain.BrowserPixel
 	// PixelsChanged is the marketing.pixels.changed event.
 	PixelsChanged = domain.PixelsChanged
+	// Feed is a product feed's format (ADR-0044).
+	Feed = domain.Feed
+	// FeedChanged is the marketing.feed.changed event.
+	FeedChanged = domain.FeedChanged
 	// Conversion is a conversion the server reports (ADR-0043), with the
 	// event_id its page reported.
 	Conversion = app.Conversion
@@ -79,6 +83,27 @@ type Conversions interface {
 }
 
 var _ Conversions = (*app.Service)(nil)
+
+// Product feeds (ADR-0044).
+const (
+	FeedGoogle = domain.FeedGoogle
+	FeedMeta   = domain.FeedMeta
+	// EventFeedChanged is published when a store turns its feeds on or
+	// off or replaces their key: the edge's copies must go.
+	EventFeedChanged = domain.EventFeedChanged
+)
+
+// FeedPath is where a store's storefront serves feed f with key.
+func FeedPath(f Feed, key string) string { return domain.FeedPath(f, key) }
+
+// Feeds is what the storefront asks before it serves a product feed. It
+// acts on the store in ctx.
+type Feeds interface {
+	// FeedAllowed reports whether key opens the store's feeds.
+	FeedAllowed(ctx context.Context, key string) (bool, error)
+}
+
+var _ Feeds = (*app.Service)(nil)
 
 // PurchaseEventID is the event_id of an order's Purchase, on its
 // thank-you page and in the server's event.

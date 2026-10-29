@@ -3298,6 +3298,47 @@ paths:
               schema: { $ref: "#/components/schemas/MarketingSettings" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/marketing/feed:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [marketing]
+      operationId: getProductFeed
+      summary: The store's product feeds for Google and Meta
+      description: "Permission: marketing.manage. Not enabled until a key is made."
+      responses:
+        "200":
+          description: The feeds.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductFeed" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [marketing]
+      operationId: renewProductFeedKey
+      summary: Turn the feeds on, or replace their key
+      description: |
+        Permission: marketing.manage. A new key replaces the old one: the
+        old URLs stop working (an edge copy may serve for up to an hour).
+      responses:
+        "200":
+          description: The feeds, with the new key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductFeed" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [marketing]
+      operationId: disableProductFeed
+      summary: Turn the feeds off
+      description: "Permission: marketing.manage. Idempotent."
+      responses:
+        "204":
+          description: Turned off.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/webhooks/{provider}/{store_id}/{connection_id}:
     post:
       tags: [webhooks]
@@ -5341,6 +5382,19 @@ components:
             where the store's country requires it (Saudi Arabia), required
             always asks, off never asks.
         version: { type: integer, minimum: 0, description: The version read; 0 before the first save. }
+    ProductFeed:
+      type: object
+      description: |
+        The store's product feeds (ADR-0044): an XML file of its products,
+        one item per variant, that Google Merchant Center and Meta
+        Commerce Manager fetch from its storefront. The paths are on the
+        store's own domain.
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        key: { type: string, pattern: "^[a-z2-7]{32}$", description: The secret in the URLs; absent when off. }
+        google_path: { type: string, example: "/feeds/google.xml?key=…", description: Absent when off. }
+        meta_path: { type: string, example: "/feeds/meta.xml?key=…", description: Absent when off. }
     OrderAttribution:
       type: object
       description: |

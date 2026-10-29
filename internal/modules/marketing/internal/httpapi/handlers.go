@@ -129,3 +129,46 @@ func (h *Handlers) SaveMarketingSettings(ctx context.Context, req SaveMarketingS
 	}
 	return SaveMarketingSettings200JSONResponse{Consent: MarketingSettingsConsent(s.Consent), Version: s.Version}, nil
 }
+
+func toFeed(key string, ok bool) ProductFeed {
+	if !ok {
+		return ProductFeed{}
+	}
+	google, meta := domain.FeedPath(domain.FeedGoogle, key), domain.FeedPath(domain.FeedMeta, key)
+	return ProductFeed{Enabled: true, Key: &key, GooglePath: &google, MetaPath: &meta}
+}
+
+// GetProductFeed implements StrictServerInterface.
+func (h *Handlers) GetProductFeed(ctx context.Context, _ GetProductFeedRequestObject) (GetProductFeedResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMarketingManage); err != nil {
+		return nil, err
+	}
+	key, ok, err := h.svc.FeedKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return GetProductFeed200JSONResponse(toFeed(key, ok)), nil
+}
+
+// RenewProductFeedKey implements StrictServerInterface.
+func (h *Handlers) RenewProductFeedKey(ctx context.Context, _ RenewProductFeedKeyRequestObject) (RenewProductFeedKeyResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMarketingManage); err != nil {
+		return nil, err
+	}
+	key, err := h.svc.RenewFeedKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return RenewProductFeedKey200JSONResponse(toFeed(key, true)), nil
+}
+
+// DisableProductFeed implements StrictServerInterface.
+func (h *Handlers) DisableProductFeed(ctx context.Context, _ DisableProductFeedRequestObject) (DisableProductFeedResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMarketingManage); err != nil {
+		return nil, err
+	}
+	if err := h.svc.DisableFeeds(ctx); err != nil {
+		return nil, err
+	}
+	return DisableProductFeed204Response{}, nil
+}

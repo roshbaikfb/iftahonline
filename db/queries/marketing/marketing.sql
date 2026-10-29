@@ -37,3 +37,16 @@ RETURNING *;
 UPDATE marketing_settings SET consent = @consent, version = version + 1, updated_at = now()
 WHERE store_id = @store_id AND version = @version
 RETURNING *;
+
+-- name: GetFeed :one
+SELECT * FROM product_feeds WHERE store_id = @store_id;
+
+-- name: SetFeedKey :one
+-- A new key replaces the old one: the old URLs stop working.
+INSERT INTO product_feeds (store_id, key)
+VALUES (@store_id, @key)
+ON CONFLICT (store_id) DO UPDATE SET key = EXCLUDED.key, created_at = now()
+RETURNING *;
+
+-- name: DeleteFeed :execrows
+DELETE FROM product_feeds WHERE store_id = @store_id;

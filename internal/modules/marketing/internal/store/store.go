@@ -173,3 +173,46 @@ func SaveSettings(ctx context.Context, tx Tx, s domain.Settings) (domain.Setting
 	}
 	return domain.Settings{Consent: domain.Consent(r.Consent), Version: int(r.Version)}, nil
 }
+
+// FeedKey returns the store's feed key; ok is false when its feeds are
+// off.
+func FeedKey(ctx context.Context, tx Tx) (key string, ok bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	r, err := marketingdb.New(tx).GetFeed(ctx, store)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("marketing store: feed: %w", err)
+	}
+	return r.Key, true, nil
+}
+
+// SetFeedKey stores the store's feed key, replacing any other.
+func SetFeedKey(ctx context.Context, tx Tx, key string) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err = marketingdb.New(tx).SetFeedKey(ctx, marketingdb.SetFeedKeyParams{StoreID: store, Key: key}); err != nil {
+		return fmt.Errorf("marketing store: set feed key: %w", err)
+	}
+	return nil
+}
+
+// DeleteFeed turns the store's feeds off; changed is false when they were
+// off already.
+func DeleteFeed(ctx context.Context, tx Tx) (changed bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := marketingdb.New(tx).DeleteFeed(ctx, store)
+	if err != nil {
+		return false, fmt.Errorf("marketing store: delete feed: %w", err)
+	}
+	return n > 0, nil
+}

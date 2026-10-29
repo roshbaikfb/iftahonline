@@ -96,6 +96,9 @@ func (m *Module) Pixels() Pixels { return m.svc }
 // through.
 func (m *Module) Conversions() Conversions { return m.svc }
 
+// Feeds is what the storefront asks before it serves a product feed.
+func (m *Module) Feeds() Feeds { return m.svc }
+
 // Mount registers the merchant API. scope is identity's membership
 // middleware.
 func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
