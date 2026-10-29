@@ -63,6 +63,8 @@ type Deps struct {
 	// Conversions reports the cart's and checkout's conversions from the
 	// server too; nil reports none.
 	Conversions Conversions
+	// Feeds opens the store's product feeds (ADR-0044); nil serves none.
+	Feeds Feeds
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
@@ -89,6 +91,7 @@ type Shop struct {
 	searchOn    bool // Catalog.Search works: pages show the search box
 	pixels      Pixels
 	conversions Conversions
+	feeds       Feeds
 	ids         *ulid.Generator // event IDs of conversions (ADR-0043)
 }
 
@@ -117,7 +120,7 @@ func New(d Deps) (*Shop, error) {
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
 		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search,
-		pixels: d.Pixels, conversions: d.Conversions, ids: ulid.NewGenerator()}, nil
+		pixels: d.Pixels, conversions: d.Conversions, feeds: d.Feeds, ids: ulid.NewGenerator()}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -153,7 +156,7 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, pxURL: s.assets.pxURL, fonts: s.assets.fontPreload(v.theme, l),
 		search: s.searchOn, track: s.orders != nil}
-	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) {
+	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) || s.feedRoute(w, r, store, p, rest) {
 		return
 	}
 	if token := r.URL.Query().Get("preview"); token != "" && isRead(r) {

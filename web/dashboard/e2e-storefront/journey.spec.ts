@@ -129,6 +129,19 @@ test('product → cart → checkout, on a phone, in Arabic', async ({ page }) =>
   expect(errors, 'no console errors (CSP violations, script errors)').toEqual([]);
 });
 
+test('a product feed\'s link opens the page on its variant', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/p/royal-oud');
+  const variants = JSON.parse((await page.locator('form[data-product]').getAttribute('data-variants')) ?? '[]') as { id: string; values: string[] }[];
+  const big = variants.find((v) => v.values[0] === '100 مل');
+  expect(big).toBeDefined();
+  await page.goto(`/p/royal-oud?variant=${big?.id ?? ''}`);
+  await expect(page.locator('[data-chosen="0"]')).toHaveText('100 مل');
+  await expect(page.locator('[data-now]')).toHaveText('750 ج.م');
+  await expect(page.locator('[data-variant]')).toHaveValue(big?.id ?? '');
+  expect(errors, 'no console errors (CSP violations, script errors)').toEqual([]);
+});
+
 test('the English store mirrors the Arabic one', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/en/p/royal-oud');

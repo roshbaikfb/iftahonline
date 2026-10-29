@@ -231,6 +231,11 @@ function productForms() {
     }
     form.addEventListener("change", update);
     qty.addEventListener("input", update);
+    // A product feed's link names the variant (?variant=): open on it.
+    const pre = variants.find((v) => v.id === new URLSearchParams(location.search).get("variant"));
+    for (let i = 0; pre && i < n; i++) {
+      for (const el of form.querySelectorAll(`[name="o${i}"]`)) el.checked = el.value === pre.values[i];
+    }
     update();
   }
 }

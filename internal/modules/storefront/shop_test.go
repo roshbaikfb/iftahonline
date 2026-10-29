@@ -183,7 +183,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	purchases.set(mkt.OrderPlacedHandler())
 	startWorker(t, pool, bus, log, mkt.AddWorkers)
 	shop, err := storefront.NewShop(storefront.ShopDeps{Pool: pool, Redis: rdb, Catalog: products, Stores: stores, Media: media, Log: log,
-		Cache: storefront.DefaultCacheConfig(), HTTPS: true, Orders: shopOrders, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(),
+		Cache: storefront.DefaultCacheConfig(), HTTPS: true, Orders: shopOrders, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(), Feeds: mkt.Feeds(),
 		ClientIP: func(r *http.Request) string {
 			host, _, _ := net.SplitHostPort(r.RemoteAddr)
 			return host

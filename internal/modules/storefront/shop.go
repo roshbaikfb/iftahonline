@@ -84,7 +84,8 @@ func PurgeHandler(p cdn.Purger) eventbus.Handler {
 //   - a size chart: the whole store too (rarely edited; its products'
 //     pages are not listed in the event);
 //   - a policy: the whole store (its link is in every footer);
-//   - another page: that page (pg-).
+//   - another page: that page (pg-);
+//   - the product feeds' key: the feeds (f-).
 func PurgeTags(d eventbus.Delivery) ([]string, error) {
 	store := d.Meta.StoreID.String()
 	switch d.Meta.Type {
@@ -100,6 +101,8 @@ func PurgeTags(d eventbus.Delivery) ([]string, error) {
 			return []string{"s-" + store}, err
 		}
 		return []string{"pg-" + ev.PageID.String()}, err
+	case marketing.EventFeedChanged:
+		return []string{"f-" + store}, nil
 	}
 	return []string{"s-" + store}, nil // categories, theme, logo
 }
@@ -148,6 +151,8 @@ type ShopDeps struct {
 	// Conversions reports the cart's and checkout's conversions from the
 	// server too; nil reports none.
 	Conversions marketing.Conversions
+	// Feeds opens the store's product feeds (ADR-0044); nil serves none.
+	Feeds marketing.Feeds
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -197,7 +202,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays, Confirmations: confirms,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions, Feeds: d.Feeds,
 	})
 	if err != nil {
 		return nil, err
