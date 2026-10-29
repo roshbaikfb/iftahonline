@@ -1,11 +1,13 @@
 package app_test
 
 import (
+	"errors"
 	"net/netip"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -85,5 +87,18 @@ func TestPlaceOrderAttribution(t *testing.T) {
 	}
 	if _, n = f.signalsOf(t, domain.Order{ID: ulid.NewGenerator().New(), CreatedAt: p.Order.CreatedAt}); n != 0 {
 		t.Fatal("signals for an order that does not exist")
+	}
+
+	// What the server-side conversion reads: the order, its lines and
+	// its signals; none for the plain order; another store's is not found.
+	o, sig, ok, err := f.svc.Conversion(f.shopperA, p.Order.ID)
+	if err != nil || !ok || sig.FBP != in.Signals.FBP || sig.IP != "203.0.113.7" || len(o.Lines) != 1 || o.Total.Amount() != p.Order.Total.Amount() {
+		t.Fatalf("conversion %+v %+v %v %v", o, sig, ok, err)
+	}
+	if _, _, ok, err = f.svc.Conversion(f.shopperA, plain.Order.ID); err != nil || ok {
+		t.Fatalf("plain order: ok %v, %v", ok, err)
+	}
+	if _, _, _, err = f.svc.Conversion(f.ctxB, p.Order.ID); !errors.Is(err, app.ErrOrderNotFound) {
+		t.Fatalf("store B reads A's conversion: %v", err)
 	}
 }

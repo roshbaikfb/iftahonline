@@ -100,3 +100,7 @@ WHERE d.store_id = @store_id AND d.key IN (
 -- The gateway's word on a card order's money (ADR-0029).
 UPDATE orders SET payment_status = @payment_status, version = version + 1, updated_at = now()
 WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND payment_method = 'card';
+
+-- name: GetOrderSignals :one
+-- One partition: the order's time is its partition key.
+SELECT * FROM order_signals WHERE store_id = @store_id AND order_created_at = @order_created_at AND order_id = @order_id;

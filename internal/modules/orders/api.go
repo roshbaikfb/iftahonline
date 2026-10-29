@@ -179,3 +179,12 @@ var (
 	ErrIdempotencyKeyReused = app.ErrIdempotencyKeyReused
 	ErrVersionConflict      = app.ErrVersionConflict
 )
+
+// Conversions is what the server-side conversions read (ADR-0043): an
+// order with its lines, and its signals; ok is false when it has none.
+// It acts on the store in ctx.
+type Conversions interface {
+	Conversion(ctx context.Context, id ulid.ID) (o Order, s Signals, ok bool, err error)
+}
+
+var _ Conversions = (*app.Service)(nil)

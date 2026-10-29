@@ -17,6 +17,8 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
 | `Shop.Bestsellers(ctx, limit)` | Product IDs by units sold in confirmed orders over the last 30 days, most first, ≤ `MaxBestsellers` (48) |
 | `Shop.Track(ctx, code, phone)` | Order tracking: the order a shopper names by its 8-character code and phone (any usual format), read through that phone's recent orders (`orders_store_phone`) and matched by code; anything else is `ErrOrderNotFound`, whichever part was wrong |
+| `Conversions` (`NewConversions`) | `Conversion(ctx, id)`: an order with its lines and signals, for the server-side conversions (ADR-0043); `ok` is false without signals |
+| `Attribution`, `Signals` | Where an order came from: UTM, and what ad providers match a conversion with |
 | `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)) |
 
 The module uses these other modules, each through its `api.go`:
