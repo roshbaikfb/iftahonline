@@ -1,14 +1,18 @@
 # Module: marketing
 
-The marketing module owns a store's **ad pixels** and the shopper's
-**consent**:
+The marketing module owns a store's **ad pixels**, the shopper's
+**consent** and the **product feeds' key**:
 - which ad and analytics providers its pages measure with, and their
   public IDs;
 - the sealed Conversions API tokens;
-- when pages may load the pixels.
+- when pages may load the pixels;
+- whether the store has product feeds for Google and Meta, and the key
+  in their URLs.
 
-The storefront renders them through `Pixels`. Design:
-[ADR-0043](../adr/0043-ad-pixels-and-conversions.md).
+The storefront renders the pixels through `Pixels` and serves the feeds
+after asking `Feeds`. Design:
+[ADR-0043](../adr/0043-ad-pixels-and-conversions.md) (pixels,
+conversions) and [ADR-0044](../adr/0044-product-feeds.md) (feeds).
 
 **Status:**
 - 6e-1: the pixels, the consent mode and their API.
@@ -18,6 +22,8 @@ The storefront renders them through `Pixels`. Design:
 - 6e-2b: UTM and the order's signals (orders, `order_signals`); see
   [orders](orders.md).
 - 6e-3: the server-side conversions (below).
+- 6f: the product feeds (below; the feed itself is rendered by the
+  [storefront](storefront.md)).
 
 ## Public API (`internal/modules/marketing/api.go`)
 
@@ -30,6 +36,9 @@ The storefront renders them through `Pixels`. Design:
 | `Module.AddWorkers` | The `marketing.send_conversion` worker (worker role) |
 | `PurchaseEventID(order)` | `purchase:<order ID>`, on the thank-you page and in the server's event |
 | `EventPixelsChanged`, `PixelsChanged` | `marketing.pixels.changed`: a pixel saved or removed, or the consent mode changed |
+| `Module.Feeds()` → `Feeds` | `FeedAllowed(ctx, key)`: whether key opens the store's feeds (constant-time; off means no) |
+| `Feed`, `FeedGoogle`, `FeedMeta`, `FeedPath(feed, key)` | The feeds and where the storefront serves them (`/feeds/<feed>.xml?key=…`) |
+| `EventFeedChanged`, `FeedChanged` | `marketing.feed.changed`: the feeds were turned on or off or got a new key (the edge purges `f-<store>`) |
 | `Provider`, `Consent`, `Browser`, `BrowserPixel` | DTOs |
 
 ## Providers
@@ -72,12 +81,18 @@ The list is closed. Each provider is a `Spec` in
 | `savePixel` `PUT …/marketing/pixels/{provider}` | Over the version read (0 to connect); 409 when it changed since; 404 for an unknown provider |
 | `deletePixel` `DELETE …/marketing/pixels/{provider}` | Removes the pixel and its token |
 | `getMarketingSettings`, `saveMarketingSettings` `…/marketing/settings` | The consent mode, over the version read |
+| `getProductFeed` `GET …/marketing/feed` | `enabled`, and when on the `key`, `google_path` and `meta_path` (on the store's own hosts) |
+| `renewProductFeedKey` `POST …/marketing/feed` | Turns the feeds on with a new key, or replaces it: the old URLs stop working |
+| `disableProductFeed` `DELETE …/marketing/feed` | Turns them off; idempotent |
 
 All of them:
 - need `marketing.manage` (owner, manager);
-- publish `marketing.pixels.changed`, if they make a change;
+- publish an event if they make a change: `marketing.pixels.changed`
+  for the pixels and the settings, `marketing.feed.changed` for the
+  feeds;
 - are audited (`pixel.saved`, `pixel.deleted`,
-  `marketing_settings.updated`), without the token.
+  `marketing_settings.updated`, `product_feed.key_renewed`,
+  `product_feed.disabled`), without the token or the key.
 
 ## Tables
 
@@ -85,6 +100,7 @@ All of them:
 |---|---|
 | `store_pixels` | Tenant table under RLS. PK `(store_id, provider)`. `server_token` is the sealed blob; `version` is used for optimistic locking |
 | `marketing_settings` | Tenant table under RLS. One row per store, absent until the first save (`auto`) |
+| `product_feeds` | Tenant table under RLS. One row per store while its feeds are on; `key` is 32 base32 characters, kept as is (ADR-0044) |
 
 ## Rules worth knowing
 

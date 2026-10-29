@@ -79,6 +79,7 @@ type fixture struct {
 	svc            *app.Service
 	storeA, storeB tenant.StoreID
 	ctxB           context.Context
+	feedOfB        string // store B's feed key
 }
 
 func newFixture(t *testing.T) fixture {
@@ -118,6 +119,9 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	if _, err = f.svc.SaveSettings(f.ctxB, domain.Settings{Consent: domain.ConsentRequired}); err != nil {
+		t.Fatal(err)
+	}
+	if f.feedOfB, err = f.svc.RenewFeedKey(f.ctxB); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,6 +217,29 @@ func TestHappyPath(t *testing.T) {
 		s["consent"] != "required" || s["version"] != float64(1) {
 		t.Fatalf("saveMarketingSettings = %d %v", code, s)
 	}
+
+	if code, s, _ = f.do(t, req(t, http.MethodGet, path(a, "/feed"), tokManagerA, "")); code != http.StatusOK || s["enabled"] != false || len(s) != 1 {
+		t.Fatalf("getProductFeed off = %d %v", code, s)
+	}
+	code, s, _ = f.do(t, req(t, http.MethodPost, path(a, "/feed"), tokManagerA, ""))
+	key, _ := s["key"].(string)
+	if code != http.StatusOK || s["enabled"] != true || len(key) != 32 || s["google_path"] != "/feeds/google.xml?key="+key || s["meta_path"] != "/feeds/meta.xml?key="+key {
+		t.Fatalf("renewProductFeedKey = %d %v", code, s)
+	}
+	if code, s, _ = f.do(t, req(t, http.MethodGet, path(a, "/feed"), tokOwnerA, "")); code != http.StatusOK || s["key"] != key {
+		t.Fatalf("getProductFeed on = %d %v", code, s)
+	}
+	if code, s, _ = f.do(t, req(t, http.MethodPost, path(a, "/feed"), tokOwnerA, "")); code != http.StatusOK || s["key"] == key {
+		t.Fatalf("renewProductFeedKey again = %d %v", code, s)
+	}
+	for range 2 {
+		if code, _, _ = f.do(t, req(t, http.MethodDelete, path(a, "/feed"), tokOwnerA, "")); code != http.StatusNoContent {
+			t.Fatalf("disableProductFeed = %d", code)
+		}
+	}
+	if code, s, _ = f.do(t, req(t, http.MethodGet, path(a, "/feed"), tokOwnerA, "")); code != http.StatusOK || s["enabled"] != false {
+		t.Fatalf("getProductFeed after disable = %d %v", code, s)
+	}
 }
 
 func TestValidation(t *testing.T) {
@@ -266,6 +293,10 @@ func TestAuthorization(t *testing.T) {
 		{tokSupportA, http.MethodDelete, "/pixels/meta", ``, http.StatusForbidden},
 		{tokSupportA, http.MethodGet, "/settings", ``, http.StatusForbidden},
 		{tokSupportA, http.MethodPut, "/settings", `{"consent":"off","version":0}`, http.StatusForbidden},
+		{tokSupportA, http.MethodGet, "/feed", ``, http.StatusForbidden},
+		{tokSupportA, http.MethodPost, "/feed", ``, http.StatusForbidden},
+		{tokSupportA, http.MethodDelete, "/feed", ``, http.StatusForbidden},
+		{"", http.MethodPost, "/feed", ``, http.StatusUnauthorized},
 		{"", http.MethodGet, "/pixels", ``, http.StatusUnauthorized},
 		{tokManagerA, http.MethodGet, "/settings", ``, http.StatusOK},
 	}
@@ -280,7 +311,7 @@ func TestCrossTenant(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	b := f.storeB
-	leaks := []string{metaOfB, tokenOfB, `"required"`}
+	leaks := []string{metaOfB, tokenOfB, `"required"`, f.feedOfB}
 	unchanged := func(t testing.TB) {
 		t.Helper()
 		pixels, err := f.svc.Pixels(f.ctxB)
@@ -291,6 +322,9 @@ func TestCrossTenant(t *testing.T) {
 		if err != nil || s.Consent != domain.ConsentRequired || s.Version != 1 {
 			t.Fatalf("store B's settings changed: %+v %v", s, err)
 		}
+		if key, ok, err := f.svc.FeedKey(f.ctxB); err != nil || !ok || key != f.feedOfB {
+			t.Fatalf("store B's feed changed: %q %v %v", key, ok, err)
+		}
 	}
 	pixel := `{"pixel_id":"111111111111111","enabled":false,"server_token":"","version":1}`
 	cases := []testkit.CrossTenantCase{
@@ -300,6 +334,9 @@ func TestCrossTenant(t *testing.T) {
 		{OperationID: "getMarketingSettings", Request: req(t, http.MethodGet, path(b, "/settings"), tokOwnerA, ""), Leaks: leaks},
 		{OperationID: "saveMarketingSettings", Request: req(t, http.MethodPut, path(b, "/settings"), tokOwnerA, `{"consent":"off","version":1}`),
 			Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "getProductFeed", Request: req(t, http.MethodGet, path(b, "/feed"), tokOwnerA, ""), Leaks: leaks},
+		{OperationID: "renewProductFeedKey", Request: req(t, http.MethodPost, path(b, "/feed"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "disableProductFeed", Request: req(t, http.MethodDelete, path(b, "/feed"), tokOwnerA, ""), Leaks: leaks, Unchanged: unchanged},
 	}
 	for _, c := range cases {
 		t.Run(c.OperationID+" "+c.Request.Method+" "+c.Request.URL.Path, func(t *testing.T) {

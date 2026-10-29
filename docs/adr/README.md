@@ -49,3 +49,4 @@ supersedes it.
 | [0041](0041-customer-started-confirmation.md) | Customers confirm on WhatsApp first, and are thanked | Accepted |
 | [0042](0042-coupons.md) | Coupons | Accepted |
 | [0043](0043-ad-pixels-and-conversions.md) | Ad pixels, consent, and server-side conversions | Accepted |
+| [0044](0044-product-feeds.md) | Product feeds for Google and Meta | Accepted |

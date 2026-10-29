@@ -206,6 +206,27 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// ProductFeed The store's product feeds (ADR-0044): an XML file of its products,
+// one item per variant, that Google Merchant Center and Meta
+// Commerce Manager fetch from its storefront. The paths are on the
+// store's own domain.
+type ProductFeed struct {
+	Enabled bool `json:"enabled"`
+
+	// GooglePath Absent when off.
+	//
+	// Example: /feeds/google.xml?key=…
+	GooglePath *string `json:"google_path,omitempty"`
+
+	// Key The secret in the URLs; absent when off.
+	Key *string `json:"key,omitempty"`
+
+	// MetaPath Absent when off.
+	//
+	// Example: /feeds/meta.xml?key=…
+	MetaPath *string `json:"meta_path,omitempty"`
+}
+
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
@@ -256,6 +277,15 @@ type SaveMarketingSettingsJSONRequestBody = MarketingSettings
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// DisableProductFeed Turn the feeds off
+	// (DELETE /v1/stores/{store_id}/marketing/feed)
+	DisableProductFeed(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetProductFeed The store's product feeds for Google and Meta
+	// (GET /v1/stores/{store_id}/marketing/feed)
+	GetProductFeed(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// RenewProductFeedKey Turn the feeds on, or replace their key
+	// (POST /v1/stores/{store_id}/marketing/feed)
+	RenewProductFeedKey(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// ListPixels The providers a store can connect, and its pixels
 	// (GET /v1/stores/{store_id}/marketing/pixels)
 	ListPixels(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -281,6 +311,84 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// DisableProductFeed operation middleware
+func (siw *ServerInterfaceWrapper) DisableProductFeed(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableProductFeed(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProductFeed operation middleware
+func (siw *ServerInterfaceWrapper) GetProductFeed(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProductFeed(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenewProductFeedKey operation middleware
+func (siw *ServerInterfaceWrapper) RenewProductFeedKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenewProductFeedKey(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListPixels operation middleware
 func (siw *ServerInterfaceWrapper) ListPixels(w http.ResponseWriter, r *http.Request) {
@@ -555,11 +663,125 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/pixels/{provider}", wrapper.SavePixel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/settings", wrapper.GetMarketingSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/settings", wrapper.SaveMarketingSettings)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/feed", wrapper.DisableProductFeed)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/feed", wrapper.GetProductFeed)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/marketing/feed", wrapper.RenewProductFeedKey)
 
 	return m
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type DisableProductFeedRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type DisableProductFeedResponseObject interface {
+	VisitDisableProductFeedResponse(w http.ResponseWriter) error
+}
+
+type DisableProductFeed204Response struct {
+}
+
+func (response DisableProductFeed204Response) VisitDisableProductFeedResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisableProductFeeddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisableProductFeeddefaultApplicationProblemPlusJSONResponse) VisitDisableProductFeedResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProductFeedRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetProductFeedResponseObject interface {
+	VisitGetProductFeedResponse(w http.ResponseWriter) error
+}
+
+type GetProductFeed200JSONResponse ProductFeed
+
+func (response GetProductFeed200JSONResponse) VisitGetProductFeedResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProductFeeddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetProductFeeddefaultApplicationProblemPlusJSONResponse) VisitGetProductFeedResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RenewProductFeedKeyRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type RenewProductFeedKeyResponseObject interface {
+	VisitRenewProductFeedKeyResponse(w http.ResponseWriter) error
+}
+
+type RenewProductFeedKey200JSONResponse ProductFeed
+
+func (response RenewProductFeedKey200JSONResponse) VisitRenewProductFeedKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RenewProductFeedKeydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RenewProductFeedKeydefaultApplicationProblemPlusJSONResponse) VisitRenewProductFeedKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListPixelsRequestObject struct {
 	StoreId StoreID `json:"store_id"`
@@ -759,6 +981,15 @@ func (response SaveMarketingSettingsdefaultApplicationProblemPlusJSONResponse) V
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// DisableProductFeed Turn the feeds off
+	// (DELETE /v1/stores/{store_id}/marketing/feed)
+	DisableProductFeed(ctx context.Context, request DisableProductFeedRequestObject) (DisableProductFeedResponseObject, error)
+	// GetProductFeed The store's product feeds for Google and Meta
+	// (GET /v1/stores/{store_id}/marketing/feed)
+	GetProductFeed(ctx context.Context, request GetProductFeedRequestObject) (GetProductFeedResponseObject, error)
+	// RenewProductFeedKey Turn the feeds on, or replace their key
+	// (POST /v1/stores/{store_id}/marketing/feed)
+	RenewProductFeedKey(ctx context.Context, request RenewProductFeedKeyRequestObject) (RenewProductFeedKeyResponseObject, error)
 	// ListPixels The providers a store can connect, and its pixels
 	// (GET /v1/stores/{store_id}/marketing/pixels)
 	ListPixels(ctx context.Context, request ListPixelsRequestObject) (ListPixelsResponseObject, error)
@@ -813,6 +1044,84 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// DisableProductFeed operation middleware
+func (sh *strictHandler) DisableProductFeed(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request DisableProductFeedRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableProductFeed(ctx, request.(DisableProductFeedRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableProductFeed")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableProductFeedResponseObject); ok {
+		if err := validResponse.VisitDisableProductFeedResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProductFeed operation middleware
+func (sh *strictHandler) GetProductFeed(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetProductFeedRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProductFeed(ctx, request.(GetProductFeedRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProductFeed")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProductFeedResponseObject); ok {
+		if err := validResponse.VisitGetProductFeedResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RenewProductFeedKey operation middleware
+func (sh *strictHandler) RenewProductFeedKey(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request RenewProductFeedKeyRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RenewProductFeedKey(ctx, request.(RenewProductFeedKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RenewProductFeedKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RenewProductFeedKeyResponseObject); ok {
+		if err := validResponse.VisitRenewProductFeedKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListPixels operation middleware

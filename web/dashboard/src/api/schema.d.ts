@@ -2887,6 +2887,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/marketing/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's product feeds for Google and Meta
+         * @description Permission: marketing.manage. Not enabled until a key is made.
+         */
+        get: operations["getProductFeed"];
+        put?: never;
+        /**
+         * Turn the feeds on, or replace their key
+         * @description Permission: marketing.manage. A new key replaces the old one: the
+         *     old URLs stop working (an edge copy may serve for up to an hour).
+         */
+        post: operations["renewProductFeedKey"];
+        /**
+         * Turn the feeds off
+         * @description Permission: marketing.manage. Idempotent.
+         */
+        delete: operations["disableProductFeed"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{provider}/{store_id}/{connection_id}": {
         parameters: {
             query?: never;
@@ -4676,6 +4707,27 @@ export interface components {
             consent: "auto" | "required" | "off";
             /** @description The version read; 0 before the first save. */
             version: number;
+        };
+        /**
+         * @description The store's product feeds (ADR-0044): an XML file of its products,
+         *     one item per variant, that Google Merchant Center and Meta
+         *     Commerce Manager fetch from its storefront. The paths are on the
+         *     store's own domain.
+         */
+        ProductFeed: {
+            enabled: boolean;
+            /** @description The secret in the URLs; absent when off. */
+            key?: string;
+            /**
+             * @description Absent when off.
+             * @example /feeds/google.xml?key=…
+             */
+            google_path?: string;
+            /**
+             * @description Absent when off.
+             * @example /feeds/meta.xml?key=…
+             */
+            meta_path?: string;
         };
         /**
          * @description The campaign that brought the order (ADR-0043): the UTM parameters
@@ -8734,6 +8786,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MarketingSettings"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProductFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The feeds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductFeed"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    renewProductFeedKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The feeds, with the new key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductFeed"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disableProductFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Turned off. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

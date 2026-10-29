@@ -49,12 +49,18 @@ func (r *recorder) RecordTx(_ context.Context, _ pgx.Tx, e audit.Entry) error {
 type published struct {
 	mu     sync.Mutex
 	events []domain.PixelsChanged
+	feeds  int // FeedChanged events
 }
 
 func (p *published) PublishTx(_ context.Context, _ pgx.Tx, ev event.Event) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.events = append(p.events, ev.(domain.PixelsChanged))
+	switch e := ev.(type) {
+	case domain.PixelsChanged:
+		p.events = append(p.events, e)
+	case domain.FeedChanged:
+		p.feeds++
+	}
 	return nil
 }
 

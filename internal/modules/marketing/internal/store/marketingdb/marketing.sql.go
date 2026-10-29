@@ -11,6 +11,18 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const deleteFeed = `-- name: DeleteFeed :execrows
+DELETE FROM product_feeds WHERE store_id = $1
+`
+
+func (q *Queries) DeleteFeed(ctx context.Context, storeID ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFeed, storeID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deletePixel = `-- name: DeletePixel :execrows
 DELETE FROM store_pixels WHERE store_id = $1 AND provider = $2
 `
@@ -26,6 +38,17 @@ func (q *Queries) DeletePixel(ctx context.Context, arg DeletePixelParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getFeed = `-- name: GetFeed :one
+SELECT store_id, key, created_at FROM product_feeds WHERE store_id = $1
+`
+
+func (q *Queries) GetFeed(ctx context.Context, storeID ulid.ID) (ProductFeed, error) {
+	row := q.db.QueryRow(ctx, getFeed, storeID)
+	var i ProductFeed
+	err := row.Scan(&i.StoreID, &i.Key, &i.CreatedAt)
+	return i, err
 }
 
 const getPixel = `-- name: GetPixel :one
@@ -179,6 +202,26 @@ func (q *Queries) ListPixels(ctx context.Context, storeID ulid.ID) ([]StorePixel
 		return nil, err
 	}
 	return items, nil
+}
+
+const setFeedKey = `-- name: SetFeedKey :one
+INSERT INTO product_feeds (store_id, key)
+VALUES ($1, $2)
+ON CONFLICT (store_id) DO UPDATE SET key = EXCLUDED.key, created_at = now()
+RETURNING store_id, key, created_at
+`
+
+type SetFeedKeyParams struct {
+	StoreID ulid.ID
+	Key     string
+}
+
+// A new key replaces the old one: the old URLs stop working.
+func (q *Queries) SetFeedKey(ctx context.Context, arg SetFeedKeyParams) (ProductFeed, error) {
+	row := q.db.QueryRow(ctx, setFeedKey, arg.StoreID, arg.Key)
+	var i ProductFeed
+	err := row.Scan(&i.StoreID, &i.Key, &i.CreatedAt)
+	return i, err
 }
 
 const updatePixel = `-- name: UpdatePixel :one
