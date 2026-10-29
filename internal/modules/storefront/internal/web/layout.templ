@@ -3,7 +3,7 @@ package web
 import "strconv"
 
 // layout is every storefront page: head (SEO, the store's inline
-// stylesheet, structured data, our one script), header, main, footer.
+// stylesheet, structured data, our scripts), header, main, footer.
 templ layout(p *pageCtx, body templ.Component) {
 	<!DOCTYPE html>
 	<html lang={ string(p.l) } dir={ p.l.Dir() }>
@@ -40,6 +40,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			}
 			@p.ldScript()
 			<script type="module" src={ p.jsURL }></script>
+			if p.pageJS != "" {
+				<script type="module" src={ p.pageJS }></script>
+			}
 			if p.challenge {
 				<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 			}

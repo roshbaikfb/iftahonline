@@ -22,6 +22,7 @@ type pageCtx struct {
 	path      string // without the language prefix, e.g. /p/shirt
 	jsURL     string
 	cssURL    string   // a stylesheet the page links besides the inlined one
+	pageJS    string   // a script the page loads besides app.js
 	fonts     []string // preloaded
 	title     string
 	desc      string

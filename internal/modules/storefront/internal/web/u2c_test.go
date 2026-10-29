@@ -124,3 +124,33 @@ func TestCheckoutStylesheet(t *testing.T) {
 		t.Fatalf("checkout.css: %d %v", rec.Code, rec.Header())
 	}
 }
+
+// TestCheckoutScript: the checkout page alone loads checkout.js (its
+// totals, coupon and payment choice); every other page carries app.js
+// only, so the pages shoppers land on download none of it.
+func TestCheckoutScript(t *testing.T) {
+	t.Parallel()
+	f := newCheckoutFixture(t)
+	cookies, _ := checkoutCart(t, f)
+	script := regexp.MustCompile(`<script type="module" src="(/assets/checkout\.[0-9a-f]{8}\.js)"></script>`)
+	m := script.FindStringSubmatch(f.getWith(t, "/checkout", cookies).Body.String())
+	if m == nil {
+		t.Fatal("checkout without its script")
+	}
+	for _, page := range []string{f.getWith(t, "/cart", cookies).Body.String(), f.get(t, "/thank-you/IFT-1001").Body.String(),
+		f.get(t, "/").Body.String(), f.get(t, "/p/cotton-tee").Body.String()} {
+		if script.MatchString(page) {
+			t.Error("a page other than checkout loads checkout.js")
+		}
+	}
+	a, err := web.LoadAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	a.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, m[1], nil))
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") ||
+		!strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || !strings.Contains(rec.Body.String(), "data-coupon-apply") {
+		t.Fatalf("checkout.js: %d %v", rec.Code, rec.Header())
+	}
+}
