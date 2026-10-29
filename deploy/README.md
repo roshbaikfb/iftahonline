@@ -4,6 +4,9 @@ One static binary (`platform`) serves every role. Ship it either as the
 distroless image (`deploy/docker/Dockerfile`) or as a bare binary under
 systemd (`deploy/systemd/`).
 
+Before real stores use it, see [docs/go-live.md](../docs/go-live.md): the
+accounts (WhatsApp, SMS, email) and settings that turn features on.
+
 ## systemd (Ubuntu LTS / Debian)
 
 ```sh
