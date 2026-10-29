@@ -225,6 +225,9 @@ Styles, scripts and fonts:
 - The CSP allows the inlined stylesheet by its sha256 (`platform/csp`).
 - Static files are under `/assets/` with content-hashed names: one
   module script and the self-hosted fonts.
+- A page preloads both weights of the theme font in its script. Iftah
+  Sans Arabic's Arabic files hold ASCII too, so its pages fetch two font
+  files in either language (`assets/fonts/README.md`).
 - Sources are in `internal/web/assets/src` and are minified by esbuild
   at `make gen`. Font provenance and licenses are in `assets/fonts`.
 

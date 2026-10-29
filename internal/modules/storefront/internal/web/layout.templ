@@ -31,8 +31,8 @@ templ layout(p *pageCtx, body templ.Component) {
 			if p.image != "" {
 				<meta property="og:image" content={ p.image }/>
 			}
-			if p.font != "" {
-				<link rel="preload" href={ p.font } as="font" type="font/woff2" crossorigin/>
+			for _, f := range p.fonts {
+				<link rel="preload" href={ f } as="font" type="font/woff2" crossorigin/>
 			}
 			@p.styleTag()
 			if p.cssURL != "" {

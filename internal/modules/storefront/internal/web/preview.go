@@ -23,7 +23,7 @@ func (s *Shop) servePreview(w http.ResponseWriter, r *http.Request, p *pageCtx, 
 	}
 	if d.Theme != nil {
 		p.v = s.withTheme(p.v, *d.Theme)
-		p.font = s.assets.fontPreload(p.v.theme, p.l)
+		p.fonts = s.assets.fontPreload(p.v.theme, p.l)
 	}
 	p.preview, p.homeDraft, p.noindex = token, d.Home, true
 	// The banner's rules ride with the page's own style, so shoppers'

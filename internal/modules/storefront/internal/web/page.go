@@ -21,8 +21,8 @@ type pageCtx struct {
 	base      string // scheme://host
 	path      string // without the language prefix, e.g. /p/shirt
 	jsURL     string
-	cssURL    string // a stylesheet the page links besides the inlined one
-	font      string // preload
+	cssURL    string   // a stylesheet the page links besides the inlined one
+	fonts     []string // preloaded
 	title     string
 	desc      string
 	image     string // og:image

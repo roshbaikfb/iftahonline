@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 """Builds the storefront's Iftah Sans Arabic from IBM Plex Sans Arabic.
 
-The Fontsource Arabic subset of IBM Plex Sans Arabic is three times the
-size of Cairo's, which pushes the storefront's LCP past its budget on a
-slow phone network. This keeps what Egyptian and Gulf stores write:
+The full IBM Plex Sans Arabic is ten times the size the storefront can
+afford on a slow phone network. This keeps what Egyptian and Gulf stores
+write, in one file per weight:
 
-- the Arabic block (U+0600-06FF), the joiners and marks (U+200C-200F),
-  dashes and punctuation (U+2010-2027), ASCII digits and symbols, and the
-  no-break space;
+- the Arabic letters, marks and digits these stores type, with the four
+  Persian letters used for foreign sounds (U+067E, U+0686, U+06A4,
+  U+06AF), the Persian keyboard's kaf, yeh and digits;
+- ASCII, the Latin-1 symbols, dashes, quotes, the euro, the minus and the
+  joiners, so an Arabic page (prices, codes, a brand name in English)
+  needs no Latin file at all;
 - every OpenType layout feature, so shaping is unchanged.
 
-It drops the Arabic Supplement and the presentation forms, which these
-stores do not type (a character outside the subset falls back to the
-system font), and drops the hinting.
+A character outside the subset falls to the family's Latin file (if it
+is there) or to the system font. The hinting is dropped.
 
 The license (SIL OFL 1.1) reserves the name "Plex": a modified version
 may not carry it. So the result is renamed "Iftah Sans Arabic" in every
 name record, and keeps the copyright notice and the license URL.
 
 Usage (fonttools 4.x):
-    scripts/build-iftah-sans.py <dir of the Fontsource files> <out dir>
-The inputs are ibm-plex-sans-arabic-arabic-{400,700}.woff2 from
-cdn.jsdelivr.net/fontsource/fonts/ibm-plex-sans-arabic@latest/
-(arabic-400-normal.woff2, arabic-700-normal.woff2).
+    scripts/build-iftah-sans.py <dir of the source files> <out dir>
+The inputs are IBMPlexSansArabic-{Regular,Bold}.ttf from
+github.com/google/fonts/tree/main/ofl/ibmplexsansarabic.
 """
 
 import pathlib
@@ -31,7 +32,12 @@ import sys
 from fontTools import subset
 from fontTools.ttLib import TTFont
 
-UNICODES = "U+0600-06FF,U+200C-200F,U+0020-0040,U+00A0,U+2010-2027"
+UNICODES = (
+    "U+060C,U+061B,U+061F,U+0621-063A,U+0640-0655,U+0660-066D,U+0670,"
+    "U+067E,U+0686,U+06A4,U+06A9,U+06AF,U+06CC,U+06D4,U+06F0-06F9,"
+    "U+0020-007E,U+00A0-00BF,U+00D7,U+00F7,U+200C-200F,U+2010-2027,"
+    "U+2030-203A,U+20AC,U+2122,U+2212"
+)
 NAME = ("IBM Plex Sans Arabic", "Iftah Sans Arabic")
 POSTSCRIPT = ("IBMPlexSansArabic", "IftahSansArabic")
 # The records that name the font (family, full, unique, PostScript,
@@ -76,8 +82,8 @@ def main() -> None:
     if len(sys.argv) != 3:
         sys.exit(__doc__)
     src, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-    for weight in ("400", "700"):
-        build(src / f"ibm-plex-sans-arabic-arabic-{weight}.woff2", out / f"iftah-sans-arabic-arabic-{weight}.woff2")
+    for weight, style in (("400", "Regular"), ("700", "Bold")):
+        build(src / f"IBMPlexSansArabic-{style}.ttf", out / f"iftah-sans-arabic-arabic-{weight}.woff2")
 
 
 if __name__ == "__main__":

@@ -265,15 +265,15 @@ func layout(p *pageCtx, body templ.Component) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if p.font != "" {
+		for _, f := range p.fonts {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<link rel=\"preload\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var17 templ.SafeURL
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(p.font)
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(f)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `layout.templ`, Line: 35, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `layout.templ`, Line: 35, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
