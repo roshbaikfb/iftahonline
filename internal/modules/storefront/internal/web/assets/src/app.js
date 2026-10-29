@@ -1,6 +1,7 @@
 // Storefront enhancements (ADR-0018). Every page works without this
 // file; it only adds the live countdown and the variant picker's price.
-// Loaded as a module from our origin (CSP script-src 'self').
+// Loaded as a module from our origin (CSP script-src 'self'). What only
+// checkout needs is in checkout.js, loaded by that page alone.
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -103,7 +104,10 @@ function orderQuotes() {
         if (!res.ok || mine !== seq) return;
         const q = await res.json();
         if (out.hasAttribute("data-totals")) {
-          fillTotals(form, out, q);
+          // checkout.js fills the totals card: from the event, or from
+          // out.quote if it loads after the answer.
+          out.quote = q;
+          out.dispatchEvent(new CustomEvent("quote"));
           return;
         }
         out.textContent = q.text;
@@ -116,8 +120,7 @@ function orderQuotes() {
     for (const name of ["governorate", "city", "variant", "qty", "pay_method", "coupon"]) {
       for (const el of form.querySelectorAll(`[name="${name}"]`)) el.addEventListener("change", update);
     }
-    const apply = form.querySelector("[data-coupon-apply]");
-    if (apply) apply.addEventListener("click", update);
+    out.addEventListener("requote", update);
     update();
   }
 }
@@ -134,53 +137,6 @@ function formatMoney(minor, f) {
   if (frac) s += "." + String(frac).padStart(f.units, "0");
   if (neg) s = "-" + s;
   return f.after ? `${s} ${f.sym}` : `${f.sym} ${s}`;
-}
-
-// fillTotals writes checkout's totals card from the quote: each amount
-// on its line, the cash fee's row only when there is one, the summary's
-// total, and the cash choice's note with its fee.
-function fillTotals(form, card, q) {
-  const bad = card.querySelector("[data-not-delivered]");
-  bad.textContent = q.deliverable ? "" : q.text;
-  bad.hidden = q.deliverable;
-  const a = q.amounts;
-  if (!a) return;
-  for (const el of card.querySelectorAll("[data-amt]")) {
-    const v = a[el.dataset.amt];
-    if (v !== undefined) el.textContent = v;
-  }
-  card.querySelector("[data-cod-row]").hidden = !a.cod_fee;
-  const off = card.querySelector("[data-discount-row]");
-  if (off) off.hidden = !a.discount;
-  const msg = form.querySelector("[data-coupon-msg]");
-  if (msg) {
-    msg.textContent = q.coupon ? q.coupon.message : "";
-    msg.hidden = !q.coupon;
-    msg.classList.toggle("ok", !!q.coupon && q.coupon.ok);
-    msg.classList.toggle("bad", !!q.coupon && !q.coupon.ok);
-  }
-  const sum = document.querySelector("[data-sum-total]");
-  if (sum) sum.textContent = a.total;
-  const note = form.querySelector("[data-cod-note]");
-  if (note && a.cod_note) note.textContent = a.cod_note;
-}
-
-// payChoice keeps checkout's button and note in step with the payment
-// method: "confirm and pay" and the secure page for a card, "confirm"
-// and paying the courier for cash.
-function payChoice() {
-  for (const form of document.querySelectorAll("form[data-order]")) {
-    const cta = form.querySelector("[data-card-label]");
-    const note = form.querySelector("[data-card-text]");
-    if (!cta) continue;
-    const update = () => {
-      const el = form.querySelector('[name="pay_method"]:checked');
-      const card = !!el && el.value === "card";
-      cta.textContent = card ? cta.dataset.cardLabel : cta.dataset.codLabel;
-      if (note) note.querySelector("[data-secure-text]").textContent = card ? note.dataset.cardText : note.dataset.codText;
-    };
-    for (const el of form.querySelectorAll('[name="pay_method"]')) el.addEventListener("change", update);
-  }
 }
 
 // productForms follows the shopper's choice on the product page: the
@@ -369,7 +325,6 @@ variantPickers();
 cartBadge();
 orderForms();
 orderQuotes();
-payChoice();
 productForms();
 deliveryQuote();
 share();

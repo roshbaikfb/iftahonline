@@ -141,8 +141,10 @@ The product page (U2b, the approved mockup):
 Cart, checkout and thank-you (U2c, the approved mockups; the cart has
 no mockup and follows the same system):
 - **Layout.** White cards on a tinted background. The pages link
-  `checkout.css` (5 KB) besides the inlined base, so the pages shoppers
-  land on keep a small first paint.
+  `checkout.css` (5 KB) besides the inlined base, and checkout loads
+  `checkout.js` (1.6 KB: the totals card, the coupon, the payment
+  choice) besides `app.js`, so the pages shoppers land on keep a small
+  first paint.
 - **Cart.** Each line is a card: its picture (the product's first ready
   image, from the same single `SellableVariants` query), the title, the
   choice, the price, and a stepper of submit buttons (− to 0 removes
@@ -223,8 +225,9 @@ Languages and responses:
 
 Styles, scripts and fonts:
 - The CSP allows the inlined stylesheet by its sha256 (`platform/csp`).
-- Static files are under `/assets/` with content-hashed names: one
-  module script and the self-hosted fonts.
+- Static files are under `/assets/` with content-hashed names: the
+  module scripts (`app.js` everywhere, `checkout.js` on checkout) and
+  the self-hosted fonts.
 - A page preloads both weights of the theme font in its script. Iftah
   Sans Arabic's Arabic files hold ASCII too, so its pages fetch two font
   files in either language (`assets/fonts/README.md`).

@@ -14,7 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 )
 
-//go:embed assets/dist/site.css assets/dist/checkout.css assets/dist/app.js assets/fonts/*.woff2
+//go:embed assets/dist/site.css assets/dist/checkout.css assets/dist/app.js assets/dist/checkout.js assets/fonts/*.woff2
 var assetFiles embed.FS
 
 // AssetsPrefix is where static files are served, on every store host.
@@ -28,7 +28,7 @@ type asset struct {
 	contentType string
 }
 
-// Assets are the storefront's embedded static files: the script, the
+// Assets are the storefront's embedded static files: the scripts, the
 // fonts and the cart and checkout pages' stylesheet, served from our
 // origin (CSP 'self'), and the base stylesheet, which is inlined into
 // pages.
@@ -36,6 +36,7 @@ type Assets struct {
 	baseCSS     string
 	jsURL       string
 	checkoutURL string            // checkout.css: the cart, checkout and thank-you pages only
+	checkoutJS  string            // checkout.js: the checkout page only
 	fonts       map[string]string // "cairo-arabic-400" → URL
 	files       map[string]asset  // "app.3f2a9c1b.js" → file
 }
@@ -57,6 +58,11 @@ func LoadAssets() (*Assets, error) {
 		return nil, fmt.Errorf("web: %w", err)
 	}
 	a.checkoutURL = a.add("checkout", ".css", "text/css; charset=utf-8", checkout)
+	checkoutJS, err := assetFiles.ReadFile("assets/dist/checkout.js")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	a.checkoutJS = a.add("checkout", ".js", "text/javascript; charset=utf-8", checkoutJS)
 	fonts, err := fs.Glob(assetFiles, "assets/fonts/*.woff2")
 	if err != nil {
 		return nil, fmt.Errorf("web: %w", err)

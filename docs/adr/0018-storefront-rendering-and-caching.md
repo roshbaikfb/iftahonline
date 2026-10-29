@@ -58,7 +58,10 @@ theme, their page sections and the catalog's read side (ADR-0015).
      the per-page policy.
    - One ES module of 1 KB (533 B gzipped) adds the countdown tick and
      the variant picker's price. Every page works without it. FAQ uses
-     `<details>`.
+     `<details>`. *Amended 2026-10-29:* what only checkout needs (its
+     totals, coupon and payment choice) is a second module,
+     `checkout.js`, which only the checkout page loads, so the pages
+     shoppers land on do not carry it.
    - Fonts are self-hosted WOFF2 files (Cairo, Tajawal, IBM Plex Sans
      Arabic, Noto Kufi Arabic; OFL), in Arabic and Latin subsets. Only
      the theme's font is declared, and its regular weight in the

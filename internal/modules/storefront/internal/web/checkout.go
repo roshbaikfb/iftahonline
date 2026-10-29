@@ -427,6 +427,6 @@ func (s *Shop) renderOrder(w http.ResponseWriter, r *http.Request, p *pageCtx, s
 	}
 	p.title, p.noindex = p.l.T(MsgCheckout)+" | "+p.v.name, true
 	p.challenge = f.challenge != ""
-	p.head, p.back, p.soft, p.cssURL = headCheckout, "/cart", true, s.assets.checkoutURL
+	p.head, p.back, p.soft, p.cssURL, p.pageJS = headCheckout, "/cart", true, s.assets.checkoutURL, s.assets.checkoutJS
 	s.writePrivate(w, r, p, status, orderPage(p, f))
 }
