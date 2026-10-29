@@ -89,7 +89,7 @@ function orderQuotes() {
     let seq = 0;
     const update = async () => {
       const body = new URLSearchParams();
-      for (const name of ["governorate", "city", "variant", "qty", "pay_method"]) {
+      for (const name of ["governorate", "city", "variant", "qty", "pay_method", "coupon"]) {
         const el = form.elements.namedItem(name); // a radio group reads as its checked value
         if (el && el.value) body.set(name, el.value);
       }
@@ -113,9 +113,11 @@ function orderQuotes() {
         // offline or busy: the order still shows its total after placing
       }
     };
-    for (const name of ["governorate", "city", "variant", "qty", "pay_method"]) {
+    for (const name of ["governorate", "city", "variant", "qty", "pay_method", "coupon"]) {
       for (const el of form.querySelectorAll(`[name="${name}"]`)) el.addEventListener("change", update);
     }
+    const apply = form.querySelector("[data-coupon-apply]");
+    if (apply) apply.addEventListener("click", update);
     update();
   }
 }
@@ -148,6 +150,15 @@ function fillTotals(form, card, q) {
     if (v !== undefined) el.textContent = v;
   }
   card.querySelector("[data-cod-row]").hidden = !a.cod_fee;
+  const off = card.querySelector("[data-discount-row]");
+  if (off) off.hidden = !a.discount;
+  const msg = form.querySelector("[data-coupon-msg]");
+  if (msg) {
+    msg.textContent = q.coupon ? q.coupon.message : "";
+    msg.hidden = !q.coupon;
+    msg.classList.toggle("ok", !!q.coupon && q.coupon.ok);
+    msg.classList.toggle("bad", !!q.coupon && !q.coupon.ok);
+  }
   const sum = document.querySelector("[data-sum-total]");
   if (sum) sum.textContent = a.total;
   const note = form.querySelector("[data-cod-note]");

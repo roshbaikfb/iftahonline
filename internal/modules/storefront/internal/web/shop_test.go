@@ -375,8 +375,19 @@ func (f fakeOrders) OrderSummary(_ context.Context, ref string) (web.OrderSummar
 
 // Quote delivers to Cairo (in 2–3 days) and elsewhere for 50, free from
 // 1,000, with a 10 COD fee (none by card), and not to Aswan; "EG-XX" is
-// invalid and "EG-LX" fails.
+// invalid and "EG-LX" fails. Coupon SAVE10 takes 10% off the items;
+// OLD has expired; any other code does not exist.
 func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView, error) {
+	off := int64(0)
+	switch strings.ToUpper(req.Coupon) {
+	case "":
+	case "SAVE10":
+		off = -1 // 10% of the subtotal, below
+	case "OLD":
+		return web.QuoteView{}, &web.OrderInvalidError{Fields: []string{"coupon_code"}, Coupon: "expired"}
+	default:
+		return web.QuoteView{}, &web.OrderInvalidError{Fields: []string{"coupon_code"}, Coupon: "not_found"}
+	}
 	sub := int64(0)
 	for _, l := range req.Lines {
 		sub += 15000 * int64(l.Qty)
@@ -398,8 +409,14 @@ func (fakeOrders) Quote(_ context.Context, req web.QuoteRequest) (web.QuoteView,
 		fee = 0
 	}
 	freeOver := egp(100000)
+	if off < 0 {
+		off = sub / 10
+	}
 	q := web.QuoteView{Deliverable: true, FreeShipping: ship == 0, Subtotal: egp(sub), Shipping: egp(ship), CODFee: egp(fee),
-		Total: egp(sub + ship + fee), FreeOver: &freeOver}
+		Total: egp(sub - off + ship + fee), FreeOver: &freeOver, Discount: egp(off)}
+	if off > 0 {
+		q.Coupon = "SAVE10"
+	}
 	if req.Governorate == "EG-C" {
 		q.Days = &web.DeliveryDays{Min: 2, Max: 3}
 	}

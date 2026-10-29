@@ -250,6 +250,18 @@ const (
 	MsgConfirmWATitle
 	MsgConfirmWANote
 	MsgConfirmWAButton
+	MsgCoupon
+	MsgCouponApply
+	MsgDiscount
+	MsgCouponApplied
+	MsgCouponNotFound
+	MsgCouponInactive
+	MsgCouponNotStarted
+	MsgCouponExpired
+	MsgCouponMinSubtotal
+	MsgCouponUsedUp
+	MsgCouponPerCustomer
+	MsgCouponChanged
 	msgCount
 )
 
@@ -457,6 +469,18 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgConfirmWATitle:        {"أكّد طلبك الآن على واتساب", "Confirm your order on WhatsApp now"},
 	MsgConfirmWANote:         {"اضغط الزر ثم أرسل الرسالة الجاهزة كما هي، فيتأكد طلبك فوراً ويُجهَّز أسرع.", "Tap the button and send the ready message as it is: your order is confirmed at once and prepared sooner."},
 	MsgConfirmWAButton:       {"أكّد على واتساب", "Confirm on WhatsApp"},
+	MsgCoupon:                {"كود الخصم (اختياري)", "Discount code (optional)"},
+	MsgCouponApply:           {"تطبيق", "Apply"},
+	MsgDiscount:              {"الخصم", "Discount"},
+	MsgCouponApplied:         {"تم تطبيق الكود", "Code applied"},
+	MsgCouponNotFound:        {"هذا الكود غير صحيح", "This code does not exist"},
+	MsgCouponInactive:        {"هذا الكود غير مفعّل الآن", "This code is not active"},
+	MsgCouponNotStarted:      {"هذا الكود لم يبدأ بعد", "This code is not valid yet"},
+	MsgCouponExpired:         {"انتهت صلاحية هذا الكود", "This code has expired"},
+	MsgCouponMinSubtotal:     {"قيمة الطلب أقل من الحد الأدنى لهذا الكود", "Your order is below this code's minimum"},
+	MsgCouponUsedUp:          {"نفدت استخدامات هذا الكود", "This code has been used up"},
+	MsgCouponPerCustomer:     {"استخدمت هذا الكود من قبل", "You have already used this code"},
+	MsgCouponChanged:         {"تغيّرت شروط هذا الكود، راجع الإجمالي ثم أكّد الطلب", "This code changed; check the total and place the order again"},
 }
 
 // T returns the message in l.

@@ -66,7 +66,7 @@ whose event does not list the products using it).
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
 | `/order` (POST) | A landing page's one-step order form |
-| `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart |
+| `/checkout` (GET, POST) | The cart's summary with the order form; POST places the order and empties the cart. The form has a coupon field (ADR-0042): a code the order refuses comes back on it with why |
 | `/thank-you/{ref}` | An order's summary (`ref` is the order ID; the page shows its short code); for a card order, its payment status, and `?pay=1` sends the shopper on to pay |
 | any page `?preview=<token>` | With a live preview link (ADR-0036): the draft theme and home page, a «معاينة» banner, links that keep the token, `private, no-store`, `noindex`; never cached. A dead token shows the published page |
 
@@ -156,6 +156,14 @@ no mockup and follows the same system):
     brands, cash on delivery chosen by default;
   - the totals card;
   - the button and the note under it, which follow the method.
+- **Coupons** (ADR-0042). The quote takes the form's `coupon`. A code
+  that applies adds a `discount` line to `amounts` and
+  `coupon: {ok: true, code, message}`. One that does not answers
+  `coupon: {ok: false, message}` with the reason in the page's language
+  (not found, inactive, not started, expired, below its minimum, used
+  up, already used by you, changed), and the amounts are without it. The
+  "Apply" button and the field's change quote again. The thank-you page
+  shows the discount with its code.
 - **The totals card.** It fills from `/order/quote`'s `amounts`
   (subtotal, "الشحن إلى …", shipping or free, COD fee, total), and the
   cash choice's note gets its fee.

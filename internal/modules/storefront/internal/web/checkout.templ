@@ -147,10 +147,23 @@ templ orderPage(p *pageCtx, f *orderForm) {
 					<p class="cod-only"><strong>{ p.l.T(MsgPayCODOnly) }</strong><small data-cod-note>{ p.l.T(MsgCODCash) }</small></p>
 				}
 			</section>
+			<div class={ "card-box", "fld", "coupon", templ.KV("bad", f.bad("coupon")) }>
+				<label for="o-coupon">{ p.l.T(MsgCoupon) }</label>
+				<div class="coupon-row">
+					<input type="text" name="coupon" id="o-coupon" value={ f.value("coupon") } maxlength="32" autocomplete="off" autocapitalize="characters" spellcheck="false" dir="ltr"/>
+					<button type="button" class="btn-ghost" data-coupon-apply>{ p.l.T(MsgCouponApply) }</button>
+				</div>
+				<p class="coupon-msg" data-coupon-msg role="status" aria-live="polite" hidden?={ !f.bad("coupon") }>
+					if f.bad("coupon") {
+						{ p.l.T(f.errors["coupon"]) }
+					}
+				</p>
+			</div>
 			<section class="card-box totals" data-quote={ p.URL("/order/quote") } data-totals aria-live="polite">
 				if f.summary != nil && f.summary.subtotal != nil {
 					<p class="row"><span>{ p.l.T(MsgProducts) }</span><span data-amt="subtotal">{ p.l.Price(*f.summary.subtotal) }</span></p>
 				}
+				<p class="row discount" data-discount-row hidden><span>{ p.l.T(MsgDiscount) }</span><span data-amt="discount"></span></p>
 				<p class="row"><span data-amt="ship_label">{ p.l.T(MsgShipping) }</span><span data-amt="shipping">{ p.l.T(MsgShippingLater) }</span></p>
 				<p class="row" data-cod-row hidden><span>{ p.l.T(MsgCODFee) }</span><span data-amt="cod_fee"></span></p>
 				<p class="row total"><span>{ p.l.T(MsgTotal) }</span>
