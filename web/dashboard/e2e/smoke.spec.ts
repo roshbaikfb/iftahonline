@@ -442,3 +442,39 @@ test('a merchant sets order confirmation and writes the SMS text', async ({ page
   await expect(page.getByText('لا رسائل هنا بعد.')).toBeVisible();
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// Coupons (6g) against the real API: make one, see it listed, turn it
+// off, and delete it (no order used it).
+test('a merchant makes a coupon, turns it off and deletes it', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الكوبونات' }).click();
+  await page.getByRole('link', { name: 'كوبون جديد' }).first().click();
+  await page.getByLabel('الكود').fill('e2e-10');
+  await page.getByLabel('النسبة').fill('15');
+  await page.getByLabel('أقل مجموع للمنتجات (اختياري)').fill('200');
+  await expect(page.getByTestId('coupon-summary')).toContainText('خصم 15% على المنتجات');
+  await page.getByRole('button', { name: 'حفظ الكوبون' }).click();
+
+  const row = page.locator('table.orders tbody tr').filter({ hasText: 'E2E-10' });
+  await expect(row).toContainText('15% من المنتجات');
+  await expect(row).toContainText('من 200 ج.م');
+  await expect(row).toContainText('مفعّل');
+
+  await row.getByRole('link', { name: 'تعديل E2E-10' }).click();
+  await page.getByRole('button', { name: 'مفعّل' }).click();
+  await page.getByRole('button', { name: 'حفظ الكوبون' }).click();
+  await expect(row).toContainText('متوقف');
+
+  await row.getByRole('link', { name: 'تعديل E2E-10' }).click();
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('button', { name: 'حذف الكوبون' }).click();
+  await expect(page.getByRole('heading', { name: 'الكوبونات', level: 1 })).toBeVisible();
+  await expect(row).toHaveCount(0);
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});

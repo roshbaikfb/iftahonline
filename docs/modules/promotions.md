@@ -59,6 +59,24 @@ Codes are unique per store, case-insensitive (stored upper case), and
 All need `promotions.manage` (owner, manager) and are audited
 (`coupon.created`, `.updated`, `.deleted`).
 
+## Dashboard (6g)
+
+Built to the approved 6g mockups:
+- **الكوبونات** (`/stores/{id}/coupons`): each coupon's code, discount, terms,
+  uses (a bar when bounded), validity and state. The states are on, off,
+  starts on a date, ended, and used up.
+- **كوبون جديد / تعديل** (`…/coupons/new`, `…/coupons/{coupon}`):
+  - the code, uppercased, or a random one;
+  - the kind, and its percent or amount;
+  - the terms;
+  - the dates, typed in the store's time zone and sent as instants;
+  - on or off.
+
+  A live summary and what the shopper sees at checkout come with it. The form
+  is checked as the server checks it, and a taken or locked code shows on its
+  field. A coupon no order used can be deleted. On a phone the summary leads
+  and the buttons stay at the bottom.
+
 ## Tables
 
 | Table | Notes |
