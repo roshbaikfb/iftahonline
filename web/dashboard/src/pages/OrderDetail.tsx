@@ -3,10 +3,13 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { OrderConfirmationCard } from '../components/OrderConfirmationCard';
 import { OrderPayments } from '../components/OrderPayments';
 import { OrderShipping } from '../components/OrderShipping';
+import { canReadMessages, channelLabel, type CustomerMessage, type OrderConfirmation } from '../lib/messages';
 import { dateTime, money, nextSteps, statusLabel, stepLabel, type OrderStatus } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
+import { useRole } from '../lib/settings';
 
 type Detail = components['schemas']['OrderDetail'];
 
@@ -21,10 +24,24 @@ async function fetchOrder(storeId: string, orderId: string): Promise<{ detail?: 
   }
 }
 
-// OrderDetail shows one order (the approved mockup): its number, status
-// and the moves the status allows; a reminder to call before confirming a
-// cash order; the lines and totals and the timeline; and the customer,
-// payment and shipping cards. A move sends the version read, so a change
+// fetchConfirmation reads the messages sent for an order and, when one
+// asked the customer to confirm, the confirmation itself: an order that
+// asked for none (a card order, a store that does not confirm) costs no
+// request that would answer 404.
+async function fetchConfirmation(storeId: string, orderId: string): Promise<{ confirmation?: OrderConfirmation; messages: CustomerMessage[] }> {
+  const path = { store_id: storeId };
+  const m = await api.GET('/v1/stores/{store_id}/messages', { params: { path, query: { order_id: orderId } } });
+  const messages = m.data?.items ?? [];
+  if (!messages.some((x) => x.kind === 'order_confirmation')) return { messages };
+  const c = await api.GET('/v1/stores/{store_id}/messaging/confirmations/{order_id}', { params: { path: { ...path, order_id: orderId } } });
+  return c.data ? { confirmation: c.data, messages } : { messages };
+}
+
+// OrderDetail shows one order (the approved mockups): its number, status
+// and the moves the status allows; the customer's confirmation by
+// message, or a reminder to call before confirming a cash order; the
+// lines, discount and totals and the timeline; and the customer, the
+// campaign it came from, payment and shipping cards. A move sends the version read, so a change
 // made by someone else in between is refused instead of overwritten.
 export function OrderDetail() {
   const { storeId = '', orderId = '' } = useParams();
@@ -32,6 +49,21 @@ export function OrderDetail() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [places, setPlaces] = useState<Map<string, string>>(new Map());
+  const [confirm, setConfirm] = useState<{ confirmation?: OrderConfirmation; messages: CustomerMessage[] }>({ messages: [] });
+  const readMessages = canReadMessages(useRole(storeId));
+  const status = detail?.order.status;
+
+  // The confirmation follows the order's status (an answer moves both).
+  useEffect(() => {
+    if (!readMessages || !status) return;
+    let live = true;
+    void fetchConfirmation(storeId, orderId).then((r) => {
+      if (live) setConfirm(r);
+    });
+    return () => {
+      live = false;
+    };
+  }, [storeId, orderId, readMessages, status]);
 
   useEffect(() => {
     let live = true;
@@ -109,7 +141,13 @@ export function OrderDetail() {
               ))}
             </div>
           </div>
-          {o.status === 'pending' && o.payment_method === 'cod' && (
+          {o.status === 'pending' && confirm.confirmation?.status === 'pending' && (
+            <p className="notice" role="note">
+              أرسلنا للعميل رسالة تأكيد على {channelLabel(confirm.messages.find((m) => m.kind === 'order_confirmation')?.channel ?? 'whatsapp')}. يتحوّل الطلب وحده حين يرد، ويمكنك
+              تأكيده أو إلغاؤه بنفسك قبل ذلك.
+            </p>
+          )}
+          {o.status === 'pending' && o.payment_method === 'cod' && confirm.confirmation?.status !== 'pending' && (
             <p className="notice" role="note">
               طلب دفع عند الاستلام: اتصل بالعميل لتأكيده قبل الشحن.
             </p>
@@ -137,6 +175,19 @@ export function OrderDetail() {
                     <dt>المنتجات</dt>
                     <dd>{money(o.subtotal_minor, o.currency)}</dd>
                   </div>
+                  {(o.discount_minor ?? 0) > 0 && (
+                    <div className="discount">
+                      <dt>
+                        خصم الكوبون{' '}
+                        {o.coupon_code && (
+                          <span className="coupon-tag" dir="ltr">
+                            {o.coupon_code}
+                          </span>
+                        )}
+                      </dt>
+                      <dd>−{money(o.discount_minor ?? 0, o.currency)}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>الشحن إلى {places.get(o.governorate) ?? o.governorate}</dt>
                     <dd>{o.shipping_minor > 0 ? money(o.shipping_minor, o.currency) : 'مجاني'}</dd>
@@ -173,6 +224,7 @@ export function OrderDetail() {
               </section>
             </div>
             <div className="od-side">
+              {confirm.confirmation && <OrderConfirmationCard storeId={storeId} confirmation={confirm.confirmation} messages={confirm.messages} />}
               <section className="card customer">
                 <h2>العميل</h2>
                 <strong>{o.name}</strong>
@@ -193,6 +245,22 @@ export function OrderDetail() {
                 </p>
                 <Link to={`/stores/${storeId}/orders?phone=${encodeURIComponent(o.phone)}`}>طلبات هذا العميل</Link>
               </section>
+              {o.attribution && Object.values(o.attribution).some(Boolean) && (
+                <section className="card od-source" aria-labelledby="h-src">
+                  <h2 id="h-src">مصدر الطلب</h2>
+                  <dl className="src">
+                    {sourceFields.map(([k, label]) =>
+                      o.attribution?.[k] ? (
+                        <div key={k}>
+                          <dt>{label}</dt>
+                          <dd dir="ltr">{o.attribution[k]}</dd>
+                        </div>
+                      ) : null,
+                    )}
+                  </dl>
+                  <small className="muted">من رابط الإعلان الذي جاء منه العميل (UTM).</small>
+                </section>
+              )}
               {o.payment_method === 'cod' ? (
                 <section className="card">
                   <h2>الدفع</h2>
@@ -217,6 +285,15 @@ export function OrderDetail() {
     </Layout>
   );
 }
+
+// sourceFields are the campaign's parts, as the order card names them.
+const sourceFields = [
+  ['source', 'المصدر'],
+  ['medium', 'الوسيلة'],
+  ['campaign', 'الحملة'],
+  ['content', 'المحتوى'],
+  ['term', 'الكلمة'],
+] as const;
 
 // closed are the statuses after which nothing is left to collect.
 const closed = new Set<OrderStatus>(['cancelled', 'returned']);

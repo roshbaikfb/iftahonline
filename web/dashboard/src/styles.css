@@ -4051,3 +4051,502 @@ label.choice > span {
   margin: 0.4rem 0 0;
   padding-inline-start: 1.1rem;
 }
+
+/* Customer messages, notices and the order's confirmation (6g). */
+.msg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+.msg-grid .settings-cards {
+  margin: 0;
+}
+.msg-side {
+  display: grid;
+  gap: 1.25rem;
+}
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.toggle-row .muted.small {
+  margin-block-start: 0.25rem;
+}
+button.toggle {
+  flex: none;
+  inline-size: 2.9rem;
+  block-size: 1.6rem;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  position: relative;
+}
+button.toggle::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0.2rem;
+  inset-inline-start: 0.2rem;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.25);
+  transition: inset-inline-start 0.15s;
+}
+button.toggle[aria-pressed='true'] {
+  background: var(--green);
+}
+button.toggle[aria-pressed='true']::after {
+  inset-inline-start: 1.5rem;
+}
+button.toggle:hover:not(:disabled) {
+  background: #94a3b8;
+}
+button.toggle[aria-pressed='true']:hover:not(:disabled) {
+  background: #166534;
+}
+.flow {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: f;
+}
+.flow li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  color: var(--muted);
+}
+.flow li::before {
+  counter-increment: f;
+  content: counter(f);
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hours {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.hours input {
+  inline-size: 6rem;
+}
+.vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.vars button {
+  min-block-size: 2rem;
+  padding: 0 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: var(--navy);
+  border: 1px solid var(--line);
+}
+.vars button:hover:not(:disabled) {
+  background: #dbe5f1;
+  color: var(--navy);
+}
+.sms textarea {
+  min-block-size: 7rem;
+  line-height: 1.7;
+}
+.sms-meta,
+.actions-row {
+  display: flex;
+  gap: 0.6rem 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sms-meta {
+  justify-content: space-between;
+}
+.phone-preview {
+  background: #f1f5f9;
+  border-radius: 1rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.phone-preview small {
+  color: var(--subtle);
+}
+.bubble {
+  justify-self: start;
+  max-inline-size: 85%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  border-start-start-radius: 0.3rem;
+  padding: 0.6rem 0.8rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wa-bubble {
+  background: #e7f8ec;
+  border-color: #c6ebd2;
+}
+.wa-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  max-inline-size: 85%;
+}
+.wa-buttons span {
+  background: var(--surface);
+  border: 1px solid #c6ebd2;
+  border-radius: 0.6rem;
+  text-align: center;
+  padding: 0.4rem;
+  color: #0f766e;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.usage-num {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.usage-num strong {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+.meter {
+  block-size: 0.65rem;
+  background: #eef2f7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter span {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--navy);
+}
+.meter.nearly span {
+  background: #b45309;
+}
+.meter.reached span {
+  background: var(--red);
+}
+.warn-note {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+.warn-note.reached {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* The log's statuses: a message's own colours. */
+.m-queued {
+  background: #f1f5f9;
+  color: #334155;
+}
+.m-sent {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.m-delivered,
+.m-read {
+  background: #dcfce7;
+  color: #166534;
+}
+.m-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.m-skipped_quota {
+  background: #fef3c7;
+  color: #92400e;
+}
+.reply-yes {
+  color: #166534;
+  font-weight: 600;
+}
+.reply-no {
+  color: #991b1b;
+  font-weight: 600;
+}
+.chan {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.chan small {
+  color: var(--subtle);
+}
+.filter-chip {
+  margin: 0;
+}
+
+/* The bell: a panel under it, a whole page on a phone. */
+.bell {
+  position: relative;
+}
+.bell summary {
+  list-style: none;
+  cursor: pointer;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  position: relative;
+}
+.bell summary::-webkit-details-marker {
+  display: none;
+}
+.bell[open] summary {
+  background: #eef2f7;
+  color: var(--navy);
+}
+.bell .badge {
+  position: absolute;
+  inset-block-start: 0.15rem;
+  inset-inline-end: 0.1rem;
+  min-inline-size: 1.1rem;
+  block-size: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notif {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 0.5rem);
+  z-index: 20;
+  inline-size: 24rem;
+  max-inline-size: calc(100vw - 2rem);
+  max-block-size: 32rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.14);
+}
+.notif-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  border-block-end: 1px solid var(--line);
+}
+.notif-head strong {
+  flex: 1;
+  font-size: 1rem;
+}
+.notif-head .back {
+  display: none;
+}
+.notif ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notif li {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.75rem 1rem;
+  border-block-end: 1px solid #f1f5f9;
+}
+.notif li.unread {
+  background: var(--tint);
+}
+.notif li.unread .txt::after {
+  content: '';
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: #1e40af;
+  margin-inline-start: 0.4rem;
+  vertical-align: middle;
+}
+.notif .ic {
+  flex: none;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ic.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.ic.no {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.ic.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.notif .txt {
+  display: block;
+  line-height: 1.55;
+}
+.notif small {
+  color: var(--subtle);
+}
+.notif-foot {
+  padding: 0.6rem 1rem;
+  text-align: center;
+}
+
+/* The order's confirmation, discount and campaign. */
+.confirm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.msg-steps {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.msg-steps li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.msg-steps .tick {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-block-start: 0.15rem;
+}
+.msg-steps .tick.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.msg-steps .tick.wait {
+  background: #fef3c7;
+  color: #92400e;
+}
+.msg-steps .tick.no {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.msg-steps small {
+  display: block;
+  color: var(--subtle);
+}
+.deadline {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--tint);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.totals .discount dd {
+  color: #166534;
+}
+.coupon-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  background: #eef2f7;
+  border-radius: 0.35rem;
+  padding: 0 0.35rem;
+}
+dl.src {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+dl.src div {
+  display: contents;
+}
+dl.src dt {
+  color: var(--subtle);
+}
+dl.src dd {
+  margin: 0;
+  font-weight: 600;
+}
+@media (max-width: 56rem) {
+  .msg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 64rem) {
+  /* In one column the order reads: is it confirmed, who, then what. */
+  .od-main,
+  .od-side {
+    display: contents;
+  }
+  .od-confirm {
+    order: -2;
+  }
+  .od-grid .customer {
+    order: -1;
+  }
+}
+@media (max-width: 40rem) {
+  .notif {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    inline-size: auto;
+    max-inline-size: none;
+    max-block-size: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .notif-head .back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--navy);
+  }
+}

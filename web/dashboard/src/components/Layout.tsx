@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { navGroups } from '../lib/nav';
 import { storefrontURL } from '../lib/storefront';
 import { useSession } from '../session';
+import { NotificationBell } from './NotificationBell';
 
 // Layout is the signed-in frame (the approved mockup): the navy sidebar
 // at the start, a top bar with the store, its storefront and the user's
@@ -140,6 +141,7 @@ export function Layout({ storeId, children }: { storeId: string; children: React
             <span className="store-name">{name || 'متجري'}</span>
           )}
           <span className="grow" />
+          <NotificationBell storeId={storeId} />
           {store && (
             <a className="button" href={storefrontURL(store.slug)} target="_blank" rel="noopener noreferrer">
               عرض المتجر

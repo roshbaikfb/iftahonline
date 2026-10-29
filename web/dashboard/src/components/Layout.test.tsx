@@ -57,13 +57,17 @@ describe('Layout', () => {
     renderAt(`/stores/${a}/orders/01M5ORDER000000000000000001`, session([a]));
     const nav = screen.getByRole('navigation', { name: 'القائمة الرئيسية' });
     const titles = [...nav.querySelectorAll('.group-title')].map((el) => el.textContent);
-    expect(titles).toEqual(['المبيعات', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
+    expect(titles).toEqual(['المبيعات', 'التسويق', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
+    expect(within(nav).getByRole('link', { name: 'رسائل العملاء' })).toHaveAttribute('href', `/stores/${a}/messages`);
+    for (const next of ['الكوبونات', 'بكسلات الإعلانات', 'كتالوج المنتجات']) {
+      expect(within(nav).getByText(next).closest('.item')).toHaveAttribute('aria-disabled', 'true');
+    }
     // an order's page belongs to the orders screen
     expect(within(nav).getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'الشحنات' })).not.toHaveAttribute('aria-current');
     expect(within(nav).getByRole('link', { name: 'الدفع بالبطاقة' })).toHaveAttribute('href', `/stores/${a}/gateways`);
     // a screen not built yet is not a link, and says so
-    expect(within(nav).queryByRole('link', { name: /العملاء/ })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'العملاء' })).toBeNull();
     expect(within(nav).getByRole('link', { name: 'التصميم' })).toHaveAttribute('href', `/stores/${a}/design`);
     expect(within(nav).getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', `/stores/${a}/home-page`);
     expect(within(nav).getByRole('link', { name: 'الصفحات' })).toHaveAttribute('href', `/stores/${a}/pages`);

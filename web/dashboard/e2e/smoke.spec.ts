@@ -402,3 +402,43 @@ test('a merchant renames the store, adds a domain and invites a teammate', async
   await expect(page.getByText('أرسلنا الدعوة إلى helper@demo.test. الرابط صالح 7 أيام.')).toBeVisible();
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// Customer messages (6g) against the real API: the confirmation settings,
+// the month's quota and the SMS text, saved and back to the default; the
+// log and the bell read the store's (empty) messages and notices.
+test('a merchant sets order confirmation and writes the SMS text', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByLabel('الإشعارات').first().click();
+  await expect(page.getByText('لا إشعارات بعد.')).toBeVisible();
+
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'رسائل العملاء' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('رسائل العملاء');
+  await expect(page.getByRole('meter', { name: 'المستخدم من الرصيد' })).toBeVisible();
+  const hours = page.getByLabel('إلغاء تلقائي إن لم يرد العميل خلال');
+  await hours.fill('12');
+  await hours.blur();
+  await expect(page.getByText('حُفظت الإعدادات.')).toBeVisible();
+
+  const text = page.getByRole('textbox', { name: 'النص' });
+  await text.fill('{{store}}: أكّد طلبك {{ref}} من هنا {{url}}');
+  await expect(page.getByTestId('sms-preview')).toContainText('أكّد طلبك YM2ECZRR من هنا mona.iftahonline.com/o/');
+  await page.getByRole('button', { name: 'حفظ النص' }).click();
+  await expect(page.getByText('حُفظ النص.')).toBeVisible();
+  await expect(page.getByText('نصّك')).toBeVisible();
+  await page.getByRole('button', { name: 'الرجوع للنص الافتراضي' }).click();
+  await expect(page.getByText('رجع النص الافتراضي.')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('إلغاء تلقائي إن لم يرد العميل خلال')).toHaveValue('12');
+
+  await page.getByRole('link', { name: 'سجل الرسائل' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('سجل الرسائل');
+  await page.getByRole('tab', { name: 'لم تصل' }).click();
+  await expect(page.getByText('لا رسائل هنا بعد.')).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});

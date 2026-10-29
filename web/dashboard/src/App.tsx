@@ -13,6 +13,8 @@ import { HomeEditor } from './pages/HomeEditor';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
 import { LandingEditor } from './pages/LandingEditor';
+import { MessageLog } from './pages/MessageLog';
+import { Messages } from './pages/Messages';
 import { Login } from './pages/Login';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
@@ -102,6 +104,8 @@ function Gate() {
           <Route path="/stores/:storeId/carriers" element={<Carriers />} />
           <Route path="/stores/:storeId/cod" element={<COD />} />
           <Route path="/stores/:storeId/payments" element={<Payments />} />
+          <Route path="/stores/:storeId/messages" element={<Messages />} />
+          <Route path="/stores/:storeId/messages/log" element={<MessageLog />} />
           <Route path="/stores/:storeId/gateways" element={<Gateways />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
