@@ -197,16 +197,20 @@ func TestOrderQueriesUseIndexesUnderRLS(t *testing.T) {
 	}
 	t.Cleanup(owner.Close)
 	store, _ := tenant.FromContext(f.ctxA)
-	// 40,000 orders over this month and the next, 20 per customer.
+	// 40,000 orders over this month and the next, 20 per customer. Each
+	// ID is a ULID of its order's time, as the service makes them: a
+	// page's cursor is read back as a time (domain.CreatedAtOf), so a
+	// random ID would bound the next page at a random date.
 	if err = postgres.InTenantTx(f.ctxA, owner, func(tx pgx.Tx) error {
 		_, execErr := tx.Exec(f.ctxA, `
 INSERT INTO orders (id, store_id, created_at, status, source, customer_id, name, phone, governorate, city, address,
                     currency, subtotal_minor, total_minor, item_count, lines_hash)
-SELECT gen_random_uuid(), $1, date_trunc('month', now()) + (n % 50) * interval '1 day' + n * interval '1 second',
+SELECT (lpad(to_hex((extract(epoch FROM at) * 1000)::bigint), 12, '0') || substr(md5(n::text || 'id'), 1, 20))::uuid, $1, at,
        (ARRAY['pending','confirmed','shipped','delivered'])[1 + n % 4], 'storefront',
        md5((n / 20)::text)::uuid, 'nn', '+2010' || lpad((n / 20)::text, 8, '0'), 'EG-C', 'city', 'address 1',
        'EGP', 1000, 1000, 1, decode(md5(n::text) || md5(n::text), 'hex')
-FROM generate_series(1, 40000) AS n`, store.ID)
+FROM generate_series(1, 40000) AS n,
+     LATERAL (SELECT date_trunc('month', now()) + (n % 50) * interval '1 day' + n * interval '1 second' AS at) t`, store.ID)
 		return execErr
 	}); err != nil {
 		t.Fatal(err)
