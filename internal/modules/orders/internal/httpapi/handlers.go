@@ -314,6 +314,20 @@ func errorDetail(err error) string {
 	return "the order could not be moved"
 }
 
+// toAttribution is nil for an order no campaign brought.
+func toAttribution(a domain.Attribution) *OrderAttribution {
+	if a.IsZero() {
+		return nil
+	}
+	opt := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+	return &OrderAttribution{Source: opt(a.Source), Medium: opt(a.Medium), Campaign: opt(a.Campaign), Content: opt(a.Content), Term: opt(a.Term)}
+}
+
 func toOrder(o domain.Order) Order {
 	c := o.Contact
 	var code *string
@@ -325,7 +339,7 @@ func toOrder(o domain.Order) Order {
 		discount = o.Discount.Amount()
 	}
 	return Order{
-		DiscountMinor: &discount, CouponCode: code,
+		DiscountMinor: &discount, CouponCode: code, Attribution: toAttribution(o.Attribution),
 		Id: o.ID.String(), Code: o.Code(), Status: OrderStatus(o.Status), Version: o.Version, Source: OrderSource(o.Source),
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,
 		Address: c.Address, Notes: c.Notes, Currency: string(o.Total.Currency()), SubtotalMinor: o.Subtotal.Amount(),

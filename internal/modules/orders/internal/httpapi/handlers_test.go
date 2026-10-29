@@ -398,3 +398,41 @@ func TestOrderStats(t *testing.T) {
 		t.Fatalf("anonymous = %d %v", code, body)
 	}
 }
+
+// TestOrderAttribution (ADR-0043): an order shows the campaign that
+// brought it; one without has no attribution.
+func TestOrderAttribution(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, owner := f.storeA, f.tok[authz.RoleOwner]
+	shopper := tenant.WithStore(t.Context(), a)
+	p, err := f.env.Svc.PlaceOrder(shopper, domain.NewOrder{Source: domain.SourceStorefront, Name: "nn", Phone: "01012345671",
+		Governorate: "EG-C", City: "cc", Address: "aaaaa", Lines: []domain.LineInput{{VariantID: f.variantA, Qty: 1}},
+		Attribution: domain.Attribution{Source: "tiktok", Campaign: "eid"}, Signals: domain.Signals{IP: "203.0.113.9"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, body, _ := f.do(t, req(t, http.MethodGet, path(a, "/"+p.Order.ID.String()), owner, ""))
+	o, _ := body["order"].(map[string]any)
+	at, _ := o["attribution"].(map[string]any)
+	if code != http.StatusOK || at["source"] != "tiktok" || at["campaign"] != "eid" || len(at) != 2 {
+		t.Fatalf("getOrder attribution = %d %v", code, o["attribution"])
+	}
+	if strings.Contains(fmt.Sprint(body), "203.0.113.9") {
+		t.Fatal("the order shows its signals")
+	}
+	code, list, _ := f.do(t, req(t, http.MethodGet, path(a, ""), owner, ""))
+	items, _ := list["items"].([]any)
+	if code != http.StatusOK || len(items) != 1 || items[0].(map[string]any)["attribution"] == nil {
+		t.Fatalf("listOrders = %d %v", code, list)
+	}
+	plain, err := f.env.Svc.PlaceOrder(shopper, domain.NewOrder{Source: domain.SourceStorefront, Name: "nn", Phone: "01012345672",
+		Governorate: "EG-C", City: "cc", Address: "aaaaa", Lines: []domain.LineInput{{VariantID: f.variantA, Qty: 2}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, body, _ = f.do(t, req(t, http.MethodGet, path(a, "/"+plain.Order.ID.String()), owner, "")); code != http.StatusOK ||
+		body["order"].(map[string]any)["attribution"] != nil {
+		t.Fatalf("an order without a campaign: %d %v", code, body["order"])
+	}
+}

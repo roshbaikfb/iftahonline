@@ -7,6 +7,7 @@ package dbgen
 import (
 	"database/sql/driver"
 	"fmt"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -309,6 +310,11 @@ type Order struct {
 	PaymentStatus   string
 	DiscountMinor   int64
 	CouponCode      pgtype.Text
+	UtmSource       pgtype.Text
+	UtmMedium       pgtype.Text
+	UtmCampaign     pgtype.Text
+	UtmContent      pgtype.Text
+	UtmTerm         pgtype.Text
 }
 
 type OrderConfirmation struct {
@@ -364,6 +370,20 @@ type OrderItem struct {
 type OrderSalesCounted struct {
 	StoreID pgtype.UUID
 	OrderID pgtype.UUID
+}
+
+type OrderSignal struct {
+	StoreID        pgtype.UUID
+	OrderCreatedAt pgtype.Timestamptz
+	OrderID        pgtype.UUID
+	Fbp            string
+	Fbc            string
+	Ttp            string
+	Ttclid         string
+	Sccid          string
+	Gclid          string
+	Ip             *netip.Addr
+	UserAgent      string
 }
 
 type Payment struct {

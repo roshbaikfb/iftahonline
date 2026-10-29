@@ -7,6 +7,7 @@ package ordersdb
 
 import (
 	"context"
+	"net/netip"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -64,7 +65,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
 `
 
 type GetOrderParams struct {
@@ -103,12 +104,17 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.PaymentStatus,
 		&i.DiscountMinor,
 		&i.CouponCode,
+		&i.UtmSource,
+		&i.UtmMedium,
+		&i.UtmCampaign,
+		&i.UtmContent,
+		&i.UtmTerm,
 	)
 	return i, err
 }
 
 const getOrderForUpdate = `-- name: GetOrderForUpdate :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
 `
 
 type GetOrderForUpdateParams struct {
@@ -149,6 +155,11 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 		&i.PaymentStatus,
 		&i.DiscountMinor,
 		&i.CouponCode,
+		&i.UtmSource,
+		&i.UtmMedium,
+		&i.UtmCampaign,
+		&i.UtmContent,
+		&i.UtmTerm,
 	)
 	return i, err
 }
@@ -185,10 +196,12 @@ const insertOrder = `-- name: InsertOrder :exec
 
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
                     currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
-                    updated_at, status_changed_at, payment_method, payment_status)
+                    updated_at, status_changed_at, payment_method, payment_status,
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16, $17, $18, $19,
-        $20, $3, $3, $21, $22)
+        $20, $3, $3, $21, $22,
+        $23, $24, $25, $26, $27)
 `
 
 type InsertOrderParams struct {
@@ -214,6 +227,11 @@ type InsertOrderParams struct {
 	LinesHash     []byte
 	PaymentMethod string
 	PaymentStatus string
+	UtmSource     *string
+	UtmMedium     *string
+	UtmCampaign   *string
+	UtmContent    *string
+	UtmTerm       *string
 }
 
 // Every lookup of one order names its partition key: created_at is the
@@ -242,6 +260,11 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.LinesHash,
 		arg.PaymentMethod,
 		arg.PaymentStatus,
+		arg.UtmSource,
+		arg.UtmMedium,
+		arg.UtmCampaign,
+		arg.UtmContent,
+		arg.UtmTerm,
 	)
 	return err
 }
@@ -316,6 +339,43 @@ func (q *Queries) InsertOrderItems(ctx context.Context, arg InsertOrderItemsPara
 		arg.Qtys,
 		arg.UnitPrices,
 		arg.Totals,
+	)
+	return err
+}
+
+const insertOrderSignals = `-- name: InsertOrderSignals :exec
+INSERT INTO order_signals (store_id, order_created_at, order_id, fbp, fbc, ttp, ttclid, sccid, gclid, ip, user_agent)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+`
+
+type InsertOrderSignalsParams struct {
+	StoreID        ulid.ID
+	OrderCreatedAt time.Time
+	OrderID        ulid.ID
+	Fbp            string
+	Fbc            string
+	Ttp            string
+	Ttclid         string
+	Sccid          string
+	Gclid          string
+	Ip             *netip.Addr
+	UserAgent      string
+}
+
+// In the order's transaction (ADR-0043); kept one month.
+func (q *Queries) InsertOrderSignals(ctx context.Context, arg InsertOrderSignalsParams) error {
+	_, err := q.db.Exec(ctx, insertOrderSignals,
+		arg.StoreID,
+		arg.OrderCreatedAt,
+		arg.OrderID,
+		arg.Fbp,
+		arg.Fbc,
+		arg.Ttp,
+		arg.Ttclid,
+		arg.Sccid,
+		arg.Gclid,
+		arg.Ip,
+		arg.UserAgent,
 	)
 	return err
 }
@@ -493,7 +553,7 @@ const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders
 SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2
 WHERE store_id = $3 AND created_at = $4 AND id = $5
-RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term
 `
 
 type SetOrderStatusParams struct {
@@ -540,6 +600,11 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.PaymentStatus,
 		&i.DiscountMinor,
 		&i.CouponCode,
+		&i.UtmSource,
+		&i.UtmMedium,
+		&i.UtmCampaign,
+		&i.UtmContent,
+		&i.UtmTerm,
 	)
 	return i, err
 }

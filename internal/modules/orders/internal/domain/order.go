@@ -112,6 +112,10 @@ type NewOrder struct {
 	// CouponCode is a coupon to apply (promotions decides whether it
 	// does). Optional.
 	CouponCode string
+	// Attribution and Signals come from the shopper's browser
+	// (ADR-0043); both are optional and cleaned, never refused.
+	Attribution Attribution
+	Signals     Signals
 }
 
 // Draft is a validated NewOrder.
@@ -122,6 +126,8 @@ type Draft struct {
 	Contact        Contact
 	Lines          []LineInput // sorted by variant, no repeats
 	CouponCode     string      // upper case, "" for none
+	Attribution    Attribution // cleaned; not part of the fingerprint
+	Signals        Signals     // cleaned; not part of the fingerprint
 	// Fingerprint identifies the request: the same key with another
 	// fingerprint is a reused key, not a retry.
 	Fingerprint [32]byte
@@ -178,6 +184,7 @@ func ValidateNewOrder(in NewOrder, country geo.Country) (Draft, error) {
 	if d.CouponCode, err = CleanCouponCode(in.CouponCode); err != nil {
 		add(err)
 	}
+	d.Attribution, d.Signals = in.Attribution.Clean(), in.Signals.Clean()
 
 	lines, lineErrs := validateLines(in.Lines)
 	fields = append(fields, lineErrs...)
@@ -318,6 +325,7 @@ type Order struct {
 	CODFee          money.Money // the cash-on-delivery fee quoted when placed (0 for card orders)
 	Discount        money.Money // the coupon's, off the items (ADR-0042)
 	CouponCode      string      // the coupon the order took, "" for none
+	Attribution     Attribution // the campaign that brought it (ADR-0043)
 	Total           money.Money // Subtotal - Discount + Shipping + CODFee
 	PaymentMethod   PaymentMethod
 	PaymentStatus   PaymentStatus

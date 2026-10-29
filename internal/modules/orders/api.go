@@ -39,6 +39,11 @@ type (
 	NewOrder = domain.NewOrder
 	// LineInput is one variant and quantity of a NewOrder.
 	LineInput = domain.LineInput
+	// Attribution is the campaign that brought an order (UTM, ADR-0043).
+	Attribution = domain.Attribution
+	// Signals are what ad providers' server APIs match a conversion
+	// with (ADR-0043), kept one month.
+	Signals = domain.Signals
 	// Source is where an order was placed.
 	Source = domain.Source
 	// Placement is PlaceOrder's outcome: the order, and whether it was a

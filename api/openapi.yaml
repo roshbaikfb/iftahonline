@@ -4318,6 +4318,7 @@ components:
         total_minor: { type: integer, format: int64, description: subtotal − discount + shipping + COD fee. }
         discount_minor: { type: integer, format: int64, description: "The coupon's discount, off the items (ADR-0042); 0 without one." }
         coupon_code: { type: string, description: The coupon the order took. }
+        attribution: { $ref: "#/components/schemas/OrderAttribution" }
         item_count: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -5340,6 +5341,18 @@ components:
             where the store's country requires it (Saudi Arabia), required
             always asks, off never asks.
         version: { type: integer, minimum: 0, description: The version read; 0 before the first save. }
+    OrderAttribution:
+      type: object
+      description: |
+        The campaign that brought the order (ADR-0043): the UTM parameters
+        of the shopper's visit, as their link carried them (each at most
+        100 characters). Absent when the visit had none.
+      properties:
+        source: { type: string, example: facebook }
+        medium: { type: string, example: paid_social }
+        campaign: { type: string }
+        content: { type: string }
+        term: { type: string }
     WebhookReceipt:
       type: object
       required: [status]
