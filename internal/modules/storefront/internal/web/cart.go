@@ -380,7 +380,7 @@ func (s *Shop) cartWrite(w http.ResponseWriter, r *http.Request, store tenant.St
 		s.setUnitsCookie(w, n)
 	}
 	if choose { // an add, not an update: the cart page reports it
-		s.setAdded(w, p, id, qty)
+		s.setAdded(r.Context(), tok, p, id, qty)
 	}
 	w.Header().Set("Cache-Control", noStore)
 	http.Redirect(w, r, p.localize(p.l, "/cart"), http.StatusSeeOther)
@@ -418,7 +418,7 @@ func (s *Shop) cartPage(w http.ResponseWriter, r *http.Request, p *pageCtx, stat
 		msg = p.l.T(problem)
 	}
 	p.soft, p.cssURL = true, s.assets.checkoutURL
-	if id, variant, qty, ok := takeAdded(w, r); ok {
+	if id, variant, qty, ok := s.takeAdded(r.Context(), s.cartToken(r)); ok {
 		for _, l := range view.Lines {
 			if l.VariantID == variant {
 				if value, mulErr := l.Price.MulInt(int64(qty)); mulErr == nil {

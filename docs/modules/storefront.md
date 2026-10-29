@@ -262,12 +262,13 @@ On a store with pixels:
   | Event | Page | `event_id` |
   |---|---|---|
   | ViewContent | product | none (browser only) |
-  | AddToCart | the cart page after an add | a ULID the cart's form post made, carried by `__Host-px_add` (60 s, HttpOnly, read once) |
-  | InitiateCheckout | checkout | a ULID made at render |
+  | AddToCart | the cart page after an add | a ULID the cart's form post made, kept in Redis under the cart's token hash (`sf:px-add:<store>:<hash>`, 60 s, read once) |
+  | InitiateCheckout | checkout | `ic-` + a hash of the cart's token and lines: the same on a reload |
   | Purchase | thank-you (not for a cancelled order) | `purchase:<order ID>` |
 
   A reload sends no conversion twice: `px.js` remembers the last 20
-  `event_id`s on the device.
+  `event_id`s on the device. The server's copies are limited to 30 per
+  address and 3,000 per store every 10 minutes.
 
 A store without pixels carries none of this, and its CSP is unchanged.
 

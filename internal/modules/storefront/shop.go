@@ -202,7 +202,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays, Confirmations: confirms,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions, Feeds: d.Feeds,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions, Feeds: d.Feeds, Added: store.NewAdded(d.Redis),
 	})
 	if err != nil {
 		return nil, err

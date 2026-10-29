@@ -187,10 +187,10 @@ func TestBrowserAndServerShareEventIDs(t *testing.T) {
 		return nil
 	}
 
-	// AddToCart: the cart page after the add.
+	// AddToCart: the cart page after the add; the add waits in Redis.
 	add := shopper(http.MethodPost, "/cart", url.Values{"variant": {variant}, "qty": {"2"}})
 	cart := cookie(add, "__Host-cart")
-	cartPage := shopper(http.MethodGet, "/cart", nil, cart, cookie(add, "__Host-px_add")).Body.String()
+	cartPage := shopper(http.MethodGet, "/cart", nil, cart).Body.String()
 	added := pageEventID(t, cartPage, marketing.AddToCart)
 	if e := p.metaEvent(t, added); e.Name != "AddToCart" || e.Pixel != pixel || e.Token != "EAAB-acceptance" || e.User["fbp"] != "fb.1.1730000000000.77" ||
 		e.User["client_ip_address"] != "203.0.113.9" {

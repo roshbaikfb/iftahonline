@@ -201,3 +201,23 @@ func TestValue(t *testing.T) {
 		}
 	}
 }
+
+// TestNoRedirect: the client never follows a redirect, so a token in the
+// URL (Snap, GA4) never reaches another host.
+func TestNoRedirect(t *testing.T) {
+	t.Parallel()
+	elsewhere := newServer(t, http.StatusOK, "{}")
+	moved := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(moved.Close)
+	err := capi.Snap{Base: moved.URL, Client: capi.NewClient()}.Send(t.Context(), capi.Pixel{ID: "p", Token: "secret-token"}, event())
+	if err == nil || errors.Is(err, capi.ErrRejected) || strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("redirect: %v", err)
+	}
+	elsewhere.mu.Lock()
+	defer elsewhere.mu.Unlock()
+	if len(elsewhere.got) != 0 {
+		t.Fatal("the redirect was followed, with the token")
+	}
+}

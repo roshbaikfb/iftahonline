@@ -65,6 +65,9 @@ type Deps struct {
 	Conversions Conversions
 	// Feeds opens the store's product feeds (ADR-0044); nil serves none.
 	Feeds Feeds
+	// Added keeps an AddToCart for the cart page (ADR-0043); nil reports
+	// no AddToCart.
+	Added Added
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
@@ -92,6 +95,7 @@ type Shop struct {
 	pixels      Pixels
 	conversions Conversions
 	feeds       Feeds
+	added       Added
 	ids         *ulid.Generator // event IDs of conversions (ADR-0043)
 }
 
@@ -120,7 +124,7 @@ func New(d Deps) (*Shop, error) {
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
 		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search,
-		pixels: d.Pixels, conversions: d.Conversions, feeds: d.Feeds, ids: ulid.NewGenerator()}, nil
+		pixels: d.Pixels, conversions: d.Conversions, feeds: d.Feeds, added: d.Added, ids: ulid.NewGenerator()}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request

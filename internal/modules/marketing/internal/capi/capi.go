@@ -78,6 +78,13 @@ var ErrRejected = errors.New("capi: rejected")
 // Timeout bounds one request to a provider.
 const Timeout = 10 * time.Second
 
+// NewClient is the client the senders share: bounded by Timeout, and it
+// never follows a redirect, since Snap's and GA4's URLs carry the token.
+// A redirect answers as its own status (not 2xx, so retried).
+func NewClient() *http.Client {
+	return &http.Client{Timeout: Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
 // hash is the hex SHA-256 the providers ask for; "" stays "".
 func hash(s string) string {
 	if s == "" {
