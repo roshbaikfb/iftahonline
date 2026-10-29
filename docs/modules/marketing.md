@@ -15,7 +15,8 @@ The storefront renders them through `Pixels`. Design:
 - 6e-2a: the storefront's tags (`px.js`, CSP per store, consent banner,
   the browser's conversions with their `event_id`s); see
   [storefront](storefront.md).
-- 6e-2b: UTM and the order's signals.
+- 6e-2b: UTM and the order's signals (orders, `order_signals`); see
+  [orders](orders.md).
 - 6e-3: the server-side conversions.
 
 ## Public API (`internal/modules/marketing/api.go`)

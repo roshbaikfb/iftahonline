@@ -320,6 +320,24 @@ function galleries() {
   }
 }
 
+// visitSource remembers the campaign that brought the shopper (the UTM
+// parameters and ad click IDs of the landing URL) for 30 days, for the
+// order (ADR-0043): pages are cached, so the server never sees the URL
+// a shopper landed on. A later campaign's link replaces it.
+function visitSource() {
+  const q = new URLSearchParams(location.search);
+  const keep = new URLSearchParams();
+  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "ttclid", "ScCid", "fbclid"]) {
+    const v = q.get(k);
+    if (v) keep.set(k, v.slice(0, 255));
+  }
+  if (!keep.toString()) return;
+  if (keep.has("fbclid")) keep.set("ts", String(Date.now())); // Meta's fbc names the click's time
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `ift_src=${encodeURIComponent(keep.toString())}; Max-Age=2592000; Path=/; SameSite=Lax${secure}`;
+}
+
+visitSource();
 countdowns();
 variantPickers();
 cartBadge();

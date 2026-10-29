@@ -254,3 +254,72 @@ func TestNoAddedCookieWithoutPixels(t *testing.T) {
 		t.Fatal("a store without pixels set the AddToCart cookie")
 	}
 }
+
+// TestOrderVisit (ADR-0043): an order carries the campaign app.js
+// remembered; the ad signals only where the store's pixels may run for
+// the shopper.
+func TestOrderVisit(t *testing.T) {
+	t.Parallel()
+	src := &http.Cookie{Name: "ift_src", Value: url.QueryEscape("utm_source=facebook&utm_campaign=eid&fbclid=IwAR0&ts=1730000000000&gclid=Cj0&ttclid=E.C.P")}
+	signals := []*http.Cookie{{Name: "_fbp", Value: "fb.1.1730000000000.42"}, {Name: "_ttp", Value: "ttp-1"}}
+	place := func(t *testing.T, f checkoutFixture, extra ...*http.Cookie) web.Visit {
+		t.Helper()
+		cookies, form := checkoutCart(t, f)
+		rec := f.post(t, "/checkout", form, append(cookies, extra...), map[string]string{"User-Agent": "Mozilla/5.0 test"})
+		reqs := f.orders.placed()
+		if rec.Code != http.StatusSeeOther || len(reqs) == 0 {
+			t.Fatalf("checkout = %d %s", rec.Code, rec.Body.String())
+		}
+		return reqs[len(reqs)-1].Visit
+	}
+
+	t.Run("no pixels: the campaign only", func(t *testing.T) {
+		t.Parallel()
+		v := place(t, newCheckoutFixture(t), append([]*http.Cookie{src}, signals...)...)
+		if v.UTMSource != "facebook" || v.UTMCampaign != "eid" || v.FBP != "" || v.GCLID != "" || v.IP != "" || v.UserAgent != "" {
+			t.Fatalf("visit %+v", v)
+		}
+	})
+	t.Run("pixels, no consent asked", func(t *testing.T) {
+		t.Parallel()
+		v := place(t, newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff))), append([]*http.Cookie{src}, signals...)...)
+		if v.UTMSource != "facebook" || v.FBP != "fb.1.1730000000000.42" || v.FBC != "fb.1.1730000000000.IwAR0" || v.TTP != "ttp-1" ||
+			v.GCLID != "Cj0" || v.TTCLID != "E.C.P" || v.IP == "" || v.UserAgent != "Mozilla/5.0 test" {
+			t.Fatalf("visit %+v", v)
+		}
+	})
+	t.Run("Meta's own fbc wins", func(t *testing.T) {
+		t.Parallel()
+		v := place(t, newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff))), src, &http.Cookie{Name: "_fbc", Value: "fb.1.1.own"})
+		if v.FBC != "fb.1.1.own" {
+			t.Fatalf("fbc %q", v.FBC)
+		}
+	})
+	for name, answer := range map[string]string{"consent not given": "", "consent declined": "no"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cookies := append([]*http.Cookie{src}, signals...)
+			if answer != "" {
+				cookies = append(cookies, &http.Cookie{Name: "px_c", Value: answer})
+			}
+			v := place(t, newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentRequired))), cookies...)
+			if v.UTMSource != "facebook" || v.FBP != "" || v.GCLID != "" || v.IP != "" || v.UserAgent != "" {
+				t.Fatalf("visit %+v", v)
+			}
+		})
+	}
+	t.Run("consent given", func(t *testing.T) {
+		t.Parallel()
+		cookies := append([]*http.Cookie{src, {Name: "px_c", Value: "yes"}}, signals...)
+		if v := place(t, newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentRequired))), cookies...); v.FBP == "" || v.IP == "" {
+			t.Fatalf("visit %+v", v)
+		}
+	})
+	t.Run("a cookie that is not a query", func(t *testing.T) {
+		t.Parallel()
+		v := place(t, newCheckoutFixture(t), &http.Cookie{Name: "ift_src", Value: "%zz"})
+		if v != (web.Visit{}) {
+			t.Fatalf("visit %+v", v)
+		}
+	})
+}

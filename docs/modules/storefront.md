@@ -270,6 +270,24 @@ On a store with pixels:
 
 A store without pixels carries none of this, and its CSP is unchanged.
 
+**Where an order came from** (6e-2b). Pages are cached, so the server
+never sees the URL a shopper landed on. Instead:
+- `app.js` (every store) keeps the landing URL's UTM parameters and ad
+  click IDs (`gclid`, `ttclid`, `ScCid`, `fbclid`, plus the click's time)
+  in the `ift_src` cookie for 30 days; a later campaign's link replaces
+  them.
+- `px.js` writes the shopper's consent answer to the `px_c` cookie.
+
+When an order is placed, `Visit` carries:
+- **always**, the UTM parameters;
+- **only on a store with pixels, and with consent where it asks for
+  it**, the providers' cookies (`_fbp`, `_fbc`, `_ttp`), the click IDs,
+  the IP address and the user agent. When Meta's tag has not written
+  `_fbc` yet, `fbc` is built from the click.
+
+Orders keep the UTM on the order and the rest in `order_signals`, for
+one month.
+
 ## Section types
 
 Each type has a schema in `internal/sections/schemas/<type>.json`, with

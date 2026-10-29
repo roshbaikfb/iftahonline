@@ -26,6 +26,14 @@ function stored(key) {
   }
 }
 
+// remember keeps the shopper's answer on the device, and tells the
+// server (an order's signals are kept only with consent).
+function remember(choice) {
+  store(CONSENT, choice);
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `px_c=${choice}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+}
+
 function store(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -193,12 +201,12 @@ function ask(cfg) {
   if (!box) return;
   box.hidden = false;
   box.querySelector("[data-consent-yes]").addEventListener("click", () => {
-    store(CONSENT, "yes");
+    remember("yes");
     box.hidden = true;
     later(() => start(cfg));
   });
   box.querySelector("[data-consent-no]").addEventListener("click", () => {
-    store(CONSENT, "no");
+    remember("no");
     box.hidden = true;
   });
 }
@@ -206,6 +214,7 @@ function ask(cfg) {
 const cfg = read();
 if (cfg && Array.isArray(cfg.p)) {
   const choice = stored(CONSENT);
+  if (choice) remember(choice); // the cookie may have expired or been cleared
   if (!cfg.ask || choice === "yes") later(() => start(cfg));
   else if (choice !== "no") ask(cfg);
 }

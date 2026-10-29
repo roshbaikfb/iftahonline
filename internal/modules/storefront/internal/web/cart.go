@@ -144,6 +144,7 @@ type OrderRequest struct {
 	Card                                           bool // paid online, not cash on delivery
 	Lines                                          []OrderRequestLine
 	Coupon                                         string // a coupon code; may be empty
+	Visit                                          Visit  // where the shopper came from (ADR-0043)
 }
 
 // Payment states an OrderSummary reports.
