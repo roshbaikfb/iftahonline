@@ -17,7 +17,7 @@ The storefront renders them through `Pixels`. Design:
   [storefront](storefront.md).
 - 6e-2b: UTM and the order's signals (orders, `order_signals`); see
   [orders](orders.md).
-- 6e-3: the server-side conversions.
+- 6e-3: the server-side conversions (below).
 
 ## Public API (`internal/modules/marketing/api.go`)
 
@@ -25,6 +25,10 @@ The storefront renders them through `Pixels`. Design:
 |---|---|
 | `New(Deps)`, `Module.Mount` | Wiring; the merchant HTTP API (behind identity's membership middleware) |
 | `Module.Pixels()` → `Pixels` | What the storefront uses: `Browser(ctx)`, which returns the enabled pixels' public IDs, the consent mode, and the CSP origins they need. It never reads a token |
+| `Module.Conversions()` → `Conversions` | `Track(ctx, Conversion)`: the storefront's AddToCart and InitiateCheckout, one job per provider the store sends server events to |
+| `Module.OrderPlacedHandler()`, `PurchasesSubscriber` | Reports a placed order's Purchase; subscribe it to `orders.EventOrderPlaced` (worker role) |
+| `Module.AddWorkers` | The `marketing.send_conversion` worker (worker role) |
+| `PurchaseEventID(order)` | `purchase:<order ID>`, on the thank-you page and in the server's event |
 | `EventPixelsChanged`, `PixelsChanged` | `marketing.pixels.changed`: a pixel saved or removed, or the consent mode changed |
 | `Provider`, `Consent`, `Browser`, `BrowserPixel` | DTOs |
 
@@ -94,3 +98,14 @@ All of them:
     saves, events and audit.
   - `httpapi` covers the happy path, validation, authorization, and a
     cross-tenant test for every operation.
+  - `capi` checks each provider's request: the path, where the token
+    goes, the hashing and the decimal value. It also checks which
+    answers are refusals, and that no error carries the token.
+  - `app` covers `Track` (who gets a job, and no phone in the job
+    table), the send (token, refusal, retry, a pixel removed or turned
+    off), the Purchase read at send time, and a keyless role.
+  - The P6 acceptance test is
+    `storefront/conversions_test.go`
+    (`TestBrowserAndServerShareEventIDs`). It runs real modules with
+    River. The AddToCart, InitiateCheckout and Purchase `event_id`s in
+    the pages are the ones the stand-in Meta receives, once each.

@@ -10,7 +10,9 @@ import (
 	"context"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/capi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // DTOs.
@@ -26,6 +28,19 @@ type (
 	BrowserPixel = domain.BrowserPixel
 	// PixelsChanged is the marketing.pixels.changed event.
 	PixelsChanged = domain.PixelsChanged
+	// Conversion is a conversion the server reports (ADR-0043), with the
+	// event_id its page reported.
+	Conversion = app.Conversion
+	// User is who a conversion matches: normalized and hashed before it
+	// leaves; sealed while it waits.
+	User = capi.User
+)
+
+// Conversion names.
+const (
+	AddToCart        = capi.AddToCart
+	InitiateCheckout = capi.InitiateCheckout
+	Purchase         = capi.Purchase
 )
 
 // Providers.
@@ -55,3 +70,21 @@ type Pixels interface {
 }
 
 var _ Pixels = (*app.Service)(nil)
+
+// Conversions is what the storefront reports server-side conversions
+// through: one job per provider the store sends them to, nothing for a
+// store without any. It acts on the store in ctx.
+type Conversions interface {
+	Track(ctx context.Context, c Conversion) error
+}
+
+var _ Conversions = (*app.Service)(nil)
+
+// PurchaseEventID is the event_id of an order's Purchase, on its
+// thank-you page and in the server's event.
+func PurchaseEventID(order ulid.ID) string { return app.PurchaseEventID(order) }
+
+// PurchasesSubscriber is the event bus subscriber name of
+// Module.OrderPlacedHandler: subscribe it to orders.EventOrderPlaced on
+// every role; only the worker's handles.
+const PurchasesSubscriber = "marketing.report_purchases"

@@ -69,9 +69,32 @@ against a sandbox.
    - ViewContent and PageView are browser-only. Pages are cached, and no
      endpoint takes beacons.
 5. **Server events are River jobs** (6e-3). One job per provider and
-   event, inserted in the transaction of the state change.
-   - Meta: `/{pixel}/events`. TikTok: Events API 1.3. Snap: CAPI v3. GA4:
-     Measurement Protocol.
+   event (`marketing.send_conversion`, unique by store, provider and
+   `event_id`).
+   - Purchase is reported when `orders.order.placed` is delivered, and
+     only for an order that has signals. Signals exist only where the
+     shopper allowed them, so that is the consent check.
+   - AddToCart and InitiateCheckout are enqueued by the storefront when
+     it renders the cart page after an add and the checkout page. This
+     happens only when the visit may carry signals.
+   - The storefront role holds no keys, by design. Two consequences:
+     - A Purchase job carries only its order's ID. The worker reads the
+       phone and signals from the order when it sends, so no phone
+       number waits in the job table.
+     - The cart's and checkout's jobs carry the visit's signals (IP,
+       user agent, cookies, click IDs), in the clear, as
+       `order_signals` does, until River deletes the finished job.
+   - A refusal for good (4xx except 408 and 429, or TikTok's non-zero
+     `code`) cancels the job; anything else is retried 8 times. A pixel
+     turned off or removed since is skipped.
+   - GA4's client ID is our customer's (or the event's) ID: the GA
+     cookie is not read. Server events count, but do not join the
+     browser's session; GA4 dedupes the purchase by `transaction_id`.
+     Google Ads has no server event yet.
+   - Meta: `/{pixel}/events` (the token in the body). TikTok: Events API
+     1.3 (the token in a header). Snap: CAPI v3 and GA4's Measurement
+     Protocol: their documented query parameters; transport errors drop
+     the URL before anything is logged.
    - Phone and e-mail are normalized, then hashed with SHA-256.
    - The order's signals (`fbp`, `fbc`, `ttclid`, `ScCid`, `gclid`, IP,
      user agent) and UTM parameters are written with the order: UTM in
