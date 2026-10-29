@@ -30,3 +30,6 @@ web/dashboard/blob-report/
 
 # go build ./cmd/platform output
 /platform
+
+# A stray `go build ./internal/tools/sfdemo` at the root (make builds into bin/).
+/sfdemo
