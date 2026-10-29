@@ -363,6 +363,27 @@ func deref(p *string) string {
 	return *p
 }
 
+// Signals reads an order's signals; ok is false when it has none (or
+// they were dropped after their month).
+func Signals(ctx context.Context, tx Tx, o domain.Order) (s domain.Signals, ok bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Signals{}, false, err
+	}
+	r, err := ordersdb.New(tx).GetOrderSignals(ctx, ordersdb.GetOrderSignalsParams{StoreID: store, OrderCreatedAt: o.CreatedAt, OrderID: o.ID})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return domain.Signals{}, false, nil
+	case err != nil:
+		return domain.Signals{}, false, fmt.Errorf("orders store: signals: %w", err)
+	}
+	s = domain.Signals{FBP: r.Fbp, FBC: r.Fbc, TTP: r.Ttp, TTCLID: r.Ttclid, ScCID: r.Sccid, GCLID: r.Gclid, UserAgent: r.UserAgent}
+	if r.Ip != nil {
+		s.IP = r.Ip.String()
+	}
+	return s, true, nil
+}
+
 // InsertSignals writes an order's signals (ADR-0043), in its
 // transaction.
 func InsertSignals(ctx context.Context, tx Tx, o domain.Order, s domain.Signals) error {

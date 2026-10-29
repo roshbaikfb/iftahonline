@@ -164,6 +164,36 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 	return i, err
 }
 
+const getOrderSignals = `-- name: GetOrderSignals :one
+SELECT store_id, order_created_at, order_id, fbp, fbc, ttp, ttclid, sccid, gclid, ip, user_agent FROM order_signals WHERE store_id = $1 AND order_created_at = $2 AND order_id = $3
+`
+
+type GetOrderSignalsParams struct {
+	StoreID        ulid.ID
+	OrderCreatedAt time.Time
+	OrderID        ulid.ID
+}
+
+// One partition: the order's time is its partition key.
+func (q *Queries) GetOrderSignals(ctx context.Context, arg GetOrderSignalsParams) (OrderSignal, error) {
+	row := q.db.QueryRow(ctx, getOrderSignals, arg.StoreID, arg.OrderCreatedAt, arg.OrderID)
+	var i OrderSignal
+	err := row.Scan(
+		&i.StoreID,
+		&i.OrderCreatedAt,
+		&i.OrderID,
+		&i.Fbp,
+		&i.Fbc,
+		&i.Ttp,
+		&i.Ttclid,
+		&i.Sccid,
+		&i.Gclid,
+		&i.Ip,
+		&i.UserAgent,
+	)
+	return i, err
+}
+
 const insertIdempotencyKey = `-- name: InsertIdempotencyKey :one
 INSERT INTO order_idempotency (store_id, key, fingerprint, order_id)
 VALUES ($1, $2, $3, $4)

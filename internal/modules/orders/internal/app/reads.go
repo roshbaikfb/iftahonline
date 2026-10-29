@@ -212,3 +212,20 @@ func (s *Service) BulkTransition(ctx context.Context, ids []ulid.ID, to domain.S
 func cleanNote(note string) (string, error) {
 	return text.Clean(note, "note", 0, domain.MaxNotesLen)
 }
+
+// Conversion is an order as its server-side conversion needs it
+// (ADR-0043): with its lines, and its signals; ok is false when the
+// order has no signals (none were allowed, or their month passed).
+func (s *Service) Conversion(ctx context.Context, id ulid.ID) (o domain.Order, sig domain.Signals, ok bool, err error) {
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		if o, err = store.Get(ctx, tx, id, false); err != nil {
+			return err
+		}
+		if o.Lines, err = store.Lines(ctx, tx, id, o.Total.Currency()); err != nil {
+			return err
+		}
+		sig, ok, err = store.Signals(ctx, tx, o)
+		return err
+	})
+	return o, sig, ok, notFound(err)
+}

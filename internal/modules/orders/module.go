@@ -104,6 +104,17 @@ func NewFulfilment(d ShopDeps) (Payments, error) {
 	return svc, nil
 }
 
+// NewConversions builds what the worker role's server-side conversions
+// read (ADR-0043): an order, its lines and signals. It holds no merchant
+// permissions.
+func NewConversions(d ShopDeps) (Conversions, error) {
+	svc, err := withoutPermissions(d)
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
+
 // SalesSubscriber is the event bus subscriber name of the bestsellers
 // counter (NewSalesCounter).
 const SalesSubscriber = "orders.count_sales"
