@@ -63,9 +63,13 @@ against a sandbox.
 4. **One `event_id` per conversion** (6e-2, 6e-3).
    - Purchase: `purchase:<order ULID>`, rendered on the thank-you page
      and sent by the server.
-   - AddToCart: a ULID made by the cart handler, rendered on the private
-     cart response and sent by the server.
-   - InitiateCheckout: made by the checkout page (private), sent by both.
+   - AddToCart: a ULID made by the cart's form post and kept in Redis
+     for a minute under the cart's token hash, read once by the cart page
+     it redirects to. The shopper never carries it, so cannot name one
+     (P6 review).
+   - InitiateCheckout: `ic-` and a hash of the cart's token and lines.
+     A reload is the same event, and River's uniqueness and the browser
+     report it once; another cart is another event (P6 review).
    - ViewContent and PageView are browser-only. Pages are cached, and no
      endpoint takes beacons.
 5. **Server events are River jobs** (6e-3). One job per provider and
@@ -76,7 +80,12 @@ against a sandbox.
      shopper allowed them, so that is the consent check.
    - AddToCart and InitiateCheckout are enqueued by the storefront when
      it renders the cart page after an add and the checkout page. This
-     happens only when the visit may carry signals.
+     happens only when the visit may carry signals, and within limits:
+     30 per address and 3,000 per store every 10 minutes
+     (`conversion:` keys). Past them, or with the limiter down, the
+     browser still reports the event and the server does not. Pages are
+     public, and every server event costs a job and a call with the
+     merchant's token (P6 review).
    - The storefront role holds no keys, by design. Two consequences:
      - A Purchase job carries only its order's ID. The worker reads the
        phone and signals from the order when it sends, so no phone

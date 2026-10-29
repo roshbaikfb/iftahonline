@@ -2,18 +2,25 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
+	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -28,16 +35,40 @@ type Conversions interface {
 	Track(ctx context.Context, c marketing.Conversion) error
 }
 
+// Added keeps an AddToCart between the cart's form post and the cart
+// page, on the server (storefront store.Added): its event_id is never
+// the shopper's to name.
+type Added interface {
+	Put(ctx context.Context, tokenHash []byte, value string, ttl time.Duration) error
+	Take(ctx context.Context, tokenHash []byte) (string, bool, error)
+}
+
+// Server-side conversions are bounded per address and per store: pages
+// are public, and every event costs a job and a call to each provider
+// with the merchant's token. Past a limit the page still reports its
+// event from the browser.
+var (
+	conversionPerIP    = ratelimit.Limit{Burst: 30, Period: 10 * time.Minute}   //nolint:gochecknoglobals // constant policy
+	conversionPerStore = ratelimit.Limit{Burst: 3000, Period: 10 * time.Minute} //nolint:gochecknoglobals // constant policy
+)
+
 // track reports a conversion the page also reports, from the server,
 // with the same event_id, when the shopper's visit allows ad signals
-// (the store has pixels, and consent where it asks). A failure costs the
-// event, never the page.
+// (the store has pixels, and consent where it asks) and the limits do.
+// A failure costs the event, never the page.
 func (s *Shop) track(r *http.Request, p *pageCtx, name, id string, value money.Money, items []string) {
 	if s.conversions == nil || id == "" {
 		return
 	}
 	v := s.visit(r, p)
 	if v.IP == "" { // not allowed: the visit carries no signals
+		return
+	}
+	store, tenantErr := tenant.FromContext(r.Context())
+	if tenantErr != nil {
+		return
+	}
+	if ok, _ := s.allowGuarded(r, store, "conversion", conversionPerIP, conversionPerStore); !ok {
 		return
 	}
 	c := marketing.Conversion{Name: name, EventID: id, Time: s.now(), Value: value, Items: items, URL: p.abs(p.l, p.path),
@@ -55,6 +86,19 @@ const (
 	EventInitiateCheckout = "InitiateCheckout"
 	EventPurchase         = "Purchase"
 )
+
+// checkoutEventID is the event_id of a cart's InitiateCheckout: the same
+// for the same cart and lines, so a reload of checkout is one event (the
+// server's jobs are unique by it, the browser keeps what it sent), and a
+// new one once the cart changes. Only a hash of the token goes in it.
+func checkoutEventID(tok authtoken.Token, view app.CartView) string {
+	h := sha256.New()
+	h.Write(tok.Hash())
+	for _, l := range view.Lines {
+		h.Write([]byte("|" + l.VariantID.String() + ":" + strconv.Itoa(l.Qty)))
+	}
+	return "ic-" + hex.EncodeToString(h.Sum(nil))[:32]
+}
 
 // purchaseEventID is the event_id of an order's Purchase: the thank-you
 // page and the server's event carry the same one (marketing owns it).
@@ -149,48 +193,72 @@ func (p *pageCtx) pxScript() templ.Component {
 	return templ.Raw(`<script type="application/json" id="px">` + string(b) + `</script>`)
 }
 
-// addedCookie carries an AddToCart from the cart's form post to the cart
-// page it redirects to: the event_id the server made, the variant and
-// the quantity. It lives seconds and is read once.
-const addedCookie = "__Host-px_add"
+// addedTTL is how long an AddToCart waits for the cart page the form
+// post redirects to.
+const addedTTL = time.Minute
 
-// setAdded records an AddToCart for the next cart page.
-func (s *Shop) setAdded(w http.ResponseWriter, p *pageCtx, variant ulid.ID, qty int) string {
-	if !p.v.hasPixels() || qty < 1 {
-		return ""
+// setAdded records an AddToCart for the cart's next page, on the server.
+func (s *Shop) setAdded(ctx context.Context, tok authtoken.Token, p *pageCtx, variant ulid.ID, qty int) {
+	if s.added == nil || tok == "" || !p.v.hasPixels() || qty < 1 {
+		return
 	}
-	id := s.ids.New().String()
-	http.SetCookie(w, &http.Cookie{Name: addedCookie, Value: id + "." + variant.String() + "." + strconv.Itoa(qty), Path: "/",
-		MaxAge: 60, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	return id
+	value := s.ids.New().String() + "." + variant.String() + "." + strconv.Itoa(qty)
+	if err := s.added.Put(ctx, tok.Hash(), value, addedTTL); err != nil {
+		s.log.WarnContext(ctx, "storefront: keep AddToCart", "err", err)
+	}
 }
 
-// maxAddedQty bounds the quantity a cookie may claim (a cart line holds
+// maxAddedQty bounds the quantity an add may report (a cart line holds
 // far fewer).
 const maxAddedQty = 1000
 
-// takeAdded reads and clears the AddToCart a form post left: its
-// event_id, variant and quantity.
-func takeAdded(w http.ResponseWriter, r *http.Request) (id string, variant ulid.ID, qty int, ok bool) {
-	c, err := r.Cookie(addedCookie)
-	if err != nil {
+// takeAdded returns and forgets the AddToCart the cart's last form post
+// left: its event_id, variant and quantity.
+func (s *Shop) takeAdded(ctx context.Context, tok authtoken.Token) (id string, variant ulid.ID, qty int, ok bool) {
+	if s.added == nil || tok == "" {
 		return "", ulid.ID{}, 0, false
 	}
-	http.SetCookie(w, &http.Cookie{Name: addedCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	parts := strings.Split(c.Value, ".")
+	value, ok, err := s.added.Take(ctx, tok.Hash())
+	if err != nil {
+		s.log.WarnContext(ctx, "storefront: take AddToCart", "err", err)
+	}
+	if !ok {
+		return "", ulid.ID{}, 0, false
+	}
+	return parseAdded(value)
+}
+
+// parseAdded reads "<event id>.<variant>.<qty>".
+func parseAdded(value string) (id string, variant ulid.ID, qty int, ok bool) {
+	parts := strings.Split(value, ".")
 	if len(parts) != 3 {
 		return "", ulid.ID{}, 0, false
 	}
-	if _, err = ulid.Parse(parts[0]); err != nil {
+	if _, err := ulid.Parse(parts[0]); err != nil {
 		return "", ulid.ID{}, 0, false
 	}
-	if variant, err = ulid.Parse(parts[1]); err != nil {
+	variant, err := ulid.Parse(parts[1])
+	if err != nil {
 		return "", ulid.ID{}, 0, false
 	}
 	if qty, err = strconv.Atoi(parts[2]); err != nil || qty < 1 || qty > maxAddedQty {
 		return "", ulid.ID{}, 0, false
 	}
 	return parts[0], variant, qty, true
+}
+
+// sourceOf reads the campaign app.js kept in sourceCookie: a query
+// string, escaped once more. Anything else reads as no campaign.
+func sourceOf(cookie string) url.Values {
+	raw, err := url.QueryUnescape(cookie)
+	if err != nil {
+		return url.Values{}
+	}
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		return url.Values{}
+	}
+	return q
 }
 
 // Visit is where an order's shopper came from (ADR-0043): the campaign's
@@ -215,11 +283,7 @@ const (
 func (s *Shop) visit(r *http.Request, p *pageCtx) Visit {
 	src := url.Values{}
 	if c, err := r.Cookie(sourceCookie); err == nil {
-		if raw, unErr := url.QueryUnescape(c.Value); unErr == nil {
-			if q, qErr := url.ParseQuery(raw); qErr == nil {
-				src = q
-			}
-		}
+		src = sourceOf(c.Value)
 	}
 	v := Visit{UTMSource: src.Get("utm_source"), UTMMedium: src.Get("utm_medium"), UTMCampaign: src.Get("utm_campaign"),
 		UTMContent: src.Get("utm_content"), UTMTerm: src.Get("utm_term")}

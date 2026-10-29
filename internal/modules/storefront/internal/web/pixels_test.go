@@ -186,40 +186,42 @@ func TestPixelsFailOpen(t *testing.T) {
 }
 
 // TestCheckoutConversions: adding to the cart reports AddToCart once on
-// the cart page, with the event_id the form post made; checkout reports
-// InitiateCheckout; the thank-you page reports Purchase with the order's
-// event_id.
+// the cart page, with an event_id the server made and kept; checkout
+// reports InitiateCheckout with one event_id per cart and lines; the
+// thank-you page reports Purchase with the order's event_id.
 func TestCheckoutConversions(t *testing.T) {
 	t.Parallel()
 	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)))
 	variant := f.shirt.Variants[0].ID.String()
 	add := f.post(t, "/cart", url.Values{"variant": {variant}, "qty": {"2"}}, nil, nil)
-	added := cookie(add, "__Host-px_add")
-	if added == nil || !added.HttpOnly || !added.Secure || added.MaxAge != 60 {
-		t.Fatalf("AddToCart cookie %+v", added)
+	if cookie(add, "__Host-px_add") != nil {
+		t.Fatal("the add's event_id left the server")
 	}
-	id, _, _ := strings.Cut(added.Value, ".")
 	cart := cookie(add, "__Host-cart")
-	rec := f.getWith(t, "/cart", []*http.Cookie{cart, added})
-	c, _ := px(t, rec.Body.String())
-	if len(c.Events) != 1 || c.Events[0].N != web.EventAddToCart || c.Events[0].ID != id || c.Events[0].V != 30000 || c.Events[0].IDs[0] != variant {
+	c, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart}).Body.String())
+	if len(c.Events) != 1 || c.Events[0].N != web.EventAddToCart || len(c.Events[0].ID) != 26 || c.Events[0].V != 30000 || c.Events[0].IDs[0] != variant {
 		t.Fatalf("cart events %+v", c.Events)
-	}
-	if gone := cookie(rec, "__Host-px_add"); gone == nil || gone.MaxAge >= 0 {
-		t.Fatalf("the AddToCart cookie is not cleared: %+v", gone)
 	}
 	if again, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart}).Body.String()); len(again.Events) != 0 {
 		t.Fatalf("the cart reports the add twice: %+v", again.Events)
 	}
-	// An update is not an add.
-	upd := f.post(t, "/cart/update", url.Values{"variant": {variant}, "qty": {"1"}}, []*http.Cookie{cart}, nil)
-	if cookie(upd, "__Host-px_add") != nil {
-		t.Fatal("a quantity change reported as an add")
-	}
 
 	co, _ := px(t, f.getWith(t, "/checkout", []*http.Cookie{cart}).Body.String())
-	if len(co.Events) != 1 || co.Events[0].N != web.EventInitiateCheckout || len(co.Events[0].ID) != 26 || co.Events[0].V != 15000 {
+	if len(co.Events) != 1 || co.Events[0].N != web.EventInitiateCheckout || !strings.HasPrefix(co.Events[0].ID, "ic-") || len(co.Events[0].ID) != 35 ||
+		co.Events[0].V != 30000 {
 		t.Fatalf("checkout events %+v", co.Events)
+	}
+	// A reload is the same checkout; another cart is another.
+	if re, _ := px(t, f.getWith(t, "/checkout", []*http.Cookie{cart}).Body.String()); re.Events[0].ID != co.Events[0].ID {
+		t.Fatalf("a reload made a new event_id: %s, %s", co.Events[0].ID, re.Events[0].ID)
+	}
+	// An update is not an add, and changes the checkout.
+	f.post(t, "/cart/update", url.Values{"variant": {variant}, "qty": {"1"}}, []*http.Cookie{cart}, nil)
+	if after, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart}).Body.String()); len(after.Events) != 0 {
+		t.Fatalf("a quantity change reported as an add: %+v", after.Events)
+	}
+	if changed, _ := px(t, f.getWith(t, "/checkout", []*http.Cookie{cart}).Body.String()); changed.Events[0].ID == co.Events[0].ID {
+		t.Fatal("another cart kept the checkout's event_id")
 	}
 
 	ty, _ := px(t, f.get(t, "/thank-you/IFT-1001").Body.String())
@@ -228,30 +230,69 @@ func TestCheckoutConversions(t *testing.T) {
 	}
 }
 
-// TestAddedCookieTampered: a cookie the server did not write reports
-// nothing.
-func TestAddedCookieTampered(t *testing.T) {
+// TestAddedNotFromCookie: the shopper cannot name an AddToCart: a cookie
+// of the old form, or any other, reports nothing.
+func TestAddedNotFromCookie(t *testing.T) {
 	t.Parallel()
-	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)))
+	conv := &tracked{}
+	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)), func(d *web.Deps) { d.Conversions = conv })
 	variant := f.shirt.Variants[0].ID.String()
 	add := f.post(t, "/cart", url.Values{"variant": {variant}, "qty": {"1"}}, nil, nil)
 	cart := cookie(add, "__Host-cart")
-	for _, v := range []string{"x", "a.b.c", "01M5PAGE000000000000000001." + variant + ".0", "01M5PAGE000000000000000001." + variant + ".99999",
-		"01M5PAGE000000000000000001.nope.1", "01M5PAGE000000000000000001.01M5PAGE000000000000000002.1"} {
+	f.getWith(t, "/cart", []*http.Cookie{cart}) // the real add, reported
+	for _, v := range []string{"01M5PAGE000000000000000001." + variant + ".1", "01M5PAGE000000000000000002." + variant + ".5", "x"} {
 		rec := f.getWith(t, "/cart", []*http.Cookie{cart, {Name: "__Host-px_add", Value: v}})
 		if c, _ := px(t, rec.Body.String()); len(c.Events) != 0 {
 			t.Errorf("cookie %q reported %+v", v, c.Events)
 		}
 	}
+	if got := conv.all(); len(got) != 1 || got[0].Name != marketing.AddToCart {
+		t.Fatalf("server events %+v", got)
+	}
 }
 
-// TestNoAddedCookieWithoutPixels: a store without pixels sets no cookie.
-func TestNoAddedCookieWithoutPixels(t *testing.T) {
+// TestNoAddedWithoutPixels: a store without pixels keeps no add.
+func TestNoAddedWithoutPixels(t *testing.T) {
 	t.Parallel()
-	f := newCheckoutFixture(t)
-	add := f.post(t, "/cart", url.Values{"variant": {f.shirt.Variants[0].ID.String()}, "qty": {"1"}}, nil, nil)
-	if cookie(add, "__Host-px_add") != nil {
-		t.Fatal("a store without pixels set the AddToCart cookie")
+	added := &fakeAdded{kept: map[string]string{}}
+	f := newCheckoutFixture(t, func(d *web.Deps) { d.Added = added })
+	f.post(t, "/cart", url.Values{"variant": {f.shirt.Variants[0].ID.String()}, "qty": {"1"}}, nil, nil)
+	if added.len() != 0 {
+		t.Fatal("a store without pixels kept an add")
+	}
+}
+
+// TestServerConversionsLimited: past the limits, the server reports no
+// more conversions; the page still does, from the browser.
+func TestServerConversionsLimited(t *testing.T) {
+	t.Parallel()
+	conv := &tracked{}
+	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)), func(d *web.Deps) { d.Conversions = conv })
+	f.limiter.mu.Lock()
+	f.limiter.allow["conversion:ip:203.0.113.7"] = 2
+	f.limiter.mu.Unlock()
+	cookies, _ := checkoutCart(t, f)
+	for range 5 {
+		if c, _ := px(t, f.getWith(t, "/checkout", cookies).Body.String()); len(c.Events) != 1 {
+			t.Fatalf("checkout events %+v", c.Events)
+		}
+	}
+	if got := conv.all(); len(got) != 2 {
+		t.Fatalf("%d server events past a limit of 2", len(got))
+	}
+	// The limiter down: no server events (they cost a call each), pages fine.
+	quiet := &tracked{}
+	g := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)), func(d *web.Deps) { d.Conversions = quiet })
+	gCookies, _ := checkoutCart(t, g)
+	g.limiter.mu.Lock()
+	g.limiter.fail = true
+	g.limiter.mu.Unlock()
+	rec := g.getWith(t, "/checkout", gCookies)
+	if c, _ := px(t, rec.Body.String()); rec.Code != http.StatusOK || len(c.Events) != 1 {
+		t.Fatalf("checkout without a limiter: %d %+v", rec.Code, c.Events)
+	}
+	if len(quiet.all()) != 0 {
+		t.Fatal("a server event without a working limiter")
 	}
 }
 
@@ -354,8 +395,8 @@ func TestServerConversions(t *testing.T) {
 	f := newCheckoutFixture(t, withPixels(metaAndGA4(marketing.ConsentOff)), func(d *web.Deps) { d.Conversions = conv })
 	variant := f.shirt.Variants[0].ID.String()
 	add := f.post(t, "/cart", url.Values{"variant": {variant}, "qty": {"2"}}, nil, nil)
-	cart, added := cookie(add, "__Host-cart"), cookie(add, "__Host-px_add")
-	page, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart, added, {Name: "_fbp", Value: "fb.1.2.3"}}).Body.String())
+	cart := cookie(add, "__Host-cart")
+	page, _ := px(t, f.getWith(t, "/cart", []*http.Cookie{cart, {Name: "_fbp", Value: "fb.1.2.3"}}).Body.String())
 	checkout, _ := px(t, f.getWith(t, "/checkout", []*http.Cookie{cart}).Body.String())
 	got := conv.all()
 	if len(got) != 2 || len(page.Events) != 1 || len(checkout.Events) != 1 {

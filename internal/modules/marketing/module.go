@@ -68,7 +68,7 @@ func New(d Deps) (*Module, error) {
 	}
 	c := d.Client
 	if c == nil {
-		c = &http.Client{Timeout: capi.Timeout}
+		c = capi.NewClient()
 	}
 	e := d.Endpoints
 	senders := map[domain.Provider]capi.Sender{

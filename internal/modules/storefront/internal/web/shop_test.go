@@ -467,6 +467,33 @@ func product(title, slug string, price int64, available bool, cats ...ulid.ID) c
 	}
 }
 
+// fakeAdded keeps pending AddToCarts in memory, as Redis does.
+type fakeAdded struct {
+	mu   sync.Mutex
+	kept map[string]string
+}
+
+func (a *fakeAdded) Put(_ context.Context, tokenHash []byte, value string, _ time.Duration) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.kept[string(tokenHash)] = value
+	return nil
+}
+
+func (a *fakeAdded) Take(_ context.Context, tokenHash []byte) (string, bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	v, ok := a.kept[string(tokenHash)]
+	delete(a.kept, string(tokenHash))
+	return v, ok, nil
+}
+
+func (a *fakeAdded) len() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.kept)
+}
+
 func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	t.Helper()
 	cat := catalog.Category{ID: gen.New(), Slug: "tshirts", Name: "تيشيرتات"}
@@ -497,7 +524,8 @@ func newFixture(t testing.TB, opts ...func(*web.Deps)) fixture {
 	deps := web.Deps{
 		Catalog: fc, Stores: fakeStores{tenancy.Store{Name: "متجر منى", Locale: "ar", Currency: "EGP"}}, Content: content, Carts: carts,
 		Signer: fakeSigner{}, Assets: assets, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPS: true,
-		Now: func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
+		Now:   func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
+		Added: &fakeAdded{kept: map[string]string{}},
 	}
 	for _, o := range opts {
 		o(&deps)
