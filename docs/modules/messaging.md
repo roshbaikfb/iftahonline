@@ -147,6 +147,23 @@ approved templates, so only the SMS text is the store's.
 7. **Notices** are made once each and kept 90 days. The quota warnings
    are also emailed to the owner and managers.
 
+## Dashboard (6g)
+
+The merchant dashboard follows the approved 6g mockups:
+- **رسائل العملاء** (`/stores/{id}/messages`): the confirmation switch and the
+  auto-cancel hours (saved when the field is left), the month's quota (a
+  warning at `nearly` and `reached`), the SMS text per language with
+  placeholder buttons and a live preview (a text without `{{url}}` cannot be
+  saved), and the WhatsApp template as the customer sees it. Support reads it;
+  the owner and managers change it.
+- **سجل الرسائل** (`…/messages/log`): one tab per status, 50 at a time;
+  `?order=` shows one order's messages.
+- **The bell** in the top bar: the unread count and the latest notices, a panel
+  under it (a whole page on a phone); a notice's link or "mark all read" marks
+  them read. Hidden from the shipping role (no `messaging.read`).
+- **The order page**: the customer confirmation card (the message's way, the
+  answer, the auto-cancel time), shown first on a phone.
+
 ## Webhooks
 
 Each event is placed in its store by our reference

@@ -17,7 +17,16 @@ export function navGroups(storeId: string): NavGroup[] {
   const at = (path: string) => `/stores/${storeId}/${path}`;
   return [
     { items: [{ label: 'الرئيسية', to: at('home') }] },
-    { title: 'المبيعات', items: [{ label: 'الطلبات', to: at('orders'), pendingBadge: true }, { label: 'المدفوعات', to: at('payments') }, { label: 'العملاء' }] },
+    {
+      title: 'المبيعات',
+      items: [
+        { label: 'الطلبات', to: at('orders'), pendingBadge: true },
+        { label: 'المدفوعات', to: at('payments') },
+        { label: 'رسائل العملاء', to: at('messages') },
+        { label: 'العملاء' },
+      ],
+    },
+    { title: 'التسويق', items: [{ label: 'الكوبونات' }, { label: 'بكسلات الإعلانات' }, { label: 'كتالوج المنتجات' }] },
     {
       title: 'المنتجات',
       items: [

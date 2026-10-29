@@ -97,6 +97,10 @@ Roles:
 The merchant dashboard's orders screens (list with filters, bulk
 confirm, order page with moves, CSV export) use this API; see
 [ADR-0023](../adr/0023-merchant-dashboard-shell.md).
+The order page also shows the coupon's discount (`discount_minor`,
+`coupon_code`) in the totals, the campaign it came from (`attribution`) in
+its own card, and the customer's confirmation by message (see
+[messaging](messaging.md)).
 
 ## Rules worth knowing
 
