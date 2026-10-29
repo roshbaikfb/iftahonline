@@ -145,6 +145,9 @@ type ShopDeps struct {
 	Confirmations messaging.ConfirmLinks
 	// Pixels are the stores' ad pixels (ADR-0043); nil loads none.
 	Pixels marketing.Pixels
+	// Conversions reports the cart's and checkout's conversions from the
+	// server too; nil reports none.
+	Conversions marketing.Conversions
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -194,7 +197,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays, Confirmations: confirms,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels,
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions,
 	})
 	if err != nil {
 		return nil, err

@@ -132,7 +132,9 @@ func (s *Shop) checkoutPage(w http.ResponseWriter, r *http.Request, p *pageCtx) 
 		for i, l := range view.Lines {
 			ids[i] = l.VariantID.String()
 		}
-		p.event(EventInitiateCheckout, s.ids.New().String(), *view.Subtotal, ids)
+		id := s.ids.New().String()
+		p.event(EventInitiateCheckout, id, *view.Subtotal, ids)
+		s.track(r, p, EventInitiateCheckout, id, *view.Subtotal, ids)
 	}
 	s.renderOrder(w, r, p, http.StatusOK, f)
 }

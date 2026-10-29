@@ -60,32 +60,36 @@ type Deps struct {
 	Search bool
 	// Pixels are the store's ad pixels (ADR-0043); nil loads none.
 	Pixels Pixels
+	// Conversions reports the cart's and checkout's conversions from the
+	// server too; nil reports none.
+	Conversions Conversions
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
 // context (the host was resolved before).
 type Shop struct {
-	catalog  Catalog
-	stores   Stores
-	content  Content
-	signer   Signer
-	assets   *Assets
-	log      *slog.Logger
-	caches   *caches
-	scheme   string
-	edge     string // Cache-Control of a page
-	carts    Carts
-	orders   Orders
-	confirms Confirmations
-	payments Payments
-	limiter  Limiter
-	captcha  CaptchaVerifier
-	siteKey  string
-	clientIP func(*http.Request) string
-	now      func() time.Time
-	searchOn bool // Catalog.Search works: pages show the search box
-	pixels   Pixels
-	ids      *ulid.Generator // event IDs of conversions (ADR-0043)
+	catalog     Catalog
+	stores      Stores
+	content     Content
+	signer      Signer
+	assets      *Assets
+	log         *slog.Logger
+	caches      *caches
+	scheme      string
+	edge        string // Cache-Control of a page
+	carts       Carts
+	orders      Orders
+	confirms    Confirmations
+	payments    Payments
+	limiter     Limiter
+	captcha     CaptchaVerifier
+	siteKey     string
+	clientIP    func(*http.Request) string
+	now         func() time.Time
+	searchOn    bool // Catalog.Search works: pages show the search box
+	pixels      Pixels
+	conversions Conversions
+	ids         *ulid.Generator // event IDs of conversions (ADR-0043)
 }
 
 // New builds the shop.
@@ -113,7 +117,7 @@ func New(d Deps) (*Shop, error) {
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
 		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search,
-		pixels: d.Pixels, ids: ulid.NewGenerator()}, nil
+		pixels: d.Pixels, conversions: d.Conversions, ids: ulid.NewGenerator()}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
