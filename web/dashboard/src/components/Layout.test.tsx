@@ -60,9 +60,8 @@ describe('Layout', () => {
     expect(titles).toEqual(['المبيعات', 'التسويق', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
     expect(within(nav).getByRole('link', { name: 'رسائل العملاء' })).toHaveAttribute('href', `/stores/${a}/messages`);
     expect(within(nav).getByRole('link', { name: 'الكوبونات' })).toHaveAttribute('href', `/stores/${a}/coupons`);
-    for (const next of ['بكسلات الإعلانات', 'كتالوج المنتجات']) {
-      expect(within(nav).getByText(next).closest('.item')).toHaveAttribute('aria-disabled', 'true');
-    }
+    expect(within(nav).getByRole('link', { name: 'بكسلات الإعلانات' })).toHaveAttribute('href', `/stores/${a}/pixels`);
+    expect(within(nav).getByRole('link', { name: 'كتالوج المنتجات' })).toHaveAttribute('href', `/stores/${a}/feeds`);
     // an order's page belongs to the orders screen
     expect(within(nav).getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'الشحنات' })).not.toHaveAttribute('aria-current');

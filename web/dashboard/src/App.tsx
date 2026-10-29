@@ -10,6 +10,7 @@ import { Design } from './pages/Design';
 import { CouponEditor } from './pages/CouponEditor';
 import { Coupons } from './pages/Coupons';
 import { Domains } from './pages/Domains';
+import { Feeds } from './pages/Feeds';
 import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
 import { Imports } from './pages/Imports';
@@ -23,6 +24,7 @@ import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
 import { Pages } from './pages/Pages';
 import { Payments } from './pages/Payments';
+import { Pixels } from './pages/Pixels';
 import { PolicyEditor } from './pages/PolicyEditor';
 import { ProductEditor } from './pages/ProductEditor';
 import { Products } from './pages/Products';
@@ -108,6 +110,8 @@ function Gate() {
           <Route path="/stores/:storeId/payments" element={<Payments />} />
           <Route path="/stores/:storeId/messages" element={<Messages />} />
           <Route path="/stores/:storeId/coupons" element={<Coupons />} />
+          <Route path="/stores/:storeId/pixels" element={<Pixels />} />
+          <Route path="/stores/:storeId/feeds" element={<Feeds />} />
           <Route path="/stores/:storeId/coupons/new" element={<CouponEditor />} />
           <Route path="/stores/:storeId/coupons/:couponId" element={<CouponEditor key="edit" />} />
           <Route path="/stores/:storeId/messages/log" element={<MessageLog />} />
