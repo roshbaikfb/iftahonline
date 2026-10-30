@@ -150,3 +150,30 @@ export function ago(iso: string, now = Date.now()): string {
   if (h < 24) return say(h, 'ساعة', 'ساعتين', 'ساعات', 'ساعة');
   return dateTime(iso);
 }
+
+// The bell's last read of a store's notices. Every screen mounts its own
+// bell, so the read is kept here: a screen opened within a minute of the
+// last read shows it without asking again (the unread count is a query).
+export interface NoticeRead {
+  at: number;
+  items: Notice[];
+  unread: number;
+  next: string;
+}
+
+export const noticeTTL = 60_000;
+const noticeReads = new Map<string, NoticeRead>();
+
+export function recentNotices(storeId: string, now = Date.now()): NoticeRead | undefined {
+  const r = noticeReads.get(storeId);
+  return r && now - r.at < noticeTTL ? r : undefined;
+}
+
+export function keepNotices(storeId: string, r: NoticeRead): void {
+  noticeReads.set(storeId, r);
+}
+
+// forgetNotices drops what was kept (tests; signing out).
+export function forgetNotices(): void {
+  noticeReads.clear();
+}

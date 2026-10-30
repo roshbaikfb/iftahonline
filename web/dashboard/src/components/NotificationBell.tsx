@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import { api } from '../api/client';
-import { ago, canReadMessages, noticeText, noticeTone, orderCode, type Notice } from '../lib/messages';
+import { ago, canReadMessages, keepNotices, noticeText, noticeTone, orderCode, recentNotices, type Notice } from '../lib/messages';
 import { useRole } from '../lib/settings';
 
 const pageSize = 10;
@@ -25,9 +25,11 @@ const icons = {
 export function NotificationBell({ storeId }: { storeId: string }) {
   const role = useRole(storeId);
   const { pathname } = useLocation();
-  const [items, setItems] = useState<Notice[]>([]);
-  const [unread, setUnread] = useState(0);
-  const [next, setNext] = useState('');
+  // A read kept from the last minute fills the bell at once (any screen).
+  const kept = recentNotices(storeId);
+  const [items, setItems] = useState<Notice[]>(kept?.items ?? []);
+  const [unread, setUnread] = useState(kept?.unread ?? 0);
+  const [next, setNext] = useState(kept?.next ?? '');
   // The panel is open on the page it was opened on: following a link
   // closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -35,12 +37,14 @@ export function NotificationBell({ storeId }: { storeId: string }) {
   const allowed = canReadMessages(role);
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || recentNotices(storeId)) return;
     let live = true;
     void api
       .GET('/v1/stores/{store_id}/messaging/notifications', { params: { path: { store_id: storeId }, query: { limit: pageSize } } })
       .then(({ data }) => {
-        if (!live || !data) return;
+        if (!data) return;
+        keepNotices(storeId, { at: Date.now(), items: data.items, unread: data.unread, next: data.next_cursor ?? '' });
+        if (!live) return;
         setItems(data.items);
         setUnread(data.unread);
         setNext(data.next_cursor ?? '');
@@ -56,8 +60,11 @@ export function NotificationBell({ storeId }: { storeId: string }) {
     if (ids.length === 0) return;
     const { error } = await api.POST('/v1/stores/{store_id}/messaging/notifications/read', { params: { path: { store_id: storeId } }, body: { ids } });
     if (error) return;
-    setItems((xs) => xs.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)));
-    setUnread((u) => Math.max(0, u - ids.length));
+    const nextItems = items.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n));
+    const nextUnread = Math.max(0, unread - ids.length);
+    setItems(nextItems);
+    setUnread(nextUnread);
+    keepNotices(storeId, { at: recentNotices(storeId)?.at ?? Date.now(), items: nextItems, unread: nextUnread, next });
   }
 
   async function more() {
@@ -65,8 +72,10 @@ export function NotificationBell({ storeId }: { storeId: string }) {
       params: { path: { store_id: storeId }, query: { limit: pageSize, cursor: next } },
     });
     if (!data) return;
-    setItems([...items, ...data.items]);
+    const all = [...items, ...data.items];
+    setItems(all);
     setNext(data.next_cursor ?? '');
+    keepNotices(storeId, { at: recentNotices(storeId)?.at ?? Date.now(), items: all, unread, next: data.next_cursor ?? '' });
   }
 
   const label = unread > 0 ? `الإشعارات: ${String(unread)} غير مقروءة` : 'الإشعارات';
