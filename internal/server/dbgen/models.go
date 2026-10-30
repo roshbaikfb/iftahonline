@@ -118,6 +118,20 @@ type BillingAccountStore struct {
 	AddedAt       pgtype.Timestamptz
 }
 
+type BillingCheckout struct {
+	StoreID       pgtype.UUID
+	ID            pgtype.UUID
+	AccountID     pgtype.UUID
+	InvoiceID     pgtype.UUID
+	Reference     string
+	PaymobOrderID pgtype.Text
+	Currency      string
+	AmountMinor   int64
+	Status        string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type BillingPaymentMethod struct {
 	AccountID pgtype.UUID
 	Gateway   string

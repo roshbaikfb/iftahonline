@@ -2991,6 +2991,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's plan, card on file and open invoices
+         * @description Permission: billing.manage.
+         */
+        get: operations["getBilling"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay an open invoice on Paymob's page
+         * @description Permission: billing.manage. Returns the page to send the owner to;
+         *     the card used there is saved for the next invoices. The invoice is
+         *     paid when Paymob confirms it (its callback, checked by asking
+         *     Paymob). 404 for an invoice that is not open; 503 when the
+         *     invoice's currency has no checkout.
+         */
+        post: operations["payInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4628,6 +4677,53 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        Billing: {
+            plan_name_ar: string;
+            plan_name_en: string;
+            /** @enum {string} */
+            status: "trialing" | "active" | "past_due" | "suspended" | "cancelled";
+            /** @enum {string} */
+            cycle?: "monthly" | "annual";
+            /** Format: date-time */
+            trial_ends_at?: string;
+            /** Format: date-time */
+            period_end?: string;
+            /**
+             * Format: date-time
+             * @description Past due: when the store closes unpaid.
+             */
+            grace_until?: string;
+            cancel_at_period_end?: boolean;
+            /**
+             * @description The card on file; absent without one.
+             * @example MasterCard •••• 2346
+             */
+            card?: string;
+            open_invoices: components["schemas"]["OpenInvoice"][];
+        };
+        OpenInvoice: {
+            id: components["schemas"]["ULID"];
+            /** @example INV-2026-000001 */
+            number: string;
+            /**
+             * Format: date
+             * @example 2026-10-01
+             */
+            period: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /**
+             * Format: int64
+             * @description With tax.
+             */
+            total_minor: number;
+            /** Format: date-time */
+            due_at: string;
+            /** @description Charges tried. */
+            attempts: number;
+            /** Format: date-time */
+            next_attempt_at?: string;
+        };
         NotificationPage: {
             items: components["schemas"]["Notification"][];
             /** Format: int64 */
@@ -4797,6 +4893,7 @@ export interface components {
         };
     };
     parameters: {
+        InvoiceID: components["schemas"]["ULID"];
         StoreID: components["schemas"]["ULID"];
         DomainID: components["schemas"]["ULID"];
         ProductID: components["schemas"]["ULID"];
@@ -8994,6 +9091,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookReceipt"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store's billing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    payInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The checkout page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        checkout_url: string;
+                    };
                 };
             };
             default: components["responses"]["Problem"];
