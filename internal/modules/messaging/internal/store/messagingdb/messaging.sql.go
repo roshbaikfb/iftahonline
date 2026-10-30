@@ -68,16 +68,34 @@ func (q *Queries) ConfirmationByToken(ctx context.Context, arg ConfirmationByTok
 	return i, err
 }
 
-const confirmationStoreByCode = `-- name: ConfirmationStoreByCode :one
-SELECT app.confirmation_store($1::text)::uuid AS store_id
+const confirmationStoresByCodes = `-- name: ConfirmationStoresByCodes :many
+SELECT code::text AS code, store_id::uuid AS store_id FROM app.confirmation_stores($1::text[])
 `
 
-// The store of a WhatsApp code, across stores (SECURITY DEFINER).
-func (q *Queries) ConfirmationStoreByCode(ctx context.Context, code string) (ulid.ID, error) {
-	row := q.db.QueryRow(ctx, confirmationStoreByCode, code)
-	var store_id ulid.ID
-	err := row.Scan(&store_id)
-	return store_id, err
+type ConfirmationStoresByCodesRow struct {
+	Code    string
+	StoreID ulid.ID
+}
+
+// The stores of many codes at once (a webhook's batch of texts).
+func (q *Queries) ConfirmationStoresByCodes(ctx context.Context, codes []string) ([]ConfirmationStoresByCodesRow, error) {
+	rows, err := q.db.Query(ctx, confirmationStoresByCodes, codes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConfirmationStoresByCodesRow{}
+	for rows.Next() {
+		var i ConfirmationStoresByCodesRow
+		if err := rows.Scan(&i.Code, &i.StoreID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countUnreadNotifications = `-- name: CountUnreadNotifications :one

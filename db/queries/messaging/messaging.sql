@@ -125,9 +125,9 @@ WHERE m.store_id = @store_id AND m.id IN (
 -- name: ConfirmationByToken :one
 SELECT * FROM order_confirmations WHERE store_id = @store_id AND token_hash = @token_hash;
 
--- name: ConfirmationStoreByCode :one
--- The store of a WhatsApp code, across stores (SECURITY DEFINER).
-SELECT app.confirmation_store(@code::text)::uuid AS store_id;
+-- name: ConfirmationStoresByCodes :many
+-- The stores of many codes at once (a webhook's batch of texts).
+SELECT code::text AS code, store_id::uuid AS store_id FROM app.confirmation_stores(@codes::text[]);
 
 -- name: ConfirmationByCode :one
 SELECT * FROM order_confirmations WHERE store_id = @store_id AND wa_code = @wa_code;
