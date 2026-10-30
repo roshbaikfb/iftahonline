@@ -102,6 +102,17 @@ The order page also shows the coupon's discount (`discount_minor`,
 its own card, and the customer's confirmation by message (see
 [messaging](messaging.md)).
 
+## Plan limit (ADR-0046)
+
+Every placed order counts one `orders_per_month` through
+`entitlements.CountTx`, in the order's transaction:
+- **Never refused.** The plan's monthly orders are a soft limit; an order
+  past it is placed like any other.
+- **Counted once.** A replayed or duplicate submit aborts before the
+  count.
+- **The merchant hears.** At 80% and 100% the count publishes
+  `entitlements.usage.crossed`, and messaging warns the merchant.
+
 ## Rules worth knowing
 
 - **Charges.** Every order (storefront or staff) is charged the shipping

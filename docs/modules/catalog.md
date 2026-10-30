@@ -141,6 +141,17 @@ Existing products (same slug) are updated, with variants matched by SKU;
 others are created. Bad rows are reported and skipped. Excel workbooks are
 not accepted yet: save as "CSV UTF-8" (ADR-0014).
 
+## Plan limit (ADR-0046)
+
+Every new product passes `entitlements.AdmitTx(products)`:
+- API creations, CSV and WooCommerce import rows, and starter samples
+  alike.
+- It counts the store's products that are not deleted, of any status.
+- Past the plan's grant, creation is a 403 with code `plan_limit`.
+- An import row past it fails with that message; rows that update
+  existing products go through.
+- A downgrade deletes nothing.
+
 ## Search
 
 `searchProducts` goes to Meilisearch only (no database query). The search
