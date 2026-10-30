@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { api } from './api/client';
+import { forgetNotices } from './lib/messages';
 import { fetchSession, SessionContext, type SessionState } from './session';
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -22,6 +23,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api.POST('/v1/auth/logout');
+    forgetNotices(); // another account may sign in next
     setState({ kind: 'signed-out' });
   }, []);
 

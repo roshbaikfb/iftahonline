@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '../components/Layout';
-import { ago, smsParts } from '../lib/messages';
+import { ago, forgetNotices, smsParts } from '../lib/messages';
 import type { Role } from '../lib/settings';
 import { SessionContext, type Session } from '../session';
 import { mockAPI, type Call } from '../test/api';
@@ -71,6 +71,7 @@ function renderAt(path: string, role: Role = 'owner') {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  forgetNotices();
 });
 
 describe('Messages', () => {
@@ -246,6 +247,26 @@ describe('NotificationBell', () => {
     });
     await waitFor(() => {
       expect(screen.queryByLabelText(/غير مقروءة/)).toBeNull();
+    });
+  });
+
+  it('asks again only after a minute, however many screens open meanwhile', async () => {
+    const calls = routes({ [`GET ${base}/messaging/notifications`]: () => ({ status: 200, body: { items: notices, unread: 2 } }) });
+    let now = Date.parse('2026-10-29T12:00:00Z');
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    renderAt(`/stores/${store}/home`);
+    const user = userEvent.setup();
+    expect(await screen.findByLabelText('الإشعارات: 2 غير مقروءة')).toBeInTheDocument();
+    const reads = () => calls.filter((c) => c.path === `${base}/messaging/notifications`).length;
+    expect(reads()).toBe(1);
+    await user.click(screen.getByRole('link', { name: 'رسائل العملاء' }));
+    expect(await screen.findByRole('heading', { name: 'رسائل العملاء', level: 1 })).toBeInTheDocument();
+    expect(screen.getByLabelText('الإشعارات: 2 غير مقروءة')).toBeInTheDocument(); // the kept read, at once
+    expect(reads()).toBe(1);
+    now += 61_000;
+    await user.click(screen.getByRole('link', { name: 'سجل الرسائل' }));
+    await waitFor(() => {
+      expect(reads()).toBe(2);
     });
   });
 
