@@ -13,6 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/search"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -43,6 +44,9 @@ type Deps struct {
 	Keyring *secretbox.Keyring
 	// Events receives the catalog's domain events (ADR-0015).
 	Events eventbus.Publisher
+	// Plan admits new products within the store's plan (ADR-0045); nil
+	// admits every one (tests).
+	Plan entitlements.Entitlements
 }
 
 // Module is the wired catalog module.
@@ -71,7 +75,7 @@ func New(d Deps) (*Module, error) {
 	index := search.New(d.Search.URL, d.Search.APIKey, d.Search.Index, 10*time.Second)
 	return &Module{
 		svc: app.NewService(app.Deps{
-			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index, Events: d.Events,
+			DB: d.Pool, Jobs: d.Jobs, IDs: d.IDs, Audit: d.Audit, Currency: d.Currency, Media: m, Search: index, Events: d.Events, Plan: d.Plan,
 			Imports: app.Imports{
 				Keyring: d.Keyring, Retry: retry.Default(),
 				HTTP: safehttp.New(safehttp.Options{Timeout: 30 * time.Second, MaxResponseBytes: 20 << 20}),

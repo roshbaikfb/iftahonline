@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -31,13 +32,20 @@ type Service struct {
 	ids        *ulid.Generator
 	baseDomain string
 	audit      audit.Recorder
+	plan       entitlements.Entitlements
 }
 
 // NewService builds the service. baseDomain is the platform domain under
 // which store subdomains live (e.g. iftahonline.com); rec records store
-// actions in the audit log, in the same transaction as the action.
-func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, baseDomain string, rec audit.Recorder) *Service {
-	return &Service{db: db, jobs: ins, ids: ids, baseDomain: baseDomain, audit: rec}
+// actions in the audit log, in the same transaction as the action; plan
+// admits custom domains within the store's plan (nil admits every one).
+func NewService(db postgres.Beginner, ins jobs.Inserter, ids *ulid.Generator, baseDomain string, rec audit.Recorder,
+	plan entitlements.Entitlements,
+) *Service {
+	if plan == nil {
+		plan = entitlements.Unrestricted()
+	}
+	return &Service{db: db, jobs: ins, ids: ids, baseDomain: baseDomain, audit: rec, plan: plan}
 }
 
 var errStoreNotFound = errs.NotFound("store_not_found", "store not found")
@@ -166,6 +174,13 @@ func (s *Service) AddCustomDomain(ctx context.Context, rawHost string) (domain.D
 		}
 		if n >= domain.MaxCustomDomains {
 			return errDomainLimit
+		}
+		// Within the plan's custom domains; a refusal is the merchant's
+		// 403 plan_limit.
+		if _, txErr = s.plan.AdmitTx(ctx, tx, entitlements.CustomDomains, 1, func(context.Context, pgx.Tx) (int64, error) {
+			return int64(n), nil
+		}); txErr != nil {
+			return txErr
 		}
 		if d, txErr = store.InsertDomain(ctx, tx, store.NewDomain{
 			ID: s.ids.New(), Host: host, Kind: domain.KindCustom, VerificationToken: token,

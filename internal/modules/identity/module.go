@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/httpapi"
@@ -44,6 +45,9 @@ type Deps struct {
 	Jobs    jobs.Inserter
 	// Env decides whether phone OTP is available (see OTPAvailable).
 	Env string
+	// Plan admits invitations within the store's team seats (ADR-0045);
+	// nil admits every one (tests).
+	Plan entitlements.Entitlements
 }
 
 // OTPAvailable reports whether phone codes can be delivered: outside
@@ -84,7 +88,7 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{
 		DB: d.Pool, Hasher: hasher, Limiter: limiter, Limits: limits, Stores: d.Tenancy, Onboarding: d.Onboarding, IDs: d.IDs, Log: d.Log,
-		Redis: d.Redis, Keyring: d.Secrets.Keyring, Pepper: d.Secrets.OTPPepper, Jobs: d.Jobs, OTPEnabled: OTPAvailable(d.Env),
+		Redis: d.Redis, Keyring: d.Secrets.Keyring, Pepper: d.Secrets.OTPPepper, Jobs: d.Jobs, OTPEnabled: OTPAvailable(d.Env), Plan: d.Plan,
 	})
 	return &Module{svc: svc, policy: policy, scope: httpapi.Scope(svc, problem.NewResponder(d.Log), d.ClientIP)}, nil
 }

@@ -12,6 +12,19 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const countLiveProducts = `-- name: CountLiveProducts :one
+SELECT count(*) FROM products WHERE store_id = $1 AND deleted_at IS NULL
+`
+
+// What the plan's products limit counts: every product not deleted, of
+// any status (products_store_status_list).
+func (q *Queries) CountLiveProducts(ctx context.Context, storeID ulid.ID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveProducts, storeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countProductsByStatus = `-- name: CountProductsByStatus :many
 SELECT status, count(*)::int AS n FROM products
 WHERE store_id = $1 AND deleted_at IS NULL

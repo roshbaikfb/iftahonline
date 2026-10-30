@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/onboarding"
@@ -80,6 +81,9 @@ type Deps struct {
 	// OTPEnabled is false while no SMS/WhatsApp provider is configured in
 	// production: phone OTP then answers 503.
 	OTPEnabled bool
+	// Plan admits invitations within the store's team seats (ADR-0045);
+	// nil admits every one (tests).
+	Plan entitlements.Entitlements
 }
 
 // Service implements the identity use cases.
@@ -98,14 +102,18 @@ type Service struct {
 	pepper     []byte
 	jobs       jobs.Inserter
 	otpEnabled bool
+	plan       entitlements.Entitlements
 	now        func() time.Time
 }
 
 // NewService wires the service.
 func NewService(d Deps) *Service {
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
 	return &Service{db: d.DB, hasher: d.Hasher, limiter: d.Limiter, limits: d.Limits, stores: d.Stores, onboarding: d.Onboarding, ids: d.IDs,
 		audit: NewRecorder(d.IDs), log: d.Log, rdb: d.Redis, keyring: d.Keyring, pepper: d.Pepper, jobs: d.Jobs,
-		otpEnabled: d.OTPEnabled, now: time.Now}
+		otpEnabled: d.OTPEnabled, plan: d.Plan, now: time.Now}
 }
 
 var (

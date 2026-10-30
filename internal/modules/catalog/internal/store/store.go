@@ -474,6 +474,21 @@ func CountProducts(ctx context.Context, tx Tx) (map[domain.ProductStatus]int, er
 	return out, nil
 }
 
+// CountLiveProducts is how many products the store has (any status, not
+// deleted): what the plan's products limit counts. Its signature fits
+// entitlements' AdmitTx.
+func CountLiveProducts(ctx context.Context, tx pgx.Tx) (int64, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := catalogdb.New(tx).CountLiveProducts(ctx, store)
+	if err != nil {
+		return 0, productErr(err, "count live products")
+	}
+	return n, nil
+}
+
 // SetProductsStatus sets the status of the store's live products among
 // ids and returns the IDs it changed.
 func SetProductsStatus(ctx context.Context, tx Tx, ids []ulid.ID, status domain.ProductStatus) ([]ulid.ID, error) {

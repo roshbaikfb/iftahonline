@@ -131,3 +131,8 @@ UPDATE products p SET status = @status, updated_at = now()
 FROM unnest(@ids::uuid[]) AS ids(id)
 WHERE p.id = ids.id AND p.store_id = @store_id AND p.deleted_at IS NULL
 RETURNING p.id;
+
+-- name: CountLiveProducts :one
+-- What the plan's products limit counts: every product not deleted, of
+-- any status (products_store_status_list).
+SELECT count(*) FROM products WHERE store_id = @store_id AND deleted_at IS NULL;

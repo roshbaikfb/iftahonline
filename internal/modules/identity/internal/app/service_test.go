@@ -42,6 +42,7 @@ var infra testinfra.Infra
 func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 
 type fixture struct {
+	deps    app.Deps // what svc was built from
 	svc     *app.Service
 	app     *pgxpool.Pool
 	owner   *pgxpool.Pool
@@ -112,11 +113,11 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := app.NewService(app.Deps{
+	deps := app.Deps{
 		DB: pool, Hasher: hasher, Limiter: limiter, Limits: testLimits(), Stores: ten.Service(), Onboarding: onb.Starter(), IDs: ids, Log: log,
 		Redis: rdb, Keyring: keyring, Pepper: []byte("dev-only-otp-pepper-not-a-secret"), Jobs: ins, OTPEnabled: true,
-	})
-	return fixture{svc: svc, app: pool, owner: owner, ids: ids, qc: qc, ten: ten, rdb: rdb, keyring: keyring, ins: ins, log: log}
+	}
+	return fixture{svc: app.NewService(deps), deps: deps, app: pool, owner: owner, ids: ids, qc: qc, ten: ten, rdb: rdb, keyring: keyring, ins: ins, log: log}
 }
 
 func (f fixture) unique(prefix string) string {
