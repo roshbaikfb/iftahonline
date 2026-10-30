@@ -340,3 +340,21 @@ func RemoveMember(ctx context.Context, tx Tx, userID ulid.ID) (bool, error) {
 	}
 	return n == 1, nil
 }
+
+// MemberPhones are the verified phones (E.164) of the current store's
+// members with one of roles.
+func MemberPhones(ctx context.Context, tx Tx, roles []authz.Role) ([]string, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(roles))
+	for i, r := range roles {
+		names[i] = string(r)
+	}
+	phones, err := identitydb.New(tx).ListMemberPhones(ctx, identitydb.ListMemberPhonesParams{StoreID: store, Roles: names})
+	if err != nil {
+		return nil, fmt.Errorf("identity store: member phones: %w", err)
+	}
+	return phones, nil
+}

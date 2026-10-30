@@ -90,6 +90,41 @@ func (q *Queries) IsMemberByEmail(ctx context.Context, arg IsMemberByEmailParams
 	return member, err
 }
 
+const listMemberPhones = `-- name: ListMemberPhones :many
+SELECT u.phone::text AS phone FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = $1 AND m.role = ANY($2::text[]) AND u.phone IS NOT NULL AND u.phone_verified_at IS NOT NULL
+ORDER BY m.created_at
+LIMIT 20
+`
+
+type ListMemberPhonesParams struct {
+	StoreID ulid.ID
+	Roles   []string
+}
+
+// The verified phones of the store's members with one of roles, for the
+// platform's WhatsApp notices to them.
+func (q *Queries) ListMemberPhones(ctx context.Context, arg ListMemberPhonesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listMemberPhones, arg.StoreID, arg.Roles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var phone string
+		if err := rows.Scan(&phone); err != nil {
+			return nil, err
+		}
+		items = append(items, phone)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMembers = `-- name: ListMembers :many
 SELECT m.user_id, m.role, m.created_at, u.name, u.email
 FROM store_memberships m
