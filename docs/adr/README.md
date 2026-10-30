@@ -60,3 +60,4 @@ supersedes it.
 | [0052](0052-charging-cards-on-file-with-paymob.md) | Charging merchants' cards on file with Paymob | Accepted |
 | [0053](0053-paying-invoices-and-saving-the-card.md) | Paying an invoice on Paymob's page, and saving the card | Accepted |
 | [0054](0054-owners-billing-notices-on-whatsapp.md) | Owners' billing notices on WhatsApp | Accepted |
+| [0055](0055-time-limited-audited-impersonation.md) | Time-limited, audited impersonation | Accepted |

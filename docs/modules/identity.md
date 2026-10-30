@@ -145,6 +145,29 @@ per IP. It is advisory: sign-up checks again (422 `store.slug` `taken`).
 - **Privacy:** the database stores only the IP's /24 (IPv4) or /48 (IPv6)
   and a truncated User-Agent.
 
+### Support sessions (impersonation, ADR-0055)
+
+- **What it is:** a platform admin's session as a store's owner. It is
+  marked in `user_sessions`:
+  - `impersonator_id`;
+  - `scope_store_id`;
+  - `read_only`.
+- **How it opens:** `Module.Impersonate` opens it from the console. The
+  dashboard then exchanges the console's one-time code (60 s, in Redis,
+  sealed) at `POST /v1/auth/impersonation`.
+- **Bounds:**
+  - It lasts 5 to 60 minutes and is never extended.
+  - It is read-only by default; a change answers 403.
+  - Any other store answers 404.
+  - Outside its store it may only read and use `/v1/auth/*`.
+- **`/v1/me`:** lists only its store and adds `impersonation`, with
+  `read_only` and `expires_at`.
+- **Audit:** in the store's log:
+  - `impersonation.started` when it opens;
+  - `impersonation.request` for every request, with the method, the
+    route and `refused`;
+  - `impersonated_by` added to every other entry written during it.
+
 ## Second factor (TOTP)
 
 **Enrolment:**
