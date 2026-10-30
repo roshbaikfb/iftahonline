@@ -140,8 +140,8 @@ func TestImpersonationRefusals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, err := f.svc.AuthenticateInStore(inA, string(token)); err != nil || p.ReadOnly {
-		t.Fatalf("write principal = %+v, %v", p, err)
+	if p, authErr := f.svc.AuthenticateInStore(inA, string(token)); authErr != nil || p.ReadOnly {
+		t.Fatalf("write principal = %+v, %v", p, authErr)
 	}
 	if _, err = f.owner.Exec(t.Context(), "UPDATE user_sessions SET expires_at = now() - interval '1 second' WHERE impersonator_id = $1", admin); err != nil {
 		t.Fatal(err)
