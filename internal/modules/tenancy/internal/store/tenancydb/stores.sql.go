@@ -12,7 +12,7 @@ import (
 )
 
 const getStore = `-- name: GetStore :one
-SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at FROM stores WHERE id = $1
+SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
 `
 
 func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (Store, error) {
@@ -29,6 +29,7 @@ func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (Store, error) 
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BillingHold,
 	)
 	return i, err
 }
@@ -37,7 +38,7 @@ const insertStore = `-- name: InsertStore :one
 
 INSERT INTO stores (id, slug, name, currency, locale, timezone)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at
+RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type InsertStoreParams struct {
@@ -72,6 +73,7 @@ func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (Store
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BillingHold,
 	)
 	return i, err
 }
@@ -94,10 +96,30 @@ func (q *Queries) ResolveHost(ctx context.Context, host string) (ResolveHostRow,
 	return i, err
 }
 
+const setBillingHold = `-- name: SetBillingHold :execrows
+UPDATE stores SET billing_hold = $1, updated_at = now()
+WHERE id = $2 AND billing_hold IS DISTINCT FROM $1
+`
+
+type SetBillingHoldParams struct {
+	Hold    bool
+	StoreID ulid.ID
+}
+
+// Holds or releases the store for billing (ADR-0051); no row when it
+// already was.
+func (q *Queries) SetBillingHold(ctx context.Context, arg SetBillingHoldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setBillingHold, arg.Hold, arg.StoreID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setStoreStatus = `-- name: SetStoreStatus :one
 UPDATE stores SET status = $1, updated_at = now()
 WHERE id = $2
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at
+RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type SetStoreStatusParams struct {
@@ -119,6 +141,7 @@ func (q *Queries) SetStoreStatus(ctx context.Context, arg SetStoreStatusParams) 
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BillingHold,
 	)
 	return i, err
 }
@@ -127,7 +150,7 @@ const updateStore = `-- name: UpdateStore :one
 UPDATE stores
 SET name = $1, locale = $2, timezone = $3, updated_at = now()
 WHERE id = $4
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at
+RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type UpdateStoreParams struct {
@@ -156,6 +179,7 @@ func (q *Queries) UpdateStore(ctx context.Context, arg UpdateStoreParams) (Store
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BillingHold,
 	)
 	return i, err
 }

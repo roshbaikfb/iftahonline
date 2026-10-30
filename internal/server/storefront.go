@@ -19,6 +19,7 @@ import (
 //
 //   - unknown host or closed store: platform-branded 404;
 //   - suspended store: 503 "store unavailable";
+//   - store held for billing: 503 "under maintenance" (ADR-0051);
 //   - resolver failure (database down): 503 "try again";
 //   - otherwise pages runs with the store in tenant context.
 func MountStorefront(resolver tenancy.HostResolver, pages http.Handler, assetsPrefix string, assets http.Handler) func(Routes) {
@@ -48,6 +49,13 @@ func StoreHost(rt Routes, resolver tenancy.HostResolver, next http.Handler) http
 		switch res.Status {
 		case tenancy.StatusActive:
 			next.ServeHTTP(w, r.WithContext(tenant.WithStore(r.Context(), res.StoreID)))
+		case tenancy.StatusHeld:
+			// The store's data is kept; it comes back when its invoice is
+			// paid. Nothing tells shoppers why.
+			w.Header().Set("Retry-After", "3600")
+			writePage(rt, w, r, http.StatusServiceUnavailable, "no-store", views.ErrorPage(http.StatusServiceUnavailable,
+				"المتجر تحت الصيانة", "Store under maintenance",
+				"المتجر تحت الصيانة حاليًا، وسيعود قريبًا.", "This store is under maintenance and will be back soon."))
 		case tenancy.StatusSuspended:
 			writePage(rt, w, r, http.StatusServiceUnavailable, "no-store", views.ErrorPage(http.StatusServiceUnavailable,
 				"المتجر غير متاح حاليًا", "Store unavailable",

@@ -51,7 +51,7 @@ func (c *HostCache) Get(ctx context.Context, host string) (res domain.Resolution
 	}
 	idStr, statusStr, ok := strings.Cut(v, ":")
 	id, idErr := tenant.ParseStoreID(idStr)
-	status, stOK := domain.ParseStoreStatus(statusStr)
+	status, stOK := domain.ParseResolutionStatus(statusStr)
 	if !ok || idErr != nil || !stOK {
 		// Corrupt entry: treat as a miss so the database answers.
 		return domain.Resolution{}, false, false, nil

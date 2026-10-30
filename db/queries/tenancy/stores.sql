@@ -24,3 +24,9 @@ RETURNING *;
 -- The only cross-tenant read: SECURITY DEFINER, returns no other columns.
 SELECT r.store_id::uuid AS store_id, r.store_status::text AS store_status
 FROM app.resolve_host(@host::text) AS r;
+
+-- name: SetBillingHold :execrows
+-- Holds or releases the store for billing (ADR-0051); no row when it
+-- already was.
+UPDATE stores SET billing_hold = @hold, updated_at = now()
+WHERE id = @store_id AND billing_hold IS DISTINCT FROM @hold;
