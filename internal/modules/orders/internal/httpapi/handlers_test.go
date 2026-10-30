@@ -142,7 +142,7 @@ func TestHappyPath(t *testing.T) {
 	rq.Header.Set("Idempotency-Key", "phone-order-1")
 	code, d, _ := f.do(t, rq)
 	o, _ := d["order"].(map[string]any)
-	if code != http.StatusCreated || o["status"] != "pending" || o["total_minor"] != float64(30000) || o["source"] != "merchant" ||
+	if code != http.StatusCreated || o["status"] != "pending" || o["total_minor"] != float64(30000) || o["source"] != "merchant" || // noplannames:allow an order's source, not a plan
 		o["phone"] != "+201012345678" || len(d["lines"].([]any)) != 1 || len(d["events"].([]any)) != 1 {
 		t.Fatalf("createOrder = %d %v", code, d)
 	}
