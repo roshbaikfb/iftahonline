@@ -17,6 +17,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
@@ -155,6 +156,7 @@ type Service struct {
 	coupons   Coupons
 	stores    StoreSource
 	auth      authz.Authorizer
+	plan      entitlements.Entitlements
 	now       func() time.Time
 }
 
@@ -174,6 +176,9 @@ type Deps struct {
 	Stores  StoreSource
 	// Auth checks each transition's own permission (domain.Step).
 	Auth authz.Authorizer
+	// Plan counts the month's orders against the store's plan, never
+	// refusing one (ADR-0045); nil counts nothing (tests).
+	Plan entitlements.Entitlements
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -184,8 +189,11 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
-		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, now: time.Now}
+		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, now: time.Now}
 }
 
 // SetClock replaces the clock (tests of the duplicate window).
@@ -297,6 +305,11 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 		return err
 	}
 	if err = store.Insert(ctx, tx, *o, d.LinesHash); err != nil {
+		return err
+	}
+	// The month's orders against the plan: counted, never refused; the
+	// merchant hears at 80% and 100% (entitlements.UsageCrossed).
+	if _, err = s.plan.CountTx(ctx, tx, entitlements.OrdersPerMonth, 1); err != nil {
 		return err
 	}
 	if !d.Signals.IsZero() { // with the order, so its conversions find them (ADR-0043)

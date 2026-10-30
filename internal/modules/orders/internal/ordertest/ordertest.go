@@ -27,6 +27,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -147,7 +148,10 @@ type Env struct {
 	// Coupons applies codes for services built after it is set; nil
 	// makes every code not_found.
 	Coupons app.Coupons
-	Svc     *app.Service
+	// Plan counts orders for services built after it is set; nil counts
+	// nothing.
+	Plan entitlements.Entitlements
+	Svc  *app.Service
 	// Members are the bearer tokens of FakeStoreScope; NewStore adds an
 	// owner per store ("owner-<store id>").
 	Members map[string]testkit.FakeMember
@@ -213,7 +217,7 @@ func New(t testing.TB, appURL string) *Env {
 // Env's modules and fakes.
 func (e *Env) Service(db postgres.Beginner) *app.Service {
 	return app.NewService(app.Deps{DB: db, IDs: e.IDs, Audit: e.Audit, Events: e.Events, Catalog: e.Catalog,
-		Customers: e.Customers, Shipping: e.Shipping, Coupons: e.Coupons, Auth: e.Policy, Stores: Stores})
+		Customers: e.Customers, Shipping: e.Shipping, Coupons: e.Coupons, Auth: e.Policy, Stores: Stores, Plan: e.Plan})
 }
 
 // NewStore creates a store (EGP, Cairo) and returns its context, with no
