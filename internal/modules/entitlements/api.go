@@ -30,7 +30,17 @@ type (
 	Grants = domain.Grants
 	// Fixed grants every store the same (tests and demo tools).
 	Fixed = app.Fixed
+	// UsageCrossed is published when a monthly count crosses 80% or 100%
+	// of the limit.
+	UsageCrossed = domain.UsageCrossed
 )
+
+// EventUsageCrossed is UsageCrossed's type.
+const EventUsageCrossed = domain.EventUsageCrossed
+
+// PlanLimitCode is the problem code of a request the store's plan does
+// not allow.
+const PlanLimitCode = domain.PlanLimitCode
 
 // Source is where grants come from (FromBilling, Fixed).
 type Source = app.Source
@@ -42,7 +52,7 @@ const (
 	OrdersPerMonth = domain.OrdersPerMonth
 )
 
-// Counted features: CheckCount.
+// Counted features: AdmitTx.
 const (
 	Products      = domain.Products
 	Staff         = domain.Staff
@@ -86,9 +96,16 @@ var (
 type Entitlements interface {
 	// Allowed reports whether the store has the flag feature f.
 	Allowed(ctx context.Context, f Feature) (bool, error)
-	// CheckCount reports whether the store may hold after units of the
-	// counted feature f (ErrLimitReached when not), with its grant.
-	CheckCount(ctx context.Context, f Feature, after int64) (Grant, error)
+	// AdmitTx admits n more of the counted feature f in the caller's
+	// tenant transaction. count says how many the store holds; it runs
+	// under a lock on (store, f) held until tx ends, so concurrent
+	// creations cannot pass the limit together. Past the limit it is a
+	// 403 with code plan_limit (errors.Is ErrLimitReached): return it.
+	AdmitTx(ctx context.Context, tx pgx.Tx, f Feature, n int64, count func(context.Context, pgx.Tx) (int64, error)) (Grant, error)
+	// CountTx counts n units of the monthly feature f in the caller's
+	// tenant transaction and never refuses (a soft limit: orders). It
+	// publishes UsageCrossed at 80% and 100%, once per month.
+	CountTx(ctx context.Context, tx pgx.Tx, f Feature, n int64) (Usage, error)
 	// ConsumeTx counts n units of the monthly feature f in the caller's
 	// tenant transaction, so they count only if it commits. Past the limit it
 	// counts nothing and returns ErrQuotaExceeded. Warn the merchant
@@ -101,4 +118,12 @@ type Entitlements interface {
 	Usage(ctx context.Context, f Feature) (Usage, error)
 }
 
-var _ Entitlements = (*app.Service)(nil)
+var (
+	_ Entitlements = (*app.Service)(nil)
+	_ Entitlements = app.Unrestricted{}
+)
+
+// Unrestricted allows everything and counts nothing: the default of a
+// module built without entitlements, in its own tests. cmd/platform
+// always wires the real service.
+func Unrestricted() Entitlements { return app.Unrestricted{} }

@@ -75,11 +75,18 @@ func TestGrantsFromPlans(t *testing.T) {
 	if ok, aErr := ent.Allowed(brand, entitlements.AdFree); aErr != nil || !ok {
 		t.Errorf("brand store ad-free = %v, %v", ok, aErr)
 	}
-	if _, err = ent.CheckCount(free, entitlements.Products, 51); !errors.Is(err, entitlements.ErrLimitReached) {
+	admit := func(ctx context.Context, have int64) (g entitlements.Grant, err error) {
+		err = postgres.InTenantTx(ctx, pool, func(tx pgx.Tx) (txErr error) {
+			g, txErr = ent.AdmitTx(ctx, tx, entitlements.Products, 1, func(context.Context, pgx.Tx) (int64, error) { return have, nil })
+			return txErr
+		})
+		return g, err
+	}
+	if _, err = admit(free, 50); !errors.Is(err, entitlements.ErrLimitReached) {
 		t.Errorf("free store's 51st product: %v", err)
 	}
-	if g, err := ent.CheckCount(brand, entitlements.Products, 1_000_000); err != nil || !g.Unlimited {
-		t.Errorf("brand products = %+v, %v", g, err)
+	if g, aErr := admit(brand, 1_000_000); aErr != nil || !g.Unlimited {
+		t.Errorf("brand products = %+v, %v", g, aErr)
 	}
 	if u, err := ent.Usage(free, entitlements.Messages); err != nil || u.Limit != 0 {
 		t.Errorf("free store messages = %+v, %v", u, err)

@@ -13,9 +13,12 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/event"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/storecache"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Source says what the store in ctx is granted, reading in tx: the
@@ -41,6 +44,8 @@ type Service struct {
 	db     postgres.Beginner
 	source Source
 	cache  *storecache.Cache[domain.Grants]
+	ids    *ulid.Generator
+	events eventbus.Publisher
 	now    func() time.Time
 }
 
@@ -48,6 +53,9 @@ type Service struct {
 type Deps struct {
 	DB     postgres.Beginner
 	Source Source
+	// IDs and Events publish UsageCrossed; nil Events discards.
+	IDs    *ulid.Generator
+	Events eventbus.Publisher
 	// Cache bounds the grants kept in memory; zero is DefaultCacheConfig.
 	Cache storecache.Config
 	// Now is the clock (tests); nil is time.Now.
@@ -63,7 +71,13 @@ func NewService(d Deps) *Service {
 	if d.Cache == (storecache.Config{}) {
 		d.Cache = DefaultCacheConfig()
 	}
-	return &Service{db: d.DB, source: d.Source, cache: storecache.New[domain.Grants](d.Cache), now: now}
+	if d.Events == nil {
+		d.Events = eventbus.Nop{}
+	}
+	if d.IDs == nil {
+		d.IDs = ulid.NewGenerator()
+	}
+	return &Service{db: d.DB, source: d.Source, cache: storecache.New[domain.Grants](d.Cache), ids: d.IDs, events: d.Events, now: now}
 }
 
 // Invalidate drops the store's cached grants, so the next check reads
@@ -127,19 +141,40 @@ func (s *Service) Allowed(ctx context.Context, f domain.Feature) (bool, error) {
 	return g.Unlimited || g.Value > 0, nil
 }
 
-// CheckCount reports whether the store in ctx may hold after units of
-// the counted feature f: domain.ErrLimitReached when its plan grants
-// fewer. The grant comes back either way, for the merchant's message.
-func (s *Service) CheckCount(ctx context.Context, f domain.Feature, after int64) (domain.Grant, error) {
+// AdmitTx admits n more units of the counted feature f in tx: count says
+// how many the store holds, and is called under a lock on (store, f)
+// taken for tx, so concurrent creations cannot pass the limit together.
+// Past the limit it is LimitError (errors.Is ErrLimitReached), a 403 with
+// code plan_limit. An unlimited grant takes no lock and does not count.
+func (s *Service) AdmitTx(ctx context.Context, tx pgx.Tx, f domain.Feature, n int64,
+	count func(context.Context, pgx.Tx) (int64, error),
+) (domain.Grant, error) {
 	if err := checkKind(f, domain.Count); err != nil {
 		return domain.Grant{}, err
 	}
-	g, err := s.grant(ctx, f)
+	if n < 1 || n > domain.MaxUnits {
+		return domain.Grant{}, fmt.Errorf("%w: %d units", domain.ErrInvalid, n)
+	}
+	grants, err := s.grantsTx(ctx, tx)
 	if err != nil {
 		return domain.Grant{}, err
 	}
-	if !g.Unlimited && after > g.Value {
-		return g, fmt.Errorf("%w: %s %d of %d", domain.ErrLimitReached, f, after, g.Value)
+	g := grants[f]
+	if g.Unlimited {
+		return g, nil
+	}
+	if n > g.Value {
+		return g, domain.LimitError(f, g)
+	}
+	if err = store.Lock(ctx, tx, f); err != nil {
+		return domain.Grant{}, err
+	}
+	have, err := count(ctx, tx)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if have+n > g.Value {
+		return g, domain.LimitError(f, g)
 	}
 	return g, nil
 }
@@ -189,6 +224,39 @@ func (s *Service) ConsumeTx(ctx context.Context, tx pgx.Tx, f domain.Feature, n 
 		return domain.Usage{}, err
 	}
 	return u, domain.ErrQuotaExceeded
+}
+
+// CountTx counts n units of the monthly feature f in tx and never
+// refuses: the limit is soft (orders are never turned away). When the
+// count crosses 80% or 100% of the limit it publishes UsageCrossed in tx,
+// once per threshold and month.
+func (s *Service) CountTx(ctx context.Context, tx pgx.Tx, f domain.Feature, n int64) (domain.Usage, error) {
+	if err := checkUnits(f, n); err != nil {
+		return domain.Usage{}, err
+	}
+	limit, err := s.limitTx(ctx, tx, f)
+	if err != nil {
+		return domain.Usage{}, err
+	}
+	u := domain.Usage{Feature: f, Period: domain.PeriodOf(s.now()), Limit: limit}
+	used, _, err := store.Consume(ctx, tx, f, u.Period, n, domain.Unlimited)
+	if err != nil {
+		return domain.Usage{}, err
+	}
+	u.Used = used
+	th := u.CrossedBy(n)
+	if th == domain.NoThreshold {
+		return u, nil
+	}
+	meta, err := event.MetaFor(ctx, s.ids, domain.EventUsageCrossed, 1)
+	if err != nil {
+		return domain.Usage{}, err
+	}
+	ev := domain.UsageCrossed{Meta: meta, Feature: f, Threshold: th, Period: u.Period, Used: u.Used, Limit: u.Limit}
+	if err = s.events.PublishTx(ctx, tx, ev); err != nil {
+		return domain.Usage{}, fmt.Errorf("entitlements: publish: %w", err)
+	}
+	return u, nil
 }
 
 // ReleaseTx gives back n units of f that ConsumeTx counted in period

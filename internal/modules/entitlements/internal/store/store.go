@@ -84,3 +84,16 @@ func Used(ctx context.Context, tx Tx, f domain.Feature, period time.Time) (int64
 	}
 	return used, nil
 }
+
+// Lock serializes the store's creations of the counted feature f until
+// tx ends.
+func Lock(ctx context.Context, tx Tx, f domain.Feature) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = entitlementsdb.New(tx).LockFeature(ctx, entitlementsdb.LockFeatureParams{StoreID: store, Feature: string(f)}); err != nil {
+		return fmt.Errorf("entitlements store: lock: %w", err)
+	}
+	return nil
+}
