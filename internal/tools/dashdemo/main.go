@@ -24,6 +24,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 )
 
@@ -87,7 +95,7 @@ func run(addr, bin string) error {
 	if err = waitReady(ctx, base+"/readyz"); err != nil {
 		return err
 	}
-	if err = seed(ctx, base); err != nil {
+	if err = seed(ctx, base, infra.OwnerURL); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 
@@ -135,7 +143,7 @@ func waitReady(ctx context.Context, u string) error {
 // seed creates the merchant through the public API, as the dashboard
 // would: sign-up (a mobile client, to get a bearer token), the setup
 // wizard closed, one product, three orders, one of them confirmed.
-func seed(ctx context.Context, base string) error {
+func seed(ctx context.Context, base, ownerURL string) error {
 	c := client{ctx: ctx, base: base}
 	var signup struct {
 		Token   string `json:"token"`
@@ -148,6 +156,9 @@ func seed(ctx context.Context, base string) error {
 		return err
 	}
 	c.token = signup.Token
+	if err := onPaidPlan(ctx, ownerURL, signup.StoreID); err != nil {
+		return err
+	}
 	store := "/v1/stores/" + signup.StoreID
 	// The demo merchant runs an established store: their setup wizard
 	// (ADR-0034) is closed, so signing in opens the orders.
@@ -189,6 +200,27 @@ type client struct {
 	ctx   context.Context
 	base  string
 	token string
+}
+
+// onPaidPlan puts the demo store on the brand plan, as the console will
+// (P7 7e): the demo merchant uses features the free plan does not grant
+// (custom domains, teammates, pixels).
+func onPaidPlan(ctx context.Context, ownerURL, storeID string) error {
+	id, err := ulid.Parse(storeID)
+	if err != nil {
+		return err
+	}
+	pool, err := pgxpool.New(ctx, ownerURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	sctx := tenant.WithStore(ctx, tenant.StoreID{ID: id})
+	return postgres.InTenantTx(sctx, pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(sctx, `INSERT INTO subscriptions (store_id, plan_id, status)
+			SELECT app.current_store_id(), id, 'active' FROM plans WHERE code = 'brand' AND status = 'active'`)
+		return err
+	})
 }
 
 func (c client) do(method, path string, body any, want int, out any) error {
