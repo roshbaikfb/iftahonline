@@ -912,17 +912,24 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.countSales.Set(counter)
-	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords)})
+	billJobs, err := server.NewRiverInserter(pool, log)
+	if err != nil {
+		return err
+	}
+	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids})
 	if err != nil {
 		return err
 	}
 	c.sellFees.Set(sellFeesHandler(bill.Fees()))
+	if err = bill.RegisterWorkers(workers); err != nil {
+		return err
+	}
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
 		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
 	}); err != nil {
 		return err
 	}
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), cat.PeriodicJobs()...)
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), append(cat.PeriodicJobs(), bill.PeriodicJobs()...)...)
 	if err != nil {
 		return err
 	}
