@@ -97,20 +97,8 @@ func gatewayErr(err error) error {
 
 // token is an auth token from the API key, for inquiries.
 func (g *Gateway) token(ctx context.Context, base string, creds gateway.Credentials) (string, error) {
-	if creds.APIKey == "" {
-		return "", gateway.ErrAuth
-	}
-	var out struct {
-		Token string `json:"token"`
-	}
-	code, err := g.do(ctx, http.MethodPost, base+"/api/auth/tokens", "", map[string]string{"api_key": creds.APIKey}, &out)
-	if err != nil {
-		return "", err
-	}
-	if code == http.StatusNotFound || out.Token == "" {
-		return "", retry.Permanent(gateway.ErrAuth)
-	}
-	return out.Token, nil
+	tok, err := g.client.AuthToken(ctx, base, creds.APIKey)
+	return tok, gatewayErr(err)
 }
 
 // inquiryToken is a cached auth token for inquiries, or a new one.
@@ -192,22 +180,7 @@ func (g *Gateway) CreatePayment(ctx context.Context, creds gateway.Credentials, 
 }
 
 // transaction is Paymob's transaction object (callbacks and inquiries).
-type transaction struct {
-	ID                  json.Number `json:"id"`
-	Success             bool        `json:"success"`
-	Pending             bool        `json:"pending"`
-	AmountCents         int64       `json:"amount_cents"`
-	RefundedAmountCents int64       `json:"refunded_amount_cents"`
-	IsRefunded          bool        `json:"is_refunded"`
-	IsVoided            bool        `json:"is_voided"`
-	IsAuth              bool        `json:"is_auth"`
-	IsCapture           bool        `json:"is_capture"`
-	Currency            string      `json:"currency"`
-	CreatedAt           string      `json:"created_at"`
-	Order               struct {
-		MerchantOrderID string `json:"merchant_order_id"`
-	} `json:"order"`
-}
+type transaction = paymob.Transaction
 
 // FetchStatus implements gateway.Gateway by transaction inquiry.
 func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, reference string, cur money.Currency) (gateway.Status, error) {
@@ -222,11 +195,12 @@ func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, re
 		if tokErr != nil {
 			return tokErr
 		}
-		inquire := func(tok string) (int, error) {
-			return g.do(ctx, http.MethodPost, base+"/api/ecommerce/orders/transaction_inquiry", "Bearer "+tok,
-				map[string]string{"merchant_order_id": reference}, &t)
+		inquire := func(tok string) (bool, error) {
+			got, ok, iErr := g.client.Inquire(ctx, base, tok, reference)
+			t = got
+			return ok, gatewayErr(iErr)
 		}
-		code, doErr := inquire(tok)
+		ok, doErr := inquire(tok)
 		if errors.Is(doErr, gateway.ErrAuth) {
 			// The cached token expired: a new one, once (a bad API key
 			// fails at the token itself).
@@ -234,11 +208,11 @@ func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, re
 			if tok, k, tokErr = g.inquiryToken(ctx, base, creds); tokErr != nil {
 				return tokErr
 			}
-			if code, doErr = inquire(tok); errors.Is(doErr, gateway.ErrAuth) {
+			if ok, doErr = inquire(tok); errors.Is(doErr, gateway.ErrAuth) {
 				g.tokens.drop(k)
 			}
 		}
-		found = code != http.StatusNotFound
+		found = ok
 		return doErr
 	})
 	if err != nil {
