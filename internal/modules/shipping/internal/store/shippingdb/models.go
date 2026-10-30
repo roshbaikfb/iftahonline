@@ -470,6 +470,14 @@ type PlanEntitlement struct {
 	Value   *int64
 }
 
+type PlanFee struct {
+	PlanID   ulid.ID
+	Currency string
+	RateBps  int32
+	MinMinor int64
+	MaxMinor *int64
+}
+
 type PlanPrice struct {
 	PlanID      ulid.ID
 	Currency    string
@@ -589,6 +597,22 @@ type RiverQueue struct {
 	Metadata  []byte
 	PausedAt  *time.Time
 	UpdatedAt time.Time
+}
+
+type SellFee struct {
+	StoreID     ulid.ID
+	OrderID     ulid.ID
+	Period      pgtype.Date
+	PlanID      ulid.ID
+	BaseMinor   int64
+	RateBps     int32
+	FeeMinor    int64
+	Currency    string
+	Status      string
+	DeliveredAt time.Time
+	ReturnedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Shipment struct {

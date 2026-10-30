@@ -470,6 +470,14 @@ type PlanEntitlement struct {
 	Value   *int64
 }
 
+type PlanFee struct {
+	PlanID   ulid.ID
+	Currency string
+	RateBps  int32
+	MinMinor int64
+	MaxMinor *int64
+}
+
 type PlanPrice struct {
 	PlanID      ulid.ID
 	Currency    string
@@ -538,7 +546,7 @@ type ProductImage struct {
 type ProductSale struct {
 	StoreID   ulid.ID
 	ProductID ulid.ID
-	Day       pgtype.Date
+	Day       time.Time
 	Units     int32
 }
 
@@ -589,6 +597,22 @@ type RiverQueue struct {
 	Metadata  []byte
 	PausedAt  *time.Time
 	UpdatedAt time.Time
+}
+
+type SellFee struct {
+	StoreID     ulid.ID
+	OrderID     ulid.ID
+	Period      time.Time
+	PlanID      ulid.ID
+	BaseMinor   int64
+	RateBps     int32
+	FeeMinor    int64
+	Currency    string
+	Status      string
+	DeliveredAt time.Time
+	ReturnedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Shipment struct {
@@ -838,7 +862,7 @@ type Subscription struct {
 type UsageCounter struct {
 	StoreID   ulid.ID
 	Feature   string
-	Period    pgtype.Date
+	Period    time.Time
 	Used      int64
 	UpdatedAt time.Time
 }
