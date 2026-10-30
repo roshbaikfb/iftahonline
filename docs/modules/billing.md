@@ -5,7 +5,9 @@ is the only module that knows plans by name. Every other module asks
 [entitlements](entitlements.md) what a store may do.
 
 Design: [ADR-0045](../adr/0045-plans-as-data-and-one-entitlements-service.md)
-(plans) and [ADR-0048](../adr/0048-pay-as-you-sell-fees.md) (fees).
+(plans), [ADR-0048](../adr/0048-pay-as-you-sell-fees.md) (fees) and
+[ADR-0049](../adr/0049-billing-accounts-and-monthly-invoices.md) (accounts
+and invoices).
 
 **Status (P7 7a):** plans, their grants and the subscription lifecycle
 are in place.
@@ -13,7 +15,7 @@ are in place.
 | Coming | PR |
 |---|---|
 | Fees on delivered orders | 7c-1 (done) |
-| Invoices, agency accounts | 7c-2 |
+| Invoices, agency accounts | 7c-2 (done) |
 | Payments and dunning | 7d |
 | The console's plan editor | 7e |
 | The merchant's billing page | 7f |
@@ -74,6 +76,32 @@ The seeded prices and limits are **placeholders**: set them before launch
 | Returned before the invoice | `cancelled` |
 | Returned after the invoice | `credit_due`: credited on the next invoice (7c-2) |
 
+## Accounts and invoices (ADR-0049)
+
+- **Accounts.** An account is who pays: a store's own account, made the
+  first time it has something to bill, or an agency's, which the console
+  sets up (7e).
+- **The account wall.** Account tables sit behind their own RLS on
+  `app.account_id`, which billing sets from the store's own subscription
+  or from a system job.
+
+| Job | Does |
+|---|---|
+| `billing.invoice_month` | Daily (and at start): asks for the previous month's invoice of every billable store (`app.billable_stores`) |
+| `billing.invoice_store` | Gives the store its account if needed; asks for the account's invoice |
+| `billing.invoice_account` | Writes the account's invoice of the month, once |
+
+An invoice holds:
+- each store's renewal ending by the next month's first day, at its plan
+  version's price (an agency's plan once per account);
+- the store's `due` fees up to the month;
+- credits for returned orders, as negative lines;
+- the country's VAT (EG 14%, SA 15%, AE 5%).
+
+Numbers are `INV-<year>-<n>` and have no gaps. An invoice is due three
+days after issue. When there is nothing to bill, or the credits are as
+large as the charges, no invoice is written and the credits wait.
+
 ## The subscription lifecycle
 
 | From | Step | To |
@@ -100,7 +128,11 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `plan_entitlements` | platform | `(plan_id, feature)`; `value` NULL is unlimited |
 | `plan_fees` | platform | `(plan_id, currency)`: `rate_bps`, `min_minor`, `max_minor` (00057) |
 | `sell_fees` | tenant (RLS) | `(store_id, order_id)`; `sell_fees_store_period` serves invoices; `app_user` cannot delete (00057) |
-| `subscriptions` | tenant (RLS) | One row per store; `app_user` cannot delete. Existing stores got a 14-day trial of pro from the migration |
+| `billing_accounts`, `billing_account_stores` | account (RLS on `app.account_id`) | A store is in one account (00058) |
+| `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
+| `invoice_counters` | platform | One row per year: gapless numbers |
+| `tax_rates` | platform | VAT by country |
+| `subscriptions` | tenant (RLS) | One row per store; `app_user` cannot delete. Existing stores got a 14-day trial of pro from the migration. `account_id` (who pays) and `renewal_invoice_id` (a billed renewal) from 00058 |
 
 `app_user` may only read the platform tables.
 
@@ -115,4 +147,5 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | Fee rounding and bounds; returns | `domain.TestFee`, `domain.TestSellFeeReturned` |
 | Fees once per delivery, cancelled or credited on return, none on other plans | `app.TestSellFees` |
 | The orders adapter (base, statuses) | `cmd/platform` `TestBillingOrders` |
+| A pay-as-you-sell invoice (late fee, credit, VAT, once); a renewal billed once; an agency's one invoice; nothing to bill; the month's run; the account wall | `app.TestInvoiceOfAPayAsYouSellStore`, `TestInvoiceRenewsAPaidPlanOnce`, `TestAgencyGetsOneInvoice`, `TestNothingToBill`, `TestStartMonth`, `TestAccountWall`, `TestAccountTablesUseTheWall` |
 | No plan-name checks anywhere else | `internal/tools/noplannames` |

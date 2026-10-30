@@ -54,3 +54,4 @@ supersedes it.
 | [0046](0046-enforcing-plan-limits.md) | Enforcing plan limits | Accepted |
 | [0047](0047-plan-features-where-they-are-used.md) | Plan features are checked where they are used | Accepted |
 | [0048](0048-pay-as-you-sell-fees.md) | Pay-as-you-sell fees | Accepted |
+| [0049](0049-billing-accounts-and-monthly-invoices.md) | Billing accounts and monthly invoices | Accepted |
