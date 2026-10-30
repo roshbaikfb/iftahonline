@@ -128,11 +128,11 @@ func TestAdmitRace(t *testing.T) {
 	for range 20 {
 		wg.Go(func() {
 			err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
-				// The "creation" is a messages unit; the count reads them back.
-				count := func(ctx context.Context, tx pgx.Tx) (int64, error) {
-					u, err := f.svc.Usage(ctx, domain.Messages)
-					_ = tx
-					return u.Used, err
+				// The "creation" is a messages unit; the count reads them back
+				// in the same transaction, as a module counts its own rows.
+				count := func(ctx context.Context, tx pgx.Tx) (n int64, err error) {
+					err = tx.QueryRow(ctx, `SELECT coalesce(sum(used), 0)::bigint FROM usage_counters WHERE feature = 'messages'`).Scan(&n)
+					return n, err
 				}
 				if _, err := f.svc.AdmitTx(ctx, tx, domain.Staff, 1, count); err != nil {
 					return err
