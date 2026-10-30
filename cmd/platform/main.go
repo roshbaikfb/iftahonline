@@ -184,6 +184,9 @@ type clients struct {
 	// plan answers what each store's plan allows (ADR-0045); one per
 	// process, so its cache is shared by every module.
 	plan entitlements.Entitlements
+	// entitlements is plan's module: each role listens for its
+	// invalidations (ADR-0050).
+	entitlements *entitlements.Module
 	// watchOrders handles orders.order.placed for payments; the worker
 	// sets it once the payments module is built.
 	watchOrders *lateHandler
@@ -283,6 +286,17 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(entitlements.EventUsageCrossed, messaging.PlanLimitsSubscriber, limits.Handle); err != nil {
 		return clients{}, err
 	}
+	// A store's plan changed: what it may do, and so its pages (cards,
+	// pixels, ads), on every instance and at the edge (ADR-0050).
+	if err = bus.Subscribe(billing.EventSubscriptionChanged, entitlements.InvalidateSubscriber, entitlements.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
+	if err = bus.Subscribe(billing.EventSubscriptionChanged, storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)); err != nil {
+		return clients{}, err
+	}
+	if err = bus.Subscribe(billing.EventSubscriptionChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
+		return clients{}, err
+	}
 	// A delivered or returned order's pay-as-you-sell fee (ADR-0048).
 	fees := &lateHandler{}
 	if err = bus.Subscribe(orders.EventOrderStatusChanged, billing.SellFeesSubscriber, fees.Handle); err != nil {
@@ -296,7 +310,7 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err != nil {
 		return clients{}, err
 	}
-	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), watchOrders: watch, countSales: sales,
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), entitlements: ent, watchOrders: watch, countSales: sales,
 		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits, sellFees: fees}, nil
 }
 
@@ -569,6 +583,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		return nil, err
 	}
 	go ship.Listen(ctx)
+	go c.entitlements.Listen(ctx, c.rdb, c.log)
 	prom, err := newPromotions(c)
 	if err != nil {
 		return nil, err
@@ -694,6 +709,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	go ship.Listen(ctx)
+	go c.entitlements.Listen(ctx, c.rdb, c.log)
 	orderDeps, err := shopOrderDeps(c, ten, ship)
 	if err != nil {
 		return nil, err
@@ -818,6 +834,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err != nil {
 		return err
 	}
+	go c.entitlements.Listen(ctx, rdb, log)
 	if err = river.AddWorkerSafely(workers, c.events.Worker()); err != nil {
 		return fmt.Errorf("event bus: %w", err)
 	}
@@ -916,7 +933,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err != nil {
 		return err
 	}
-	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids})
+	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events})
 	if err != nil {
 		return err
 	}
