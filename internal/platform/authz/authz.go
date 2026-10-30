@@ -86,6 +86,8 @@ const (
 	PermPromotionsManage Permission = "promotions.manage" // coupons
 
 	PermMarketingManage Permission = "marketing.manage" // ad pixels and consent
+
+	PermBillingManage Permission = "billing.manage" // the plan, the card on file, paying invoices
 )
 
 // Permissions lists every permission.
@@ -105,6 +107,7 @@ func Permissions() []Permission {
 		PermMessagingRead, PermMessagingManage,
 		PermPromotionsManage,
 		PermMarketingManage,
+		PermBillingManage,
 	}
 }
 
