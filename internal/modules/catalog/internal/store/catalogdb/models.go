@@ -999,15 +999,18 @@ type UserRecoveryCode struct {
 }
 
 type UserSession struct {
-	ID         ulid.ID
-	UserID     ulid.ID
-	TokenHash  []byte
-	UserAgent  string
-	IpPrefix   string
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	ExpiresAt  time.Time
-	RevokedAt  *time.Time
+	ID             ulid.ID
+	UserID         ulid.ID
+	TokenHash      []byte
+	UserAgent      string
+	IpPrefix       string
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	ExpiresAt      time.Time
+	RevokedAt      *time.Time
+	ImpersonatorID *ulid.ID
+	ScopeStoreID   *ulid.ID
+	ReadOnly       bool
 }
 
 type Variant struct {

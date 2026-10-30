@@ -385,6 +385,27 @@ paths:
               schema: { $ref: "#/components/schemas/SlugAvailability" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/auth/impersonation:
+    post:
+      tags: [identity]
+      operationId: exchangeImpersonation
+      summary: Exchange a console's one-time code for its support session
+      description: |
+        The code works once and for 60 seconds. The cookie it sets ends
+        with the support session, which opens one store only.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImpersonationExchange" }
+      responses:
+        "204":
+          description: Signed in to the support session.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/auth/logout:
     post:
       tags: [identity]
@@ -1900,6 +1921,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/impersonate:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminImpersonateStore
+      summary: Open a time-limited support session as the store's owner
+      description: |
+        Recorded in the admin log (with the reason) before anything else,
+        then in the store's own log. The session is read-only unless
+        `write` is true, lasts `minutes` (5–60, default 30) and is never
+        extended; every request it makes is recorded in the store's log.
+        The answer carries a one-time code, valid for 60 seconds, that the
+        dashboard exchanges for the session (`url` opens it).
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminImpersonationRequest" }
+      responses:
+        "201":
+          description: Opened.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminImpersonation" }
         default:
           $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/reactivate:
@@ -3849,6 +3899,19 @@ components:
         memberships:
           type: array
           items: { $ref: "#/components/schemas/Membership" }
+        impersonation: { $ref: "#/components/schemas/ImpersonationInfo" }
+    ImpersonationInfo:
+      type: object
+      description: Set when this is a platform admin's support session; only its store is listed.
+      required: [read_only, expires_at]
+      properties:
+        read_only: { type: boolean }
+        expires_at: { type: string, format: date-time }
+    ImpersonationExchange:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 43, maxLength: 43 }
     Membership:
       type: object
       required: [store_id, role]
@@ -3924,6 +3987,21 @@ components:
       required: [reason]
       properties:
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminImpersonationRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin and the store's audit logs. }
+        minutes: { type: integer, minimum: 5, maximum: 60, default: 30 }
+        write: { type: boolean, default: false, description: Allow changes (default read-only). }
+    AdminImpersonation:
+      type: object
+      required: [code, code_expires_at, expires_at, url]
+      properties:
+        code: { type: string, description: One-time, for POST /v1/auth/impersonation. }
+        code_expires_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: When the session ends. }
+        url: { type: string, description: The dashboard page that exchanges the code (in the fragment). }
     AdminStoreSummary:
       type: object
       required: [store, primary_host]

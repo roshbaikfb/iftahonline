@@ -207,6 +207,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/impersonation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a console's one-time code for its support session
+         * @description The code works once and for 60 seconds. The cookie it sets ends
+         *     with the support session, which opens one store only.
+         */
+        post: operations["exchangeImpersonation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1585,6 +1606,33 @@ export interface paths {
         put?: never;
         /** Suspend an active store (storefront answers 503) */
         post: operations["adminSuspendStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a time-limited support session as the store's owner
+         * @description Recorded in the admin log (with the reason) before anything else,
+         *     then in the store's own log. The session is read-only unless
+         *     `write` is true, lasts `minutes` (5–60, default 30) and is never
+         *     extended; every request it makes is recorded in the store's log.
+         *     The answer carries a one-time code, valid for 60 seconds, that the
+         *     dashboard exchanges for the session (`url` opens it).
+         */
+        post: operations["adminImpersonateStore"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3220,6 +3268,16 @@ export interface components {
         Me: {
             user: components["schemas"]["User"];
             memberships: components["schemas"]["Membership"][];
+            impersonation?: components["schemas"]["ImpersonationInfo"];
+        };
+        /** @description Set when this is a platform admin's support session; only its store is listed. */
+        ImpersonationInfo: {
+            read_only: boolean;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        ImpersonationExchange: {
+            code: string;
         };
         Membership: {
             store_id: components["schemas"]["ULID"];
@@ -3285,6 +3343,30 @@ export interface components {
         AdminReason: {
             /** @description Kept in the admin audit log. */
             reason: string;
+        };
+        AdminImpersonationRequest: {
+            /** @description Kept in the admin and the store's audit logs. */
+            reason: string;
+            /** @default 30 */
+            minutes: number;
+            /**
+             * @description Allow changes (default read-only).
+             * @default false
+             */
+            write: boolean;
+        };
+        AdminImpersonation: {
+            /** @description One-time */
+            code: string;
+            /** Format: date-time */
+            code_expires_at: string;
+            /**
+             * Format: date-time
+             * @description When the session ends.
+             */
+            expires_at: string;
+            /** @description The dashboard page that exchanges the code (in the fragment). */
+            url: string;
         };
         AdminStoreSummary: {
             store: components["schemas"]["Store"];
@@ -5184,6 +5266,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SlugAvailability"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    exchangeImpersonation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpersonationExchange"];
+            };
+        };
+        responses: {
+            /** @description Signed in to the support session. */
+            204: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
@@ -7212,6 +7318,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminImpersonateStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminImpersonationRequest"];
+            };
+        };
+        responses: {
+            /** @description Opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminImpersonation"];
                 };
             };
             default: components["responses"]["Problem"];

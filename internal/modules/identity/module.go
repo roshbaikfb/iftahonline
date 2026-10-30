@@ -1,10 +1,12 @@
 package identity
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -98,6 +100,14 @@ func (m *Module) Authorizer() authz.Authorizer { return m.policy }
 
 // Scope is the authentication/membership middleware for API routes.
 func (m *Module) Scope() func(http.Handler) http.Handler { return m.scope }
+
+// Impersonate opens a platform admin's support session as the owner of
+// the store in ctx (ADR-0055): read-only unless write, for d (5 to 60
+// minutes), recorded in the store's audit log. The console calls it after
+// recording the attempt in its own log.
+func (m *Module) Impersonate(ctx context.Context, admin ulid.ID, reason string, d time.Duration, write bool) (ImpersonationGrant, error) {
+	return m.svc.StartImpersonation(ctx, admin, reason, d, write)
+}
 
 // Mount registers the identity HTTP API.
 func (m *Module) Mount(mux *http.ServeMux, resp *problem.Responder) {

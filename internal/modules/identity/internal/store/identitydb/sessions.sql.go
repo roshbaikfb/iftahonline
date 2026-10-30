@@ -13,19 +13,23 @@ import (
 )
 
 const getActiveSession = `-- name: GetActiveSession :one
-SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status
+SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status,
+       s.impersonator_id, s.scope_store_id, s.read_only
 FROM user_sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
 `
 
 type GetActiveSessionRow struct {
-	ID         ulid.ID
-	UserID     ulid.ID
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	ExpiresAt  time.Time
-	UserStatus string
+	ID             ulid.ID
+	UserID         ulid.ID
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	ExpiresAt      time.Time
+	UserStatus     string
+	ImpersonatorID *ulid.ID
+	ScopeStoreID   *ulid.ID
+	ReadOnly       bool
 }
 
 // One query per authenticated request: the live session and its user.
@@ -39,13 +43,16 @@ func (q *Queries) GetActiveSession(ctx context.Context, tokenHash []byte) (GetAc
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.UserStatus,
+		&i.ImpersonatorID,
+		&i.ScopeStoreID,
+		&i.ReadOnly,
 	)
 	return i, err
 }
 
 const getActiveSessionInStore = `-- name: GetActiveSessionInStore :one
 SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status,
-       coalesce(m.role, '')::text AS role
+       coalesce(m.role, '')::text AS role, s.impersonator_id, s.scope_store_id, s.read_only
 FROM user_sessions s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN store_memberships m ON m.user_id = s.user_id AND m.store_id = $1
@@ -58,13 +65,16 @@ type GetActiveSessionInStoreParams struct {
 }
 
 type GetActiveSessionInStoreRow struct {
-	ID         ulid.ID
-	UserID     ulid.ID
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	ExpiresAt  time.Time
-	UserStatus string
-	Role       string
+	ID             ulid.ID
+	UserID         ulid.ID
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	ExpiresAt      time.Time
+	UserStatus     string
+	Role           string
+	ImpersonatorID *ulid.ID
+	ScopeStoreID   *ulid.ID
+	ReadOnly       bool
 }
 
 // As GetActiveSession, plus the user's role in the tenant store (empty for
@@ -81,14 +91,59 @@ func (q *Queries) GetActiveSessionInStore(ctx context.Context, arg GetActiveSess
 		&i.ExpiresAt,
 		&i.UserStatus,
 		&i.Role,
+		&i.ImpersonatorID,
+		&i.ScopeStoreID,
+		&i.ReadOnly,
 	)
 	return i, err
+}
+
+const getStoreOwner = `-- name: GetStoreOwner :one
+SELECT user_id FROM store_memberships WHERE store_id = $1 AND role = 'owner'
+`
+
+// The store's owner (one per store); runs in its tenant transaction.
+func (q *Queries) GetStoreOwner(ctx context.Context, storeID ulid.ID) (ulid.ID, error) {
+	row := q.db.QueryRow(ctx, getStoreOwner, storeID)
+	var user_id ulid.ID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const insertImpersonationSession = `-- name: InsertImpersonationSession :exec
+INSERT INTO user_sessions (id, user_id, token_hash, user_agent, ip_prefix, expires_at, impersonator_id, scope_store_id, read_only)
+VALUES ($1, $2, $3, 'impersonation', '', $4, $5, $6, $7)
+`
+
+type InsertImpersonationSessionParams struct {
+	ID             ulid.ID
+	UserID         ulid.ID
+	TokenHash      []byte
+	ExpiresAt      time.Time
+	ImpersonatorID *ulid.ID
+	ScopeStoreID   *ulid.ID
+	ReadOnly       bool
+}
+
+// An admin's session as the store's owner (ADR-0055): scoped to the
+// store, never slid past expires_at.
+func (q *Queries) InsertImpersonationSession(ctx context.Context, arg InsertImpersonationSessionParams) error {
+	_, err := q.db.Exec(ctx, insertImpersonationSession,
+		arg.ID,
+		arg.UserID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.ImpersonatorID,
+		arg.ScopeStoreID,
+		arg.ReadOnly,
+	)
+	return err
 }
 
 const insertSession = `-- name: InsertSession :one
 INSERT INTO user_sessions (id, user_id, token_hash, user_agent, ip_prefix, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, token_hash, user_agent, ip_prefix, created_at, last_seen_at, expires_at, revoked_at
+RETURNING id, user_id, token_hash, user_agent, ip_prefix, created_at, last_seen_at, expires_at, revoked_at, impersonator_id, scope_store_id, read_only
 `
 
 type InsertSessionParams struct {
@@ -120,12 +175,15 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (U
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.ImpersonatorID,
+		&i.ScopeStoreID,
+		&i.ReadOnly,
 	)
 	return i, err
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT id, user_id, token_hash, user_agent, ip_prefix, created_at, last_seen_at, expires_at, revoked_at FROM user_sessions
+SELECT id, user_id, token_hash, user_agent, ip_prefix, created_at, last_seen_at, expires_at, revoked_at, impersonator_id, scope_store_id, read_only FROM user_sessions
 WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 ORDER BY created_at DESC
 LIMIT 100
@@ -150,6 +208,9 @@ func (q *Queries) ListUserSessions(ctx context.Context, userID ulid.ID) ([]UserS
 			&i.LastSeenAt,
 			&i.ExpiresAt,
 			&i.RevokedAt,
+			&i.ImpersonatorID,
+			&i.ScopeStoreID,
+			&i.ReadOnly,
 		); err != nil {
 			return nil, err
 		}

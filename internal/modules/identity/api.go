@@ -20,6 +20,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+// ImpersonationGrant is a support session's one-time code (ADR-0055).
+type ImpersonationGrant = app.ImpersonationGrant
+
 // NewAuditRecorder returns the audit log writer to give other modules.
 // It needs nothing but an ID generator, so it can be built before the
 // module itself.

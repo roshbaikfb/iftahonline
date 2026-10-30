@@ -122,6 +122,11 @@ type ActiveSession struct {
 	ExpiresAt           time.Time
 	UserStatus          domain.UserStatus
 	Role                authz.Role
+	// An admin's impersonation (ADR-0055): who, the one store it may
+	// open, and whether it may change anything.
+	Impersonator *ulid.ID
+	ScopeStore   *ulid.ID
+	ReadOnly     bool
 }
 
 // SessionByToken loads a live session.
@@ -131,7 +136,7 @@ func SessionByToken(ctx context.Context, db Tx, t authtoken.Token) (ActiveSessio
 		return ActiveSession{}, noRows(err)
 	}
 	return ActiveSession{ID: r.ID, UserID: r.UserID, CreatedAt: r.CreatedAt, LastSeen: r.LastSeenAt, ExpiresAt: r.ExpiresAt,
-		UserStatus: domain.UserStatus(r.UserStatus)}, nil
+		UserStatus: domain.UserStatus(r.UserStatus), Impersonator: r.ImpersonatorID, ScopeStore: r.ScopeStoreID, ReadOnly: r.ReadOnly}, nil
 }
 
 // SessionByTokenInStore loads a live session and the user's role in the
@@ -146,7 +151,44 @@ func SessionByTokenInStore(ctx context.Context, tx Tx, t authtoken.Token) (Activ
 		return ActiveSession{}, noRows(err)
 	}
 	return ActiveSession{ID: r.ID, UserID: r.UserID, CreatedAt: r.CreatedAt, LastSeen: r.LastSeenAt, ExpiresAt: r.ExpiresAt,
-		UserStatus: domain.UserStatus(r.UserStatus), Role: authz.Role(r.Role)}, nil
+		UserStatus: domain.UserStatus(r.UserStatus), Role: authz.Role(r.Role), Impersonator: r.ImpersonatorID, ScopeStore: r.ScopeStoreID,
+		ReadOnly: r.ReadOnly}, nil
+}
+
+// StoreOwner is the current store's owner.
+func StoreOwner(ctx context.Context, tx Tx) (ulid.ID, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return ulid.ID{}, err
+	}
+	id, err := identitydb.New(tx).GetStoreOwner(ctx, store)
+	if err != nil {
+		return ulid.ID{}, noRows(err)
+	}
+	return id, nil
+}
+
+// Impersonation is an admin's session as the current store's owner.
+type Impersonation struct {
+	ID, UserID, Admin ulid.ID
+	TokenHash         []byte
+	ExpiresAt         time.Time
+	ReadOnly          bool
+}
+
+// InsertImpersonation writes an impersonation session scoped to the
+// current store.
+func InsertImpersonation(ctx context.Context, tx Tx, i Impersonation) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = identitydb.New(tx).InsertImpersonationSession(ctx, identitydb.InsertImpersonationSessionParams{
+		ID: i.ID, UserID: i.UserID, TokenHash: i.TokenHash, ExpiresAt: i.ExpiresAt, ImpersonatorID: &i.Admin, ScopeStoreID: &store, ReadOnly: i.ReadOnly,
+	}); err != nil {
+		return fmt.Errorf("identity store: insert impersonation: %w", err)
+	}
+	return nil
 }
 
 // TouchSession records activity and slides the expiry.
