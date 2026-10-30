@@ -3,15 +3,21 @@ package entitlements_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
+	"github.com/roshbaikfb/iftahonline/internal/platform/event"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
@@ -133,5 +139,60 @@ func TestNewNeedsItsDependencies(t *testing.T) {
 	}
 	if _, err := entitlements.New(entitlements.Deps{Pool: connect(t, infra.AppURL)}); err == nil {
 		t.Error("no source: want error")
+	}
+}
+
+// countingGrants counts its reads.
+type countingGrants struct{ reads atomic.Int64 }
+
+func (c *countingGrants) GrantsTx(context.Context, pgx.Tx) (entitlements.Grants, error) {
+	c.reads.Add(1)
+	return entitlements.Grants{entitlements.AdFree: {Value: 1}}, nil
+}
+
+// TestInvalidationOverRedis: a plan change on one instance drops every
+// instance's cached grants of that store, through Redis (ADR-0050).
+func TestInvalidationOverRedis(t *testing.T) {
+	t.Parallel()
+	pool := connect(t, infra.AppURL)
+	opts, err := redis.ParseURL(infra.RedisURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { _ = rdb.Close() })
+	src := &countingGrants{}
+	mod, err := entitlements.New(entitlements.Deps{Pool: pool, Source: src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go mod.Listen(ctx, rdb, slog.New(slog.DiscardHandler))
+	store := newStore(t, pool, "")
+	id, _ := tenant.FromContext(store)
+	check := func() {
+		t.Helper()
+		if _, aErr := mod.Entitlements().Allowed(store, entitlements.AdFree); aErr != nil {
+			t.Fatal(aErr)
+		}
+	}
+	check()
+	check()
+	if src.reads.Load() != 1 {
+		t.Fatalf("%d reads before, want 1 (cached)", src.reads.Load())
+	}
+	handler := entitlements.InvalidateHandler(rdb)
+	deadline := time.Now().Add(5 * time.Second)
+	for src.reads.Load() < 2 {
+		// The subscription may not be up yet: publish until it is heard.
+		if err = handler(t.Context(), eventbus.Delivery{Meta: event.Meta{StoreID: id}}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(50 * time.Millisecond)
+		check()
+		if time.Now().After(deadline) {
+			t.Fatal("the invalidation never arrived")
+		}
 	}
 }

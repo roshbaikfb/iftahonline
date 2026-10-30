@@ -3,14 +3,17 @@ package entitlements
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -45,6 +48,36 @@ func (m *Module) Entitlements() Entitlements { return m.svc }
 // Invalidate drops this instance's cached grants of store, after its
 // plan changed.
 func (m *Module) Invalidate(store tenant.StoreID) { m.svc.Invalidate(store) }
+
+// InvalidateChannel is the Redis channel on which instances learn that a
+// store's plan changed.
+const InvalidateChannel = "entitlements:invalidate"
+
+// InvalidateSubscriber is the event bus subscriber name of
+// InvalidateHandler.
+const InvalidateSubscriber = "entitlements.invalidate_grants"
+
+// InvalidateHandler tells every instance that the event's store's plan
+// changed. Subscribe it to billing.EventSubscriptionChanged on every
+// role's bus (ADR-0050).
+func InvalidateHandler(rdb *redis.Client) eventbus.Handler {
+	return func(ctx context.Context, d eventbus.Delivery) error {
+		return rdb.Publish(ctx, InvalidateChannel, d.Meta.StoreID.String()).Err()
+	}
+}
+
+// Listen applies invalidations published on InvalidateChannel until ctx
+// ends. A lost message costs at most the cache TTL (30 s).
+func (m *Module) Listen(ctx context.Context, rdb *redis.Client, log *slog.Logger) {
+	for payload := range redisx.Subscribe(ctx, rdb, InvalidateChannel, log) {
+		id, err := tenant.ParseStoreID(payload)
+		if err != nil {
+			log.WarnContext(ctx, "entitlements: bad invalidation message", "err", err)
+			continue
+		}
+		m.svc.Invalidate(id)
+	}
+}
 
 // FromBilling reads grants from the store's plan. Features the code does
 // not enforce (keys the console added for display) are left out.
