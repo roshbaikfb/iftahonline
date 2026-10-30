@@ -27,17 +27,25 @@ WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND reply =
 RETURNING id;
 
 -- name: ListMessages :many
--- The log, newest first, after a keyset cursor; status '' is any.
+-- The log, newest first, after a keyset cursor (the primary key).
 SELECT * FROM messages
 WHERE store_id = @store_id AND (created_at, id) < (@before_at::timestamptz, @before_id::uuid)
-  AND (@status::text = '' OR status = @status::text)
+ORDER BY created_at DESC, id DESC
+LIMIT @lim;
+
+-- name: ListMessagesByStatus :many
+-- One status's messages, newest first, after a keyset cursor
+-- (messages_store_status): a rare status reads its rows only.
+SELECT * FROM messages
+WHERE store_id = @store_id AND status = @status AND (created_at, id) < (@before_at::timestamptz, @before_id::uuid)
 ORDER BY created_at DESC, id DESC
 LIMIT @lim;
 
 -- name: ListOrderMessages :many
--- An order's messages, newest first (an order has a few).
+-- An order's messages, newest first (an order has a few). None is older
+-- than the order, so the months before it are never read.
 SELECT * FROM messages
-WHERE store_id = @store_id AND order_id = @order_id
+WHERE store_id = @store_id AND order_id = @order_id AND created_at >= @since
 ORDER BY created_at DESC, id DESC
 LIMIT 50;
 

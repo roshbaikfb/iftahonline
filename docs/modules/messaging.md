@@ -160,7 +160,9 @@ The merchant dashboard follows the approved 6g mockups:
   `?order=` shows one order's messages.
 - **The bell** in the top bar: the unread count and the latest notices, a panel
   under it (a whole page on a phone); a notice's link or "mark all read" marks
-  them read. Hidden from the shipping role (no `messaging.read`).
+  them read. Hidden from the shipping role (no `messaging.read`). Every screen
+  mounts its own bell, so the last read is kept for a minute per store
+  (`lib/messages.ts`): screens opened meanwhile show it without asking again.
 - **The order page**: the customer confirmation card (the message's way, the
   answer, the auto-cancel time), shown first on a phone.
 
@@ -184,11 +186,11 @@ Each event is placed in its store by our reference
 
 | Table | Notes |
 |---|---|
-| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads every partition through that key, never by a scan (both pinned by plan tests). `messages_store_order` serves an order's messages. `app_user` cannot delete |
+| `messages` | Tenant table under RLS. Partitioned monthly on the ULID time; partitions dropped after 6 whole months. PK `(store_id, created_at, id)`: a webhook's lookup reads one partition, and a page of the log reads every partition through that key, never by a scan (both pinned by plan tests). `messages_store_order` serves an order's messages, from the order's time on. `messages_store_status` (00054) serves one status's page without reading the others (pinned by `TestDashboardQueryPlans`). `app_user` cannot delete |
 | `message_templates` | Tenant table under RLS. The store's SMS text per `(kind, locale)`; no row means the default |
 | `messaging_settings` | Tenant table under RLS. `confirm_cod`, `auto_cancel_hours`; no row means the defaults |
 | `order_confirmations` | Tenant table under RLS. One per order (PK `(store_id, order_id)`), with its message, status, deadline, answer, the SMS token's SHA-256 (unique per store), and the WhatsApp code (unique across stores; `app.confirmation_store` maps it to its store) |
-| `merchant_notifications` | Tenant table under RLS. Unique `(store_id, kind, dedup_key)`; purged after 90 days as new ones arrive |
+| `merchant_notifications` | Tenant table under RLS. Unique `(store_id, kind, dedup_key)`; purged after 90 days as new ones arrive. The partial index `merchant_notifications_unread` (00054) serves the bell's unread count |
 
 ## Rules worth knowing
 
