@@ -21,6 +21,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/httpapi"
@@ -103,7 +104,11 @@ const (
 	tokOwnerB    = "owner-b"
 )
 
-func newFixture(t *testing.T) fixture {
+func newFixture(t *testing.T) fixture { t.Helper(); return newFixtureWith(t, nil) }
+
+// newFixtureWith builds the fixture with plan admitting custom domains
+// (nil admits every one).
+func newFixtureWith(t *testing.T, plan entitlements.Entitlements) fixture {
 	t.Helper()
 	ctx := t.Context()
 	pool, err := pgxpool.New(ctx, infra.AppURL)
@@ -121,7 +126,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	svc := app.NewService(pool, ins, ids, "iftahonline.com", audit.Nop{})
+	svc := app.NewService(pool, ins, ids, "iftahonline.com", audit.Nop{}, plan)
 
 	mk := func(prefix string) (context.Context, tenant.StoreID) {
 		id := tenant.StoreID{ID: ids.New()}

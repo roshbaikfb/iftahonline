@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -99,6 +100,11 @@ func (s *Service) Invite(ctx context.Context, rawEmail, rawRole string) (store.I
 	_, hash, _ := parseInviteToken(token)
 	var inv store.Invitation
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		// Within the plan's team seats, invitations included; a refusal
+		// is the merchant's 403 plan_limit.
+		if _, txErr := s.plan.AdmitTx(ctx, tx, entitlements.Staff, 1, store.CountSeats); txErr != nil {
+			return txErr
+		}
 		var txErr error
 		inv, txErr = store.InsertInvitation(ctx, tx, store.NewInvitation{
 			ID: s.ids.New(), Email: email, Role: role, TokenHash: hash, InvitedBy: p.UserID,

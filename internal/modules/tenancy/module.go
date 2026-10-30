@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/httpapi"
@@ -42,6 +43,9 @@ type Deps struct {
 	// AdminPool is the app_admin pool for the super-admin directory;
 	// nil means no directory (every role but the api).
 	AdminPool *pgxpool.Pool
+	// Plan admits custom domains within the store's plan (ADR-0045); nil
+	// admits every one (tests).
+	Plan entitlements.Entitlements
 }
 
 // Module is the wired tenancy module.
@@ -74,7 +78,7 @@ func New(d Deps) (*Module, error) {
 		return nil, err
 	}
 	return &Module{
-		svc:      app.NewService(d.Pool, d.Jobs, d.IDs, c.BaseDomain, d.Audit),
+		svc:      app.NewService(d.Pool, d.Jobs, d.IDs, c.BaseDomain, d.Audit, d.Plan),
 		resolver: resolver,
 		cache:    cache,
 		deps:     d,

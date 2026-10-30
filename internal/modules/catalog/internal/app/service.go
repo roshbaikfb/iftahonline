@@ -15,6 +15,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
@@ -41,6 +42,7 @@ type Service struct {
 	search   SearchIndex
 	imports  Imports
 	events   Events
+	plan     entitlements.Entitlements
 	now      func() time.Time
 }
 
@@ -56,12 +58,18 @@ type Deps struct {
 	Imports  Imports
 	// Events receives the catalog's domain events; nil discards them.
 	Events eventbus.Publisher
+	// Plan admits new products within the store's plan; nil admits
+	// every one (tests).
+	Plan entitlements.Entitlements
 }
 
 // NewService builds the service.
 func NewService(d Deps) *Service {
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
 	return &Service{db: d.DB, jobs: d.Jobs, ids: d.IDs, audit: d.Audit, currency: d.Currency, media: d.Media, search: d.Search, imports: d.Imports,
-		events: Events{Pub: d.Events, IDs: d.IDs}, now: time.Now}
+		events: Events{Pub: d.Events, IDs: d.IDs}, plan: d.Plan, now: time.Now}
 }
 
 // SetClock replaces the clock (tests).
@@ -109,6 +117,11 @@ func (s *Service) CreateProduct(ctx context.Context, in domain.ProductInput) (do
 }
 
 func (s *Service) createTx(ctx context.Context, tx pgx.Tx, id ulid.ID, cur money.Currency, in domain.ProductInput) (domain.Product, error) {
+	// Within the plan's products (imports and starter samples too); a
+	// refusal is the merchant's 403 plan_limit.
+	if _, err := s.plan.AdmitTx(ctx, tx, entitlements.Products, 1, store.CountLiveProducts); err != nil {
+		return domain.Product{}, err
+	}
 	if err := store.SaveProduct(ctx, tx, id, in, true); err != nil {
 		return domain.Product{}, err
 	}

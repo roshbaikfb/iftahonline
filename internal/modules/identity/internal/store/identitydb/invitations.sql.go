@@ -30,6 +30,21 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 	return result.RowsAffected(), nil
 }
 
+const countSeats = `-- name: CountSeats :one
+SELECT (SELECT count(*) FROM store_memberships m WHERE m.store_id = $1)
+     + (SELECT count(*) FROM store_invitations i
+        WHERE i.store_id = $1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > now()) AS n
+`
+
+// What the plan's team limit counts: members, the owner included, and
+// open invitations (each may become a member).
+func (q *Queries) CountSeats(ctx context.Context, storeID ulid.ID) (int32, error) {
+	row := q.db.QueryRow(ctx, countSeats, storeID)
+	var n int32
+	err := row.Scan(&n)
+	return n, err
+}
+
 const getInvitation = `-- name: GetInvitation :one
 SELECT id, store_id, email, role, token_hash, invited_by, created_at, expires_at, accepted_at, revoked_at FROM store_invitations WHERE store_id = $1 AND id = $2
 `

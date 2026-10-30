@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store/identitydb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -196,6 +198,21 @@ func ListInvitations(ctx context.Context, tx Tx) ([]Invitation, error) {
 		out[i] = toInvitation(r)
 	}
 	return out, nil
+}
+
+// CountSeats is how many team seats the store uses: members (the owner
+// included) and open invitations, what the plan's team limit counts. Its
+// signature fits entitlements' AdmitTx.
+func CountSeats(ctx context.Context, tx pgx.Tx) (int64, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := identitydb.New(tx).CountSeats(ctx, store)
+	if err != nil {
+		return 0, fmt.Errorf("identity store: count seats: %w", err)
+	}
+	return int64(n), nil
 }
 
 // GetInvitation returns one of the current store's invitations.

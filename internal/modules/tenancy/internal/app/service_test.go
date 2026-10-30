@@ -68,7 +68,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	ids := ulid.NewGenerator()
-	return fixture{app: appPool, owner: owner, rdb: rdb, svc: app.NewService(appPool, ins, ids, base, audit.Nop{}), ids: ids}
+	return fixture{app: appPool, owner: owner, rdb: rdb, svc: app.NewService(appPool, ins, ids, base, audit.Nop{}, nil), ids: ids}
 }
 
 // slug returns a unique valid slug (tests share one database).
