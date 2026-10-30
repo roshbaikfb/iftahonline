@@ -120,6 +120,15 @@ type BillingAccountStore struct {
 	AddedAt       pgtype.Timestamptz
 }
 
+type BillingPaymentMethod struct {
+	AccountID ulid.ID
+	Gateway   string
+	Token     []byte
+	Label     string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type CarrierConnection struct {
 	ID                ulid.ID
 	StoreID           ulid.ID
@@ -273,6 +282,10 @@ type Invoice struct {
 	DueAt         pgtype.Timestamptz
 	PaidAt        pgtype.Timestamptz
 	CreatedAt     pgtype.Timestamptz
+	Attempts      int32
+	FirstFailedAt pgtype.Timestamptz
+	NextAttemptAt pgtype.Timestamptz
+	LastError     pgtype.Text
 }
 
 type InvoiceCounter struct {
@@ -465,6 +478,18 @@ type Payment struct {
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 	Version       int32
+}
+
+type PaymentAttempt struct {
+	ID          ulid.ID
+	InvoiceID   ulid.ID
+	AccountID   ulid.ID
+	Gateway     string
+	Outcome     string
+	Reason      string
+	Reference   string
+	AmountMinor int64
+	CreatedAt   pgtype.Timestamptz
 }
 
 type PaymentConnection struct {
@@ -766,16 +791,17 @@ type StockReservation struct {
 }
 
 type Store struct {
-	ID        ulid.ID
-	Slug      string
-	Name      string
-	Status    string
-	Plan      string
-	Currency  string
-	Locale    string
-	Timezone  string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Plan        string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	BillingHold bool
 }
 
 type StoreAsset struct {

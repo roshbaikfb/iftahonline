@@ -13,7 +13,7 @@ import (
 )
 
 const adminGetStore = `-- name: AdminGetStore :one
-SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at FROM stores WHERE id = $1
+SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
 `
 
 func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) {
@@ -30,6 +30,7 @@ func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) 
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BillingHold,
 	)
 	return i, err
 }
@@ -73,7 +74,7 @@ func (q *Queries) AdminListDomains(ctx context.Context, storeID ulid.ID) ([]Stor
 
 const adminSearchStores = `-- name: AdminSearchStores :many
 
-SELECT s.id, s.slug, s.name, s.status, s.plan, s.currency, s.locale, s.timezone, s.created_at, s.updated_at,
+SELECT s.id, s.slug, s.name, s.status, s.plan, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
 WHERE ($1::text = '' OR s.slug::text LIKE $1::text || '%' OR s.name ILIKE '%' || $1::text || '%')
@@ -103,6 +104,7 @@ type AdminSearchStoresRow struct {
 	Timezone    string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	BillingHold bool
 	PrimaryHost string
 }
 
@@ -135,6 +137,7 @@ func (q *Queries) AdminSearchStores(ctx context.Context, arg AdminSearchStoresPa
 			&i.Timezone,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BillingHold,
 			&i.PrimaryHost,
 		); err != nil {
 			return nil, err

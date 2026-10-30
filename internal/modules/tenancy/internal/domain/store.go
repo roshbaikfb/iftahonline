@@ -30,6 +30,20 @@ const (
 	StatusClosed    StoreStatus = "closed"    // by the owner
 )
 
+// StatusHeld is how host resolution reports an active store held for
+// billing (ADR-0051): its storefront shows a maintenance page. It is
+// never a store's own status, which ParseStoreStatus validates.
+const StatusHeld StoreStatus = "held"
+
+// ParseResolutionStatus validates a resolved status: a store's own, or
+// held.
+func ParseResolutionStatus(s string) (StoreStatus, bool) {
+	if StoreStatus(s) == StatusHeld {
+		return StatusHeld, true
+	}
+	return ParseStoreStatus(s)
+}
+
 // ParseStoreStatus validates a status.
 func ParseStoreStatus(s string) (StoreStatus, bool) {
 	st := StoreStatus(s)

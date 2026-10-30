@@ -64,6 +64,8 @@ func TestStorefrontHostResolution(t *testing.T) {
 			[]string{"Store not found"}, false},
 		{"suspended store is unavailable", fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusSuspended}}, http.StatusServiceUnavailable,
 			[]string{"Store unavailable", "iftahonline"}, false},
+		{"a store held for billing is under maintenance", fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusHeld}}, http.StatusServiceUnavailable,
+			[]string{"المتجر تحت الصيانة", "Store under maintenance"}, true},
 		{"resolver failure is a temporary error", fakeResolver{err: errors.New("db down")}, http.StatusServiceUnavailable,
 			[]string{"Temporary error"}, true},
 		{"active store serves its pages", fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusActive}}, http.StatusOK,

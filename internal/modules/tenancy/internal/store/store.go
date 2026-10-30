@@ -81,6 +81,20 @@ func SetStoreStatus(ctx context.Context, tx Tx, st domain.StoreStatus) (domain.S
 	return storeResult(row, err, "set status")
 }
 
+// SetBillingHold holds or releases the store in ctx for billing; changed
+// is false when it already was.
+func SetBillingHold(ctx context.Context, tx Tx, hold bool) (changed bool, err error) {
+	id, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := tenancydb.New(tx).SetBillingHold(ctx, tenancydb.SetBillingHoldParams{StoreID: id, Hold: hold})
+	if err != nil {
+		return false, fmt.Errorf("tenancy store: billing hold: %w", err)
+	}
+	return n == 1, nil
+}
+
 func storeResult(row tenancydb.Store, err error, op string) (domain.Store, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Store{}, domain.ErrNotFound

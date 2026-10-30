@@ -16,6 +16,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -133,6 +134,32 @@ func (s *Service) SetStatus(ctx context.Context, status domain.StoreStatus) (dom
 		return s.invalidate(ctx, tx, hosts...)
 	})
 	return st, notFound(err, errStoreNotFound)
+}
+
+// SetBillingHoldTx holds (or releases) the store in ctx for billing, in
+// the caller's tenant transaction: its storefront shows a maintenance
+// page (ADR-0051). The platform's suspension (SetStatus) is separate.
+func (s *Service) SetBillingHoldTx(ctx context.Context, tx pgx.Tx, hold bool) error {
+	changed, err := store.SetBillingHold(ctx, tx, hold)
+	if err != nil || !changed {
+		return err
+	}
+	hosts, err := store.ListHosts(ctx, tx)
+	if err != nil {
+		return err
+	}
+	action := "store.billing_hold_released"
+	if hold {
+		action = "store.billing_held"
+	}
+	id, err := tenant.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if err = s.audit.RecordTx(ctx, tx, audit.Entry{Action: action, TargetType: "store", TargetID: id.String()}); err != nil {
+		return err
+	}
+	return s.invalidate(ctx, tx, hosts...)
 }
 
 // ListDomains returns the current store's domains.

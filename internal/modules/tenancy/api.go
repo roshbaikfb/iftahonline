@@ -37,7 +37,10 @@ type (
 const (
 	StatusActive    = domain.StatusActive
 	StatusSuspended = domain.StatusSuspended
-	StatusClosed    = domain.StatusClosed
+	// StatusHeld is a resolution, not a store's status: active but held
+	// for billing.
+	StatusHeld   = domain.StatusHeld
+	StatusClosed = domain.StatusClosed
 )
 
 // ErrUnknownHost means no store is reachable at a host.
@@ -52,6 +55,10 @@ type Service interface {
 	UpdateSettings(ctx context.Context, in StoreSettings) (Store, error)
 	// SetStatus is for the platform (suspension) and the owner (closing).
 	SetStatus(ctx context.Context, status StoreStatus) (Store, error)
+	// SetBillingHoldTx holds or releases the store for billing in the
+	// caller's tenant transaction: a held active store resolves as
+	// StatusHeld and its storefront shows a maintenance page (ADR-0051).
+	SetBillingHoldTx(ctx context.Context, tx pgx.Tx, hold bool) error
 	ListDomains(ctx context.Context) ([]Domain, error)
 	AddCustomDomain(ctx context.Context, host string) (Domain, error)
 	VerifyDomain(ctx context.Context, id ulid.ID) (Domain, error)
