@@ -101,6 +101,23 @@ describe('Coupons', () => {
     expect(screen.getAllByRole('link', { name: 'كوبون جديد' })[0]).toHaveAttribute('href', `/stores/${store}/coupons/new`);
   });
 
+  it('reads the next page on demand', async () => {
+    const calls = routes({
+      [`GET ${base}/coupons`]: (c) =>
+        c.search.get('cursor') === 'C2'
+          ? { status: 200, body: { items: [coupon({ id: 'C3', code: 'THIRD' })] } }
+          : { status: 200, body: { items: [coupon({ id: 'C1', code: 'FIRST' }), coupon({ id: 'C2', code: 'SECOND' })], next_cursor: 'C2' } },
+    });
+    renderAt(`/stores/${store}/coupons`);
+    const user = userEvent.setup();
+    expect(await screen.findByRole('link', { name: 'SECOND' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'المزيد' }));
+    expect(await screen.findByRole('link', { name: 'THIRD' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'FIRST' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'المزيد' })).toBeNull();
+    expect(calls.filter((c) => c.path === `${base}/coupons`).at(-1)?.search.get('cursor')).toBe('C2');
+  });
+
   it('invites the first coupon when there is none', async () => {
     routes({ [`GET ${base}/coupons`]: () => ({ status: 200, body: { items: [] } }) });
     renderAt(`/stores/${store}/coupons`);

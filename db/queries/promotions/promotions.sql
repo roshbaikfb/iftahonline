@@ -17,8 +17,10 @@ RETURNING *;
 SELECT * FROM coupons WHERE store_id = @store_id AND id = @id;
 
 -- name: ListCoupons :many
--- The store's coupons, newest first (a store keeps tens, not thousands).
-SELECT * FROM coupons WHERE store_id = @store_id ORDER BY created_at DESC, id DESC LIMIT 500;
+-- A page of the store's coupons, newest first (IDs are ULIDs: their
+-- order is the coupons' creation), after a keyset cursor; the primary key
+-- serves it.
+SELECT * FROM coupons WHERE store_id = @store_id AND id < @before ORDER BY id DESC LIMIT @lim;
 
 -- name: CouponByCode :one
 SELECT * FROM coupons WHERE store_id = @store_id AND code = @code;

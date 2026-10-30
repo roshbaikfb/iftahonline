@@ -45,17 +45,27 @@ func Mount(mux *http.ServeMux, svc *app.Service, auth authz.Authorizer, scope fu
 }
 
 // ListCoupons implements StrictServerInterface.
-func (h *Handlers) ListCoupons(ctx context.Context, _ ListCouponsRequestObject) (ListCouponsResponseObject, error) {
+func (h *Handlers) ListCoupons(ctx context.Context, req ListCouponsRequestObject) (ListCouponsResponseObject, error) {
 	if err := h.auth.Authorize(ctx, authz.PermPromotionsManage); err != nil {
 		return nil, err
 	}
-	list, err := h.svc.Coupons(ctx)
+	cursor, limit := "", 0
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	page, err := h.svc.Coupons(ctx, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := ListCoupons200JSONResponse{Items: make([]Coupon, len(list))}
-	for i, c := range list {
+	out := ListCoupons200JSONResponse{Items: make([]Coupon, len(page.Items))}
+	for i, c := range page.Items {
 		out.Items[i] = toCoupon(c)
+	}
+	if page.Next != "" {
+		out.NextCursor = &page.Next
 	}
 	return out, nil
 }

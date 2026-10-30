@@ -224,12 +224,20 @@ func (q *Queries) InsertRedemption(ctx context.Context, arg InsertRedemptionPara
 }
 
 const listCoupons = `-- name: ListCoupons :many
-SELECT store_id, id, code, kind, percent, amount_minor, min_subtotal_minor, max_uses, max_per_customer, starts_at, ends_at, active, uses, created_at, updated_at FROM coupons WHERE store_id = $1 ORDER BY created_at DESC, id DESC LIMIT 500
+SELECT store_id, id, code, kind, percent, amount_minor, min_subtotal_minor, max_uses, max_per_customer, starts_at, ends_at, active, uses, created_at, updated_at FROM coupons WHERE store_id = $1 AND id < $2 ORDER BY id DESC LIMIT $3
 `
 
-// The store's coupons, newest first (a store keeps tens, not thousands).
-func (q *Queries) ListCoupons(ctx context.Context, storeID ulid.ID) ([]Coupon, error) {
-	rows, err := q.db.Query(ctx, listCoupons, storeID)
+type ListCouponsParams struct {
+	StoreID ulid.ID
+	Before  ulid.ID
+	Lim     int32
+}
+
+// A page of the store's coupons, newest first (IDs are ULIDs: their
+// order is the coupons' creation), after a keyset cursor; the primary key
+// serves it.
+func (q *Queries) ListCoupons(ctx context.Context, arg ListCouponsParams) ([]Coupon, error) {
+	rows, err := q.db.Query(ctx, listCoupons, arg.StoreID, arg.Before, arg.Lim)
 	if err != nil {
 		return nil, err
 	}

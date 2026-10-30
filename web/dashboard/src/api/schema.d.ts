@@ -2762,7 +2762,7 @@ export interface paths {
         };
         /**
          * The store's coupons, newest first
-         * @description Permission: promotions.manage.
+         * @description Permission: promotions.manage. A page at a time; follow `next_cursor`.
          */
         get: operations["listCoupons"];
         put?: never;
@@ -8538,7 +8538,11 @@ export interface operations {
     };
     listCoupons: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The last page's `next_cursor`. */
+                cursor?: string;
+                limit?: number;
+            };
             header?: never;
             path: {
                 store_id: components["parameters"]["StoreID"];
@@ -8547,7 +8551,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Every coupon (a store keeps tens). */
+            /** @description One page. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8555,6 +8559,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["Coupon"][];
+                        /** @description Absent on the last page. */
+                        next_cursor?: string;
                     };
                 };
             };

@@ -57,7 +57,7 @@ Codes are unique per store, case-insensitive (stored upper case), and
 
 | Operation | Notes |
 |---|---|
-| `listCoupons` `GET /v1/stores/{store}/coupons` | Newest first, with `uses` |
+| `listCoupons` `GET /v1/stores/{store}/coupons` | Newest first, with `uses`; a page at a time (`limit` 1–100, default 50; follow `next_cursor`, the last ID shown) |
 | `createCoupon` `POST …/coupons` | 409 when the code is taken |
 | `getCoupon`, `updateCoupon` (`PUT`), `deleteCoupon` | Every field is replaced on update. The code is fixed once an order held the coupon (409); such a coupon cannot be deleted (409), only turned off |
 

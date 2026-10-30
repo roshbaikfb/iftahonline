@@ -3124,10 +3124,18 @@ paths:
       tags: [promotions]
       operationId: listCoupons
       summary: The store's coupons, newest first
-      description: "Permission: promotions.manage."
+      description: "Permission: promotions.manage. A page at a time; follow `next_cursor`."
+      parameters:
+        - name: cursor
+          in: query
+          description: The last page's `next_cursor`.
+          schema: { type: string, maxLength: 64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
         "200":
-          description: Every coupon (a store keeps tens).
+          description: One page.
           content:
             application/json:
               schema:
@@ -3137,6 +3145,7 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/Coupon" }
+                  next_cursor: { type: string, description: Absent on the last page. }
         default:
           $ref: "#/components/responses/Problem"
     post:

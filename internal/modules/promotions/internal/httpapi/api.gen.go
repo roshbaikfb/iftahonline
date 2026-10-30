@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -234,6 +235,13 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// ListCouponsParams defines parameters for ListCoupons.
+type ListCouponsParams struct {
+	// Cursor The last page's `next_cursor`.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateCouponJSONRequestBody defines body for CreateCoupon for application/json ContentType.
 type CreateCouponJSONRequestBody = CouponInput
 
@@ -244,7 +252,7 @@ type UpdateCouponJSONRequestBody = CouponInput
 type ServerInterface interface {
 	// ListCoupons The store's coupons, newest first
 	// (GET /v1/stores/{store_id}/coupons)
-	ListCoupons(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	ListCoupons(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListCouponsParams)
 	// CreateCoupon Add a coupon
 	// (POST /v1/stores/{store_id}/coupons)
 	CreateCoupon(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -283,8 +291,37 @@ func (siw *ServerInterfaceWrapper) ListCoupons(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCouponsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCoupons(w, r, storeId)
+		siw.Handler.ListCoupons(w, r, storeId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -558,6 +595,7 @@ type ProblemApplicationProblemPlusJSONResponse Problem
 
 type ListCouponsRequestObject struct {
 	StoreId StoreID `json:"store_id"`
+	Params  ListCouponsParams
 }
 
 type ListCouponsResponseObject interface {
@@ -566,6 +604,9 @@ type ListCouponsResponseObject interface {
 
 type ListCoupons200JSONResponse struct {
 	Items []Coupon `json:"items"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 func (response ListCoupons200JSONResponse) VisitListCouponsResponse(w http.ResponseWriter) error {
@@ -811,10 +852,11 @@ type strictHandler struct {
 }
 
 // ListCoupons operation middleware
-func (sh *strictHandler) ListCoupons(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+func (sh *strictHandler) ListCoupons(w http.ResponseWriter, r *http.Request, storeId StoreID, params ListCouponsParams) {
 	var request ListCouponsRequestObject
 
 	request.StoreId = storeId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListCoupons(ctx, request.(ListCouponsRequestObject))

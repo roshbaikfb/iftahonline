@@ -308,9 +308,9 @@ func TestCrossTenant(t *testing.T) {
 	leaks := []string{cid, uid, codeOfB, "USEDB"}
 	unchanged := func(t testing.TB) {
 		t.Helper()
-		list, err := f.svc.Coupons(f.ctxB)
-		if err != nil || len(list) != 2 {
-			t.Fatalf("store B's coupons changed: %+v %v", list, err)
+		page, err := f.svc.Coupons(f.ctxB, "", 0)
+		if err != nil || len(page.Items) != 2 {
+			t.Fatalf("store B's coupons changed: %+v %v", page, err)
 		}
 		c, err := f.svc.Coupon(f.ctxB, f.couponB.ID)
 		if err != nil || c.Code != codeOfB || c.Percent != 30 || !c.Active {

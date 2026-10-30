@@ -12,6 +12,7 @@ import { problemMessage } from '../lib/problem';
 export function Coupons() {
   const { storeId = '' } = useParams();
   const [items, setItems] = useState<Coupon[] | null>(null);
+  const [next, setNext] = useState('');
   const [store, setStore] = useState({ currency: 'EGP', timezone: 'Africa/Cairo' });
   const [error, setError] = useState('');
 
@@ -22,12 +23,25 @@ export function Coupons() {
       if (!live) return;
       if (s.data) setStore({ currency: s.data.currency, timezone: s.data.timezone });
       if (c.error) setError(problemMessage(c.error));
-      else setItems(c.data.items);
+      else {
+        setItems(c.data.items);
+        setNext(c.data.next_cursor ?? '');
+      }
     });
     return () => {
       live = false;
     };
   }, [storeId]);
+
+  async function more() {
+    const { data, error: err } = await api.GET('/v1/stores/{store_id}/coupons', { params: { path: { store_id: storeId }, query: { cursor: next } } });
+    if (err) {
+      setError(problemMessage(err));
+      return;
+    }
+    setItems([...(items ?? []), ...data.items]);
+    setNext(data.next_cursor ?? '');
+  }
 
   return (
     <Layout storeId={storeId}>
@@ -119,6 +133,11 @@ export function Coupons() {
           </div>
           <div className="foot">
             <span className="muted small">الكوبون المستخدم في طلب لا يُحذف: أوقفه بدلًا من ذلك. يعود الاستخدام إن أُلغي الطلب قبل الشحن.</span>
+            {next && (
+              <button type="button" className="secondary small" onClick={() => void more()}>
+                المزيد
+              </button>
+            )}
           </div>
         </section>
       )}
