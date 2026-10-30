@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
@@ -76,7 +77,11 @@ func newFixture(t *testing.T) fixture {
 	keyring, _ := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=")
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
 		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
-		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
+		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
+			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
+		},
+		DashboardURL: "https://app.iftahonline.com",
+		Hashing:      config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,5 +274,31 @@ func TestConsoleRefusesWithoutAdminSession(t *testing.T) {
 	}
 	if r := f.do(t, http.MethodPost, adminHost, "/admin/v1/auth/login", `{`, sameOrigin); r.status != http.StatusBadRequest {
 		t.Fatalf("malformed login = %d", r.status)
+	}
+}
+
+func TestConsoleImpersonate(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	path := "/admin/v1/stores/" + f.store(t) + "/impersonate"
+
+	if r := f.do(t, http.MethodPost, adminHost, path, `{"reason":"ticket 9"}`, sameOrigin); r.status != http.StatusUnauthorized {
+		t.Fatalf("no session = %d", r.status)
+	}
+	if r := f.do(t, http.MethodPost, adminHost, path, `{"reason":"ticket 9"}`, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r := f.do(t, http.MethodPost, adminHost, path, `{"reason":"ticket 9","minutes":15}`, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["code"] != "c0de" || r.body["url"] != "https://app.iftahonline.com/impersonate#code=c0de" {
+		t.Fatalf("impersonate = %d %v", r.status, r.body)
+	}
+	for _, body := range []string{`{"reason":"x"}`, `{"reason":"ticket 9","minutes":0}`, `{"reason":"ticket 9","minutes":61}`} {
+		if r := f.do(t, http.MethodPost, adminHost, path, body, withCookie(sess), sameOrigin); r.status != http.StatusUnprocessableEntity {
+			t.Errorf("%s = %d %v", body, r.status, r.body)
+		}
+	}
+	if r := f.do(t, http.MethodPost, adminHost, path, ``, withCookie(sess), sameOrigin); r.status != http.StatusBadRequest {
+		t.Errorf("no body = %d", r.status)
 	}
 }

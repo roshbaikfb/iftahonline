@@ -639,6 +639,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		if console, err = admin.New(admin.Deps{
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
+			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
 		}); err != nil {
 			return nil, err
 		}
