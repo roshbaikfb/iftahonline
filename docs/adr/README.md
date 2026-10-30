@@ -53,3 +53,4 @@ supersedes it.
 | [0045](0045-plans-as-data-and-one-entitlements-service.md) | Plans as data, and one entitlements service | Accepted |
 | [0046](0046-enforcing-plan-limits.md) | Enforcing plan limits | Accepted |
 | [0047](0047-plan-features-where-they-are-used.md) | Plan features are checked where they are used | Accepted |
+| [0048](0048-pay-as-you-sell-fees.md) | Pay-as-you-sell fees | Accepted |
