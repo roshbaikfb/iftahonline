@@ -619,6 +619,21 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			return nil, err
 		}
 	}
+	billJobs, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	bill, err := billing.New(billing.Deps{Pool: c.pool, Jobs: billJobs, IDs: c.ids, Log: c.log, Paymob: c.cfg.Billing,
+		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL})
+	if err != nil {
+		return nil, err
+	}
+	// Paymob's callbacks of merchants' checkouts (ADR-0053).
+	if p, ok := bill.CallbackProvider(); ok {
+		if err = hooks.RegisterPlatform(p); err != nil {
+			return nil, err
+		}
+	}
 	var console *admin.Module
 	if c.adminPool != nil {
 		if console, err = admin.New(admin.Deps{
@@ -644,6 +659,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		msg.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		mkt.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		bill.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
 			c.log.Error("card checkout not mounted", "err", mountErr)
 		}
@@ -939,6 +955,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}
 	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events,
 		Sealer: billSealer, Holds: billingHolds(ten), Collect: cfg.Billing.CollectionEnabled, Paymob: cfg.Billing,
+		Inbox: hooks.Inbox(), Log: log, PublicURL: cfg.Mail.DashboardURL, DashboardURL: cfg.Mail.DashboardURL,
 		Notifier: billingNotifier(ten, identity.StaffEmails(pool, authz.RoleOwner), mailer.FromConfig(cfg.Mail, log), cfg.Mail.DashboardURL)})
 	if err != nil {
 		return err

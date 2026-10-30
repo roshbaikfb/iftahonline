@@ -95,6 +95,10 @@ type BillingPaymob struct {
 	SecretKey         string
 	APIKey            string
 	MotoIntegrationID int64 // Paymob enables merchant-initiated charges on request
+	// The checkout where merchants pay and save their card (ADR-0053).
+	PublicKey         string
+	CardIntegrationID int64
+	HMACSecret        string
 }
 
 // Messaging configures the platform's own messaging accounts
@@ -774,7 +778,9 @@ func (r *reader) prefixes(key string) []netip.Prefix {
 // nothing.
 // billing reads the collection switch and the platform's Paymob
 // accounts: BILLING_PAYMOB_<CURRENCY>_{SECRET_KEY,API_KEY,MOTO_INTEGRATION_ID},
-// all three of a currency or none.
+// all three of a currency or none, and its checkout,
+// BILLING_PAYMOB_<CURRENCY>_{PUBLIC_KEY,CARD_INTEGRATION_ID,HMAC_SECRET},
+// all three or none, on an account.
 func (r *reader) billing() Billing {
 	b := Billing{
 		CollectionEnabled: r.oneOf("BILLING_COLLECTION_ENABLED", "false", "true", "false") == "true",
@@ -785,12 +791,19 @@ func (r *reader) billing() Billing {
 		p := "BILLING_PAYMOB_" + cur + "_"
 		a := BillingPaymob{SecretKey: r.secretOptional(p + "SECRET_KEY"), APIKey: r.secretOptional(p + "API_KEY"),
 			MotoIntegrationID: r.int64(p+"MOTO_INTEGRATION_ID", 0, 0, 1<<53)}
-		switch set := countSet(a.SecretKey, a.APIKey) + map[bool]int{true: 1}[a.MotoIntegrationID != 0]; set {
-		case 0:
-		case 3:
-			b.Paymob[cur] = a
-		default:
+		a.PublicKey, a.HMACSecret = r.str(p+"PUBLIC_KEY", ""), r.secretOptional(p+"HMAC_SECRET")
+		a.CardIntegrationID = r.int64(p+"CARD_INTEGRATION_ID", 0, 0, 1<<53)
+		account := countSet(a.SecretKey, a.APIKey) + map[bool]int{true: 1}[a.MotoIntegrationID != 0]
+		checkout := countSet(a.PublicKey, a.HMACSecret) + map[bool]int{true: 1}[a.CardIntegrationID != 0]
+		switch {
+		case account != 0 && account != 3:
 			r.errorf("%sSECRET_KEY, %sAPI_KEY and %sMOTO_INTEGRATION_ID go together", p, p, p)
+		case checkout != 0 && checkout != 3:
+			r.errorf("%sPUBLIC_KEY, %sCARD_INTEGRATION_ID and %sHMAC_SECRET go together", p, p, p)
+		case checkout == 3 && account == 0:
+			r.errorf("%sPUBLIC_KEY: a checkout needs the account's keys", p)
+		case account == 3:
+			b.Paymob[cur] = a
 		}
 	}
 	return b

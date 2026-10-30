@@ -207,6 +207,17 @@ func TestBilling(t *testing.T) {
 	if _, err = config.Load(config.RoleWorker, env(with(egp[:4]...))); err == nil {
 		t.Fatal("an account without its MOTO integration accepted")
 	}
+	checkout := append(append([]string{}, egp...), "BILLING_PAYMOB_EGP_PUBLIC_KEY", "egy_pk_test_1", "BILLING_PAYMOB_EGP_CARD_INTEGRATION_ID", "123",
+		"BILLING_PAYMOB_EGP_HMAC_SECRET", "hmac-1")
+	if c, err = config.Load(config.RoleWorker, env(with(checkout...))); err != nil || c.Billing.Paymob["EGP"].CardIntegrationID != 123 || c.Billing.Paymob["EGP"].HMACSecret != "hmac-1" {
+		t.Fatalf("Egypt's checkout: %+v %v", c.Billing.Paymob, err)
+	}
+	if _, err = config.Load(config.RoleWorker, env(with(checkout[:10]...))); err == nil {
+		t.Fatal("a checkout without its HMAC secret accepted")
+	}
+	if _, err = config.Load(config.RoleWorker, env(with(checkout[6:]...))); err == nil {
+		t.Fatal("a checkout without the account accepted")
+	}
 }
 
 func TestMessaging(t *testing.T) {
