@@ -14,15 +14,10 @@
 package paymob
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,6 +26,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
+	"github.com/roshbaikfb/iftahonline/internal/platform/paymob"
 	"github.com/roshbaikfb/iftahonline/internal/platform/retry"
 	"github.com/roshbaikfb/iftahonline/internal/platform/text"
 )
@@ -40,12 +36,10 @@ const Name = "paymob"
 
 // Base URLs per region.
 const (
-	EgyptURL = "https://accept.paymob.com"
-	SaudiURL = "https://ksa.paymob.com"
-	UAEURL   = "https://uae.paymob.com"
+	EgyptURL = paymob.EgyptURL
+	SaudiURL = paymob.SaudiURL
+	UAEURL   = paymob.UAEURL
 )
-
-const maxResponse = 1 << 20
 
 // Options configures New.
 type Options struct {
@@ -58,8 +52,7 @@ type Options struct {
 
 // Gateway is the Paymob adapter.
 type Gateway struct {
-	base   string
-	http   *http.Client
+	client *paymob.Client
 	retry  retry.Policy
 	tokens *tokens
 }
@@ -68,17 +61,11 @@ var _ gateway.Gateway = (*Gateway)(nil)
 
 // New returns the adapter.
 func New(o Options) *Gateway {
-	if o.Timeout <= 0 {
-		o.Timeout = 10 * time.Second
-	}
-	if o.Client == nil {
-		o.Client = &http.Client{Timeout: o.Timeout}
-	}
 	p := retry.Default()
 	if o.Retry != nil {
 		p = *o.Retry
 	}
-	return &Gateway{base: strings.TrimRight(o.BaseURL, "/"), http: o.Client, retry: p, tokens: newTokens()}
+	return &Gateway{client: paymob.New(paymob.Options{BaseURL: o.BaseURL, Timeout: o.Timeout, Client: o.Client}), retry: p, tokens: newTokens()}
 }
 
 // Name implements gateway.Gateway.
@@ -86,64 +73,26 @@ func (*Gateway) Name() string { return Name }
 
 // baseFor is the API of cur's region.
 func (g *Gateway) baseFor(cur money.Currency) (string, error) {
-	if g.base != "" {
-		return g.base, nil
-	}
-	switch cur {
-	case money.EGP:
-		return EgyptURL, nil
-	case money.SAR:
-		return SaudiURL, nil
-	case money.AED:
-		return UAEURL, nil
-	}
-	return "", fmt.Errorf("%w: Paymob does not take %s", gateway.ErrRejected, cur)
+	base, err := g.client.BaseFor(string(cur))
+	return base, gatewayErr(err)
 }
 
 // do sends one JSON request; auth is the whole Authorization value.
 func (g *Gateway) do(ctx context.Context, method, rawURL, auth string, in, out any) (int, error) {
-	var body io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return 0, retry.Permanent(err)
-		}
-		body = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
-	if err != nil {
-		return 0, retry.Permanent(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	if auth != "" {
-		req.Header.Set("Authorization", auth)
-	}
-	resp, err := g.http.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("paymob: %s: %w", req.URL.Path, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
-	if err != nil {
-		return resp.StatusCode, fmt.Errorf("paymob: read: %w", err)
-	}
+	code, err := g.client.Do(ctx, method, rawURL, auth, in, out)
+	return code, gatewayErr(err)
+}
+
+// gatewayErr gives the platform client's refusals this module's gateway
+// errors, keeping them permanent.
+func gatewayErr(err error) error {
 	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return resp.StatusCode, retry.Permanent(gateway.ErrAuth)
-	case resp.StatusCode == http.StatusNotFound:
-		return resp.StatusCode, nil
-	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		return resp.StatusCode, fmt.Errorf("paymob: %s: status %d", req.URL.Path, resp.StatusCode)
-	case resp.StatusCode >= 400:
-		return resp.StatusCode, retry.Permanent(fmt.Errorf("%w: %s (status %d)", gateway.ErrRejected, text.Redact(text.Clip(string(raw), 200)), resp.StatusCode))
+	case errors.Is(err, paymob.ErrAuth):
+		return retry.Permanent(gateway.ErrAuth)
+	case errors.Is(err, paymob.ErrRejected):
+		return retry.Permanent(fmt.Errorf("%w: %w", gateway.ErrRejected, err))
 	}
-	if out != nil {
-		if err = json.Unmarshal(raw, out); err != nil {
-			return resp.StatusCode, retry.Permanent(fmt.Errorf("paymob: decode %s: %w", req.URL.Path, err))
-		}
-	}
-	return resp.StatusCode, nil
+	return err
 }
 
 // token is an auth token from the API key, for inquiries.
@@ -190,9 +139,11 @@ func (g *Gateway) Verify(ctx context.Context, creds gateway.Credentials) error {
 	if creds.SecretKey == "" || creds.PublicKey == "" || creds.WebhookSecret == "" || len(creds.IntegrationIDs) == 0 {
 		return gateway.ErrAuth
 	}
-	base := g.base
-	if base == "" {
-		base = EgyptURL // the key is checked where it was issued; any region answers for its own keys
+	// The override, else Egypt: the key is checked where it was issued;
+	// any region answers for its own keys.
+	base, err := g.baseFor(money.EGP)
+	if err != nil {
+		return err
 	}
 	return retry.Do(ctx, g.retry, func(ctx context.Context) error {
 		_, err := g.token(ctx, base, creds)
@@ -352,34 +303,11 @@ func (g *Gateway) Refund(ctx context.Context, creds gateway.Credentials, transac
 	return out.ID.String(), nil
 }
 
-// hmacFields are the transaction callback's signed fields, in Paymob's
-// order. One of the source_data fields is the card's masked last four
-// digits, as Paymob sends them: it is only read to check the signature.
-var hmacFields = []string{ //nolint:gochecknoglobals // constant list
-	"amount_cents", "created_at", "currency", "error_occured", "has_parent_transaction", "id", "integration_id",
-	"is_3d_secure", "is_auth", "is_capture", "is_refunded", "is_standalone_payment", "is_voided", "order.id", "owner",
-	"pending", "source_data.pan", "source_data.sub_type", "source_data.type", "success", // nocarddata:allow masked last four digits, part of Paymob's signed field list
-}
-
 // VerifyWebhook implements gateway.Gateway for transaction callbacks.
 func (*Gateway) VerifyWebhook(creds gateway.Credentials, req gateway.WebhookRequest) (gateway.WebhookEvent, error) {
-	got, err := hex.DecodeString(strings.ToLower(req.Query.Get("hmac")))
-	if err != nil || len(got) != sha512.Size || creds.WebhookSecret == "" {
-		return gateway.WebhookEvent{}, gateway.ErrForged
-	}
-	var cb struct {
-		Type string                     `json:"type"`
-		Obj  map[string]json.RawMessage `json:"obj"`
-	}
-	d := json.NewDecoder(bytes.NewReader(req.Body))
-	d.UseNumber()
-	if err = d.Decode(&cb); err != nil || cb.Obj == nil {
+	cb, err := paymob.ParseCallback(req.Body)
+	if err != nil || !paymob.Verify(creds.WebhookSecret, req.Query.Get("hmac"), cb.Obj, paymob.TransactionFields()) {
 		return gateway.WebhookEvent{}, gateway.ErrForged // cannot be what was signed
-	}
-	m := hmac.New(sha512.New, []byte(creds.WebhookSecret))
-	m.Write([]byte(signedString(cb.Obj)))
-	if !hmac.Equal(got, m.Sum(nil)) {
-		return gateway.WebhookEvent{}, gateway.ErrForged
 	}
 	return (*Gateway)(nil).ParseWebhook(req.Body)
 }
@@ -398,49 +326,9 @@ func (*Gateway) ParseWebhook(body []byte) (gateway.WebhookEvent, error) {
 	return gateway.WebhookEvent{EventID: id, Reference: t.Order.MerchantOrderID}, nil
 }
 
-// signedString concatenates the signed fields' values: strings as they
-// are, numbers as sent, booleans as true/false, missing and null as
-// nothing.
-func signedString(obj map[string]json.RawMessage) string {
-	var b strings.Builder
-	for _, f := range hmacFields {
-		raw := lookup(obj, f)
-		if len(raw) == 0 || string(raw) == "null" {
-			continue
-		}
-		var s string
-		if err := json.Unmarshal(raw, &s); err == nil {
-			b.WriteString(s)
-			continue
-		}
-		b.Write(bytes.TrimSpace(raw)) // numbers and booleans as written
-	}
-	return b.String()
-}
-
-func lookup(obj map[string]json.RawMessage, path string) json.RawMessage {
-	parent, child, nested := strings.Cut(path, ".")
-	if !nested {
-		return obj[parent]
-	}
-	var inner map[string]json.RawMessage
-	if err := json.Unmarshal(obj[parent], &inner); err != nil {
-		return nil
-	}
-	return inner[child]
-}
-
 // Sign is the hmac a callback body carries (the stand-in and tests).
 func Sign(secret string, body []byte) (string, error) {
-	var cb struct {
-		Obj map[string]json.RawMessage `json:"obj"`
-	}
-	if err := json.Unmarshal(body, &cb); err != nil {
-		return "", err
-	}
-	m := hmac.New(sha512.New, []byte(secret))
-	m.Write([]byte(signedString(cb.Obj)))
-	return hex.EncodeToString(m.Sum(nil)), nil
+	return paymob.Sign(secret, body, paymob.TransactionFields())
 }
 
 func orNA(s string) string {
