@@ -7,6 +7,8 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/paymob"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -26,6 +28,9 @@ type Deps struct {
 	Events eventbus.Publisher
 	// Gateways, Sealer, Holds and Notifier collect invoices and run
 	// dunning (the worker, ADR-0051); Collect turns the hourly run on.
+	// Paymob adds the paymob gateway from the platform's accounts
+	// (ADR-0052).
+	Paymob   config.Billing
 	Gateways map[string]Gateway
 	Sealer   Sealer
 	Holds    Holds
@@ -44,8 +49,19 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil {
 		return nil, errors.New("billing: missing dependency")
 	}
+	gateways := map[string]Gateway{}
+	for name, g := range d.Gateways {
+		gateways[name] = g
+	}
+	if len(d.Paymob.Paymob) > 0 {
+		regions := make(map[string]paymob.Region, len(d.Paymob.Paymob))
+		for cur, a := range d.Paymob.Paymob {
+			regions[cur] = paymob.Region{SecretKey: a.SecretKey, APIKey: a.APIKey, MotoIntegrationID: a.MotoIntegrationID}
+		}
+		gateways[paymob.Name] = paymob.New(paymob.Options{Regions: regions, BaseURL: d.Paymob.PaymobBaseURL})
+	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
-		Gateways: d.Gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier}), collect: d.Collect}, nil
+		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier}), collect: d.Collect}, nil
 }
 
 // Grants is what the entitlements module reads.
