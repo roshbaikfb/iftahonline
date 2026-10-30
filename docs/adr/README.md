@@ -52,3 +52,4 @@ supersedes it.
 | [0044](0044-product-feeds.md) | Product feeds for Google and Meta | Accepted |
 | [0045](0045-plans-as-data-and-one-entitlements-service.md) | Plans as data, and one entitlements service | Accepted |
 | [0046](0046-enforcing-plan-limits.md) | Enforcing plan limits | Accepted |
+| [0047](0047-plan-features-where-they-are-used.md) | Plan features are checked where they are used | Accepted |

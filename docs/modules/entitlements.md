@@ -23,6 +23,7 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
 | `Unrestricted()` | Allows everything and counts nothing, without a database: the default of a module built without entitlements (its own tests) |
 | `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
+| `Entitlements.Require(ctx, f)` | `Allowed` as an error for a merchant's request: a 403 with code `plan_limit` (`NotInPlan`) |
 | `Entitlements.AdmitTx(ctx, tx, f, n, count)` | Admits `n` more of the counted feature `f` in the caller's transaction. `count` (the module's own count) runs under an advisory lock on (store, `f`) held until the transaction ends. Past the grant it returns a 403 with code `plan_limit` (`errors.Is ErrLimitReached`) |
 | `Entitlements.CountTx(ctx, tx, f, n)` | Counts `n` units of a monthly feature and never refuses (a soft limit: orders). Publishes `UsageCrossed` (`entitlements.usage.crossed`) at 80% and 100% |
 | `Entitlements.ConsumeTx(ctx, tx, f, n)` | Counts `n` units of the monthly feature `f` in the caller's tenant transaction. Past the limit it counts nothing and returns `ErrQuotaExceeded` with the month's usage |
@@ -58,7 +59,12 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
   | `orders_per_month` | orders, every placement | `CountTx`: never refused; messaging warns the merchant |
   | `messages` | messaging | `ConsumeTx` (ADR-0038) |
 
-  The flags are enforced from P7 7b-2; `ad_free` from 7g.
+  | `card_payments` | payments: `connectPaymentGateway`; `CardEnabled`, `StartCheckout` | `Require` to connect; `Allowed` at checkout (ADR-0047) |
+  | `coupons` | promotions: `createCoupon`; `Preview` | `Require` to create; a code is `not_found` for the shopper without it |
+  | `pixels` | marketing: `savePixel`; `Browser`, `Track` | `Require` to save; pages load none and no conversion is sent without it |
+  | `feeds` | marketing: `renewProductFeedKey`; `FeedAllowed` | `Require` to turn on; the feed URL opens nothing without it |
+
+  `ad_free` is enforced from 7g.
 
 ## The cache
 

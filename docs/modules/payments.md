@@ -118,6 +118,14 @@ owner and the manager.
 | `payments.refund_payment` | A refund asked | One at a time per payment, oldest first: check what was already refunded, refund once, record |
 | `payments.sync_payment` | After a refund | Re-query and apply the new amounts |
 
+## Plan feature (ADR-0047)
+
+`card_payments` gates cards:
+- `connectPaymentGateway` is a 403 `plan_limit` without it;
+- a connected gateway stays saved but unused: `CardEnabled` is false, so
+  checkout offers no card, and `StartCheckout` refuses with
+  `card_payments_unavailable`.
+
 ## Data
 
 `payment_connections`, `payments`, `payment_refunds` (migration 00035) and
