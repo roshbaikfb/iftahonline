@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
@@ -42,6 +43,9 @@ type Deps struct {
 	Stores StoreSource
 	// Auth checks each transition's own permission.
 	Auth authz.Authorizer
+	// Plan counts the month's orders against the store's plan (ADR-0045);
+	// nil counts nothing (tests).
+	Plan entitlements.Entitlements
 }
 
 // Module is the wired orders module.
@@ -56,7 +60,7 @@ func New(d Deps) (*Module, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth})}, nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth, Plan: d.Plan})}, nil
 }
 
 // Fulfilment is the API courier integrations use.
@@ -80,6 +84,7 @@ type ShopDeps struct {
 	Shipping  shipping.Quoter
 	Coupons   Coupons // nil: every code is not_found
 	Stores    StoreSource
+	Plan      entitlements.Entitlements // counts the month's orders; nil counts nothing (tests)
 }
 
 // NewShop builds the shopper's side for the storefront role. Merchant
@@ -143,7 +148,7 @@ func withoutPermissions(d ShopDeps) (*app.Service, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}}), nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}, Plan: d.Plan}), nil
 }
 
 // denyAll refuses every permission.
