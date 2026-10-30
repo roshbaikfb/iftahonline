@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/capi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/store"
@@ -95,6 +96,10 @@ func (s *Service) Track(ctx context.Context, c Conversion) error {
 	t, err := jobs.ForTenant(ctx)
 	if err != nil {
 		return err
+	}
+	// Without pixels in the store's plan, nothing is reported.
+	if allowed, pErr := s.plan.Allowed(ctx, entitlements.Pixels); pErr != nil || !allowed {
+		return pErr
 	}
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		rows, err := store.Pixels(ctx, tx)

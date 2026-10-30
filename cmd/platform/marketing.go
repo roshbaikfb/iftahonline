@@ -25,5 +25,5 @@ func newMarketing(c clients, ords orders.Conversions) (*marketing.Module, error)
 		return nil, err
 	}
 	return marketing.New(marketing.Deps{Pool: c.pool, IDs: c.ids, Sealer: sealer, Events: c.events, Audit: identity.NewAuditRecorder(c.ids),
-		Jobs: ins, Orders: ords})
+		Jobs: ins, Orders: ords, Plan: c.plan})
 }

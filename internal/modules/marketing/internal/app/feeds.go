@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -26,6 +27,9 @@ func (s *Service) FeedKey(ctx context.Context) (key string, ok bool, err error) 
 // RenewFeedKey turns the store's feeds on with a new key, or replaces
 // their key: the old URLs stop working.
 func (s *Service) RenewFeedKey(ctx context.Context) (string, error) {
+	if err := s.plan.Require(ctx, entitlements.Feeds); err != nil {
+		return "", err
+	}
 	key, err := domain.NewFeedKey()
 	if err != nil {
 		return "", err
@@ -58,10 +62,14 @@ func (s *Service) DisableFeeds(ctx context.Context) error {
 }
 
 // FeedAllowed reports whether key opens the store's feeds: they are on
-// and it is their key. The storefront asks before it serves one.
+// and it is their key, and the store's plan includes feeds. The
+// storefront asks before it serves one.
 func (s *Service) FeedAllowed(ctx context.Context, key string) (bool, error) {
 	if len(key) != domain.FeedKeyLen {
 		return false, nil // no query for a key that cannot match
+	}
+	if allowed, err := s.plan.Allowed(ctx, entitlements.Feeds); err != nil || !allowed {
+		return false, err
 	}
 	want, ok, err := s.FeedKey(ctx)
 	if err != nil || !ok {
