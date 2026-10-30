@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
@@ -84,6 +85,7 @@ type Service struct {
 	orders    Orders
 	jobs      jobs.Inserter
 	inbox     webhooks.Inbox
+	plan      entitlements.Entitlements
 	now       func() time.Time
 }
 
@@ -99,6 +101,9 @@ type Deps struct {
 	Orders    Orders
 	Jobs      jobs.Inserter
 	Inbox     webhooks.Inbox // the worker role
+	// Plan says whether the store's plan includes card payments
+	// (ADR-0046); nil includes them (tests).
+	Plan entitlements.Entitlements
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -109,8 +114,11 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
-		publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, inbox: d.Inbox, now: time.Now}
+		publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, inbox: d.Inbox, plan: d.Plan, now: time.Now}
 }
 
 // SetClock replaces the clock (expiry tests).
@@ -135,6 +143,9 @@ type ConnectInput struct {
 func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connection, error) {
 	storeID, err := tenant.FromContext(ctx)
 	if err != nil {
+		return domain.Connection{}, err
+	}
+	if err = s.plan.Require(ctx, entitlements.CardPayments); err != nil {
 		return domain.Connection{}, err
 	}
 	g, ok := s.gateways[in.Gateway]
@@ -238,8 +249,12 @@ func (s *Service) connectionChangedTx(ctx context.Context, tx pgx.Tx, c domain.C
 	return s.events.PublishTx(ctx, tx, domain.ConnectionChanged{Meta: m, ConnectionID: c.ID, Gateway: c.Gateway, Status: c.Status})
 }
 
-// CardEnabled reports whether the store in ctx takes card payments.
+// CardEnabled reports whether the store in ctx takes card payments: its
+// plan includes them and a gateway is connected.
 func (s *Service) CardEnabled(ctx context.Context) (bool, error) {
+	if ok, err := s.plan.Allowed(ctx, entitlements.CardPayments); err != nil || !ok {
+		return false, err
+	}
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		_, txErr := store.ActiveConnection(ctx, tx)
 		return txErr

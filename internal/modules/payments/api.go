@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/payapi"
@@ -94,8 +95,11 @@ type CardCheck interface {
 
 var _ CardCheck = (*app.Service)(nil)
 
-// NewCardCheck builds a CardCheck on pool.
-func NewCardCheck(pool *pgxpool.Pool) CardCheck { return app.NewService(app.Deps{DB: pool}) }
+// NewCardCheck builds a CardCheck on pool; plan says whether the store's
+// plan includes card payments (nil includes them: tests).
+func NewCardCheck(pool *pgxpool.Pool, plan entitlements.Entitlements) CardCheck {
+	return app.NewService(app.Deps{DB: pool, Plan: plan})
+}
 
 // StartURL is where the storefront sends a card order's shopper: the
 // API host's checkout route (apiOrigin, e.g. https://app.iftahonline.com),

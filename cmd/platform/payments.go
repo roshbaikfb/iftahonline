@@ -32,7 +32,7 @@ func newPayments(c clients, ords orders.Payments, inbox webhooks.Inbox, ten *ten
 	}
 	d := payments.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events, Gateways: c.cfg.Payments,
-		Sealer: sealer, PublicURL: c.cfg.Mail.DashboardURL, Orders: ords, Jobs: ins, Inbox: inbox, Log: c.log,
+		Sealer: sealer, PublicURL: c.cfg.Mail.DashboardURL, Orders: ords, Jobs: ins, Inbox: inbox, Log: c.log, Plan: c.plan,
 	}
 	if ten != nil {
 		if d.Limiter, err = ratelimit.New(c.rdb, "checkout"); err != nil {

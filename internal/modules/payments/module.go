@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
@@ -48,6 +49,9 @@ type Deps struct {
 	Jobs jobs.Inserter
 	// Inbox gives webhook jobs their receipts (worker).
 	Inbox webhooks.Inbox
+	// Plan says whether the store's plan includes card payments
+	// (ADR-0046); nil includes them (tests).
+	Plan entitlements.Entitlements
 
 	// The shopper's checkout routes (api role, MountCheckout):
 	// Hosts checks return URLs, Limiter and ClientIP bound checkouts per
@@ -105,7 +109,7 @@ func New(d Deps) (*Module, error) {
 	}
 	gs, f := gateways(d.Gateways, d.PublicURL)
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events, Gateways: gs,
-		Sealer: d.Sealer, PublicURL: d.PublicURL, Orders: d.Orders, Jobs: d.Jobs, Inbox: d.Inbox}), fake: f, d: d}, nil
+		Sealer: d.Sealer, PublicURL: d.PublicURL, Orders: d.Orders, Jobs: d.Jobs, Inbox: d.Inbox, Plan: d.Plan}), fake: f, d: d}, nil
 }
 
 // Checkout is what the storefront uses to take card payments.
