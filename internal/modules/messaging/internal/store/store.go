@@ -117,22 +117,31 @@ func List(ctx context.Context, tx Tx, beforeAt time.Time, beforeID ulid.ID, stat
 	if err != nil {
 		return nil, err
 	}
-	rows, err := messagingdb.New(tx).ListMessages(ctx, messagingdb.ListMessagesParams{
-		StoreID: store, BeforeAt: beforeAt, BeforeID: beforeID, Status: string(status), Lim: int32(limit), //nolint:gosec // bounded by the caller
-	})
+	q := messagingdb.New(tx)
+	var rows []messagingdb.Message
+	if status == "" {
+		rows, err = q.ListMessages(ctx, messagingdb.ListMessagesParams{
+			StoreID: store, BeforeAt: beforeAt, BeforeID: beforeID, Lim: int32(limit), //nolint:gosec // bounded by the caller
+		})
+	} else {
+		rows, err = q.ListMessagesByStatus(ctx, messagingdb.ListMessagesByStatusParams{
+			StoreID: store, Status: string(status), BeforeAt: beforeAt, BeforeID: beforeID, Lim: int32(limit), //nolint:gosec // bounded by the caller
+		})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("messaging store: list: %w", err)
 	}
 	return toDomains(rows), nil
 }
 
-// OrderMessages returns an order's messages, newest first.
+// OrderMessages returns an order's messages, newest first. The order's
+// ID carries when it was placed, and no message is older.
 func OrderMessages(ctx context.Context, tx Tx, order ulid.ID) ([]domain.Message, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := messagingdb.New(tx).ListOrderMessages(ctx, messagingdb.ListOrderMessagesParams{StoreID: store, OrderID: &order})
+	rows, err := messagingdb.New(tx).ListOrderMessages(ctx, messagingdb.ListOrderMessagesParams{StoreID: store, OrderID: &order, Since: order.Time()})
 	if err != nil {
 		return nil, fmt.Errorf("messaging store: order messages: %w", err)
 	}

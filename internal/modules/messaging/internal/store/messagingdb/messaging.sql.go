@@ -334,26 +334,85 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 const listMessages = `-- name: ListMessages :many
 SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
 WHERE store_id = $1 AND (created_at, id) < ($2::timestamptz, $3::uuid)
-  AND ($4::text = '' OR status = $4::text)
 ORDER BY created_at DESC, id DESC
-LIMIT $5
+LIMIT $4
 `
 
 type ListMessagesParams struct {
 	StoreID  ulid.ID
 	BeforeAt time.Time
 	BeforeID ulid.ID
-	Status   string
 	Lim      int32
 }
 
-// The log, newest first, after a keyset cursor; status ” is any.
+// The log, newest first, after a keyset cursor (the primary key).
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessages,
 		arg.StoreID,
 		arg.BeforeAt,
 		arg.BeforeID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.StoreID,
+			&i.CreatedAt,
+			&i.ID,
+			&i.Kind,
+			&i.Locale,
+			&i.OrderID,
+			&i.Status,
+			&i.Channel,
+			&i.Provider,
+			&i.ProviderMessageID,
+			&i.ToMasked,
+			&i.Content,
+			&i.QuotaPeriod,
+			&i.Fallback,
+			&i.ErrorCode,
+			&i.Reply,
+			&i.RepliedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesByStatus = `-- name: ListMessagesByStatus :many
+SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
+WHERE store_id = $1 AND status = $2 AND (created_at, id) < ($3::timestamptz, $4::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT $5
+`
+
+type ListMessagesByStatusParams struct {
+	StoreID  ulid.ID
+	Status   string
+	BeforeAt time.Time
+	BeforeID ulid.ID
+	Lim      int32
+}
+
+// One status's messages, newest first, after a keyset cursor
+// (messages_store_status): a rare status reads its rows only.
+func (q *Queries) ListMessagesByStatus(ctx context.Context, arg ListMessagesByStatusParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMessagesByStatus,
+		arg.StoreID,
 		arg.Status,
+		arg.BeforeAt,
+		arg.BeforeID,
 		arg.Lim,
 	)
 	if err != nil {
@@ -443,7 +502,7 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 
 const listOrderMessages = `-- name: ListOrderMessages :many
 SELECT store_id, created_at, id, kind, locale, order_id, status, channel, provider, provider_message_id, to_masked, content, quota_period, fallback, error_code, reply, replied_at, updated_at FROM messages
-WHERE store_id = $1 AND order_id = $2
+WHERE store_id = $1 AND order_id = $2 AND created_at >= $3
 ORDER BY created_at DESC, id DESC
 LIMIT 50
 `
@@ -451,11 +510,13 @@ LIMIT 50
 type ListOrderMessagesParams struct {
 	StoreID ulid.ID
 	OrderID *ulid.ID
+	Since   time.Time
 }
 
-// An order's messages, newest first (an order has a few).
+// An order's messages, newest first (an order has a few). None is older
+// than the order, so the months before it are never read.
 func (q *Queries) ListOrderMessages(ctx context.Context, arg ListOrderMessagesParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, listOrderMessages, arg.StoreID, arg.OrderID)
+	rows, err := q.db.Query(ctx, listOrderMessages, arg.StoreID, arg.OrderID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
