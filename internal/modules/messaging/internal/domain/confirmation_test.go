@@ -78,12 +78,12 @@ func TestNotices(t *testing.T) {
 func TestPlanLimitNotices(t *testing.T) {
 	t.Parallel()
 	period := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	reached := domain.PlanLimitNotice(domain.PlanLimitReached, "orders_per_month", period, 300, 300)
-	nearly := domain.PlanLimitNotice(domain.PlanLimitNearly, "orders_per_month", period, 240, 300)
+	reached := domain.PlanLimitNotice(domain.QuotaReached, "orders_per_month", period, 300, 300)
+	nearly := domain.PlanLimitNotice(domain.QuotaNearly, "orders_per_month", period, 240, 300)
 	if reached.DedupKey != "orders_per_month:2026-10" || reached.Data.Feature != "orders_per_month" || !reached.Kind.Emailed() || !nearly.Kind.Emailed() {
 		t.Fatalf("notice = %+v", reached)
 	}
-	other := domain.PlanLimitNotice(domain.PlanLimitNearly, "uploads", period, 8, 10)
+	other := domain.PlanLimitNotice(domain.QuotaNearly, "uploads", period, 8, 10)
 	tests := []struct {
 		n                    domain.Notification
 		locale, subj, inText string

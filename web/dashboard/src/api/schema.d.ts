@@ -4599,10 +4599,12 @@ export interface components {
         Notification: {
             id: components["schemas"]["ULID"];
             /**
-             * @description plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
+             * @description quota_* is a monthly limit at 80% or 100%: the messages quota
+             *     without `feature`, or the plan's limit of `feature` (orders still
+             *     come in).
              * @enum {string}
              */
-            kind: "quota_nearly" | "quota_reached" | "order_confirmed" | "order_cancelled" | "order_auto_cancelled" | "confirmation_unreached" | "plan_limit_nearly" | "plan_limit_reached";
+            kind: "quota_nearly" | "quota_reached" | "order_confirmed" | "order_cancelled" | "order_auto_cancelled" | "confirmation_unreached";
             order_id?: components["schemas"]["ULID"];
             order_ref?: string;
             /** Format: int64 */
@@ -4612,7 +4614,7 @@ export interface components {
             /** @example 2026-10 */
             period?: string;
             /**
-             * @description A plan limit's feature (plan_limit_*).
+             * @description For quota_*: the plan's limited feature; absent for messages.
              * @example orders_per_month
              */
             feature?: string;

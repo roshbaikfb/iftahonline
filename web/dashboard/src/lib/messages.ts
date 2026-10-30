@@ -106,8 +106,11 @@ export function partsLabel(n: number): string {
 export function noticeText(n: Notice): { before: string; after: string } {
   switch (n.kind) {
     case 'quota_nearly':
+      if (n.feature)
+        return { before: `استهلكت 80% من طلبات باقتك هذا الشهر (${String(n.used ?? 0)} من ${String(n.limit ?? 0)}).`, after: '' };
       return { before: `استهلكت 80% من رسائل هذا الشهر (${String(n.used ?? 0)} من ${String(n.limit ?? 0)}).`, after: '' };
     case 'quota_reached':
+      if (n.feature) return { before: 'وصلت إلى حد طلبات باقتك هذا الشهر. الطلبات ما زالت تصلك؛ رقِّ باقتك لتبقى ضمن الحد.', after: '' };
       return { before: 'نفد رصيد رسائل هذا الشهر: لن تُرسل رسائل التأكيد حتى يتجدد.', after: '' };
     case 'order_confirmed':
       return { before: 'أكّد العميل الطلب', after: '.' };
@@ -117,10 +120,6 @@ export function noticeText(n: Notice): { before: string; after: string } {
       return { before: 'أُلغي الطلب', after: ' تلقائيًا: لم يرد العميل في الوقت.' };
     case 'confirmation_unreached':
       return { before: 'لم تصل رسالة التأكيد لعميل الطلب', after: ': اتصل به بنفسك.' };
-    case 'plan_limit_nearly':
-      return { before: `استهلكت 80% من طلبات باقتك هذا الشهر (${String(n.used ?? 0)} من ${String(n.limit ?? 0)}).`, after: '' };
-    case 'plan_limit_reached':
-      return { before: 'وصلت إلى حد طلبات باقتك هذا الشهر. الطلبات ما زالت تصلك؛ رقِّ باقتك لتبقى ضمن الحد.', after: '' };
   }
 }
 

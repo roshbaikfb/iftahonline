@@ -252,8 +252,8 @@ describe('NotificationBell', () => {
 
   it("shows a plan's monthly orders limit, near and reached", async () => {
     const planNotices = [
-      { id: 'P1', kind: 'plan_limit_nearly', feature: 'orders_per_month', used: 240, limit: 300, read: false, created_at: new Date().toISOString() },
-      { id: 'P2', kind: 'plan_limit_reached', feature: 'orders_per_month', used: 300, limit: 300, read: false, created_at: new Date().toISOString() },
+      { id: 'P1', kind: 'quota_nearly', feature: 'orders_per_month', used: 240, limit: 300, read: false, created_at: new Date().toISOString() },
+      { id: 'P2', kind: 'quota_reached', feature: 'orders_per_month', used: 300, limit: 300, read: false, created_at: new Date().toISOString() },
     ];
     routes({ [`GET ${base}/messaging/notifications`]: () => ({ status: 200, body: { items: planNotices, unread: 2 } }) });
     renderAt(`/stores/${store}/home`);
@@ -262,6 +262,7 @@ describe('NotificationBell', () => {
     const panel = screen.getByRole('region', { name: 'الإشعارات' });
     expect(within(panel).getByText(/استهلكت 80% من طلبات باقتك هذا الشهر \(240 من 300\)/)).toBeInTheDocument();
     expect(within(panel).getByText(/وصلت إلى حد طلبات باقتك هذا الشهر/)).toBeInTheDocument();
+    expect(within(panel).queryByRole('link', { name: 'الرصيد' })).toBeNull(); // the messages balance is another quota
   });
 
   it('asks again only after a minute, however many screens open meanwhile', async () => {

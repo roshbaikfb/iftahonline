@@ -113,17 +113,11 @@ const (
 	OrderCancelledNotice  NoticeKind = "order_cancelled"
 	OrderAutoCancelled    NoticeKind = "order_auto_cancelled"
 	ConfirmationUnreached NoticeKind = "confirmation_unreached"
-	// PlanLimitNearly and PlanLimitReached: a monthly limit of the
-	// store's plan (orders) at 80% or 100% (ADR-0045).
-	PlanLimitNearly  NoticeKind = "plan_limit_nearly"
-	PlanLimitReached NoticeKind = "plan_limit_reached"
 )
 
 // Emailed reports whether the merchant also gets k by email: the quota
-// and plan-limit warnings only (an order's notices would flood the inbox).
-func (k NoticeKind) Emailed() bool {
-	return k == QuotaNearly || k == QuotaReached || k == PlanLimitNearly || k == PlanLimitReached
-}
+// warnings only (an order's notices would flood the inbox).
+func (k NoticeKind) Emailed() bool { return k == QuotaNearly || k == QuotaReached }
 
 // Notification is a notice to the store's staff.
 type Notification struct {
@@ -142,7 +136,7 @@ type NoticeData struct {
 	Used     int64  `json:"used,omitempty"`
 	Limit    int64  `json:"limit,omitempty"`
 	Period   string `json:"period,omitempty"`  // YYYY-MM
-	Feature  string `json:"feature,omitempty"` // a plan limit's
+	Feature  string `json:"feature,omitempty"` // a plan limit's; "" is the messages quota
 }
 
 // QuotaNotice is the warning for a threshold reached in a month, once
@@ -153,7 +147,9 @@ func QuotaNotice(kind NoticeKind, period time.Time, used, limit int64) Notificat
 }
 
 // PlanLimitNotice is the warning for a plan's monthly limit of feature
-// near or reached, once per feature, month and threshold.
+// near (QuotaNearly) or reached (QuotaReached), once per feature, month
+// and threshold. It is a quota notice with a feature, so the API's kinds
+// stay as they were (ADR-0046).
 func PlanLimitNotice(kind NoticeKind, feature string, period time.Time, used, limit int64) Notification {
 	p := period.Format("2006-01")
 	return Notification{Kind: kind, DedupKey: feature + ":" + p, Data: NoticeData{Used: used, Limit: limit, Period: p, Feature: feature}}
@@ -167,7 +163,7 @@ func OrderNotice(kind NoticeKind, order ulid.ID, ref string) Notification {
 // Email is a notice's email in locale: its subject and text.
 func (n Notification) Email(locale, storeName, dashboardURL string) (subject, text string) {
 	used, limit := strconv.FormatInt(n.Data.Used, 10), strconv.FormatInt(n.Data.Limit, 10)
-	if n.Kind == PlanLimitNearly || n.Kind == PlanLimitReached {
+	if n.Data.Feature != "" {
 		return n.planLimitEmail(locale, storeName, dashboardURL+"/billing", used, limit)
 	}
 	link := dashboardURL + "/messages"
@@ -201,7 +197,7 @@ func (n Notification) planLimitEmail(locale, storeName, link, used, limit string
 		what, whatAr = n.Data.Feature, n.Data.Feature
 	}
 	if locale == English {
-		if n.Kind == PlanLimitReached {
+		if n.Kind == QuotaReached {
 			return storeName + ": your plan's monthly " + what + " are used up",
 				"Your store has reached its plan's " + limit + " " + what + " for " + n.Data.Period + ".\n" +
 					"New orders still come in; upgrade your plan to stay within it.\n\n" + link
@@ -209,7 +205,7 @@ func (n Notification) planLimitEmail(locale, storeName, link, used, limit string
 		return storeName + ": 80% of your plan's monthly " + what,
 			"Your store has used " + used + " of its plan's " + limit + " " + what + " for " + n.Data.Period + ".\n\n" + link
 	}
-	if n.Kind == PlanLimitReached {
+	if n.Kind == QuotaReached {
 		return storeName + ": وصلت إلى حد باقتك هذا الشهر",
 			"وصل متجرك إلى حد باقته (" + limit + " " + whatAr + ") في " + n.Data.Period + ".\n" +
 				"الطلبات الجديدة ما زالت تصلك؛ رقِّ باقتك لتبقى ضمن حدها.\n\n" + link

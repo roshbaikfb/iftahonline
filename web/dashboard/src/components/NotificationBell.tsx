@@ -149,7 +149,7 @@ export function NotificationBell({ storeId }: { storeId: string }) {
                         </>
                       )}
                       {t.after}
-                      {(n.kind === 'quota_nearly' || n.kind === 'quota_reached') && (
+                      {(n.kind === 'quota_nearly' || n.kind === 'quota_reached') && !n.feature && (
                         <>
                           {' '}
                           <Link to={`/stores/${storeId}/messages`} onClick={read}>
