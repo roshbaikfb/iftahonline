@@ -434,6 +434,8 @@ sql:
         overrides:
           - db_type: uuid
             go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+          - db_type: date
+            go_type: time.Time
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz
