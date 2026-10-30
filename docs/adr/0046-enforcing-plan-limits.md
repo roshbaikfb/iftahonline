@@ -60,7 +60,10 @@ in 7b-2 and ads in 7g.
    - The usage keeps counting past the limit, so 7c can bill overage.
 4. **Messaging warns the merchant.**
    - It subscribes to the event (`messaging.plan_limits`) and adds a
-     `plan_limit_nearly` or `plan_limit_reached` notice.
+     `quota_nearly` or `quota_reached` notice with a `feature`. These are
+     the kinds the messages quota already uses, which has no `feature`.
+     New kinds would have broken `/v1`: clients written against the closed
+     enum could not handle them, and `openapi-diff` refuses them.
    - The notice is kept once per feature, month and threshold, carries the
      feature, and is emailed to the staff with a link to `/billing`.
    - Messaging's own message quota keeps its own warnings (ADR-0038).
@@ -86,6 +89,6 @@ in 7b-2 and ads in 7g.
   products, is unaffected.
 - **Grant changes take up to 30 s** on another instance (ADR-0045 §4),
   until the plan-change events of 7d and 7e invalidate the cache.
-- **New notice kinds** (`plan_limit_nearly`, `plan_limit_reached`) and a
-  `feature` field are added to the API's `Notification`. Old clients see
-  unknown kinds; the dashboard shows them.
+- **One optional field.** `Notification` gains only an optional
+  `feature`. A client that ignores it reads a plan-limit notice as a quota
+  warning, which it is.

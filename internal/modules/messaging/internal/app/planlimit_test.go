@@ -26,7 +26,7 @@ func TestPlanLimitWarnings(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if kinds := c.noticeKinds(ctx, t); kinds != "plan_limit_reached,plan_limit_nearly" {
+	if kinds := c.noticeKinds(ctx, t); kinds != "quota_reached,quota_nearly" {
 		t.Fatalf("notices = %s", kinds)
 	}
 	emails := c.jobsOf("messaging.email_notice")
@@ -51,7 +51,7 @@ func TestPlanLimitWarnings(t *testing.T) {
 		Period: october.AddDate(0, 1, 0), Used: 240, Limit: 300}); err != nil {
 		t.Fatal(err)
 	}
-	if kinds := c.noticeKinds(ctx, t); !strings.HasPrefix(kinds, "plan_limit_nearly,") {
+	if kinds := c.noticeKinds(ctx, t); !strings.HasPrefix(kinds, "quota_nearly,") {
 		t.Fatalf("next month = %s", kinds)
 	}
 }

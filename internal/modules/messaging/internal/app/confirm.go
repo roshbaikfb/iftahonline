@@ -199,10 +199,10 @@ func (s *Service) quotaNoticeTx(ctx context.Context, tx pgx.Tx, q Queued) error 
 // plan is near or reached (entitlements.UsageCrossed), once per feature,
 // month and threshold: in the bell, and by email.
 func (s *Service) PlanLimitCrossed(ctx context.Context, ev entitlements.UsageCrossed) error {
-	kind := domain.PlanLimitNearly
+	kind := domain.QuotaNearly
 	switch ev.Threshold {
 	case entitlements.Reached:
-		kind = domain.PlanLimitReached
+		kind = domain.QuotaReached
 	case entitlements.Nearly:
 	default:
 		return nil

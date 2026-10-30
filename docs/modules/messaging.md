@@ -169,8 +169,9 @@ The merchant dashboard follows the approved 6g mockups:
 ### Plan-limit notices (ADR-0046)
 
 `Module.PlanLimitHandler`, subscribed as `messaging.plan_limits` to
-`entitlements.usage.crossed` in the worker, adds a `plan_limit_nearly` or
-`plan_limit_reached` notice:
+`entitlements.usage.crossed` in the worker, adds a `quota_nearly` or
+`quota_reached` notice with a `feature`. Without `feature`, the notice is
+the messages quota:
 - one per feature, month and threshold;
 - with the `feature`, `used`, `limit` and `period`;
 - emailed to the staff with a link to `/billing`.

@@ -5306,15 +5306,17 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         kind:
           type: string
-          enum: [quota_nearly, quota_reached, order_confirmed, order_cancelled, order_auto_cancelled, confirmation_unreached,
-            plan_limit_nearly, plan_limit_reached]
-          description: plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
+          enum: [quota_nearly, quota_reached, order_confirmed, order_cancelled, order_auto_cancelled, confirmation_unreached]
+          description: |
+            quota_* is a monthly limit at 80% or 100%: the messages quota
+            without `feature`, or the plan's limit of `feature` (orders still
+            come in).
         order_id: { $ref: "#/components/schemas/ULID" }
         order_ref: { type: string }
         used: { type: integer, format: int64 }
         limit: { type: integer, format: int64 }
         period: { type: string, example: "2026-10" }
-        feature: { type: string, example: orders_per_month, description: "A plan limit's feature (plan_limit_*)." }
+        feature: { type: string, example: orders_per_month, description: "For quota_*: the plan's limited feature; absent for messages." }
         read: { type: boolean }
         created_at: { type: string, format: date-time }
     NotificationPage:
