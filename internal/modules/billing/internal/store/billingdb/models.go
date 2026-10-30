@@ -65,7 +65,7 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt time.Time
-	AdminID    pgtype.UUID
+	AdminID    *ulid.ID
 	Action     string
 	TargetType string
 	TargetID   string
@@ -96,12 +96,28 @@ type AuditLog struct {
 	ID          ulid.ID
 	StoreID     ulid.ID
 	OccurredAt  time.Time
-	ActorUserID pgtype.UUID
+	ActorUserID *ulid.ID
 	Action      string
 	TargetType  string
 	TargetID    string
 	IpPrefix    string
 	Metadata    []byte
+}
+
+type BillingAccount struct {
+	ID        ulid.ID
+	Kind      string
+	Name      string
+	Currency  string
+	Country   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type BillingAccountStore struct {
+	AccountID     ulid.ID
+	MemberStoreID ulid.ID
+	AddedAt       time.Time
 }
 
 type CarrierConnection struct {
@@ -157,7 +173,7 @@ type CatalogImport struct {
 type Category struct {
 	ID        ulid.ID
 	StoreID   ulid.ID
-	ParentID  pgtype.UUID
+	ParentID  *ulid.ID
 	Slug      string
 	Name      string
 	Position  int32
@@ -171,7 +187,7 @@ type CodSettlement struct {
 	ConnectionID   ulid.ID
 	Carrier        string
 	TrackingNumber string
-	ShipmentID     pgtype.UUID
+	ShipmentID     *ulid.ID
 	Currency       string
 	AmountMinor    int64
 	SettledAt      time.Time
@@ -242,6 +258,39 @@ type InventoryLevel struct {
 	UpdatedAt time.Time
 }
 
+type Invoice struct {
+	ID            ulid.ID
+	AccountID     ulid.ID
+	Number        string
+	Period        time.Time
+	Currency      string
+	SubtotalMinor int64
+	TaxBps        int32
+	TaxMinor      int64
+	TotalMinor    int64
+	Status        string
+	IssuedAt      time.Time
+	DueAt         time.Time
+	PaidAt        *time.Time
+	CreatedAt     time.Time
+}
+
+type InvoiceCounter struct {
+	Year int32
+	Last int64
+}
+
+type InvoiceLine struct {
+	InvoiceID   ulid.ID
+	AccountID   ulid.ID
+	LineNo      int32
+	Kind        string
+	LineStoreID *ulid.ID
+	Description string
+	Quantity    int64
+	AmountMinor int64
+}
+
 type MarketingSetting struct {
 	StoreID   ulid.ID
 	Consent   string
@@ -265,7 +314,7 @@ type Message struct {
 	ID                ulid.ID
 	Kind              string
 	Locale            string
-	OrderID           pgtype.UUID
+	OrderID           *ulid.ID
 	Status            string
 	Channel           string
 	Provider          string
@@ -332,7 +381,7 @@ type Order struct {
 type OrderConfirmation struct {
 	StoreID    ulid.ID
 	OrderID    ulid.ID
-	MessageID  pgtype.UUID
+	MessageID  *ulid.ID
 	Status     string
 	TokenHash  []byte
 	ExpiresAt  time.Time
@@ -351,7 +400,7 @@ type OrderEvent struct {
 	OccurredAt     time.Time
 	FromStatus     *string
 	ToStatus       string
-	ActorUserID    pgtype.UUID
+	ActorUserID    *ulid.ID
 	Note           string
 	Actor          string
 }
@@ -510,7 +559,7 @@ type Product struct {
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
 	IsSample    bool
-	SizeChartID pgtype.UUID
+	SizeChartID *ulid.ID
 }
 
 type ProductCategory struct {
@@ -613,6 +662,7 @@ type SellFee struct {
 	ReturnedAt  *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	InvoiceID   *ulid.ID
 }
 
 type Shipment struct {
@@ -857,6 +907,15 @@ type Subscription struct {
 	TrialUsed         bool
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	AccountID         *ulid.ID
+	RenewalInvoiceID  *ulid.ID
+}
+
+type TaxRate struct {
+	Country string
+	RateBps int32
+	NameAr  string
+	NameEn  string
 }
 
 type UsageCounter struct {
