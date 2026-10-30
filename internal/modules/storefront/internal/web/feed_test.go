@@ -195,6 +195,50 @@ func TestFeedRateLimit(t *testing.T) {
 	}
 }
 
+// TestFeedOnlyTheKey (P6 review): a feed's URL takes its key and nothing
+// else, so a valid key cannot be dressed in other parameters to pass the
+// edge's copy and make the origin stream the catalog again.
+func TestFeedOnlyTheKey(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, withFeeds(fakeFeeds{key: feedKey}))
+	for _, q := range []string{"key=" + feedKey + "&x=1", "x=1&key=" + feedKey, "key=" + feedKey + "&key=" + feedKey, "key=" + feedKey + "&", "KEY=" + feedKey} {
+		if rec := f.get(t, "/feeds/google.xml?"+q); rec.Code != http.StatusNotFound || rec.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("?%s: %d %q", q, rec.Code, rec.Header().Get("Cache-Control"))
+		}
+	}
+	if n := f.catalog.calls0("list"); n != 0 {
+		t.Fatalf("refused URLs read the catalog %d times", n)
+	}
+	if rec := f.get(t, "/feeds/google.xml?key="+feedKey); rec.Code != http.StatusOK {
+		t.Fatalf("the key alone: %d", rec.Code)
+	}
+}
+
+// TestFeedLimits: a store's feeds are limited per store too; with the
+// limiter down they are a short 503, never served unguarded.
+func TestFeedLimits(t *testing.T) {
+	t.Parallel()
+	lim := &countLimiter{used: map[string]int{}, allow: map[string]int{}}
+	f := newFixture(t, withFeeds(fakeFeeds{key: feedKey}), func(d *web.Deps) {
+		d.Limiter = lim
+		d.ClientIP = func(*http.Request) string { return "203.0.113.7" }
+	})
+	lim.allow["feed:store:"+f.store.String()] = 1
+	if rec := f.get(t, "/feeds/google.xml?key="+feedKey); rec.Code != http.StatusOK {
+		t.Fatalf("first: %d", rec.Code)
+	}
+	if rec := f.get(t, "/feeds/meta.xml?key="+feedKey); rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("past the store's limit: %d", rec.Code)
+	}
+	lim.mu.Lock()
+	lim.fail = true
+	lim.mu.Unlock()
+	rec := f.get(t, "/feeds/google.xml?key="+feedKey)
+	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") == "" || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("limiter down: %d %v", rec.Code, rec.Header())
+	}
+}
+
 // TestFeedPages: a catalog of many pages streams whole, a page per query.
 func TestFeedPages(t *testing.T) {
 	t.Parallel()

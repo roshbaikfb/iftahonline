@@ -79,10 +79,15 @@ guard a secret.
    prober learns nothing:
    - a wrong or missing key;
    - feeds that are off;
-   - an unknown feed.
+   - an unknown feed;
+   - any query parameter besides `key` (P6 review): extra parameters
+     would make URLs the edge has no copy of, and the origin would
+     stream the catalog again for each.
 
-   Key checks are rate-limited per IP (20 a minute). The right key is
-   served from the edge.
+   Requests that reach the origin are limited per IP (20 a minute) and
+   per store (120 a minute), through the storefront's shared limiter
+   (`allowGuarded`). With the limiter down, a feed is a `no-store` 503,
+   never served unguarded. The right key is served from the edge.
 
 ## Consequences
 

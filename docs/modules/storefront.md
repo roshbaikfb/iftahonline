@@ -296,8 +296,10 @@ products as RSS 2.0 with Google's `g:` elements, one item per variant,
 for Google Merchant Center and Meta Commerce Manager:
 - **The key.** It is checked with `marketing.Feeds.FeedAllowed` before
   anything is read. A wrong or missing key, feeds that are off, and an
-  unknown feed are all a `no-store` 404. Checks are rate-limited per IP
-  (`feed:ip:`, 20 a minute).
+  unknown feed are all a `no-store` 404, and so is any query parameter
+  besides `key`. Requests are limited per IP (`feed:ip:`, 20 a minute)
+  and per store (`feed:store:`, 120 a minute); with the limiter down, a
+  `no-store` 503.
 - **Streaming.** The feed streams a catalog page at a time
   (`StorefrontQuery.Feed`: the same products, with each picture's JPEG),
   gzipped when the client takes it. A failure on the first page is a
