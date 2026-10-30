@@ -92,7 +92,10 @@ against a sandbox.
        number waits in the job table.
      - The cart's and checkout's jobs carry the visit's signals (IP,
        user agent, cookies, click IDs), in the clear, as
-       `order_signals` does, until River deletes the finished job.
+       `order_signals` does, until River deletes the job: a day after
+       it is sent, three days after it is cancelled or gives up
+       (`server.FailedJobRetention`, P6 review; River's default is
+       seven), long enough to look into a failure.
    - A refusal for good (4xx except 408 and 429, or TikTok's non-zero
      `code`) cancels the job; anything else is retried 8 times. A pixel
      turned off or removed since is skipped.

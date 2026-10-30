@@ -59,18 +59,32 @@ func NewRiverClient(pool *pgxpool.Pool, c config.Worker, log *slog.Logger, worke
 		}
 		all[name] = q
 	}
-	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Logger:       log,
-		Queues:       all,
-		Workers:      workers,
-		Middleware:   jobs.Middleware(),
-		PeriodicJobs: periodic,
-		JobTimeout:   time.Minute,
-	})
+	client, err := river.NewClient(riverpgxv5.New(pool), workerConfig(log, all, workers, periodic))
 	if err != nil {
 		return nil, fmt.Errorf("river: new client: %w", err)
 	}
 	return client, nil
+}
+
+// FailedJobRetention is how long River keeps a job that was cancelled or
+// gave up (P6 review). A job's arguments may carry a shopper's ad signals
+// (IP address, user agent, click IDs: ADR-0043), so they are kept long
+// enough to look into a failure, and no longer. River keeps a finished
+// job a day.
+const FailedJobRetention = 72 * time.Hour
+
+// workerConfig is the worker client's River configuration.
+func workerConfig(log *slog.Logger, queues map[string]river.QueueConfig, workers *river.Workers, periodic []*river.PeriodicJob) *river.Config {
+	return &river.Config{
+		Logger:                      log,
+		Queues:                      queues,
+		Workers:                     workers,
+		Middleware:                  jobs.Middleware(),
+		PeriodicJobs:                periodic,
+		JobTimeout:                  time.Minute,
+		CancelledJobRetentionPeriod: FailedJobRetention,
+		DiscardedJobRetentionPeriod: FailedJobRetention,
+	}
 }
 
 // NewRiverInserter builds an insert-only River client for the api and
