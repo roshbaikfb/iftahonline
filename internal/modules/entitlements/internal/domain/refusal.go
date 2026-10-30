@@ -21,6 +21,15 @@ func LimitError(f Feature, g Grant) error {
 	}
 }
 
+// NotInPlan refuses the flag feature f, which the store's plan does not
+// grant: 403 with code plan_limit. It matches ErrLimitReached.
+func NotInPlan(f Feature) error {
+	return &errs.Error{
+		Kind: errs.KindForbidden, Code: PlanLimitCode, Cause: ErrLimitReached,
+		Message: fmt.Sprintf("the store's plan does not include %s; upgrade the plan to use it", f),
+	}
+}
+
 // EventUsageCrossed is published when a counted month's usage crosses
 // 80% or 100% of the plan's limit.
 const EventUsageCrossed = "entitlements.usage.crossed"

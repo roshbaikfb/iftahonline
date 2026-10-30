@@ -96,6 +96,10 @@ var (
 type Entitlements interface {
 	// Allowed reports whether the store has the flag feature f.
 	Allowed(ctx context.Context, f Feature) (bool, error)
+	// Require is Allowed as an error for a merchant's request: a 403 with
+	// code plan_limit (errors.Is ErrLimitReached) when the plan does not
+	// grant f.
+	Require(ctx context.Context, f Feature) error
 	// AdmitTx admits n more of the counted feature f in the caller's
 	// tenant transaction. count says how many the store holds; it runs
 	// under a lock on (store, f) held until tx ends, so concurrent

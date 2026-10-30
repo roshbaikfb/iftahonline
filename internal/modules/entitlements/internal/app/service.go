@@ -141,6 +141,19 @@ func (s *Service) Allowed(ctx context.Context, f domain.Feature) (bool, error) {
 	return g.Unlimited || g.Value > 0, nil
 }
 
+// Require is Allowed as an error: NotInPlan (a 403 plan_limit) when the
+// store's plan does not grant the flag feature f.
+func (s *Service) Require(ctx context.Context, f domain.Feature) error {
+	ok, err := s.Allowed(ctx, f)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.NotInPlan(f)
+	}
+	return nil
+}
+
 // AdmitTx admits n more units of the counted feature f in tx: count says
 // how many the store holds, and is called under a lock on (store, f)
 // taken for tx, so concurrent creations cannot pass the limit together.

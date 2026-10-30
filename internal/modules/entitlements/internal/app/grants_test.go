@@ -71,6 +71,15 @@ func TestAllowed(t *testing.T) {
 			t.Errorf("Allowed(%s): err = %v, want ErrInvalid", feature, err)
 		}
 	}
+	if err := f.svc.Require(ctx, domain.AdFree); err != nil {
+		t.Errorf("Require(ad_free) = %v", err)
+	}
+	if err := f.svc.Require(ctx, domain.Pixels); !errors.Is(err, domain.ErrLimitReached) || errs.KindOf(err) != errs.KindForbidden {
+		t.Errorf("Require(pixels) = %v, want a plan_limit 403", err)
+	}
+	if err := f.svc.Require(ctx, domain.Staff); !errors.Is(err, domain.ErrInvalid) {
+		t.Errorf("Require(staff) = %v", err)
+	}
 	if _, err := f.svc.Allowed(t.Context(), domain.AdFree); !errors.Is(err, tenant.ErrNoTenant) {
 		t.Errorf("no store: err = %v", err)
 	}
@@ -346,6 +355,9 @@ func TestUnrestricted(t *testing.T) {
 	period := domain.PeriodOf(time.Now())
 	if ok, err := u.Allowed(ctx, domain.Pixels); err != nil || !ok {
 		t.Errorf("Allowed = %v, %v", ok, err)
+	}
+	if err := u.Require(ctx, domain.Pixels); err != nil {
+		t.Errorf("Require = %v", err)
 	}
 	if g, err := u.AdmitTx(ctx, nil, domain.Staff, 1, nil); err != nil || !g.Unlimited {
 		t.Errorf("AdmitTx = %+v, %v", g, err)
