@@ -181,6 +181,9 @@ type clients struct {
 	rdb       *redis.Client
 	adminPool *pgxpool.Pool // api role with ADMIN_DATABASE_URL only
 	events    *eventbus.Bus // one per process; subscriptions are made in newClients
+	// plan answers what each store's plan allows (ADR-0045); one per
+	// process, so its cache is shared by every module.
+	plan entitlements.Entitlements
 	// watchOrders handles orders.order.placed for payments; the worker
 	// sets it once the payments module is built.
 	watchOrders *lateHandler
@@ -194,6 +197,9 @@ type clients struct {
 	// reportPurchases handles orders.order.placed for marketing (the
 	// server-side Purchase); the worker sets it.
 	reportPurchases *lateHandler
+	// planLimits handles entitlements.usage.crossed for messaging (the
+	// merchant's warning); the worker sets it.
+	planLimits *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -269,8 +275,21 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderPlaced, marketing.PurchasesSubscriber, purchases.Handle); err != nil {
 		return clients{}, err
 	}
-	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, watchOrders: watch, countSales: sales,
-		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases}, nil
+	// A plan's monthly limit near or reached: the merchant hears (ADR-0045).
+	limits := &lateHandler{}
+	if err = bus.Subscribe(entitlements.EventUsageCrossed, messaging.PlanLimitsSubscriber, limits.Handle); err != nil {
+		return clients{}, err
+	}
+	bill, err := billing.New(billing.Deps{Pool: pool})
+	if err != nil {
+		return clients{}, err
+	}
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.FromBilling(bill.Grants()), IDs: ids, Events: bus})
+	if err != nil {
+		return clients{}, err
+	}
+	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), watchOrders: watch, countSales: sales,
+		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -284,7 +303,7 @@ func newTenancy(c clients) (*tenancy.Module, error) {
 	}
 	return tenancy.New(tenancy.Deps{
 		Pool: c.pool, Redis: c.rdb, Jobs: inserter, IDs: c.ids, Log: c.log, Config: c.cfg.Tenancy,
-		Audit: identity.NewAuditRecorder(c.ids), AdminPool: c.adminPool,
+		Audit: identity.NewAuditRecorder(c.ids), AdminPool: c.adminPool, Plan: c.plan,
 	})
 }
 
@@ -296,7 +315,7 @@ func newIdentity(c clients, ten *tenancy.Module, onb *onboarding.Module) (*ident
 	return identity.New(identity.Deps{
 		Pool: c.pool, Redis: c.rdb, Tenancy: ten.Service(), Onboarding: onb.Starter(), IDs: c.ids, Log: c.log,
 		Config: c.cfg.Identity, ClientIP: middleware.ClientIP,
-		Secrets: c.cfg.Secrets, Jobs: inserter, Env: c.cfg.Env,
+		Secrets: c.cfg.Secrets, Jobs: inserter, Env: c.cfg.Env, Plan: c.plan,
 	})
 }
 
@@ -328,7 +347,7 @@ func newCatalog(c clients, ten *tenancy.Module) (*catalog.Module, error) {
 	stores := ten.Service()
 	return catalog.New(catalog.Deps{
 		Pool: c.pool, Jobs: inserter, IDs: c.ids, Log: c.log, Audit: identity.NewAuditRecorder(c.ids), Media: c.cfg.Media, Search: c.cfg.Search, Keyring: c.cfg.Secrets.Keyring,
-		Events: c.events,
+		Events: c.events, Plan: c.plan,
 		Currency: catalog.CurrencyFunc(func(ctx context.Context) (money.Currency, error) {
 			st, err := stores.GetStore(ctx)
 			return st.Currency, err
@@ -380,20 +399,12 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 // each store's plan (api and worker roles). inbox is the worker's, for webhook jobs, and conf its
 // order confirmation's collaborators; both nil in the api.
 func newMessaging(c clients, inbox webhooks.Inbox, conf *messaging.Deps) (*messaging.Module, error) {
-	bill, err := billing.New(billing.Deps{Pool: c.pool})
-	if err != nil {
-		return nil, err
-	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: c.pool, Source: entitlements.FromBilling(bill.Grants())})
-	if err != nil {
-		return nil, err
-	}
 	ins, err := server.NewRiverInserter(c.pool, c.log)
 	if err != nil {
 		return nil, err
 	}
 	d := messaging.Deps{
-		Pool: c.pool, IDs: c.ids, Secrets: c.cfg.Secrets, Config: c.cfg.Messaging, Quota: ent.Entitlements(), Jobs: ins,
+		Pool: c.pool, IDs: c.ids, Secrets: c.cfg.Secrets, Config: c.cfg.Messaging, Quota: c.plan, Jobs: ins,
 		PublicURL: c.cfg.Mail.DashboardURL, Inbox: inbox, Audit: identity.NewAuditRecorder(c.ids), Log: c.log,
 	}
 	if conf != nil {
@@ -459,7 +470,7 @@ func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *custom
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
 		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Auth: auth,
-		Stores: orderStores(ten),
+		Stores: orderStores(ten), Plan: c.plan,
 	})
 }
 
@@ -504,7 +515,7 @@ func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (order
 		return orders.ShopDeps{}, err
 	}
 	return orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten)}, nil
+		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten), Plan: c.plan}, nil
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
@@ -870,6 +881,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.confirmOrders.Set(msg.OrderPlacedHandler())
+	c.planLimits.Set(msg.PlanLimitHandler())
 	prom, err := newPromotions(c)
 	if err != nil {
 		return err
