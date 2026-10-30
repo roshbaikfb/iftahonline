@@ -278,12 +278,14 @@ func (w *InvoiceAccountWorker) Work(ctx context.Context, j *river.Job[InvoiceAcc
 	return w.Svc.InvoiceAccount(ctx, j.Args.AccountID, j.Args.Period)
 }
 
-// AddWorkers registers the invoice jobs.
+// AddWorkers registers the invoice and period jobs.
 func (s *Service) AddWorkers(w *river.Workers) error {
 	for _, add := range []func() error{
 		func() error { return river.AddWorkerSafely(w, &InvoiceMonthWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &InvoiceStoreWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &InvoiceAccountWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &EndPeriodsWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &EndPeriodWorker{Svc: s}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("billing: workers: %w", err)

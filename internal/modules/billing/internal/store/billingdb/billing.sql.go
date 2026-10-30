@@ -120,3 +120,65 @@ func (q *Queries) ListPlanGrants(ctx context.Context, planID ulid.ID) ([]ListPla
 	}
 	return items, nil
 }
+
+const periodsEnded = `-- name: PeriodsEnded :many
+SELECT s::uuid AS store_id FROM app.periods_ended($1::timestamptz) AS s
+`
+
+func (q *Queries) PeriodsEnded(ctx context.Context, now time.Time) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, periodsEnded, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var store_id ulid.ID
+		if err := rows.Scan(&store_id); err != nil {
+			return nil, err
+		}
+		items = append(items, store_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const saveSubscription = `-- name: SaveSubscription :exec
+UPDATE subscriptions SET plan_id = $1, status = $2, cycle = $3, trial_ends_at = $4,
+  period_start = $5, period_end = $6, grace_until = $7, suspended_at = $8,
+  cancel_at_period_end = $9, trial_used = $10, updated_at = now()
+WHERE store_id = $11
+`
+
+type SaveSubscriptionParams struct {
+	PlanID            ulid.ID
+	Status            string
+	Cycle             *string
+	TrialEndsAt       *time.Time
+	PeriodStart       *time.Time
+	PeriodEnd         *time.Time
+	GraceUntil        *time.Time
+	SuspendedAt       *time.Time
+	CancelAtPeriodEnd bool
+	TrialUsed         bool
+	StoreID           ulid.ID
+}
+
+func (q *Queries) SaveSubscription(ctx context.Context, arg SaveSubscriptionParams) error {
+	_, err := q.db.Exec(ctx, saveSubscription,
+		arg.PlanID,
+		arg.Status,
+		arg.Cycle,
+		arg.TrialEndsAt,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+		arg.GraceUntil,
+		arg.SuspendedAt,
+		arg.CancelAtPeriodEnd,
+		arg.TrialUsed,
+		arg.StoreID,
+	)
+	return err
+}

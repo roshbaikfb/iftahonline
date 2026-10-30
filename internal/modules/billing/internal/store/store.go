@@ -88,3 +88,44 @@ func PlanGrants(ctx context.Context, tx Tx, plan ulid.ID) (domain.Grants, error)
 	}
 	return g, nil
 }
+
+// SaveSubscription writes the store-in-ctx's subscription after a
+// lifecycle step.
+func SaveSubscription(ctx context.Context, tx Tx, s domain.Subscription) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	var cycle *string
+	if s.Cycle != "" {
+		c := string(s.Cycle)
+		cycle = &c
+	}
+	if err = billingdb.New(tx).SaveSubscription(ctx, billingdb.SaveSubscriptionParams{
+		StoreID: store, PlanID: s.PlanID, Status: string(s.Status), Cycle: cycle,
+		TrialEndsAt: ptr(s.TrialEndsAt), PeriodStart: ptr(s.PeriodStart), PeriodEnd: ptr(s.PeriodEnd),
+		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt),
+		CancelAtPeriodEnd: s.CancelAtPeriodEnd, TrialUsed: s.TrialUsed,
+	}); err != nil {
+		return fmt.Errorf("billing store: save subscription: %w", err)
+	}
+	return nil
+}
+
+// ptr is a time for a nullable column: nil when unset.
+func ptr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
+// PeriodsEnded are the stores whose trial or cancelled period ended by
+// now (app.periods_ended).
+func PeriodsEnded(ctx context.Context, tx Tx, now time.Time) ([]ulid.ID, error) {
+	ids, err := billingdb.New(tx).PeriodsEnded(ctx, now)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: periods ended: %w", err)
+	}
+	return ids, nil
+}

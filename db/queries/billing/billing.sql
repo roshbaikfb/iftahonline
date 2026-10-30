@@ -14,3 +14,12 @@ WHERE kind = 'free' AND status = 'active';
 
 -- name: ListPlanGrants :many
 SELECT feature, value FROM plan_entitlements WHERE plan_id = @plan_id ORDER BY feature;
+
+-- name: PeriodsEnded :many
+SELECT s::uuid AS store_id FROM app.periods_ended(@now::timestamptz) AS s;
+
+-- name: SaveSubscription :exec
+UPDATE subscriptions SET plan_id = @plan_id, status = @status, cycle = @cycle, trial_ends_at = @trial_ends_at,
+  period_start = @period_start, period_end = @period_end, grace_until = @grace_until, suspended_at = @suspended_at,
+  cancel_at_period_end = @cancel_at_period_end, trial_used = @trial_used, updated_at = now()
+WHERE store_id = @store_id;

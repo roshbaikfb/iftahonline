@@ -7,6 +7,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -21,6 +22,8 @@ type Deps struct {
 	Stores Stores
 	Jobs   jobs.Inserter
 	IDs    *ulid.Generator
+	// Events receives SubscriptionChanged (the worker); nil discards.
+	Events eventbus.Publisher
 }
 
 // Module is the wired billing module.
@@ -33,7 +36,7 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil {
 		return nil, errors.New("billing: missing dependency")
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events})}, nil
 }
 
 // Grants is what the entitlements module reads.
@@ -46,7 +49,8 @@ func (m *Module) Fees() Fees { return m.svc }
 // Deps.Stores and Deps.Jobs).
 func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorkers(w) }
 
-// PeriodicJobs start each month's invoices: daily, and at worker start.
+// PeriodicJobs start each month's invoices (daily) and end trials and
+// cancelled periods (hourly), and both at worker start.
 func (m *Module) PeriodicJobs() []*river.PeriodicJob {
-	return []*river.PeriodicJob{app.InvoicesPeriodic()}
+	return []*river.PeriodicJob{app.InvoicesPeriodic(), app.EndPeriodsPeriodic()}
 }
