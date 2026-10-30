@@ -243,6 +243,51 @@ func TestLastUseTakenOnce(t *testing.T) {
 	}
 }
 
+// TestOncePerCustomerRace: one customer's concurrent orders take a
+// once-per-customer coupon once, while other customers are not held up.
+func TestOncePerCustomerRace(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.store(t)
+	if _, err := f.svc.Create(ctx, domain.Coupon{Code: "ONCE-EACH", Kind: domain.Percent, Percent: 10, MaxPerCustomer: intp(1), Active: true}); err != nil {
+		t.Fatal(err)
+	}
+	mona, others := f.ids.New(), make([]ulid.ID, 5)
+	for i := range others {
+		others[i] = f.ids.New()
+	}
+	var monaOK, refused, othersOK atomic.Int64
+	var wg sync.WaitGroup
+	errc := make(chan error, 15)
+	for i := range 15 {
+		wg.Go(func() {
+			customer := mona
+			if i < len(others) {
+				customer = others[i]
+			}
+			_, _, rErr := f.redeem(ctx, t, "ONCE-EACH", 10000, customer)
+			switch {
+			case rErr == nil && customer == mona:
+				monaOK.Add(1)
+			case rErr == nil:
+				othersOK.Add(1)
+			case reason(rErr) == domain.PerCustomer:
+				refused.Add(1)
+			default:
+				errc <- rErr
+			}
+		})
+	}
+	wg.Wait()
+	close(errc)
+	for err := range errc {
+		t.Fatal(err)
+	}
+	if monaOK.Load() != 1 || refused.Load() != 9 || othersOK.Load() != 5 {
+		t.Fatalf("mona %d, refused %d, others %d", monaOK.Load(), refused.Load(), othersOK.Load())
+	}
+}
+
 func TestReleaseOrder(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

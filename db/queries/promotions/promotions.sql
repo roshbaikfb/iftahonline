@@ -23,10 +23,11 @@ SELECT * FROM coupons WHERE store_id = @store_id ORDER BY created_at DESC, id DE
 -- name: CouponByCode :one
 SELECT * FROM coupons WHERE store_id = @store_id AND code = @code;
 
--- name: LockCouponByCode :one
--- The order's transaction holds the coupon until it commits: concurrent
--- orders take its uses one at a time.
-SELECT * FROM coupons WHERE store_id = @store_id AND code = @code FOR UPDATE;
+-- name: LockCustomerUses :exec
+-- One customer's orders take a coupon one at a time until the order's
+-- transaction ends (its per-customer limit); other customers wait for
+-- nothing. The key is the store, coupon and customer.
+SELECT pg_advisory_xact_lock(hashtextextended(CAST(@store_id::uuid AS text) || ':' || CAST(@coupon_id::uuid AS text) || ':' || CAST(@customer_id::uuid AS text), 0));
 
 -- name: DeleteUnusedCoupon :execrows
 -- Only a coupon no order ever held.
@@ -42,8 +43,13 @@ INSERT INTO coupon_redemptions (store_id, order_id, coupon_id, customer_id, disc
 VALUES (@store_id, @order_id, @coupon_id, @customer_id, @discount_minor, @free_shipping)
 ON CONFLICT (store_id, order_id) DO NOTHING;
 
--- name: CountUse :exec
-UPDATE coupons SET uses = uses + 1, updated_at = now() WHERE store_id = @store_id AND id = @id;
+-- name: ConsumeUse :one
+-- Takes a use while one is left and the coupon is on. The row is locked
+-- only from here to the order's commit, its last step; a concurrent
+-- order waits, then reads the count it left (no row: used up).
+UPDATE coupons SET uses = uses + 1, updated_at = now()
+WHERE store_id = @store_id AND id = @id AND active AND (max_uses IS NULL OR uses < max_uses)
+RETURNING uses;
 
 -- name: ReleaseRedemption :one
 -- An order's use comes back once.

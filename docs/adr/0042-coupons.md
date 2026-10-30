@@ -42,9 +42,17 @@ must not be taken twice by two orders racing for it.
      checks everything except the per-customer limit, because the
      customer is not known yet.
    - Inside the placing transaction, once the customer is recorded,
-     `RedeemTx` locks the coupon's row, checks every limit (the
-     customer's too), records the order's redemption, and counts the
-     use.
+     `RedeemTx` checks every limit (the customer's too), records the
+     order's redemption, and takes the use, as the transaction's last
+     step (P6 review):
+     - The use is taken by a conditional update (`uses < max_uses`,
+       `active`). The coupon's row is locked only from there to the
+       commit, not across the stock reservation and the order's insert.
+       A concurrent order waits on that update, reads the count the
+       first left, and finds no use (`used_up`).
+     - The per-customer limit holds under a transaction-scoped advisory
+       lock on (store, coupon, customer): one customer's orders count
+       their uses one at a time, and other customers wait for nothing.
    - If the coupon's terms changed in between, the order is refused
      (`coupon_code: changed`) and nothing is placed.
    - A replayed order returns the first one and redeems nothing.

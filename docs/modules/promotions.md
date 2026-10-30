@@ -39,12 +39,17 @@ Codes are unique per store, case-insensitive (stored upper case), and
    call `Preview`. It checks everything but the per-customer limit.
 2. **In the placing transaction**, once the customer is known,
    `RedeemTx` does the rest:
-   - it locks the coupon (`SELECT … FOR UPDATE`) and checks every limit;
+   - it checks every limit; for a per-customer limit, under an advisory
+     lock on (store, coupon, customer) held until the commit;
    - it records the order's redemption (`coupon_redemptions`, one per
-     order) and counts the use.
+     order) and takes the use with a conditional update
+     (`uses < max_uses`, `active`).
 
-   Concurrent orders take the uses one at a time. If the terms changed
-   since the quote, the order is refused.
+   It is the placing transaction's last step, so the coupon's row is
+   locked only until the commit. Concurrent orders take the last uses
+   once (`TestLastUseTakenOnce`), one customer's concurrent orders take
+   a once-per-customer code once (`TestOncePerCustomerRace`). If the
+   terms changed since the quote, the order is refused.
 3. **On cancellation before shipping**, the worker releases the order's
    redemption and uncounts the use, once.
 
@@ -81,7 +86,7 @@ Built to the approved 6g mockups:
 
 | Table | Notes |
 |---|---|
-| `coupons` | Tenant table under RLS. PK `(store_id, id)`; unique `(store_id, code)` serves the checkout's lookup (an index search, pinned by a plan test). `uses` is counted under the row's lock |
+| `coupons` | Tenant table under RLS. PK `(store_id, id)`; unique `(store_id, code)` serves the checkout's lookup (an index search, pinned by a plan test). `uses` is taken by a conditional update, the order's last step |
 | `coupon_redemptions` | Tenant table under RLS. One per order (PK `(store_id, order_id)`): the coupon, the customer, the discount; `released_at` once given back. `(store_id, coupon_id, customer_id)` counts a customer's uses and covers the FK. `app_user` cannot delete |
 
 ## Rules worth knowing
