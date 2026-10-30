@@ -18,3 +18,8 @@ RETURNING used;
 -- name: GetUsage :one
 SELECT used FROM usage_counters
 WHERE store_id = @store_id AND feature = @feature AND period = @period;
+
+-- name: LockFeature :exec
+-- Serializes a store's creations of one counted feature until the
+-- transaction ends (AdmitTx).
+SELECT pg_advisory_xact_lock(hashtextextended(concat('entitlements:', sqlc.arg(store_id)::uuid, ':', sqlc.arg(feature)::text), 0));

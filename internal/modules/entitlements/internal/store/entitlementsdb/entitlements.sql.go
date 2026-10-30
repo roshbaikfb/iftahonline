@@ -62,6 +62,22 @@ func (q *Queries) GetUsage(ctx context.Context, arg GetUsageParams) (int64, erro
 	return used, err
 }
 
+const lockFeature = `-- name: LockFeature :exec
+SELECT pg_advisory_xact_lock(hashtextextended(concat('entitlements:', $1::uuid, ':', $2::text), 0))
+`
+
+type LockFeatureParams struct {
+	StoreID ulid.ID
+	Feature string
+}
+
+// Serializes a store's creations of one counted feature until the
+// transaction ends (AdmitTx).
+func (q *Queries) LockFeature(ctx context.Context, arg LockFeatureParams) error {
+	_, err := q.db.Exec(ctx, lockFeature, arg.StoreID, arg.Feature)
+	return err
+}
+
 const releaseUsage = `-- name: ReleaseUsage :one
 UPDATE usage_counters
 SET used = greatest(used - $1::bigint, 0), updated_at = now()

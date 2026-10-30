@@ -10,7 +10,9 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Deps are the module's explicit dependencies (CLAUDE.md rule 4).
@@ -19,6 +21,9 @@ type Deps struct {
 	// Source is where grants come from: FromBilling in production, Fixed
 	// in tests and demo tools.
 	Source Source
+	// IDs and Events publish UsageCrossed; nil Events discards.
+	IDs    *ulid.Generator
+	Events eventbus.Publisher
 }
 
 // Module is the wired entitlements module.
@@ -31,7 +36,7 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil || d.Source == nil {
 		return nil, errors.New("entitlements: missing dependency")
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Source: d.Source})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Source: d.Source, IDs: d.IDs, Events: d.Events})}, nil
 }
 
 // Entitlements is what other modules check and meter with.
