@@ -100,6 +100,10 @@ seeds six plans whose **prices and limits are placeholders**:
 - **Paymob setup.** Charging a saved card needs Paymob to enable
   recurring payments on the platform's account and issue a **MOTO
   integration ID**. Ask the Paymob account manager first.
+- **The platform's Paymob accounts.** Set one per currency the
+  platform bills (worker): `BILLING_PAYMOB_<EGP|SAR|AED>_SECRET_KEY`,
+  `…_API_KEY` and `…_MOTO_INTEGRATION_ID` (ADR-0052). Run the billing
+  gateway's contract against Paymob's test mode first.
 
 
 ## 4. Email

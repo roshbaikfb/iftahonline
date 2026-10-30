@@ -57,3 +57,4 @@ supersedes it.
 | [0049](0049-billing-accounts-and-monthly-invoices.md) | Billing accounts and monthly invoices | Accepted |
 | [0050](0050-plan-changes-reach-every-cache.md) | Plan changes reach every cache | Accepted |
 | [0051](0051-collection-and-dunning.md) | Collecting invoices, dunning, and the billing hold | Accepted |
+| [0052](0052-charging-cards-on-file-with-paymob.md) | Charging merchants' cards on file with Paymob | Accepted |

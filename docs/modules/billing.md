@@ -136,6 +136,25 @@ large as the charges, no invoice is written and the credits wait.
   saved by the gateway's token callback (7d-2) through
   `Collections.SavePaymentMethod`.
 
+## Paymob (ADR-0052)
+
+The `paymob` gateway charges cards on file through the platform's own
+Paymob accounts, one per currency:
+1. It asks first (inquiry by the attempt's reference
+   `<invoice>-<attempt>`).
+2. Then it creates an Intention on the MOTO integration.
+3. Then it pays with the card token.
+
+A lost answer is found by the retry, never charged twice. The shared
+client is `platform/paymob`.
+
+| Variable (worker) | Meaning |
+|---|---|
+| `BILLING_PAYMOB_<EGP\|SAR\|AED>_SECRET_KEY` | The account's Intention API key |
+| `BILLING_PAYMOB_<…>_API_KEY` | For inquiries |
+| `BILLING_PAYMOB_<…>_MOTO_INTEGRATION_ID` | Merchant-initiated charges; Paymob enables it on request |
+| `BILLING_PAYMOB_BASE_URL` | Overrides the API (tests) |
+
 ## The subscription lifecycle
 
 | From | Step | To |
