@@ -14,6 +14,7 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/stores?query=&status=&cursor=&limit=` | Slug prefix or name substring; newest first; keyset paging (at most 100 per page) |
 | `GET /admin/v1/stores/{id}` | The store and its domains |
 | `POST /admin/v1/stores/{id}/suspend` / `reactivate` | `reason` required (3 to 500 characters). 409 if the store is in the wrong state |
+| `POST /admin/v1/stores/{id}/impersonate` | Support session as the store's owner (ADR-0055). Requires a `reason`. `minutes` is 5 to 60 (default 30). `write` defaults to false, so the session is read-only. Answers with a one-time code and the dashboard URL that exchanges it. Recorded here (`store.impersonated`) before identity opens anything |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -28,6 +29,10 @@ same-origin.
   `tenancy.Module.Directory()`, which runs on that pool.
 - **Writing:** the console changes stores through `tenancy.Service`, as
   `app_user` inside the target store's tenant transaction.
+- **Impersonation:** `Deps.Impersonate` is adapted from
+  `identity.Module.Impersonate` in `cmd/platform/impersonate.go`.
+  `Deps.DashboardURL` is `MAIL_DASHBOARD_URL`. The CLI has neither, and
+  refuses with 503.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
   `platform/authtoken`, `platform/email` and `platform/clientinfo`. They
   were moved out of identity when the console became their second user.
