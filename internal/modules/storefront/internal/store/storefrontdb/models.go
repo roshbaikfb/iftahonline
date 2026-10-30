@@ -223,6 +223,16 @@ type Customer struct {
 	UpdatedAt   time.Time
 }
 
+type Feature struct {
+	Key       string
+	Kind      string
+	NameAr    string
+	NameEn    string
+	Sort      int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type InventoryLevel struct {
 	VariantID ulid.ID
 	StoreID   ulid.ID
@@ -437,6 +447,34 @@ type PaymentSetting struct {
 	StoreID       ulid.ID
 	DefaultMethod string
 	UpdatedAt     time.Time
+}
+
+type Plan struct {
+	ID        ulid.ID
+	Code      string
+	Version   int32
+	Kind      string
+	NameAr    string
+	NameEn    string
+	TrialDays int32
+	Public    bool
+	Status    string
+	Sort      int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type PlanEntitlement struct {
+	PlanID  ulid.ID
+	Feature string
+	Value   *int64
+}
+
+type PlanPrice struct {
+	PlanID      ulid.ID
+	Currency    string
+	Cycle       string
+	AmountMinor int64
 }
 
 type PlatformAdmin struct {
@@ -779,6 +817,22 @@ type StorefrontPreview struct {
 	StoreID   ulid.ID
 	ExpiresAt time.Time
 	CreatedAt time.Time
+}
+
+type Subscription struct {
+	StoreID           ulid.ID
+	PlanID            ulid.ID
+	Status            string
+	Cycle             *string
+	TrialEndsAt       pgtype.Timestamptz
+	PeriodStart       pgtype.Timestamptz
+	PeriodEnd         pgtype.Timestamptz
+	GraceUntil        pgtype.Timestamptz
+	SuspendedAt       pgtype.Timestamptz
+	CancelAtPeriodEnd bool
+	TrialUsed         bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type UsageCounter struct {
