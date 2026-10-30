@@ -39,3 +39,12 @@ WHERE store_id = @store_id AND user_id = @user_id AND role <> 'owner';
 -- name: DeleteMember :execrows
 DELETE FROM store_memberships
 WHERE store_id = @store_id AND user_id = @user_id AND role <> 'owner';
+
+-- name: ListMemberPhones :many
+-- The verified phones of the store's members with one of roles, for the
+-- platform's WhatsApp notices to them.
+SELECT u.phone::text AS phone FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = @store_id AND m.role = ANY(@roles::text[]) AND u.phone IS NOT NULL AND u.phone_verified_at IS NOT NULL
+ORDER BY m.created_at
+LIMIT 20;

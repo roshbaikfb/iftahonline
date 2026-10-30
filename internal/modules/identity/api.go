@@ -25,6 +25,19 @@ import (
 // module itself.
 func NewAuditRecorder(ids *ulid.Generator) audit.Recorder { return app.NewRecorder(ids) }
 
+// StaffPhones returns a function listing the verified phones (E.164) of
+// the store-in-ctx's members with one of roles, for the platform's
+// WhatsApp notices to them (billing, ADR-0054). It reads in one query.
+func StaffPhones(db postgres.Beginner, roles ...authz.Role) func(ctx context.Context) ([]string, error) {
+	return func(ctx context.Context) (out []string, err error) {
+		err = postgres.InTenantTx(ctx, db, func(tx pgx.Tx) (txErr error) {
+			out, txErr = store.MemberPhones(ctx, tx, roles)
+			return txErr
+		})
+		return out, err
+	}
+}
+
 // StaffEmails returns a function listing the email addresses of the
 // store-in-ctx's members with one of roles, for notices other modules
 // email to the store's staff. It reads in one query.
