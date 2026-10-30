@@ -126,21 +126,27 @@ func List(ctx context.Context, tx Tx) ([]domain.Coupon, error) {
 	return out, nil
 }
 
-// ByCode returns the coupon of a normalized code; lock holds its row
-// until tx ends.
-func ByCode(ctx context.Context, tx Tx, code string, lock bool) (domain.Coupon, error) {
+// ByCode returns the coupon of a normalized code.
+func ByCode(ctx context.Context, tx Tx, code string) (domain.Coupon, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return domain.Coupon{}, err
 	}
-	q := promotionsdb.New(tx)
-	var r promotionsdb.Coupon
-	if lock {
-		r, err = q.LockCouponByCode(ctx, promotionsdb.LockCouponByCodeParams{StoreID: store, Code: code})
-	} else {
-		r, err = q.CouponByCode(ctx, promotionsdb.CouponByCodeParams{StoreID: store, Code: code})
-	}
+	r, err := promotionsdb.New(tx).CouponByCode(ctx, promotionsdb.CouponByCodeParams{StoreID: store, Code: code})
 	return one(r, err, "by code")
+}
+
+// LockCustomer holds a customer's uses of a coupon until tx ends, so the
+// customer's concurrent orders count them one at a time.
+func LockCustomer(ctx context.Context, tx Tx, coupon, customer ulid.ID) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = promotionsdb.New(tx).LockCustomerUses(ctx, promotionsdb.LockCustomerUsesParams{StoreID: store, CouponID: coupon, CustomerID: customer}); err != nil {
+		return fmt.Errorf("promotions store: lock customer: %w", err)
+	}
+	return nil
 }
 
 // DeleteUnused deletes a coupon no order ever held; it reports whether
@@ -170,8 +176,13 @@ func CustomerUses(ctx context.Context, tx Tx, coupon, customer ulid.ID) (int, er
 	return int(n), nil
 }
 
-// Redeem records that an order holds a coupon and counts the use; it
-// reports false (counting nothing) when the order holds one already.
+// ErrNoUseLeft means the coupon had no use left (or was turned off) by
+// the time the order took one.
+var ErrNoUseLeft = errors.New("promotions store: no use left")
+
+// Redeem records that an order holds a coupon and takes a use; it
+// reports false (taking nothing) when the order holds one already, and
+// ErrNoUseLeft when none is left.
 func Redeem(ctx context.Context, tx Tx, order, customer ulid.ID, d domain.Discount) (bool, error) {
 	store, err := current(ctx)
 	if err != nil {
@@ -186,8 +197,12 @@ func Redeem(ctx context.Context, tx Tx, order, customer ulid.ID, d domain.Discou
 	if n == 0 {
 		return false, nil
 	}
-	if err = q.CountUse(ctx, promotionsdb.CountUseParams{StoreID: store, ID: d.CouponID}); err != nil {
-		return false, fmt.Errorf("promotions store: count use: %w", err)
+	_, err = q.ConsumeUse(ctx, promotionsdb.ConsumeUseParams{StoreID: store, ID: d.CouponID})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, ErrNoUseLeft
+	case err != nil:
+		return false, fmt.Errorf("promotions store: take use: %w", err)
 	}
 	return true, nil
 }

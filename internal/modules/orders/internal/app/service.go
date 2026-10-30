@@ -293,18 +293,6 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 		return err
 	}
 	o.CustomerID = c.ID
-	if coupon != nil {
-		// The code's use is taken under the coupon's lock, now that the
-		// customer is known (the per-customer limit); terms that changed
-		// since the quote send the shopper back.
-		got, rErr := s.coupons.RedeemTx(ctx, tx, d.CouponCode, o.Subtotal, c.ID, o.ID)
-		if rErr != nil {
-			return couponError(rErr)
-		}
-		if got.Amount.Amount() != coupon.Amount.Amount() || got.FreeShipping != coupon.FreeShipping {
-			return errCouponChanged
-		}
-	}
 	if _, err = s.catalog.ReserveStockTx(ctx, tx, catalog.ReserveRequest{Ref: stockRef(o.ID), Lines: reserveLines(d.Lines), Hold: true}); err != nil {
 		return err
 	}
@@ -314,6 +302,19 @@ func (s *Service) placeTx(ctx context.Context, tx pgx.Tx, d domain.Draft, o *dom
 	if !d.Signals.IsZero() { // with the order, so its conversions find them (ADR-0043)
 		if err = store.InsertSignals(ctx, tx, *o, d.Signals); err != nil {
 			return err
+		}
+	}
+	if coupon != nil {
+		// The code's use is taken last, so the coupon's row is locked
+		// only until this commit (ADR-0042), now that the customer is
+		// known (the per-customer limit); terms that changed since the
+		// quote send the shopper back, and nothing of the order stays.
+		got, rErr := s.coupons.RedeemTx(ctx, tx, d.CouponCode, o.Subtotal, c.ID, o.ID)
+		if rErr != nil {
+			return couponError(rErr)
+		}
+		if got.Amount.Amount() != coupon.Amount.Amount() || got.FreeShipping != coupon.FreeShipping {
+			return errCouponChanged
 		}
 	}
 	return s.recordTx(ctx, tx, *o, "", domain.StatusPending, "", "", "order.placed", domain.EventOrderPlaced,

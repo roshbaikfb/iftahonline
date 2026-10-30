@@ -12,18 +12,25 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-const countUse = `-- name: CountUse :exec
-UPDATE coupons SET uses = uses + 1, updated_at = now() WHERE store_id = $1 AND id = $2
+const consumeUse = `-- name: ConsumeUse :one
+UPDATE coupons SET uses = uses + 1, updated_at = now()
+WHERE store_id = $1 AND id = $2 AND active AND (max_uses IS NULL OR uses < max_uses)
+RETURNING uses
 `
 
-type CountUseParams struct {
+type ConsumeUseParams struct {
 	StoreID ulid.ID
 	ID      ulid.ID
 }
 
-func (q *Queries) CountUse(ctx context.Context, arg CountUseParams) error {
-	_, err := q.db.Exec(ctx, countUse, arg.StoreID, arg.ID)
-	return err
+// Takes a use while one is left and the coupon is on. The row is locked
+// only from here to the order's commit, its last step; a concurrent
+// order waits, then reads the count it left (no row: used up).
+func (q *Queries) ConsumeUse(ctx context.Context, arg ConsumeUseParams) (int32, error) {
+	row := q.db.QueryRow(ctx, consumeUse, arg.StoreID, arg.ID)
+	var uses int32
+	err := row.Scan(&uses)
+	return uses, err
 }
 
 const couponByCode = `-- name: CouponByCode :one
@@ -257,38 +264,22 @@ func (q *Queries) ListCoupons(ctx context.Context, storeID ulid.ID) ([]Coupon, e
 	return items, nil
 }
 
-const lockCouponByCode = `-- name: LockCouponByCode :one
-SELECT store_id, id, code, kind, percent, amount_minor, min_subtotal_minor, max_uses, max_per_customer, starts_at, ends_at, active, uses, created_at, updated_at FROM coupons WHERE store_id = $1 AND code = $2 FOR UPDATE
+const lockCustomerUses = `-- name: LockCustomerUses :exec
+SELECT pg_advisory_xact_lock(hashtextextended(CAST($1::uuid AS text) || ':' || CAST($2::uuid AS text) || ':' || CAST($3::uuid AS text), 0))
 `
 
-type LockCouponByCodeParams struct {
-	StoreID ulid.ID
-	Code    string
+type LockCustomerUsesParams struct {
+	StoreID    ulid.ID
+	CouponID   ulid.ID
+	CustomerID ulid.ID
 }
 
-// The order's transaction holds the coupon until it commits: concurrent
-// orders take its uses one at a time.
-func (q *Queries) LockCouponByCode(ctx context.Context, arg LockCouponByCodeParams) (Coupon, error) {
-	row := q.db.QueryRow(ctx, lockCouponByCode, arg.StoreID, arg.Code)
-	var i Coupon
-	err := row.Scan(
-		&i.StoreID,
-		&i.ID,
-		&i.Code,
-		&i.Kind,
-		&i.Percent,
-		&i.AmountMinor,
-		&i.MinSubtotalMinor,
-		&i.MaxUses,
-		&i.MaxPerCustomer,
-		&i.StartsAt,
-		&i.EndsAt,
-		&i.Active,
-		&i.Uses,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+// One customer's orders take a coupon one at a time until the order's
+// transaction ends (its per-customer limit); other customers wait for
+// nothing. The key is the store, coupon and customer.
+func (q *Queries) LockCustomerUses(ctx context.Context, arg LockCustomerUsesParams) error {
+	_, err := q.db.Exec(ctx, lockCustomerUses, arg.StoreID, arg.CouponID, arg.CustomerID)
+	return err
 }
 
 const releaseRedemption = `-- name: ReleaseRedemption :one

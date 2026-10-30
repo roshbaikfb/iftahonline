@@ -175,7 +175,7 @@ func (s *Service) Preview(ctx context.Context, code string, subtotal money.Money
 	}
 	var d domain.Discount
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		c, err := store.ByCode(ctx, tx, norm, false)
+		c, err := store.ByCode(ctx, tx, norm)
 		if errors.Is(err, domain.ErrNotFound) {
 			return &domain.Rejected{Reason: domain.NotFound}
 		}
@@ -188,21 +188,29 @@ func (s *Service) Preview(ctx context.Context, code string, subtotal money.Money
 	return d, err
 }
 
-// RedeemTx takes a code's use for an order, in the order's transaction:
-// the coupon is locked until it commits, its limits checked (the
-// customer's too) and the use counted, so concurrent orders cannot take
-// the last use twice. A code that does not apply is a *domain.Rejected.
+// RedeemTx takes a code's use for an order, in the order's transaction,
+// as its last step: the coupon's row is locked only from the use taken
+// to the commit, so concurrent orders take the last use once without
+// waiting on each other's whole order. A customer's own concurrent
+// orders take the code one at a time (the per-customer limit); other
+// customers wait for nothing. A code that does not apply is a
+// *domain.Rejected.
 func (s *Service) RedeemTx(ctx context.Context, tx pgx.Tx, code string, subtotal money.Money, customer, order ulid.ID) (domain.Discount, error) {
 	norm, ok := domain.NormalizeCode(code)
 	if !ok {
 		return domain.Discount{}, &domain.Rejected{Reason: domain.NotFound}
 	}
-	c, err := store.ByCode(ctx, tx, norm, true)
+	c, err := store.ByCode(ctx, tx, norm)
 	if errors.Is(err, domain.ErrNotFound) {
 		return domain.Discount{}, &domain.Rejected{Reason: domain.NotFound}
 	}
 	if err != nil {
 		return domain.Discount{}, err
+	}
+	if c.MaxPerCustomer != nil {
+		if err = store.LockCustomer(ctx, tx, c.ID, customer); err != nil {
+			return domain.Discount{}, err
+		}
 	}
 	uses, err := store.CustomerUses(ctx, tx, c.ID, customer)
 	if err != nil {
@@ -212,7 +220,14 @@ func (s *Service) RedeemTx(ctx context.Context, tx pgx.Tx, code string, subtotal
 	if err != nil {
 		return domain.Discount{}, err
 	}
-	if _, err = store.Redeem(ctx, tx, order, customer, d); err != nil {
+	switch _, err = store.Redeem(ctx, tx, order, customer, d); {
+	case errors.Is(err, store.ErrNoUseLeft):
+		// Taken by another order meanwhile, or turned off: say which.
+		if now, getErr := store.ByCode(ctx, tx, norm); getErr == nil && !now.Active {
+			return domain.Discount{}, &domain.Rejected{Reason: domain.Inactive}
+		}
+		return domain.Discount{}, &domain.Rejected{Reason: domain.UsedUp}
+	case err != nil:
 		return domain.Discount{}, err
 	}
 	return d, nil
