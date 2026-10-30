@@ -102,6 +102,19 @@ Numbers are `INV-<year>-<n>` and have no gaps. An invoice is due three
 days after issue. When there is nothing to bill, or the credits are as
 large as the charges, no invoice is written and the credits wait.
 
+## Plan changes (ADR-0050)
+
+- **The event.** Every lifecycle step is written with
+  `billing.subscription.changed` in its transaction. Every role's bus
+  sends it to:
+  - entitlements, whose cached grants are dropped on every instance over
+    Redis;
+  - the storefront, whose pages are refreshed and purged at the edge.
+- **Period ends.** `billing.end_periods` (hourly and at start) lists, through
+  `app.periods_ended`, the stores whose trial or cancelled period
+  ended. `billing.end_period` moves each to the free plan, keeping
+  `trial_used`.
+
 ## The subscription lifecycle
 
 | From | Step | To |

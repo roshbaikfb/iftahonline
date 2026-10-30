@@ -85,6 +85,14 @@ Grants are cached in memory per instance (`platform/storecache`):
 |---|---|
 | `Allowed`, cached, 28 goroutines (28-core dev machine) | ~205 ns/op, 0 allocs |
 
+### Across instances (ADR-0050)
+
+`billing.subscription.changed` reaches `InvalidateHandler` (subscriber
+`entitlements.invalidate_grants`) on every role's bus. The handler
+publishes the store on Redis (`entitlements:invalidate`), and each
+instance's `Module.Listen` drops its cached grants. The api, storefront
+and worker roles all listen. A lost message costs at most the 30 s TTL.
+
 ## How a consumption works
 
 `usage_counters` has one row per store, feature and month. `ConsumeTx`
