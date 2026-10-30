@@ -40,8 +40,9 @@ ON CONFLICT (year) DO UPDATE SET last = invoice_counters.last + 1
 RETURNING last;
 
 -- name: InsertInvoice :exec
-INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at)
-VALUES (@id, @account_id, @number, @period, @currency, @subtotal_minor, @tax_bps, @tax_minor, @total_minor, @issued_at, @due_at);
+-- Its first charge is due at once (ADR-0051).
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at)
+VALUES (@id, @account_id, @number, @period, @currency, @subtotal_minor, @tax_bps, @tax_minor, @total_minor, @issued_at, @due_at, @issued_at);
 
 -- name: InsertInvoiceLine :exec
 INSERT INTO invoice_lines (invoice_id, account_id, line_no, kind, line_store_id, description, quantity, amount_minor)

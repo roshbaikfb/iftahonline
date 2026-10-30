@@ -24,11 +24,19 @@ type Deps struct {
 	IDs    *ulid.Generator
 	// Events receives SubscriptionChanged (the worker); nil discards.
 	Events eventbus.Publisher
+	// Gateways, Sealer, Holds and Notifier collect invoices and run
+	// dunning (the worker, ADR-0051); Collect turns the hourly run on.
+	Gateways map[string]Gateway
+	Sealer   Sealer
+	Holds    Holds
+	Notifier Notifier
+	Collect  bool
 }
 
 // Module is the wired billing module.
 type Module struct {
-	svc *app.Service
+	svc     *app.Service
+	collect bool
 }
 
 // New wires the module.
@@ -36,7 +44,8 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil {
 		return nil, errors.New("billing: missing dependency")
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
+		Gateways: d.Gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier}), collect: d.Collect}, nil
 }
 
 // Grants is what the entitlements module reads.
@@ -49,8 +58,16 @@ func (m *Module) Fees() Fees { return m.svc }
 // Deps.Stores and Deps.Jobs).
 func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorkers(w) }
 
-// PeriodicJobs start each month's invoices (daily) and end trials and
-// cancelled periods (hourly), and both at worker start.
+// Collections records payments from outside the card on file.
+func (m *Module) Collections() Collections { return m.svc }
+
+// PeriodicJobs start each month's invoices (daily), end trials and
+// cancelled periods (hourly) and, with Deps.Collect, run the dunning
+// (hourly); all at worker start.
 func (m *Module) PeriodicJobs() []*river.PeriodicJob {
-	return []*river.PeriodicJob{app.InvoicesPeriodic(), app.EndPeriodsPeriodic()}
+	jobs := []*river.PeriodicJob{app.InvoicesPeriodic(), app.EndPeriodsPeriodic()}
+	if m.collect {
+		jobs = append(jobs, app.DunningPeriodic())
+	}
+	return jobs
 }

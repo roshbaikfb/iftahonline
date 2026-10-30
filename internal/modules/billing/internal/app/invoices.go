@@ -278,7 +278,7 @@ func (w *InvoiceAccountWorker) Work(ctx context.Context, j *river.Job[InvoiceAcc
 	return w.Svc.InvoiceAccount(ctx, j.Args.AccountID, j.Args.Period)
 }
 
-// AddWorkers registers the invoice and period jobs.
+// AddWorkers registers the invoice, period and dunning jobs.
 func (s *Service) AddWorkers(w *river.Workers) error {
 	for _, add := range []func() error{
 		func() error { return river.AddWorkerSafely(w, &InvoiceMonthWorker{Svc: s}) },
@@ -286,6 +286,11 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		func() error { return river.AddWorkerSafely(w, &InvoiceAccountWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &EndPeriodsWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &EndPeriodWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &DunningWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &ChargeInvoiceWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &SuspendWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &CancelWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &NotifyWorker{Svc: s}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("billing: workers: %w", err)
