@@ -34,6 +34,9 @@ func metaFrom(ctx context.Context) RequestMeta {
 type Identity struct {
 	UserID    ulid.ID
 	SessionID ulid.ID
+	// Impersonation is set on an admin's session as a store's owner
+	// (ADR-0055).
+	Impersonation *Impersonation
 }
 
 type identityKey struct{}

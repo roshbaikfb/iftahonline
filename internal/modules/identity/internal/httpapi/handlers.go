@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/domain"
@@ -124,7 +125,23 @@ func (h *Handlers) GetMe(ctx context.Context, _ GetMeRequestObject) (GetMeRespon
 	for i, m := range ms {
 		out.Memberships[i] = Membership{StoreId: m.StoreID.String(), Role: Role(m.Role)}
 	}
+	if id, ok := app.IdentityFrom(ctx); ok && id.Impersonation != nil {
+		out.Impersonation = &ImpersonationInfo{ReadOnly: id.Impersonation.ReadOnly, ExpiresAt: id.Impersonation.ExpiresAt}
+	}
 	return out, nil
+}
+
+// ExchangeImpersonation implements StrictServerInterface.
+func (h *Handlers) ExchangeImpersonation(ctx context.Context, req ExchangeImpersonationRequestObject) (ExchangeImpersonationResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	token, expires, err := h.svc.ExchangeImpersonation(ctx, req.Body.Code)
+	if err != nil {
+		return nil, err
+	}
+	cookie := sessionCookie(string(token), max(int(time.Until(expires).Seconds()), 1))
+	return ExchangeImpersonation204Response{Headers: ExchangeImpersonation204ResponseHeaders{SetCookie: &cookie}}, nil
 }
 
 // ListMySessions implements StrictServerInterface.

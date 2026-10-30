@@ -83,6 +83,7 @@ type fixture struct {
 	h     http.Handler
 	owner *pgxpool.Pool
 	ids   *ulid.Generator
+	id    *identity.Module
 }
 
 // newFixture mounts the real API: identity's routes and tenancy's routes
@@ -160,7 +161,7 @@ func newFixture(t *testing.T) fixture {
 		ip := netip.AddrFrom4([4]byte{10, b[13], b[14], b[15]})
 		mux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ipKey{}, ip)))
 	})
-	return fixture{h: h, owner: owner, ids: ids}
+	return fixture{h: h, owner: owner, ids: ids, id: id}
 }
 
 func (f fixture) unique(p string) string { return p + strings.ToLower(f.ids.New().String()[16:]) }

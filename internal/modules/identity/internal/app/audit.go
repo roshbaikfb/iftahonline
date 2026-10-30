@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,10 +31,18 @@ var _ audit.Recorder = (*Recorder)(nil)
 
 // RecordTx implements audit.Recorder: the store is the tenant in ctx, the
 // actor the principal in ctx (none for system actions), the network the
-// caller's IP prefix.
+// caller's IP prefix. During an admin's impersonation the metadata names
+// the admin (ADR-0055).
 func (s *Recorder) RecordTx(ctx context.Context, tx pgx.Tx, e audit.Entry) error {
 	if err := e.Validate(); err != nil {
 		return err
+	}
+	if admin, ok := impersonating(ctx); ok {
+		e.Metadata = maps.Clone(e.Metadata)
+		if e.Metadata == nil {
+			e.Metadata = map[string]any{}
+		}
+		e.Metadata["impersonated_by"] = admin.String()
 	}
 	var meta []byte
 	if len(e.Metadata) > 0 {

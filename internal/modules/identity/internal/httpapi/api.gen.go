@@ -346,6 +346,17 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
+// ImpersonationExchange defines model for ImpersonationExchange.
+type ImpersonationExchange struct {
+	Code string `json:"code"`
+}
+
+// ImpersonationInfo Set when this is a platform admin's support session; only its store is listed.
+type ImpersonationInfo struct {
+	ExpiresAt time.Time `json:"expires_at"`
+	ReadOnly  bool      `json:"read_only"`
+}
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -397,8 +408,10 @@ type MFAVerifyRequest struct {
 
 // Me defines model for Me.
 type Me struct {
-	Memberships []Membership `json:"memberships"`
-	User        User         `json:"user"`
+	// Impersonation Set when this is a platform admin's support session; only its store is listed.
+	Impersonation *ImpersonationInfo `json:"impersonation,omitempty"`
+	Memberships   []Membership       `json:"memberships"`
+	User          User               `json:"user"`
 }
 
 // Member defines model for Member.
@@ -635,6 +648,9 @@ type ListAuditLogParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ExchangeImpersonationJSONRequestBody defines body for ExchangeImpersonation for application/json ContentType.
+type ExchangeImpersonationJSONRequestBody = ImpersonationExchange
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -673,6 +689,9 @@ type UpdateMemberRoleJSONRequestBody = MemberRoleUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ExchangeImpersonation Exchange a console's one-time code for its support session
+	// (POST /v1/auth/impersonation)
+	ExchangeImpersonation(w http.ResponseWriter, r *http.Request)
 	// Login Sign in with email and password
 	// (POST /v1/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -752,6 +771,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ExchangeImpersonation operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeImpersonation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeImpersonation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -1373,6 +1406,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/verify", wrapper.VerifyOTPLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invitations/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auth/slug-availability", wrapper.CheckSlugAvailability)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/impersonation", wrapper.ExchangeImpersonation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone", wrapper.StartPhoneVerification)
@@ -1394,6 +1428,47 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ExchangeImpersonationRequestObject struct {
+	Body *ExchangeImpersonationJSONRequestBody
+}
+
+type ExchangeImpersonationResponseObject interface {
+	VisitExchangeImpersonationResponse(w http.ResponseWriter) error
+}
+
+type ExchangeImpersonation204ResponseHeaders struct {
+	SetCookie *string
+}
+
+type ExchangeImpersonation204Response struct {
+	Headers ExchangeImpersonation204ResponseHeaders
+}
+
+func (response ExchangeImpersonation204Response) VisitExchangeImpersonationResponse(w http.ResponseWriter) error {
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
+type ExchangeImpersonationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ExchangeImpersonationdefaultApplicationProblemPlusJSONResponse) VisitExchangeImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type LoginRequestObject struct {
 	Body *LoginJSONRequestBody
@@ -2340,6 +2415,9 @@ func (response UpdateMemberRoledefaultApplicationProblemPlusJSONResponse) VisitU
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ExchangeImpersonation Exchange a console's one-time code for its support session
+	// (POST /v1/auth/impersonation)
+	ExchangeImpersonation(ctx context.Context, request ExchangeImpersonationRequestObject) (ExchangeImpersonationResponseObject, error)
 	// Login Sign in with email and password
 	// (POST /v1/auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -2448,6 +2526,37 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ExchangeImpersonation operation middleware
+func (sh *strictHandler) ExchangeImpersonation(w http.ResponseWriter, r *http.Request) {
+	var request ExchangeImpersonationRequestObject
+
+	var body ExchangeImpersonationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExchangeImpersonation(ctx, request.(ExchangeImpersonationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExchangeImpersonation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExchangeImpersonationResponseObject); ok {
+		if err := validResponse.VisitExchangeImpersonationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // Login operation middleware

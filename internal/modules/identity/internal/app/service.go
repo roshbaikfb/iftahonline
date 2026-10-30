@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -371,7 +372,7 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (Identity, error
 		return Identity{}, err
 	}
 	s.touch(ctx, s.db, as)
-	return Identity{UserID: as.UserID, SessionID: as.ID}, nil
+	return Identity{UserID: as.UserID, SessionID: as.ID, Impersonation: impersonationOf(as)}, nil
 }
 
 // AuthenticateInStore resolves a token and the user's membership in the
@@ -395,20 +396,25 @@ func (s *Service) AuthenticateInStore(ctx context.Context, raw string) (authz.Pr
 		if txErr != nil {
 			return txErr
 		}
-		if as.Role == "" {
+		// An impersonation session opens its one store only (ADR-0055).
+		if as.Role == "" || as.ScopeStore != nil && *as.ScopeStore != storeID.ID {
 			return errStoreNotFound
 		}
 		s.touch(ctx, tx, as)
 		p = authz.Principal{UserID: as.UserID, SessionID: as.ID, StoreID: storeID, Role: as.Role}
+		if as.Impersonator != nil {
+			p.ImpersonatedBy, p.ReadOnly = *as.Impersonator, as.ReadOnly
+		}
 		return nil
 	})
 	return p, err
 }
 
 // touch slides the session's expiry at most once per SessionTouchEvery.
+// An impersonation session is never extended.
 func (s *Service) touch(ctx context.Context, db store.Tx, as store.ActiveSession) {
 	now := s.now()
-	if now.Sub(as.LastSeen) < domain.SessionTouchEvery {
+	if as.Impersonator != nil || now.Sub(as.LastSeen) < domain.SessionTouchEvery {
 		return
 	}
 	if err := store.TouchSession(ctx, db, as.ID, domain.ExpiresAt(as.CreatedAt, now)); err != nil {
@@ -447,6 +453,9 @@ func (s *Service) Me(ctx context.Context) (domain.User, []Membership, error) {
 		ms, err = store.MyMemberships(ctx, tx, id.UserID)
 		return err
 	})
+	if imp := id.Impersonation; imp != nil {
+		ms = slices.DeleteFunc(ms, func(m Membership) bool { return m.StoreID != imp.Store })
+	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return domain.User{}, nil, errNoSession
 	}

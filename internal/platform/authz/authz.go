@@ -117,6 +117,10 @@ type Principal struct {
 	SessionID ulid.ID
 	StoreID   tenant.StoreID
 	Role      Role
+	// ImpersonatedBy is the platform admin acting as this member, zero
+	// otherwise (ADR-0055); ReadOnly forbids such a session any change.
+	ImpersonatedBy ulid.ID
+	ReadOnly       bool
 }
 
 type principalKey struct{}

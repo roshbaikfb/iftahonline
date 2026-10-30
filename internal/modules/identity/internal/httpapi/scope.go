@@ -79,7 +79,15 @@ func Scope(svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) fun
 					return
 				}
 				ctx = authz.WithPrincipal(ctx, p)
-				ctx = app.WithIdentity(ctx, app.Identity{UserID: p.UserID, SessionID: p.SessionID})
+				id := app.Identity{UserID: p.UserID, SessionID: p.SessionID}
+				if !p.ImpersonatedBy.IsZero() {
+					imp := app.Impersonation{Admin: p.ImpersonatedBy, Store: store, ReadOnly: p.ReadOnly}
+					if !impersonationAllows(svc, w, r, resp, imp, !p.ReadOnly || safeMethod(r.Method)) {
+						return
+					}
+					id.Impersonation = &imp
+				}
+				ctx = app.WithIdentity(ctx, id)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -88,6 +96,12 @@ func Scope(svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) fun
 				id, err := svc.Authenticate(ctx, token)
 				switch {
 				case err == nil:
+					// Outside its store an impersonation session may read
+					// the account and sign out, never change it.
+					if imp := id.Impersonation; imp != nil &&
+						!impersonationAllows(svc, w, r, resp, *imp, safeMethod(r.Method) || strings.HasPrefix(r.URL.Path, "/v1/auth/")) {
+						return
+					}
 					ctx = app.WithIdentity(ctx, id)
 				case !errs.Is(err, errs.KindUnauthenticated):
 					resp.Write(w, r, err)
@@ -97,6 +111,24 @@ func Scope(svc *app.Service, resp *problem.Responder, clientIP ClientIPFunc) fun
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// impersonationAllows audits a request of an impersonation session
+// (ADR-0055) and refuses it (403) unless allowed. A request that cannot be
+// audited is not served.
+func impersonationAllows(svc *app.Service, w http.ResponseWriter, r *http.Request, resp *problem.Responder, imp app.Impersonation, allowed bool) bool {
+	route := r.Pattern
+	if route == "" {
+		route = r.URL.Path
+	}
+	if err := svc.RecordImpersonatedRequest(r.Context(), imp, r.Method, route, !allowed); err != nil {
+		resp.Write(w, r, err)
+		return false
+	}
+	if !allowed {
+		resp.Write(w, r, app.ErrImpersonationReadOnly())
+	}
+	return allowed
 }
 
 // DeviceCookieName identifies a browser across sign-ins (new-device

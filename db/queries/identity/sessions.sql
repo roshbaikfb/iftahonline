@@ -5,7 +5,8 @@ RETURNING *;
 
 -- name: GetActiveSession :one
 -- One query per authenticated request: the live session and its user.
-SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status
+SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status,
+       s.impersonator_id, s.scope_store_id, s.read_only
 FROM user_sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = @token_hash AND s.revoked_at IS NULL AND s.expires_at > now();
@@ -15,7 +16,7 @@ WHERE s.token_hash = @token_hash AND s.revoked_at IS NULL AND s.expires_at > now
 -- a non-member). Runs in a tenant transaction, so RLS limits the
 -- membership join to that store.
 SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.status AS user_status,
-       coalesce(m.role, '')::text AS role
+       coalesce(m.role, '')::text AS role, s.impersonator_id, s.scope_store_id, s.read_only
 FROM user_sessions s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN store_memberships m ON m.user_id = s.user_id AND m.store_id = @store_id
@@ -34,3 +35,13 @@ SELECT * FROM user_sessions
 WHERE user_id = @user_id AND revoked_at IS NULL AND expires_at > now()
 ORDER BY created_at DESC
 LIMIT 100;
+
+-- name: InsertImpersonationSession :exec
+-- An admin's session as the store's owner (ADR-0055): scoped to the
+-- store, never slid past expires_at.
+INSERT INTO user_sessions (id, user_id, token_hash, user_agent, ip_prefix, expires_at, impersonator_id, scope_store_id, read_only)
+VALUES (@id, @user_id, @token_hash, 'impersonation', '', @expires_at, @impersonator_id, @scope_store_id, @read_only);
+
+-- name: GetStoreOwner :one
+-- The store's owner (one per store); runs in its tenant transaction.
+SELECT user_id FROM store_memberships WHERE store_id = @store_id AND role = 'owner';
