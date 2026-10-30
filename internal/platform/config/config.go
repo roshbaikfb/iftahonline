@@ -83,6 +83,18 @@ type Billing struct {
 	// suspensions. Off until merchants can save a card (P7 7d-2), so no
 	// store is suspended for an invoice it could not pay.
 	CollectionEnabled bool
+	// Paymob are the platform's own Paymob accounts by currency (EGP,
+	// SAR, AED), which charge merchants' cards on file (ADR-0052).
+	Paymob map[string]BillingPaymob
+	// PaymobBaseURL overrides Paymob's API for every region (tests).
+	PaymobBaseURL string
+}
+
+// BillingPaymob is one of the platform's Paymob accounts.
+type BillingPaymob struct {
+	SecretKey         string
+	APIKey            string
+	MotoIntegrationID int64 // Paymob enables merchant-initiated charges on request
 }
 
 // Messaging configures the platform's own messaging accounts
@@ -409,7 +421,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			r.errorf("PAYMENTS_FAKE_GATEWAY: the fake gateway is not for production")
 		}
 		c.Messaging = r.messaging(c.Env)
-		c.Billing = Billing{CollectionEnabled: r.oneOf("BILLING_COLLECTION_ENABLED", "false", "true", "false") == "true"}
+		c.Billing = r.billing()
 	}
 	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
@@ -760,6 +772,30 @@ func (r *reader) prefixes(key string) []netip.Prefix {
 
 // messaging reads the platform's messaging accounts: each all or
 // nothing.
+// billing reads the collection switch and the platform's Paymob
+// accounts: BILLING_PAYMOB_<CURRENCY>_{SECRET_KEY,API_KEY,MOTO_INTEGRATION_ID},
+// all three of a currency or none.
+func (r *reader) billing() Billing {
+	b := Billing{
+		CollectionEnabled: r.oneOf("BILLING_COLLECTION_ENABLED", "false", "true", "false") == "true",
+		PaymobBaseURL:     r.url("BILLING_PAYMOB_BASE_URL", false, "https", "http"),
+		Paymob:            map[string]BillingPaymob{},
+	}
+	for _, cur := range []string{"EGP", "SAR", "AED"} {
+		p := "BILLING_PAYMOB_" + cur + "_"
+		a := BillingPaymob{SecretKey: r.secretOptional(p + "SECRET_KEY"), APIKey: r.secretOptional(p + "API_KEY"),
+			MotoIntegrationID: r.int64(p+"MOTO_INTEGRATION_ID", 0, 0, 1<<53)}
+		switch set := countSet(a.SecretKey, a.APIKey) + map[bool]int{true: 1}[a.MotoIntegrationID != 0]; set {
+		case 0:
+		case 3:
+			b.Paymob[cur] = a
+		default:
+			r.errorf("%sSECRET_KEY, %sAPI_KEY and %sMOTO_INTEGRATION_ID go together", p, p, p)
+		}
+	}
+	return b
+}
+
 func (r *reader) messaging(env string) Messaging {
 	m := Messaging{
 		WhatsAppPhoneNumberID: r.str("WHATSAPP_PHONE_NUMBER_ID", ""),
