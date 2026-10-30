@@ -933,7 +933,13 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err != nil {
 		return err
 	}
-	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events})
+	billSealer, err := envelope.New(envelope.FromKeyring(cfg.Secrets.Keyring))
+	if err != nil {
+		return err
+	}
+	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events,
+		Sealer: billSealer, Holds: billingHolds(ten), Collect: cfg.Billing.CollectionEnabled,
+		Notifier: billingNotifier(ten, identity.StaffEmails(pool, authz.RoleOwner), mailer.FromConfig(cfg.Mail, log), cfg.Mail.DashboardURL)})
 	if err != nil {
 		return err
 	}
