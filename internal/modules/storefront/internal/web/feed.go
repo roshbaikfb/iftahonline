@@ -38,9 +38,13 @@ const (
 	maxFeedImages      = 11 // the image and ten more
 )
 
-// feedPerIP bounds the keys one address may try; the right key is served
-// from the edge.
-var feedPerIP = ratelimit.Limit{Burst: 20, Period: time.Minute} //nolint:gochecknoglobals // constant policy
+// Feed requests that reach the origin are bounded per address (the keys
+// one may try) and per store (the edge serves the right key's copy; its
+// misses are rare).
+var (
+	feedPerIP    = ratelimit.Limit{Burst: 20, Period: time.Minute}  //nolint:gochecknoglobals // constant policy
+	feedPerStore = ratelimit.Limit{Burst: 120, Period: time.Minute} //nolint:gochecknoglobals // constant policy
+)
 
 // feedRoute serves /feeds/<feed>.xml?key=…: the store's products, one
 // item per variant, when key opens its feeds; a 404 otherwise.
@@ -60,18 +64,23 @@ func (s *Shop) feedRoute(w http.ResponseWriter, r *http.Request, store tenant.St
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return true
 	}
-	if s.limiter != nil {
-		res, err := s.limiter.Allow(r.Context(), "feed:ip:"+s.clientIP(r), feedPerIP)
-		switch {
-		case err != nil:
-			s.log.WarnContext(r.Context(), "storefront: feed limiter unavailable", "err", err)
-		case !res.Allowed:
-			w.Header().Set("Retry-After", strconv.Itoa(int(res.RetryAfter.Seconds())+1))
-			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+	key, ok := onlyKey(r.URL.RawQuery)
+	if !ok {
+		feedNotFound(w)
+		return true
+	}
+	if allow, retry := s.allowGuarded(r, store, "feed", feedPerIP, feedPerStore); !allow {
+		w.Header().Set("Cache-Control", "no-store")
+		if retry == 0 { // the limiter is down: never serve the catalog unguarded
+			w.Header().Set("Retry-After", "5")
+			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 			return true
 		}
+		w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
+		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return true
 	}
-	allowed, err := s.feeds.FeedAllowed(r.Context(), r.URL.Query().Get("key"))
+	allowed, err := s.feeds.FeedAllowed(r.Context(), key)
 	switch {
 	case err != nil:
 		s.unavailable(w, r, err)
@@ -81,6 +90,16 @@ func (s *Shop) feedRoute(w http.ResponseWriter, r *http.Request, store tenant.St
 		s.serveFeed(w, r, store, p, feed)
 	}
 	return true
+}
+
+// onlyKey reads a feed URL's query: "key=<key>" and nothing else, so no
+// other parameter can make a request the edge has no copy of.
+func onlyKey(raw string) (string, bool) {
+	key, ok := strings.CutPrefix(raw, "key=")
+	if !ok || key == "" || strings.ContainsAny(key, "&;=%+") {
+		return "", false
+	}
+	return key, true
 }
 
 // feedNotFound answers a feed that is off, unknown or asked with a wrong
