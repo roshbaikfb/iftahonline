@@ -19,7 +19,7 @@ func (f fixture) impersonate(t *testing.T, storeID string, admin ulid.ID, d time
 	if err != nil {
 		t.Fatal(err)
 	}
-	if time.Until(g.CodeExpiresAt) > time.Minute || g.ExpiresAt.Sub(time.Now()) > d {
+	if time.Until(g.CodeExpiresAt) > time.Minute || time.Until(g.ExpiresAt) > d {
 		t.Fatalf("grant = %+v", g)
 	}
 	res, m := f.do(t, newReq(t, http.MethodPost, "/v1/auth/impersonation", `{"code":"`+g.Code+`"}`, sameOrigin))

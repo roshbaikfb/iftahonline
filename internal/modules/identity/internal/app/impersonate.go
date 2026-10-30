@@ -81,7 +81,7 @@ func (s *Service) StartImpersonation(ctx context.Context, admin ulid.ID, reason 
 	g := ImpersonationGrant{Code: string(code), CodeExpiresAt: now.Add(ImpersonationCodeTTL), ExpiresAt: now.Add(d)}
 	sessionID := s.ids.New()
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		owner, txErr := store.StoreOwner(ctx, tx)
+		owner, txErr := store.Owner(ctx, tx)
 		if errors.Is(txErr, domain.ErrNotFound) {
 			return errNoOwner
 		}
