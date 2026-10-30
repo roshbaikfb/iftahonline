@@ -187,6 +187,20 @@ func TestPayments(t *testing.T) {
 	}
 }
 
+func TestBilling(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || c.Billing.CollectionEnabled {
+		t.Fatalf("default: %+v %v", c.Billing, err)
+	}
+	if c, err = config.Load(config.RoleWorker, env(with("BILLING_COLLECTION_ENABLED", "true"))); err != nil || !c.Billing.CollectionEnabled {
+		t.Fatalf("enabled: %+v %v", c.Billing, err)
+	}
+	if _, err = config.Load(config.RoleWorker, env(with("BILLING_COLLECTION_ENABLED", "yes"))); err == nil {
+		t.Fatal("yes accepted")
+	}
+}
+
 func TestMessaging(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleWorker, env(base()))

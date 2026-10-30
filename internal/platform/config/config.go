@@ -73,6 +73,16 @@ type Config struct {
 	// Messaging configures the platform's WhatsApp number and SMS account
 	// (api, worker).
 	Messaging Messaging
+	// Billing configures collecting invoices (worker).
+	Billing Billing
+}
+
+// Billing configures collecting invoices (ADR-0051).
+type Billing struct {
+	// CollectionEnabled runs the hourly dunning: charges, retries,
+	// suspensions. Off until merchants can save a card (P7 7d-2), so no
+	// store is suspended for an invoice it could not pay.
+	CollectionEnabled bool
 }
 
 // Messaging configures the platform's own messaging accounts
@@ -399,6 +409,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			r.errorf("PAYMENTS_FAKE_GATEWAY: the fake gateway is not for production")
 		}
 		c.Messaging = r.messaging(c.Env)
+		c.Billing = Billing{CollectionEnabled: r.oneOf("BILLING_COLLECTION_ENABLED", "false", "true", "false") == "true"}
 	}
 	if role == RoleAPI || role == RoleAdmin {
 		c.Identity = Identity{
