@@ -8,6 +8,7 @@ package billing
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -57,6 +58,16 @@ type (
 	// Notifier emails the store-in-ctx's owners a notice.
 	Notifier = app.Notifier
 )
+
+// Notice kinds.
+const (
+	NoticePaymentFailed = domain.NoticePaymentFailed
+	NoticeSuspended     = domain.NoticeSuspended
+	NoticePaid          = domain.NoticePaid
+)
+
+// NoticeDate is a notice's day as written in it (UTC), "" for none.
+func NoticeDate(t time.Time) string { return domain.Date(t) }
 
 // Collections records payments of invoices from outside the card on
 // file: a card saved by the gateway (7d-2), a transfer the platform

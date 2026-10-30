@@ -956,7 +956,8 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events,
 		Sealer: billSealer, Holds: billingHolds(ten), Collect: cfg.Billing.CollectionEnabled, Paymob: cfg.Billing,
 		Inbox: hooks.Inbox(), Log: log, PublicURL: cfg.Mail.DashboardURL, DashboardURL: cfg.Mail.DashboardURL,
-		Notifier: billingNotifier(ten, identity.StaffEmails(pool, authz.RoleOwner), mailer.FromConfig(cfg.Mail, log), cfg.Mail.DashboardURL)})
+		Notifier: billingNotifier(ten, identity.StaffEmails(pool, authz.RoleOwner), mailer.FromConfig(cfg.Mail, log), cfg.Mail.DashboardURL,
+			ownerNotices{phones: identity.StaffPhones(pool, authz.RoleOwner), whatsapp: msg.Merchant(), log: log})})
 	if err != nil {
 		return err
 	}
