@@ -199,6 +199,14 @@ func TestBilling(t *testing.T) {
 	if _, err = config.Load(config.RoleWorker, env(with("BILLING_COLLECTION_ENABLED", "yes"))); err == nil {
 		t.Fatal("yes accepted")
 	}
+	egp := []string{"BILLING_PAYMOB_EGP_SECRET_KEY", "egy_sk_test_1", "BILLING_PAYMOB_EGP_API_KEY", "api-1", "BILLING_PAYMOB_EGP_MOTO_INTEGRATION_ID", "4567"}
+	c, err = config.Load(config.RoleWorker, env(with(egp...)))
+	if err != nil || c.Billing.Paymob["EGP"].MotoIntegrationID != 4567 || c.Billing.Paymob["EGP"].APIKey != "api-1" || len(c.Billing.Paymob) != 1 {
+		t.Fatalf("Egypt's account: %+v %v", c.Billing.Paymob, err)
+	}
+	if _, err = config.Load(config.RoleWorker, env(with(egp[:4]...))); err == nil {
+		t.Fatal("an account without its MOTO integration accepted")
+	}
 }
 
 func TestMessaging(t *testing.T) {
