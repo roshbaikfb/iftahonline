@@ -70,6 +70,7 @@ type options struct {
 	noWA   bool
 	noSMS  bool
 	chans  *app.Channels
+	db     *pgxpool.Pool // the service's pool (a capturing one); the fixture's own otherwise
 }
 
 func newFixture(t *testing.T, o options) fixture {
@@ -102,7 +103,11 @@ func newFixture(t *testing.T, o options) fixture {
 	if o.chans != nil {
 		chans = *o.chans
 	}
-	f.svc = app.NewService(app.Deps{DB: pool, IDs: f.ids, Keyring: keyring, Quota: f.quota, Jobs: f.jobs, Channels: chans, Buttons: buttonKey,
+	db := pool
+	if o.db != nil {
+		db = o.db
+	}
+	f.svc = app.NewService(app.Deps{DB: db, IDs: f.ids, Keyring: keyring, Quota: f.quota, Jobs: f.jobs, Channels: chans, Buttons: buttonKey,
 		Inbox: f.inbox, VerifyToken: "verify-me", Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	f.svc.SetReplyHandler(f.replies)
 	return f

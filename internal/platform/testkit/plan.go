@@ -44,6 +44,20 @@ func (c *SQLCapture) Last(t testing.TB, substr string) pgx.TraceQueryStartData {
 	return pgx.TraceQueryStartData{}
 }
 
+// Count is how many captured queries' SQL contains substr: a request's
+// cost in queries.
+func (c *SQLCapture) Count(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, q := range c.queries {
+		if strings.Contains(q.SQL, substr) {
+			n++
+		}
+	}
+	return n
+}
+
 // CapturingPool opens a pool on url whose queries are captured. It is
 // closed when the test ends.
 func CapturingPool(t testing.TB, url string) (*pgxpool.Pool, *SQLCapture) {

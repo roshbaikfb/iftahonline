@@ -83,6 +83,10 @@ func (p PlatformProvider) VerifyPlatform(ctx context.Context, req webhooks.Reque
 	case err != nil:
 		return nil, err
 	}
+	textStores, err := p.svc.storesOfTexts(ctx, events)
+	if err != nil {
+		return nil, err
+	}
 	parts := make([]webhooks.Part, 0, len(events))
 	unplaced := 0
 	for _, e := range events {
@@ -98,8 +102,8 @@ func (p PlatformProvider) VerifyPlatform(ctx context.Context, req webhooks.Reque
 			ref, _, ok = p.svc.buttons.ParsePayload(e.Payload)
 			store = ref.Store
 		case channel.TextEvent:
-			if store, ok, err = p.svc.storeOfText(ctx, e.Text); err != nil {
-				return nil, err
+			if code, found := domain.FindCode(e.Text); found {
+				store, ok = textStores[code]
 			}
 		}
 		if !ok {
@@ -187,19 +191,27 @@ func (s *Service) ProcessWebhook(ctx context.Context, receiptID ulid.ID, provide
 	return s.mark(ctx, receiptID, "ignored", nil)
 }
 
-// storeOfText finds the store a customer's text is for: the store of the
-// WhatsApp code in it, across stores.
-func (s *Service) storeOfText(ctx context.Context, text string) (tenant.StoreID, bool, error) {
-	code, ok := domain.FindCode(text)
-	if !ok {
-		return tenant.StoreID{}, false, nil
+// storesOfTexts finds the stores the batch's customer texts are for: the
+// stores of the WhatsApp codes in them, across stores, in one query.
+func (s *Service) storesOfTexts(ctx context.Context, events []channel.Event) (map[string]tenant.StoreID, error) {
+	var codes []string
+	for _, e := range events {
+		if e.Kind != channel.TextEvent {
+			continue
+		}
+		if code, ok := domain.FindCode(e.Text); ok {
+			codes = append(codes, code)
+		}
 	}
-	var id tenant.StoreID
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	var out map[string]tenant.StoreID
 	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) (err error) {
-		id, ok, err = store.ByCode(ctx, tx, code)
+		out, err = store.StoresByCodes(ctx, tx, codes)
 		return err
 	})
-	return id, ok, err
+	return out, err
 }
 
 // applyText confirms an order its customer confirmed by writing to the

@@ -76,14 +76,22 @@ func InsertConfirmation(ctx context.Context, tx Tx, c domain.Confirmation, token
 	return n == 1, nil
 }
 
-// ByCode finds the store of a WhatsApp code, across stores (the
-// platform's one number receives every store's texts). tx has no tenant.
-func ByCode(ctx context.Context, tx Tx, code string) (tenant.StoreID, bool, error) {
-	id, err := messagingdb.New(tx).ConfirmationStoreByCode(ctx, code)
-	if err != nil {
-		return tenant.StoreID{}, false, fmt.Errorf("messaging store: store by code: %w", err)
+// StoresByCodes returns the store of each WhatsApp code it knows,
+// across stores (the platform's one number receives every store's
+// texts), in one query of at most 1,000 codes. tx has no tenant.
+func StoresByCodes(ctx context.Context, tx Tx, codes []string) (map[string]tenant.StoreID, error) {
+	out := make(map[string]tenant.StoreID, len(codes))
+	if len(codes) == 0 {
+		return out, nil
 	}
-	return tenant.StoreID{ID: id}, !id.IsZero(), nil
+	rows, err := messagingdb.New(tx).ConfirmationStoresByCodes(ctx, codes)
+	if err != nil {
+		return nil, fmt.Errorf("messaging store: stores by codes: %w", err)
+	}
+	for _, r := range rows {
+		out[r.Code] = tenant.StoreID{ID: r.StoreID}
+	}
+	return out, nil
 }
 
 // ConfirmationByCode returns the confirmation of a WhatsApp code in the
