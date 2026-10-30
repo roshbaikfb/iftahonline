@@ -167,6 +167,13 @@ func (m *Module) OrderPlacedHandler() eventbus.Handler {
 	return eventbus.Typed(func(ctx context.Context, ev orders.OrderPlaced) error { return m.svc.ConfirmOrder(ctx, ev.OrderID) })
 }
 
+// PlanLimitHandler warns the merchant when a monthly limit of the
+// store's plan is near or reached. Subscribe it as PlanLimitsSubscriber
+// to entitlements.EventUsageCrossed (worker role).
+func (m *Module) PlanLimitHandler() eventbus.Handler {
+	return eventbus.Typed(func(ctx context.Context, ev entitlements.UsageCrossed) error { return m.svc.PlanLimitCrossed(ctx, ev) })
+}
+
 // Fakes returns the fake WhatsApp and SMS channels when they are used
 // (MESSAGING_FAKE_CHANNELS), for tests and demos; nil otherwise.
 func (m *Module) Fakes() (whatsapp, sms *fake.Channel) { return m.wa, m.sms }

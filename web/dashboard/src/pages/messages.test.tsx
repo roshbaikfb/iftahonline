@@ -250,6 +250,20 @@ describe('NotificationBell', () => {
     });
   });
 
+  it("shows a plan's monthly orders limit, near and reached", async () => {
+    const planNotices = [
+      { id: 'P1', kind: 'plan_limit_nearly', feature: 'orders_per_month', used: 240, limit: 300, read: false, created_at: new Date().toISOString() },
+      { id: 'P2', kind: 'plan_limit_reached', feature: 'orders_per_month', used: 300, limit: 300, read: false, created_at: new Date().toISOString() },
+    ];
+    routes({ [`GET ${base}/messaging/notifications`]: () => ({ status: 200, body: { items: planNotices, unread: 2 } }) });
+    renderAt(`/stores/${store}/home`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByLabelText('الإشعارات: 2 غير مقروءة'));
+    const panel = screen.getByRole('region', { name: 'الإشعارات' });
+    expect(within(panel).getByText(/استهلكت 80% من طلبات باقتك هذا الشهر \(240 من 300\)/)).toBeInTheDocument();
+    expect(within(panel).getByText(/وصلت إلى حد طلبات باقتك هذا الشهر/)).toBeInTheDocument();
+  });
+
   it('asks again only after a minute, however many screens open meanwhile', async () => {
     const calls = routes({ [`GET ${base}/messaging/notifications`]: () => ({ status: 200, body: { items: notices, unread: 2 } }) });
     let now = Date.parse('2026-10-29T12:00:00Z');

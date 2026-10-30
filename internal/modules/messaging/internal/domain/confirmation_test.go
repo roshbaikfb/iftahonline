@@ -75,6 +75,33 @@ func TestNotices(t *testing.T) {
 	}
 }
 
+func TestPlanLimitNotices(t *testing.T) {
+	t.Parallel()
+	period := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	reached := domain.PlanLimitNotice(domain.PlanLimitReached, "orders_per_month", period, 300, 300)
+	nearly := domain.PlanLimitNotice(domain.PlanLimitNearly, "orders_per_month", period, 240, 300)
+	if reached.DedupKey != "orders_per_month:2026-10" || reached.Data.Feature != "orders_per_month" || !reached.Kind.Emailed() || !nearly.Kind.Emailed() {
+		t.Fatalf("notice = %+v", reached)
+	}
+	other := domain.PlanLimitNotice(domain.PlanLimitNearly, "uploads", period, 8, 10)
+	tests := []struct {
+		n                    domain.Notification
+		locale, subj, inText string
+	}{
+		{reached, "ar", "سوق: وصلت إلى حد باقتك هذا الشهر", "300 طلب"},
+		{nearly, "ar", "سوق: استُخدم 80% من حد باقتك هذا الشهر", "240 من 300 طلب"},
+		{reached, "en", "سوق: your plan's monthly orders are used up", "New orders still come in"},
+		{nearly, "en", "سوق: 80% of your plan's monthly orders", "240 of its plan's 300 orders"},
+		{other, "en", "سوق: 80% of your plan's monthly uploads", "8 of its plan's 10 uploads"},
+	}
+	for _, tt := range tests {
+		subj, text := tt.n.Email(tt.locale, "سوق", "https://app.example.com")
+		if subj != tt.subj || !strings.Contains(text, tt.inText) || !strings.Contains(text, "https://app.example.com/billing") {
+			t.Errorf("%s/%s: %q\n%s", tt.n.Kind, tt.locale, subj, text)
+		}
+	}
+}
+
 func TestCodes(t *testing.T) {
 	t.Parallel()
 	seen := map[string]bool{}

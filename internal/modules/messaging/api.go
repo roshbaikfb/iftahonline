@@ -82,6 +82,10 @@ type ConfirmLinks interface {
 
 var _ ConfirmLinks = (*app.Service)(nil)
 
+// PlanLimitsSubscriber is the event bus subscriber name of
+// Module.PlanLimitHandler.
+const PlanLimitsSubscriber = "messaging.plan_limits"
+
 // ConfirmOrdersSubscriber is the event bus subscriber name of
 // Module.OrderPlacedHandler: subscribe it to orders.EventOrderPlaced on
 // every role (publishers need the list); only the worker's handles.

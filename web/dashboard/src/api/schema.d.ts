@@ -432,6 +432,8 @@ export interface paths {
         /**
          * Invite someone to the team by email
          * @description Permission: members.manage. The link is emailed and valid for 7 days.
+         *     Members (the owner included) and open invitations count against the
+         *     plan's team seats; past them it is 403 with code `plan_limit`.
          */
         post: operations["createInvitation"];
         delete?: never;
@@ -530,7 +532,8 @@ export interface paths {
          * Add a custom domain
          * @description Permission: domains.manage. The domain starts as `pending`; publish
          *     the returned TXT record, and it is verified automatically (checked
-         *     with backoff for about three days).
+         *     with backoff for about three days). Past the plan's custom domains
+         *     it is 403 with code `plan_limit`.
          */
         post: operations["addDomain"];
         delete?: never;
@@ -628,6 +631,7 @@ export interface paths {
          * Create a product
          * @description Permission: catalog.manage. Without `slug`, one is derived from the
          *     title (Arabic letters are kept). Variants must not carry `id`.
+         *     Past the plan's products it is 403 with code `plan_limit`.
          */
         post: operations["createProduct"];
         delete?: never;
@@ -4594,8 +4598,11 @@ export interface components {
         };
         Notification: {
             id: components["schemas"]["ULID"];
-            /** @enum {string} */
-            kind: "quota_nearly" | "quota_reached" | "order_confirmed" | "order_cancelled" | "order_auto_cancelled" | "confirmation_unreached";
+            /**
+             * @description plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
+             * @enum {string}
+             */
+            kind: "quota_nearly" | "quota_reached" | "order_confirmed" | "order_cancelled" | "order_auto_cancelled" | "confirmation_unreached" | "plan_limit_nearly" | "plan_limit_reached";
             order_id?: components["schemas"]["ULID"];
             order_ref?: string;
             /** Format: int64 */
@@ -4604,6 +4611,11 @@ export interface components {
             limit?: number;
             /** @example 2026-10 */
             period?: string;
+            /**
+             * @description A plan limit's feature (plan_limit_*).
+             * @example orders_per_month
+             */
+            feature?: string;
             read: boolean;
             /** Format: date-time */
             created_at: string;

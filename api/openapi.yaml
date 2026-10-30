@@ -580,7 +580,10 @@ paths:
       tags: [identity]
       operationId: createInvitation
       summary: Invite someone to the team by email
-      description: "Permission: members.manage. The link is emailed and valid for 7 days."
+      description: |
+        Permission: members.manage. The link is emailed and valid for 7 days.
+        Members (the owner included) and open invitations count against the
+        plan's team seats; past them it is 403 with code `plan_limit`.
       requestBody:
         required: true
         content:
@@ -691,7 +694,8 @@ paths:
       description: |
         Permission: domains.manage. The domain starts as `pending`; publish
         the returned TXT record, and it is verified automatically (checked
-        with backoff for about three days).
+        with backoff for about three days). Past the plan's custom domains
+        it is 403 with code `plan_limit`.
       requestBody:
         required: true
         content:
@@ -802,6 +806,7 @@ paths:
       description: |
         Permission: catalog.manage. Without `slug`, one is derived from the
         title (Arabic letters are kept). Variants must not carry `id`.
+        Past the plan's products it is 403 with code `plan_limit`.
       requestBody:
         required: true
         content:
@@ -5301,12 +5306,15 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         kind:
           type: string
-          enum: [quota_nearly, quota_reached, order_confirmed, order_cancelled, order_auto_cancelled, confirmation_unreached]
+          enum: [quota_nearly, quota_reached, order_confirmed, order_cancelled, order_auto_cancelled, confirmation_unreached,
+            plan_limit_nearly, plan_limit_reached]
+          description: plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
         order_id: { $ref: "#/components/schemas/ULID" }
         order_ref: { type: string }
         used: { type: integer, format: int64 }
         limit: { type: integer, format: int64 }
         period: { type: string, example: "2026-10" }
+        feature: { type: string, example: orders_per_month, description: "A plan limit's feature (plan_limit_*)." }
         read: { type: boolean }
         created_at: { type: string, format: date-time }
     NotificationPage:
