@@ -22,7 +22,7 @@ type Charge struct {
 	Token       string // the gateway's card token, opened
 	AmountMinor int64
 	Currency    string
-	Reference   string // the invoice's number: the gateway's merchant reference
+	Reference   string // the invoice's number and attempt: the gateway's merchant reference
 }
 
 // ChargeResult is the gateway's answer.
@@ -199,7 +199,10 @@ func (s *Service) charge(ctx context.Context, account ulid.ID, m store.Method, i
 	if err != nil {
 		return ChargeResult{}, fmt.Errorf("billing: open card token: %w", err)
 	}
-	return gw.Charge(ctx, Charge{Token: string(token), AmountMinor: inv.TotalMinor, Currency: inv.Currency, Reference: inv.Number})
+	// One reference per attempt: a gateway that lost an answer finds it
+	// by this reference, and never charges the same attempt twice.
+	ref := fmt.Sprintf("%s-%d", inv.Number, inv.Attempts+1)
+	return gw.Charge(ctx, Charge{Token: string(token), AmountMinor: inv.TotalMinor, Currency: inv.Currency, Reference: ref})
 }
 
 // SettleInvoice records an invoice paid outside the card on file (a
