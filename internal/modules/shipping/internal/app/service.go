@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/storecache"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -55,7 +56,7 @@ type Service struct {
 	audit  audit.Recorder
 	events eventbus.Publisher
 	stores StoreSource
-	cache  *configs
+	cache  *storecache.Cache[domain.Config]
 
 	carriers  Carriers
 	sealer    *envelope.Sealer
@@ -99,7 +100,7 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: newConfigs(d.Cache),
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, stores: d.Stores, cache: storecache.New[domain.Config](d.Cache),
 		carriers: d.Carriers, sealer: d.Sealer, publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, objects: d.Objects, inbox: d.Inbox,
 		now: time.Now}
 }
@@ -129,12 +130,12 @@ func (s *Service) Quote(ctx context.Context, req domain.QuoteRequest) (domain.Qu
 	if err != nil {
 		return domain.Quote{}, err
 	}
-	cfg, key, ok := s.cache.get(id)
+	cfg, key, ok := s.cache.Get(id)
 	if !ok {
 		if cfg, err = s.Config(ctx); err != nil {
 			return domain.Quote{}, err
 		}
-		s.cache.put(key, cfg)
+		s.cache.Put(key, cfg)
 	}
 	return cfg.Quote(req)
 }
@@ -154,7 +155,7 @@ func (s *Service) QuoteMinor(ctx context.Context, governorate, city string, subt
 }
 
 // Invalidate drops this instance's cached config of store.
-func (s *Service) Invalidate(store tenant.StoreID) { s.cache.invalidate(store) }
+func (s *Service) Invalidate(store tenant.StoreID) { s.cache.Invalidate(store) }
 
 // SaveSettings replaces the store-wide settings. version is the one read
 // (0 when never saved).
@@ -265,6 +266,6 @@ func (s *Service) change(ctx context.Context, action, targetType, targetID strin
 	case err != nil:
 		return err
 	}
-	s.cache.invalidate(id)
+	s.cache.Invalidate(id)
 	return nil
 }
