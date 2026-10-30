@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/capi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/store"
@@ -55,6 +56,7 @@ type Service struct {
 	jobs    jobs.Inserter
 	orders  Orders
 	senders map[domain.Provider]capi.Sender
+	plan    entitlements.Entitlements
 }
 
 // Deps are the service's dependencies.
@@ -71,6 +73,9 @@ type Deps struct {
 	Jobs    jobs.Inserter
 	Orders  Orders
 	Senders map[domain.Provider]capi.Sender
+	// Plan says whether the store's plan includes pixels and feeds
+	// (ADR-0046); nil includes them (tests).
+	Plan entitlements.Entitlements
 }
 
 // NewService builds the service.
@@ -81,7 +86,11 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, ids: d.IDs, sealer: d.Sealer, events: d.Events, audit: d.Audit, jobs: d.Jobs, orders: d.Orders, senders: d.Senders}
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
+	return &Service{db: d.DB, ids: d.IDs, sealer: d.Sealer, events: d.Events, audit: d.Audit, jobs: d.Jobs, orders: d.Orders, senders: d.Senders,
+		plan: d.Plan}
 }
 
 func spec(p domain.Provider) (domain.Spec, error) {
@@ -118,6 +127,9 @@ func (s *Service) Pixels(ctx context.Context) ([]domain.Pixel, error) {
 // SavePixel connects a provider or changes its pixel, over the version
 // read.
 func (s *Service) SavePixel(ctx context.Context, p domain.Provider, in domain.PixelInput) (domain.Pixel, error) {
+	if err := s.plan.Require(ctx, entitlements.Pixels); err != nil {
+		return domain.Pixel{}, err
+	}
 	sp, err := spec(p)
 	if err != nil {
 		return domain.Pixel{}, err
@@ -223,8 +235,13 @@ func (s *Service) SaveSettings(ctx context.Context, in domain.Settings) (domain.
 
 // Browser is what the store's pages render: its enabled pixels' public
 // IDs, its consent mode and the origins they need. No token is read.
+// Without pixels in the store's plan, its pages load none.
 func (s *Service) Browser(ctx context.Context) (domain.Browser, error) {
 	var out domain.Browser
+	allowed, pErr := s.plan.Allowed(ctx, entitlements.Pixels)
+	if pErr != nil {
+		return out, pErr
+	}
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		rows, err := store.Pixels(ctx, tx)
 		if err != nil {
@@ -233,6 +250,9 @@ func (s *Service) Browser(ctx context.Context) (domain.Browser, error) {
 		set, err := store.Settings(ctx, tx)
 		if err != nil {
 			return err
+		}
+		if !allowed {
+			rows = nil
 		}
 		pixels := make([]domain.Pixel, 0, len(rows))
 		for _, r := range rows {

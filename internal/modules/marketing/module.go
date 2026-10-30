@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/capi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing/internal/domain"
@@ -48,6 +49,9 @@ type Deps struct {
 	// Endpoints and Client send the conversions (the worker).
 	Endpoints Endpoints
 	Client    *http.Client
+	// Plan says whether the store's plan includes pixels and feeds
+	// (ADR-0046); nil includes them (tests).
+	Plan entitlements.Entitlements
 }
 
 // Module is the wired marketing module.
@@ -86,7 +90,7 @@ func New(d Deps) (*Module, error) {
 		sealer = d.Sealer // never a typed nil in the interface
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Sealer: sealer, Events: d.Events, Audit: d.Audit,
-		Jobs: d.Jobs, Orders: ords, Senders: senders})}, nil
+		Jobs: d.Jobs, Orders: ords, Senders: senders, Plan: d.Plan})}, nil
 }
 
 // Pixels is what the storefront renders.
