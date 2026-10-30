@@ -39,6 +39,35 @@ type (
 	SubscriptionChanged = domain.SubscriptionChanged
 )
 
+// Collecting invoices (ADR-0051).
+type (
+	// Gateway charges cards on file.
+	Gateway = app.Gateway
+	// Charge is a charge of a card on file.
+	Charge = app.Charge
+	// ChargeResult is a gateway's answer.
+	ChargeResult = app.ChargeResult
+	// Sealer seals card tokens (platform/envelope's Sealer).
+	Sealer = app.Sealer
+	// Holds holds or releases the store in ctx for billing, in its tenant
+	// transaction (cmd/platform adapts tenancy).
+	Holds = app.Holds
+	// Notice is a billing notice to a store's owners.
+	Notice = app.Notice
+	// Notifier emails the store-in-ctx's owners a notice.
+	Notifier = app.Notifier
+)
+
+// Collections records payments of invoices from outside the card on
+// file: a card saved by the gateway (7d-2), a transfer the platform
+// confirmed (the console, 7e). Accounts come from system callers only.
+type Collections interface {
+	SavePaymentMethod(ctx context.Context, account ulid.ID, gateway, token, label string) error
+	SettleInvoice(ctx context.Context, account, invoice ulid.ID, reference string) error
+}
+
+var _ Collections = (*app.Service)(nil)
+
 // EventSubscriptionChanged is SubscriptionChanged's type. Caches of what
 // a store may do (entitlements, the storefront's pages) follow it.
 const EventSubscriptionChanged = domain.EventSubscriptionChanged

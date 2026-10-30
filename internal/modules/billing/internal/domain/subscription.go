@@ -31,6 +31,10 @@ const (
 // Paid reports whether a store on k is billed for a period.
 func (k Kind) Paid() bool { return k == KindSubscription || k == KindAgency }
 
+// Billed reports whether a store on k gets invoices it can fail to pay:
+// a period's price, or pay-as-you-sell fees.
+func (k Kind) Billed() bool { return k.Paid() || k == KindPays }
+
 // Plan is one version of a plan.
 type Plan struct {
 	ID        ulid.ID
@@ -158,14 +162,45 @@ func (s Subscription) RenewalDue(now time.Time) bool {
 	return s.Status == Active && s.Kind.Paid() && !s.CancelAtPeriodEnd && !s.PeriodEnd.IsZero() && !now.Before(s.PeriodEnd)
 }
 
-// PaymentFailed marks a paid plan's renewal unpaid: the plan applies
-// for the grace period while the payment is retried.
+// PaymentFailed marks the store's invoice unpaid (a renewal, or pay-as-
+// you-sell fees): the plan applies for the grace period while the
+// payment is retried.
 func (s Subscription) PaymentFailed(now time.Time, pol Policy) (Subscription, error) {
-	if s.Status != Active || !s.Kind.Paid() {
+	if s.Status != Active || !s.Kind.Billed() {
 		return Subscription{}, refuse(s, "payment failed")
 	}
 	s.Status, s.GraceUntil = PastDue, now.Add(pol.Grace)
 	return s, nil
+}
+
+// NextPeriodEnd is when a paid period that starts at start ends: a
+// calendar month, or twelve (ADR-0049).
+func NextPeriodEnd(start time.Time, c Cycle) time.Time {
+	if c == Annual {
+		return start.AddDate(1, 0, 0)
+	}
+	return start.AddDate(0, 1, 0)
+}
+
+// Settle is the store after its invoice was paid: the next paid period
+// when the invoice renewed it, and back to active from past due,
+// suspended or cancelled. changed is false when nothing moved (fees paid
+// by an active store).
+func (s Subscription) Settle(renewed bool) (Subscription, bool, error) {
+	changed := false
+	if renewed {
+		if !s.Kind.Paid() || s.Cycle == "" || s.PeriodEnd.IsZero() {
+			return Subscription{}, false, refuse(s, "renew")
+		}
+		s.PeriodStart, s.PeriodEnd = s.PeriodEnd, NextPeriodEnd(s.PeriodEnd, s.Cycle)
+		changed = true
+	}
+	switch s.Status {
+	case PastDue, Suspended, Cancelled:
+		s.Status, s.GraceUntil, s.SuspendedAt = Active, time.Time{}, time.Time{}
+		changed = true
+	}
+	return s, changed, nil
 }
 
 // Suspend closes a store whose grace ran out unpaid. Its data is kept.

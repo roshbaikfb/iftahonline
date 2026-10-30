@@ -1,0 +1,161 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store/billingdb"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
+)
+
+// Task is work the hourly dunning run found (app.dunning_due).
+type Task struct {
+	Kind    string  // charge, suspend or cancel
+	ID      ulid.ID // the invoice to charge, or the store
+	Account ulid.ID
+}
+
+// DunningDue lists the work due by now.
+func DunningDue(ctx context.Context, tx Tx, now time.Time) ([]Task, error) {
+	rows, err := billingdb.New(tx).DunningDue(ctx, now)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: dunning due: %w", err)
+	}
+	out := make([]Task, len(rows))
+	for i, r := range rows {
+		out[i] = Task{Kind: r.Task, ID: r.ID, Account: r.AccountID}
+	}
+	return out, nil
+}
+
+// OpenInvoice is an invoice waiting for its payment.
+type OpenInvoice struct {
+	ID          ulid.ID
+	Number      string
+	Currency    string
+	TotalMinor  int64
+	Attempts    int
+	FirstFailed time.Time
+}
+
+// LockOpenInvoice reads an open invoice of the account tx is behind and
+// locks it until tx ends; ok is false when it is not open (paid).
+func LockOpenInvoice(ctx context.Context, tx Tx, id ulid.ID) (OpenInvoice, bool, error) {
+	r, err := billingdb.New(tx).GetOpenInvoice(ctx, id)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return OpenInvoice{}, false, nil
+	case err != nil:
+		return OpenInvoice{}, false, fmt.Errorf("billing store: open invoice: %w", err)
+	}
+	return OpenInvoice{ID: r.ID, Number: r.Number, Currency: r.Currency, TotalMinor: r.TotalMinor, Attempts: int(r.Attempts),
+		FirstFailed: at(r.FirstFailedAt)}, true, nil
+}
+
+// Method is an account's card on file; Token is sealed.
+type Method struct {
+	Gateway string
+	Token   []byte
+	Label   string
+}
+
+// PaymentMethod is the card on file of the account tx is behind; ok is
+// false when it has none.
+func PaymentMethod(ctx context.Context, tx Tx, account ulid.ID) (Method, bool, error) {
+	r, err := billingdb.New(tx).GetPaymentMethod(ctx, account)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return Method{}, false, nil
+	case err != nil:
+		return Method{}, false, fmt.Errorf("billing store: payment method: %w", err)
+	}
+	return Method{Gateway: r.Gateway, Token: r.Token, Label: r.Label}, true, nil
+}
+
+// SavePaymentMethod saves or replaces the account's card on file.
+func SavePaymentMethod(ctx context.Context, tx Tx, account ulid.ID, m Method) error {
+	if err := billingdb.New(tx).SavePaymentMethod(ctx, billingdb.SavePaymentMethodParams{
+		AccountID: account, Gateway: m.Gateway, Token: m.Token, Label: m.Label,
+	}); err != nil {
+		return fmt.Errorf("billing store: save payment method: %w", err)
+	}
+	return nil
+}
+
+// Attempt is one try at paying an invoice.
+type Attempt struct {
+	ID          ulid.ID
+	Invoice     ulid.ID
+	Account     ulid.ID
+	Gateway     string
+	Outcome     string // approved, declined, no_method, manual
+	Reason      string
+	Reference   string
+	AmountMinor int64
+}
+
+// InsertAttempt records an attempt.
+func InsertAttempt(ctx context.Context, tx Tx, a Attempt) error {
+	if err := billingdb.New(tx).InsertPaymentAttempt(ctx, billingdb.InsertPaymentAttemptParams{
+		ID: a.ID, InvoiceID: a.Invoice, AccountID: a.Account, Gateway: a.Gateway, Outcome: a.Outcome,
+		Reason: a.Reason, Reference: a.Reference, AmountMinor: a.AmountMinor,
+	}); err != nil {
+		return fmt.Errorf("billing store: insert attempt: %w", err)
+	}
+	return nil
+}
+
+// MarkInvoicePaid closes an open invoice; ok is false when it was not
+// open.
+func MarkInvoicePaid(ctx context.Context, tx Tx, id ulid.ID, paidAt time.Time) (bool, error) {
+	n, err := billingdb.New(tx).MarkInvoicePaid(ctx, billingdb.MarkInvoicePaidParams{ID: id, PaidAt: &paidAt})
+	if err != nil {
+		return false, fmt.Errorf("billing store: invoice paid: %w", err)
+	}
+	return n == 1, nil
+}
+
+// MarkInvoiceFailed counts a failed attempt; next is the retry (zero:
+// none is left).
+func MarkInvoiceFailed(ctx context.Context, tx Tx, id ulid.ID, failedAt, next time.Time, reason string) error {
+	if err := billingdb.New(tx).MarkInvoiceFailed(ctx, billingdb.MarkInvoiceFailedParams{
+		ID: id, FailedAt: &failedAt, NextAttemptAt: ptr(next), LastError: &reason,
+	}); err != nil {
+		return fmt.Errorf("billing store: invoice failed: %w", err)
+	}
+	return nil
+}
+
+// RenewalInvoice is the invoice that billed the store-in-ctx's renewal,
+// if any.
+func RenewalInvoice(ctx context.Context, tx Tx) (*ulid.ID, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := billingdb.New(tx).GetRenewalInvoice(ctx, store)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("billing store: renewal invoice: %w", err)
+	}
+	return id, nil
+}
+
+// ClearRenewal forgets the billed renewal of the store in ctx: its
+// period is paid.
+func ClearRenewal(ctx context.Context, tx Tx) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = billingdb.New(tx).ClearRenewal(ctx, store); err != nil {
+		return fmt.Errorf("billing store: clear renewal: %w", err)
+	}
+	return nil
+}

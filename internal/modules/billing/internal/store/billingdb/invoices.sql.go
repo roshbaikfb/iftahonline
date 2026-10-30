@@ -121,8 +121,8 @@ func (q *Queries) InsertAccountStore(ctx context.Context, arg InsertAccountStore
 }
 
 const insertInvoice = `-- name: InsertInvoice :exec
-INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $10)
 `
 
 type InsertInvoiceParams struct {
@@ -139,6 +139,7 @@ type InsertInvoiceParams struct {
 	DueAt         time.Time
 }
 
+// Its first charge is due at once (ADR-0051).
 func (q *Queries) InsertInvoice(ctx context.Context, arg InsertInvoiceParams) error {
 	_, err := q.db.Exec(ctx, insertInvoice,
 		arg.ID,

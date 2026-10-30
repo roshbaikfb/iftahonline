@@ -46,13 +46,18 @@ type Orders func(ctx context.Context, tx pgx.Tx, id ulid.ID) (Order, error)
 
 // Service implements the use cases.
 type Service struct {
-	db     postgres.Beginner
-	orders Orders
-	stores Stores
-	jobs   jobs.Inserter
-	events eventbus.Publisher
-	ids    *ulid.Generator
-	now    func() time.Time
+	db       postgres.Beginner
+	orders   Orders
+	stores   Stores
+	jobs     jobs.Inserter
+	events   eventbus.Publisher
+	gateways map[string]Gateway
+	sealer   Sealer
+	holds    Holds
+	notifier Notifier
+	policy   domain.Policy
+	ids      *ulid.Generator
+	now      func() time.Time
 }
 
 // Deps are the service's dependencies.
@@ -65,6 +70,13 @@ type Deps struct {
 	Jobs   jobs.Inserter
 	// Events receives SubscriptionChanged; nil discards.
 	Events eventbus.Publisher
+	// Gateways charge cards on file by name, Sealer seals their tokens,
+	// Holds closes and opens stores' storefronts, Notifier emails their
+	// owners (the worker, ADR-0051); nil elsewhere.
+	Gateways map[string]Gateway
+	Sealer   Sealer
+	Holds    Holds
+	Notifier Notifier
 	// IDs makes accounts' and invoices' IDs; nil is a new generator.
 	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
@@ -83,7 +95,8 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, ids: d.IDs, now: now}
+	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
+		holds: d.Holds, notifier: d.Notifier, policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
 }
 
 // Grants are what the store in ctx is granted now, in a transaction of
