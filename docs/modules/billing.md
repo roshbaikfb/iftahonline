@@ -122,7 +122,7 @@ large as the charges, no invoice is written and the credits wait.
 | `billing.dunning` | Hourly with `BILLING_COLLECTION_ENABLED=true`. Lists, through `app.dunning_due`, invoices to charge, stores to suspend and stores to cancel |
 | `billing.charge_invoice` | Charges the account's card on file, outside a transaction, then records the attempt and settles or fails every store of the account |
 | `billing.suspend` / `billing.cancel` | The grace ran out: suspended and held (maintenance page). After 90 days: cancelled, data due for deletion (nothing deleted in P7) |
-| `billing.notify` | Emails the owners: payment failed (retry date, closing date), suspended, paid |
+| `billing.notify` | Emails the owners (payment failed with the retry and closing dates, suspended, paid), then sends the same on WhatsApp to their verified phones. WhatsApp is best effort and logged on failure (ADR-0054) |
 
 - **Retries.** A failed charge is retried 1, 3 and 5 days after the
   first failure.

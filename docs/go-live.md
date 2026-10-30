@@ -110,6 +110,9 @@ seeds six plans whose **prices and limits are placeholders**:
   account's callback URL to `https://<api host>/v1/webhooks/paymob_billing`.
   In test mode, confirm that the intention's answer carries
   `intention_order_id` (ADR-0053).
+- **WhatsApp billing templates.** Have Meta approve the three merchant
+  templates in `docs/modules/messaging.md` (ADR-0054). Until then, owners
+  get billing notices by email only.
 - **Turning collection on.** Once a region has both its account and its
   checkout, set `BILLING_COLLECTION_ENABLED=true`.
 
