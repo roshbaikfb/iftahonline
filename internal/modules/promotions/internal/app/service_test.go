@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -128,9 +129,9 @@ func TestManageCoupons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := f.svc.Coupons(ctx)
-	if err != nil || len(list) != 2 || list[0].ID != ship.ID {
-		t.Fatalf("list = %+v, %v", list, err)
+	page, err := f.svc.Coupons(ctx, "", 0)
+	if err != nil || len(page.Items) != 2 || page.Items[0].ID != ship.ID || page.Next != "" {
+		t.Fatalf("list = %+v, %v", page, err)
 	}
 	c.Code, c.Percent, c.Active = "AUTUMN15", 15, false
 	if c, err = f.svc.Update(ctx, c.ID, c); err != nil || c.Code != "AUTUMN15" || c.Active {
@@ -202,6 +203,46 @@ func TestPreviewAndRedeem(t *testing.T) {
 	}
 	if _, _, err = f.redeem(other, t, "ONCE", 20000, mona); reason(err) != domain.NotFound {
 		t.Fatalf("other store redeem: %v", err)
+	}
+}
+
+// TestCouponPages (P6 review): the list comes a page at a time, newest
+// first, every coupon once; a bad cursor or size is refused.
+func TestCouponPages(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx := f.store(t)
+	for i := range 7 {
+		if _, err := f.svc.Create(ctx, domain.Coupon{Code: "PAGE" + strconv.Itoa(i), Kind: domain.FreeShipping, Active: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var codes []string
+	cursor, pages := "", 0
+	for {
+		page, err := f.svc.Coupons(ctx, cursor, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages++
+		for _, c := range page.Items {
+			codes = append(codes, c.Code)
+		}
+		if page.Next == "" {
+			break
+		}
+		cursor = page.Next
+	}
+	if pages != 3 || strings.Join(codes, ",") != "PAGE6,PAGE5,PAGE4,PAGE3,PAGE2,PAGE1,PAGE0" {
+		t.Fatalf("%d pages: %v", pages, codes)
+	}
+	for name, call := range map[string]func() error{
+		"cursor": func() error { _, err := f.svc.Coupons(ctx, "nope", 3); return err },
+		"limit":  func() error { _, err := f.svc.Coupons(ctx, "", 101); return err },
+	} {
+		if err := call(); !errs.Is(err, errs.KindValidation) {
+			t.Errorf("bad %s: %v", name, err)
+		}
 	}
 }
 

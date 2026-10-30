@@ -110,12 +110,12 @@ func Get(ctx context.Context, tx Tx, id ulid.ID) (domain.Coupon, error) {
 }
 
 // List returns the store's coupons, newest first.
-func List(ctx context.Context, tx Tx) ([]domain.Coupon, error) {
+func List(ctx context.Context, tx Tx, before ulid.ID, limit int) ([]domain.Coupon, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := promotionsdb.New(tx).ListCoupons(ctx, store)
+	rows, err := promotionsdb.New(tx).ListCoupons(ctx, promotionsdb.ListCouponsParams{StoreID: store, Before: before, Lim: int32(limit)}) //nolint:gosec // bounded by the caller
 	if err != nil {
 		return nil, fmt.Errorf("promotions store: list: %w", err)
 	}

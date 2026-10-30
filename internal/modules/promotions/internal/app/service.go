@@ -57,14 +57,53 @@ func NewService(d Deps) *Service {
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, now: d.Now}
 }
 
-// Coupons lists the store's coupons, newest first.
-func (s *Service) Coupons(ctx context.Context) ([]domain.Coupon, error) {
-	var out []domain.Coupon
+// Page sizes of the coupons' list.
+const (
+	DefaultPage = 50
+	MaxPage     = 100
+)
+
+// CouponPage is a page of coupons; Next is the cursor of the next one,
+// empty on the last.
+type CouponPage struct {
+	Items []domain.Coupon
+	Next  string
+}
+
+// lastID is past every ULID: a first page's bound.
+var lastID = ulid.ID{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} //nolint:gochecknoglobals // constant
+
+// Coupons lists a page of the store's coupons, newest first, after
+// cursor (a page's Next; "" is the first).
+func (s *Service) Coupons(ctx context.Context, cursor string, limit int) (CouponPage, error) {
+	if limit == 0 {
+		limit = DefaultPage
+	}
+	if limit < 1 || limit > MaxPage {
+		return CouponPage{}, errs.Validation(errs.FieldError{Field: "limit", Code: "range", Message: "1 to 100"})
+	}
+	before := lastID
+	if cursor != "" {
+		id, err := ulid.Parse(cursor)
+		if err != nil {
+			return CouponPage{}, errs.Validation(errs.FieldError{Field: "cursor", Code: "invalid", Message: "a page's next_cursor"})
+		}
+		before = id
+	}
+	var items []domain.Coupon
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
-		out, err = store.List(ctx, tx)
+		items, err = store.List(ctx, tx, before, limit+1) // one more says whether a page follows
 		return err
 	})
-	return out, err
+	if err != nil {
+		return CouponPage{}, err
+	}
+	page := CouponPage{Items: items}
+	if len(items) > limit {
+		page.Items = items[:limit]
+		page.Next = page.Items[limit-1].ID.String()
+	}
+	return page, nil
 }
 
 // Coupon returns one coupon.
