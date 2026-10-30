@@ -139,3 +139,23 @@ type Sender interface {
 }
 
 var _ Sender = (*app.Service)(nil)
+
+// MerchantKind is a notice the platform sends a store's owners on
+// WhatsApp (ADR-0054).
+type MerchantKind = domain.MerchantKind
+
+// Merchant notices and their body values, in order.
+const (
+	MerchantPaymentFailed = domain.MerchantPaymentFailed // store, invoice, amount, closing date
+	MerchantSuspended     = domain.MerchantSuspended     // store
+	MerchantPaid          = domain.MerchantPaid          // store, invoice, amount
+)
+
+// MerchantSender sends merchant notices now, on WhatsApp from the
+// platform's number: not a customer message (no quota, no log). Without
+// WhatsApp configured it sends nothing.
+type MerchantSender interface {
+	SendMerchant(ctx context.Context, to string, k MerchantKind, locale string, values []string) error
+}
+
+var _ MerchantSender = (*app.Service)(nil)

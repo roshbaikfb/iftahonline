@@ -181,6 +181,9 @@ func (m *Module) Fakes() (whatsapp, sms *fake.Channel) { return m.wa, m.sms }
 // Sender is what modules that message customers use.
 func (m *Module) Sender() Sender { return m.svc }
 
+// Merchant sends the platform's WhatsApp notices to stores' owners.
+func (m *Module) Merchant() MerchantSender { return m.svc }
+
 // PlatformProviders are the channels' webhook providers, for
 // webhooks.Module.RegisterPlatform.
 func (m *Module) PlatformProviders() []webhooks.PlatformProvider { return m.svc.PlatformProviders() }
