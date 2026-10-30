@@ -8,6 +8,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -37,6 +38,19 @@ func billingOrders(f orders.Fulfilment) billing.Orders {
 			return billing.Order{}, err
 		}
 		return out, nil
+	}
+}
+
+// billingStores adapts tenancy to what invoices need: a store's name and
+// currency.
+func billingStores(ten *tenancy.Module) billing.Stores {
+	stores := ten.Service()
+	return func(ctx context.Context) (billing.StoreInfo, error) {
+		st, err := stores.GetStore(ctx)
+		if err != nil {
+			return billing.StoreInfo{}, err
+		}
+		return billing.StoreInfo{Name: st.Name, Currency: string(st.Currency)}, nil
 	}
 }
 
