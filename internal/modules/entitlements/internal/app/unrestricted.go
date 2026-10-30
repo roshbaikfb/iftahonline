@@ -17,6 +17,9 @@ type Unrestricted struct{}
 // Allowed implements the interface: every flag is on.
 func (Unrestricted) Allowed(context.Context, domain.Feature) (bool, error) { return true, nil }
 
+// Require implements the interface: every flag is on.
+func (Unrestricted) Require(context.Context, domain.Feature) error { return nil }
+
 // AdmitTx implements the interface: no limit.
 func (Unrestricted) AdmitTx(context.Context, pgx.Tx, domain.Feature, int64, func(context.Context, pgx.Tx) (int64, error)) (domain.Grant, error) {
 	return domain.Grant{Unlimited: true}, nil
