@@ -24,7 +24,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
-	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
@@ -102,7 +101,7 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Config: config.Entitlements{MessagesPerMonth: 5}})
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.Fixed{entitlements.Messages: {Value: 5}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +298,7 @@ func TestSMSUsesTheStoreText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: f.pool, Config: config.Entitlements{MessagesPerMonth: 5}})
+	ent, err := entitlements.New(entitlements.Deps{Pool: f.pool, Source: entitlements.Fixed{entitlements.Messages: {Value: 5}}})
 	if err != nil {
 		t.Fatal(err)
 	}

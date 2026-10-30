@@ -187,23 +187,6 @@ func TestPayments(t *testing.T) {
 	}
 }
 
-func TestEntitlements(t *testing.T) {
-	t.Parallel()
-	c, err := config.Load(config.RoleWorker, env(base()))
-	if err != nil || c.Entitlements.MessagesPerMonth != 500 {
-		t.Fatalf("default: %+v %v", c.Entitlements, err)
-	}
-	c, err = config.Load(config.RoleAPI, env(with("ENTITLEMENTS_MESSAGES_PER_MONTH", "0")))
-	if err != nil || c.Entitlements.MessagesPerMonth != 0 {
-		t.Fatalf("zero: %+v %v", c.Entitlements, err)
-	}
-	for _, v := range []string{"-1", "many", "10000001"} {
-		if _, err = config.Load(config.RoleAPI, env(with("ENTITLEMENTS_MESSAGES_PER_MONTH", v))); err == nil {
-			t.Errorf("%q accepted", v)
-		}
-	}
-}
-
 func TestMessaging(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleWorker, env(base()))

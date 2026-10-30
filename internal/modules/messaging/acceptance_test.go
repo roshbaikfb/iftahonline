@@ -163,7 +163,7 @@ func newPlatformWith(t *testing.T, quota int64, number string) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Config: config.Entitlements{MessagesPerMonth: quota}})
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.Fixed{entitlements.Messages: {Value: quota}}})
 	if err != nil {
 		t.Fatal(err)
 	}

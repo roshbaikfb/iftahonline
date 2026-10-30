@@ -18,7 +18,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/channel"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
-	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -118,7 +117,7 @@ func newConfirmFixture(t *testing.T, o options) cfix {
 	if limit == 0 {
 		limit = 100
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: f.pool, Config: config.Entitlements{MessagesPerMonth: limit}})
+	ent, err := entitlements.New(entitlements.Deps{Pool: f.pool, Source: entitlements.Fixed{entitlements.Messages: {Value: limit}}})
 	if err != nil {
 		t.Fatal(err)
 	}

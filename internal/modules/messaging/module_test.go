@@ -36,7 +36,7 @@ func TestChannelsFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: pool})
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.Fixed{}})
 	if err != nil {
 		t.Fatal(err)
 	}

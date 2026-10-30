@@ -37,6 +37,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
@@ -375,11 +376,15 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 
 // newWebhooks builds the inbound webhook inbox. Carriers and gateways
 // register their providers on it (P5).
-// newMessaging builds the messaging module with its quotas (api and
-// worker roles). inbox is the worker's, for webhook jobs, and conf its
+// newMessaging builds the messaging module with its quotas, read from
+// each store's plan (api and worker roles). inbox is the worker's, for webhook jobs, and conf its
 // order confirmation's collaborators; both nil in the api.
 func newMessaging(c clients, inbox webhooks.Inbox, conf *messaging.Deps) (*messaging.Module, error) {
-	ent, err := entitlements.New(entitlements.Deps{Pool: c.pool, Config: c.cfg.Entitlements})
+	bill, err := billing.New(billing.Deps{Pool: c.pool})
+	if err != nil {
+		return nil, err
+	}
+	ent, err := entitlements.New(entitlements.Deps{Pool: c.pool, Source: entitlements.FromBilling(bill.Grants())})
 	if err != nil {
 		return nil, err
 	}
