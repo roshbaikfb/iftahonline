@@ -229,3 +229,57 @@ func TransactionFields() []string {
 		"pending", "source_data.pan", "source_data.sub_type", "source_data.type", "success", // nocarddata:allow masked last four digits, part of Paymob's signed field list
 	}
 }
+
+// Transaction is Paymob's transaction object: callbacks, inquiries and
+// a token payment's answer.
+type Transaction struct {
+	ID                  json.Number `json:"id"`
+	Success             bool        `json:"success"`
+	Pending             bool        `json:"pending"`
+	AmountCents         int64       `json:"amount_cents"`
+	RefundedAmountCents int64       `json:"refunded_amount_cents"`
+	IsRefunded          bool        `json:"is_refunded"`
+	IsVoided            bool        `json:"is_voided"`
+	IsAuth              bool        `json:"is_auth"`
+	IsCapture           bool        `json:"is_capture"`
+	Currency            string      `json:"currency"`
+	CreatedAt           string      `json:"created_at"`
+	TxnResponseCode     string      `json:"txn_response_code"`
+	Data                struct {
+		Message string `json:"message"`
+	} `json:"data"`
+	Order struct {
+		MerchantOrderID string `json:"merchant_order_id"`
+	} `json:"order"`
+}
+
+// AuthToken exchanges an API key for an auth token (inquiries); an
+// unknown key is ErrAuth.
+func (c *Client) AuthToken(ctx context.Context, base, apiKey string) (string, error) {
+	if apiKey == "" {
+		return "", retry.Permanent(ErrAuth)
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	code, err := c.Do(ctx, http.MethodPost, base+"/api/auth/tokens", "", map[string]string{"api_key": apiKey}, &out)
+	if err != nil {
+		return "", err
+	}
+	if code == http.StatusNotFound || out.Token == "" {
+		return "", retry.Permanent(ErrAuth)
+	}
+	return out.Token, nil
+}
+
+// Inquire asks for the transaction of merchantOrderID (the special
+// reference an intention was created with); found is false when there
+// is none.
+func (c *Client) Inquire(ctx context.Context, base, token, merchantOrderID string) (t Transaction, found bool, err error) {
+	code, err := c.Do(ctx, http.MethodPost, base+"/api/ecommerce/orders/transaction_inquiry", "Bearer "+token,
+		map[string]string{"merchant_order_id": merchantOrderID}, &t)
+	if err != nil {
+		return Transaction{}, false, err
+	}
+	return t, code != http.StatusNotFound && t.ID != "", nil
+}
