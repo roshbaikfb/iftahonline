@@ -17,7 +17,7 @@ import (
 // the merchant's coupons, orders apply them on every role that places
 // orders, the worker gives back cancelled orders' uses).
 func newPromotions(c clients) (*promotions.Module, error) {
-	return promotions.New(promotions.Deps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids)})
+	return promotions.New(promotions.Deps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Plan: c.plan})
 }
 
 // orderCoupons adapts promotions to the orders module's coupon port
