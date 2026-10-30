@@ -474,6 +474,9 @@ type ImageID = ULID
 // ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImportID = ULID
 
+// InvoiceID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type InvoiceID = ULID
+
 // OrderID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type OrderID = ULID
 

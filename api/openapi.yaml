@@ -139,6 +139,12 @@ tags:
       transaction that places it; an order cancelled before it ships
       gives its use back. A coupon an order held keeps its code and
       cannot be deleted, only turned off. Permission: promotions.manage.
+  - name: billing
+    description: |
+      The store's plan, its card on file and its open invoices (ADR-0049,
+      ADR-0053). An invoice is paid on Paymob's page, which also saves
+      the card for the next invoices; the platform charges that card
+      itself after. Permission: billing.manage (the owner).
   - name: marketing
     description: |
       The store's ad pixels and the shopper's consent (ADR-0043). A store
@@ -3500,6 +3506,48 @@ paths:
               schema: { type: string }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [billing]
+      operationId: getBilling
+      summary: The store's plan, card on file and open invoices
+      description: "Permission: billing.manage."
+      responses:
+        "200":
+          description: The store's billing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/InvoiceID"
+    post:
+      tags: [billing]
+      operationId: payInvoice
+      summary: Pay an open invoice on Paymob's page
+      description: |
+        Permission: billing.manage. Returns the page to send the owner to;
+        the card used there is saved for the next invoices. The invoice is
+        paid when Paymob confirms it (its callback, checked by asking
+        Paymob). 404 for an invoice that is not open; 503 when the
+        invoice's currency has no checkout.
+      responses:
+        "200":
+          description: The checkout page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkout_url]
+                properties:
+                  checkout_url: { type: string, format: uri }
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     adminSessionCookie:
@@ -3526,6 +3574,11 @@ components:
       description: "`__Host-asid=<token>; Path=/; HttpOnly; Secure; SameSite=Strict` (cleared on logout)."
       schema: { type: string }
   parameters:
+    InvoiceID:
+      name: invoice_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
     StoreID:
       name: store_id
       in: path
@@ -5326,6 +5379,34 @@ components:
         feature: { type: string, example: orders_per_month, description: "For quota_*: the plan's limited feature; absent for messages." }
         read: { type: boolean }
         created_at: { type: string, format: date-time }
+    Billing:
+      type: object
+      required: [plan_name_ar, plan_name_en, status, open_invoices]
+      properties:
+        plan_name_ar: { type: string }
+        plan_name_en: { type: string }
+        status: { type: string, enum: [trialing, active, past_due, suspended, cancelled] }
+        cycle: { type: string, enum: [monthly, annual] }
+        trial_ends_at: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        grace_until: { type: string, format: date-time, description: "Past due: when the store closes unpaid." }
+        cancel_at_period_end: { type: boolean }
+        card: { type: string, example: "MasterCard •••• 2346", description: The card on file; absent without one. }
+        open_invoices:
+          type: array
+          items: { $ref: "#/components/schemas/OpenInvoice" }
+    OpenInvoice:
+      type: object
+      required: [id, number, period, currency, total_minor, due_at, attempts]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        number: { type: string, example: INV-2026-000001 }
+        period: { type: string, format: date, example: "2026-10-01" }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        total_minor: { type: integer, format: int64, description: With tax. }
+        due_at: { type: string, format: date-time }
+        attempts: { type: integer, description: Charges tried. }
+        next_attempt_at: { type: string, format: date-time }
     NotificationPage:
       type: object
       required: [items, unread]

@@ -2,14 +2,17 @@ package paymob_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/paymob"
+	platformpaymob "github.com/roshbaikfb/iftahonline/internal/platform/paymob"
 )
 
 // standIn is Paymob as the "Pay with saved card" collection describes
@@ -67,7 +70,8 @@ func (s *standIn) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		key := "pk-" + ref
 		s.keys[key] = ref
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pi_1", "payment_keys": []map[string]any{{"key": key, "integration": 777}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pi_1", "client_secret": "pak_csk_" + ref, "intention_order_id": 4547,
+			"payment_keys": []map[string]any{{"key": key, "integration": 777}}})
 	case "/api/acceptance/payments/pay":
 		ref := s.keys[in["payment_token"].(string)]
 		src := in["source"].(map[string]any)
@@ -154,5 +158,102 @@ func TestChargeRefusals(t *testing.T) {
 	bad := paymob.New(paymob.Options{BaseURL: srv.URL, Regions: map[string]paymob.Region{"EGP": {SecretKey: "secret-key", APIKey: "wrong", MotoIntegrationID: 777}}})
 	if _, err := bad.Charge(t.Context(), app.Charge{Token: "t", AmountMinor: 1, Currency: "EGP", Reference: "r"}); err == nil {
 		t.Error("a refused API key charged")
+	}
+}
+
+func checkoutGateway(srv *httptest.Server) *paymob.Gateway {
+	return paymob.New(paymob.Options{BaseURL: srv.URL, Regions: map[string]paymob.Region{
+		"EGP": {SecretKey: "secret-key", APIKey: "api-key", MotoIntegrationID: 777, PublicKey: "egy_pk", CardIntegrationID: 555, HMACSecret: "hmac-eg"},
+		"SAR": {SecretKey: "secret-sa", APIKey: "api-sa", MotoIntegrationID: 778, PublicKey: "sa_pk", CardIntegrationID: 556, HMACSecret: "hmac-sa"},
+	}})
+}
+
+func TestCheckout(t *testing.T) {
+	t.Parallel()
+	s, srv := newStandIn(t)
+	g := checkoutGateway(srv)
+	page, err := g.Checkout(t.Context(), app.CheckoutRequest{Reference: "bc_01", AmountMinor: 68286, Currency: "EGP", Description: "INV-2026-000001",
+		NotificationURL: "https://api.example.com/v1/webhooks/paymob_billing", RedirectURL: "https://app.example.com/stores/x/billing"})
+	if err != nil || !strings.Contains(page.URL, "/unifiedcheckout/?publicKey=egy_pk&clientSecret=pak_csk_bc_01") || page.ProviderOrderID != "4547" {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+	if s.intention["payment_methods"].([]any)[0] != float64(555) || s.intention["notification_url"] != "https://api.example.com/v1/webhooks/paymob_billing" ||
+		s.intention["special_reference"] != "bc_01" {
+		t.Errorf("intention = %+v", s.intention)
+	}
+	if _, err = g.Checkout(t.Context(), app.CheckoutRequest{Reference: "bc_02", AmountMinor: 1, Currency: "AED"}); !errors.Is(err, app.ErrNoCheckout) {
+		t.Errorf("no checkout in the UAE: %v", err)
+	}
+}
+
+func signed(t *testing.T, secret string, body string, fields []string) url.Values {
+	t.Helper()
+	mac, err := platformpaymob.Sign(secret, []byte(body), fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return url.Values{"hmac": {mac}}
+}
+
+func TestParseCallback(t *testing.T) {
+	t.Parallel()
+	_, srv := newStandIn(t)
+	g := checkoutGateway(srv)
+	txn := `{"type":"TRANSACTION","obj":{"id":9001,"success":true,"pending":false,"amount_cents":68286,"currency":"EGP","order":{"id":4547,"merchant_order_id":"bc_01"}}}`
+	token := `{"type":"TOKEN","obj":{"id":12929738,"token":"tok-1","masked_pan":"xxxx-xxxx-xxxx-2346","merchant_id":1,"card_subtype":"MasterCard","created_at":"2026-01-20","email":"m@example.com","order_id":"4547"}}` // nocarddata:allow Paymob's masked card
+
+	cb, err := g.ParseCallback(signed(t, "hmac-eg", txn, platformpaymob.TransactionFields()), []byte(txn))
+	if err != nil || cb.Kind != app.CallbackTransaction || cb.Reference != "bc_01" || cb.ProviderOrderID != "4547" || cb.TransactionID != "9001" ||
+		cb.EventID != "txn:9001:true:false" {
+		t.Fatalf("transaction = %+v, %v", cb, err)
+	}
+	// Another region's secret is the platform's too.
+	if _, err = g.ParseCallback(signed(t, "hmac-sa", txn, platformpaymob.TransactionFields()), []byte(txn)); err != nil {
+		t.Errorf("Saudi secret: %v", err)
+	}
+	cb, err = g.ParseCallback(signed(t, "hmac-eg", token, platformpaymob.TokenFields()), []byte(token))
+	if err != nil || cb.Kind != app.CallbackToken || cb.Token != "tok-1" || cb.ProviderOrderID != "4547" || cb.Label != "MasterCard •••• 2346" {
+		t.Fatalf("token = %+v, %v", cb, err)
+	}
+	for name, q := range map[string]url.Values{
+		"unsigned": {}, "a stranger's secret": signed(t, "other", txn, platformpaymob.TransactionFields()),
+		"the token's fields": signed(t, "hmac-eg", txn, platformpaymob.TokenFields()),
+	} {
+		if _, err = g.ParseCallback(q, []byte(txn)); !errors.Is(err, app.ErrForgedCallback) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err = g.ParseCallback(url.Values{}, []byte(`garbage`)); !errors.Is(err, app.ErrForgedCallback) {
+		t.Errorf("garbage: %v", err)
+	}
+	if _, err = g.ReadCallback([]byte(`{"type":"TRANSACTION","obj":{"id":1}}`)); !errors.Is(err, app.ErrBadCallback) {
+		t.Errorf("a transaction without our reference: %v", err)
+	}
+	if _, err = g.ReadCallback([]byte(`{"type":"TOKEN","obj":{"id":1}}`)); !errors.Is(err, app.ErrBadCallback) {
+		t.Errorf("a token without its order: %v", err)
+	}
+}
+
+func TestPaid(t *testing.T) {
+	t.Parallel()
+	s, srv := newStandIn(t)
+	g := checkoutGateway(srv)
+	s.txns["bc_paid"] = map[string]any{"id": 77, "success": true, "pending": false, "amount_cents": 68286, "currency": "EGP", "order": map[string]any{"merchant_order_id": "bc_paid"}}
+	s.txns["bc_short"] = map[string]any{"id": 78, "success": true, "amount_cents": 100, "order": map[string]any{"merchant_order_id": "bc_short"}}
+	s.txns["bc_other"] = map[string]any{"id": 79, "success": true, "amount_cents": 100, "order": map[string]any{"merchant_order_id": "someone-else"}}
+	if txn, paid, err := g.Paid(t.Context(), "EGP", "bc_paid", 68286); err != nil || !paid || txn != "77" {
+		t.Errorf("paid = %s %v %v", txn, paid, err)
+	}
+	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_short", 68286); err != nil || paid {
+		t.Errorf("a partial amount is not paid: %v %v", paid, err)
+	}
+	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_none", 1); err != nil || paid {
+		t.Errorf("no transaction: %v %v", paid, err)
+	}
+	if _, _, err := g.Paid(t.Context(), "EGP", "bc_other", 100); err == nil {
+		t.Error("an answer about another payment believed")
+	}
+	if _, _, err := g.Paid(t.Context(), "AED", "bc_paid", 1); err == nil {
+		t.Error("a region without an account answered")
 	}
 }

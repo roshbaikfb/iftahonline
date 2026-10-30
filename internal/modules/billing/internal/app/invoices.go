@@ -291,6 +291,7 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		func() error { return river.AddWorkerSafely(w, &SuspendWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &CancelWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &NotifyWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &ProcessCallbackWorker{Svc: s}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("billing: workers: %w", err)

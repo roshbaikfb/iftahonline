@@ -1,0 +1,9 @@
+# Server stubs for the `billing` tag (see docs/modules/TEMPLATE.md).
+package: httpapi
+output: internal/modules/billing/internal/httpapi/api.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+output-options:
+  include-tags: [billing]
