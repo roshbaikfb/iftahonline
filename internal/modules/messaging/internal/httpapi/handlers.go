@@ -270,6 +270,9 @@ func (h *Handlers) ListNotifications(ctx context.Context, req ListNotificationsR
 		if n.Data.Period != "" {
 			item.Period, item.Used, item.Limit = &n.Data.Period, &n.Data.Used, &n.Data.Limit
 		}
+		if n.Data.Feature != "" {
+			item.Feature = &n.Data.Feature
+		}
 		out.Items[i] = item
 	}
 	if p.Next != nil {

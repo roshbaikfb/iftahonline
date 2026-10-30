@@ -113,11 +113,17 @@ const (
 	OrderCancelledNotice  NoticeKind = "order_cancelled"
 	OrderAutoCancelled    NoticeKind = "order_auto_cancelled"
 	ConfirmationUnreached NoticeKind = "confirmation_unreached"
+	// PlanLimitNearly and PlanLimitReached: a monthly limit of the
+	// store's plan (orders) at 80% or 100% (ADR-0045).
+	PlanLimitNearly  NoticeKind = "plan_limit_nearly"
+	PlanLimitReached NoticeKind = "plan_limit_reached"
 )
 
 // Emailed reports whether the merchant also gets k by email: the quota
-// warnings only (an order's notices would flood the inbox).
-func (k NoticeKind) Emailed() bool { return k == QuotaNearly || k == QuotaReached }
+// and plan-limit warnings only (an order's notices would flood the inbox).
+func (k NoticeKind) Emailed() bool {
+	return k == QuotaNearly || k == QuotaReached || k == PlanLimitNearly || k == PlanLimitReached
+}
 
 // Notification is a notice to the store's staff.
 type Notification struct {
@@ -135,7 +141,8 @@ type NoticeData struct {
 	OrderRef string `json:"order_ref,omitempty"`
 	Used     int64  `json:"used,omitempty"`
 	Limit    int64  `json:"limit,omitempty"`
-	Period   string `json:"period,omitempty"` // YYYY-MM
+	Period   string `json:"period,omitempty"`  // YYYY-MM
+	Feature  string `json:"feature,omitempty"` // a plan limit's
 }
 
 // QuotaNotice is the warning for a threshold reached in a month, once
@@ -143,6 +150,13 @@ type NoticeData struct {
 func QuotaNotice(kind NoticeKind, period time.Time, used, limit int64) Notification {
 	p := period.Format("2006-01")
 	return Notification{Kind: kind, DedupKey: p, Data: NoticeData{Used: used, Limit: limit, Period: p}}
+}
+
+// PlanLimitNotice is the warning for a plan's monthly limit of feature
+// near or reached, once per feature, month and threshold.
+func PlanLimitNotice(kind NoticeKind, feature string, period time.Time, used, limit int64) Notification {
+	p := period.Format("2006-01")
+	return Notification{Kind: kind, DedupKey: feature + ":" + p, Data: NoticeData{Used: used, Limit: limit, Period: p, Feature: feature}}
 }
 
 // OrderNotice is an order's notice, once per order and kind.
@@ -153,6 +167,9 @@ func OrderNotice(kind NoticeKind, order ulid.ID, ref string) Notification {
 // Email is a notice's email in locale: its subject and text.
 func (n Notification) Email(locale, storeName, dashboardURL string) (subject, text string) {
 	used, limit := strconv.FormatInt(n.Data.Used, 10), strconv.FormatInt(n.Data.Limit, 10)
+	if n.Kind == PlanLimitNearly || n.Kind == PlanLimitReached {
+		return n.planLimitEmail(locale, storeName, dashboardURL+"/billing", used, limit)
+	}
 	link := dashboardURL + "/messages"
 	if locale == English {
 		switch n.Kind {
@@ -174,6 +191,31 @@ func (n Notification) Email(locale, storeName, dashboardURL string) (subject, te
 		return storeName + ": استُخدم 80% من رسائل هذا الشهر",
 			"استخدم متجرك " + used + " من " + limit + " رسالة للعملاء في " + n.Data.Period + ".\n\n" + link
 	}
+}
+
+// planLimitEmail is a plan-limit warning's email. Orders are never
+// refused, so it asks for an upgrade, not for action.
+func (n Notification) planLimitEmail(locale, storeName, link, used, limit string) (subject, text string) {
+	what, whatAr := "orders", "طلب"
+	if n.Data.Feature != "orders_per_month" {
+		what, whatAr = n.Data.Feature, n.Data.Feature
+	}
+	if locale == English {
+		if n.Kind == PlanLimitReached {
+			return storeName + ": your plan's monthly " + what + " are used up",
+				"Your store has reached its plan's " + limit + " " + what + " for " + n.Data.Period + ".\n" +
+					"New orders still come in; upgrade your plan to stay within it.\n\n" + link
+		}
+		return storeName + ": 80% of your plan's monthly " + what,
+			"Your store has used " + used + " of its plan's " + limit + " " + what + " for " + n.Data.Period + ".\n\n" + link
+	}
+	if n.Kind == PlanLimitReached {
+		return storeName + ": وصلت إلى حد باقتك هذا الشهر",
+			"وصل متجرك إلى حد باقته (" + limit + " " + whatAr + ") في " + n.Data.Period + ".\n" +
+				"الطلبات الجديدة ما زالت تصلك؛ رقِّ باقتك لتبقى ضمن حدها.\n\n" + link
+	}
+	return storeName + ": استُخدم 80% من حد باقتك هذا الشهر",
+		"استخدم متجرك " + used + " من " + limit + " " + whatAr + " يسمح بها حد باقته في " + n.Data.Period + ".\n\n" + link
 }
 
 // crockford is the alphabet of WhatsApp codes (no I, L, O, U).

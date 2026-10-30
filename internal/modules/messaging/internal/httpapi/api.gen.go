@@ -180,6 +180,8 @@ const (
 	OrderAutoCancelled    NotificationKind = "order_auto_cancelled"
 	OrderCancelled        NotificationKind = "order_cancelled"
 	OrderConfirmed        NotificationKind = "order_confirmed"
+	PlanLimitNearly       NotificationKind = "plan_limit_nearly"
+	PlanLimitReached      NotificationKind = "plan_limit_reached"
 	QuotaNearly           NotificationKind = "quota_nearly"
 	QuotaReached          NotificationKind = "quota_reached"
 )
@@ -194,6 +196,10 @@ func (e NotificationKind) Valid() bool {
 	case OrderCancelled:
 		return true
 	case OrderConfirmed:
+		return true
+	case PlanLimitNearly:
+		return true
+	case PlanLimitReached:
 		return true
 	case QuotaNearly:
 		return true
@@ -370,8 +376,15 @@ type MessagingSettings struct {
 type Notification struct {
 	CreatedAt time.Time `json:"created_at"`
 
+	// Feature A plan limit's feature (plan_limit_*).
+	//
+	// Example: orders_per_month
+	Feature *string `json:"feature,omitempty"`
+
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id    ULID             `json:"id"`
+	Id ULID `json:"id"`
+
+	// Kind plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
 	Kind  NotificationKind `json:"kind"`
 	Limit *int64           `json:"limit,omitempty"`
 
@@ -385,7 +398,7 @@ type Notification struct {
 	Used   *int64  `json:"used,omitempty"`
 }
 
-// NotificationKind defines model for Notification.Kind.
+// NotificationKind plan_limit_* is a monthly limit of the store's plan (feature) at 80% or 100%; orders still come in.
 type NotificationKind string
 
 // NotificationPage defines model for NotificationPage.

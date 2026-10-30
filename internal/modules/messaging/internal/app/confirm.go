@@ -195,6 +195,22 @@ func (s *Service) quotaNoticeTx(ctx context.Context, tx pgx.Tx, q Queued) error 
 	return s.notifyTx(ctx, tx, domain.QuotaNotice(kind, q.Usage.Period, q.Usage.Used, q.Usage.Limit))
 }
 
+// PlanLimitCrossed warns the merchant that a monthly limit of the store's
+// plan is near or reached (entitlements.UsageCrossed), once per feature,
+// month and threshold: in the bell, and by email.
+func (s *Service) PlanLimitCrossed(ctx context.Context, ev entitlements.UsageCrossed) error {
+	kind := domain.PlanLimitNearly
+	switch ev.Threshold {
+	case entitlements.Reached:
+		kind = domain.PlanLimitReached
+	case entitlements.Nearly:
+	default:
+		return nil
+	}
+	n := domain.PlanLimitNotice(kind, string(ev.Feature), ev.Period, ev.Used, ev.Limit)
+	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.notifyTx(ctx, tx, n) })
+}
+
 // notifyTx adds a notice for the store's staff, once; an emailed kind
 // gets its email job.
 func (s *Service) notifyTx(ctx context.Context, tx pgx.Tx, n domain.Notification) error {
