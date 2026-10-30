@@ -76,6 +76,22 @@ Body, English:
 
 > Hi {{1}}, thank you for your order from {{2}}. Order {{3}}, total {{4}}. Do you confirm it?
 
+### Merchant notices (ADR-0054)
+
+The platform also tells a store's **owners** about billing on WhatsApp,
+from its own number. These are not customer messages:
+- they are not counted in the store's quota and not in its message log;
+- `Module.Merchant().SendMerchant` sends them at once, from billing's
+  notice job, to the owners' verified phones.
+
+Submit these templates to Meta as **Utility**, Arabic and English:
+
+| Template | Body ({{1}}…) |
+|---|---|
+| `billing_payment_failed_v1` | ar: «{{1}}: تعذّر تحصيل الفاتورة {{2}} بقيمة {{3}}. سنحاول مرة أخرى، وإذا لم تُدفع يُغلق المتجر يوم {{4}} مع الاحتفاظ ببياناته. ادفع أو غيّر البطاقة من صفحة الفوترة.» en: "{{1}}: we could not charge invoice {{2}} ({{3}}). We will try again; if it stays unpaid, the store closes on {{4}}, its data kept. Pay or change the card on the billing page." |
+| `billing_store_suspended_v1` | ar: «{{1}}: أُغلق المتجر لفاتورة غير مدفوعة. بياناته محفوظة؛ ادفع الفاتورة ليعود.» en: "{{1}}: the store is closed for an unpaid invoice. Its data is kept; pay the invoice to open it again." |
+| `billing_payment_received_v1` | ar: «{{1}}: دُفعت الفاتورة {{2}} بقيمة {{3}}. شكرًا لك.» en: "{{1}}: invoice {{2}} ({{3}}) is paid. Thank you." |
+
 ## HTTP API (tag `messaging`)
 
 | Operation | Permission | Notes |
