@@ -2366,7 +2366,8 @@ export interface paths {
         put?: never;
         /**
          * Connect the store's gateway account
-         * @description Permission: payments.manage. Paste the keys from the gateway's
+         * @description Permission: payments.manage. 403 with code `plan_limit` when the
+         *     store's plan does not include card payments. Paste the keys from the gateway's
          *     dashboard (Paymob: secret key, public key, API key, HMAC secret
          *     and the card integration IDs). They are checked with the gateway
          *     first (refused keys are a validation error on `secret_key`), then
@@ -2772,7 +2773,8 @@ export interface paths {
         put?: never;
         /**
          * Add a coupon
-         * @description Permission: promotions.manage. The code is stored in upper case; 409 when another coupon has it.
+         * @description Permission: promotions.manage. The code is stored in upper case; 409 when another coupon has it;
+         *     403 with code `plan_limit` when the store's plan does not include coupons (shoppers' codes then do not apply).
          */
         post: operations["createCoupon"];
         delete?: never;
@@ -2851,7 +2853,9 @@ export interface paths {
          * Connect a provider, or change its pixel
          * @description Permission: marketing.manage. Saves over the version read (0 for
          *     a provider not connected yet); 409 when it changed since. Absent
-         *     server_token keeps the saved token, "" removes it.
+         *     server_token keeps the saved token, "" removes it. 403 with code
+         *     `plan_limit` when the store's plan does not include pixels (saved
+         *     pixels then load on no page).
          */
         put: operations["savePixel"];
         post?: never;
@@ -2910,6 +2914,8 @@ export interface paths {
          * Turn the feeds on, or replace their key
          * @description Permission: marketing.manage. A new key replaces the old one: the
          *     old URLs stop working (an edge copy may serve for up to an hour).
+         *     403 with code `plan_limit` when the store's plan does not include
+         *     feeds (the feed URLs then open nothing).
          */
         post: operations["renewProductFeedKey"];
         /**
