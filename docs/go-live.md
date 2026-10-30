@@ -104,6 +104,14 @@ seeds six plans whose **prices and limits are placeholders**:
   platform bills (worker): `BILLING_PAYMOB_<EGP|SAR|AED>_SECRET_KEY`,
   `…_API_KEY` and `…_MOTO_INTEGRATION_ID` (ADR-0052). Run the billing
   gateway's contract against Paymob's test mode first.
+- **The platform's Paymob checkout.** Per currency (api and worker):
+  `BILLING_PAYMOB_<CUR>_PUBLIC_KEY`, `…_CARD_INTEGRATION_ID` (3DS, with
+  "save card" pre-checked: ask Paymob) and `…_HMAC_SECRET`. Set the
+  account's callback URL to `https://<api host>/v1/webhooks/paymob_billing`.
+  In test mode, confirm that the intention's answer carries
+  `intention_order_id` (ADR-0053).
+- **Turning collection on.** Once a region has both its account and its
+  checkout, set `BILLING_COLLECTION_ENABLED=true`.
 
 
 ## 4. Email

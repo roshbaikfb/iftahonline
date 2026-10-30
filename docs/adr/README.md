@@ -58,3 +58,4 @@ supersedes it.
 | [0050](0050-plan-changes-reach-every-cache.md) | Plan changes reach every cache | Accepted |
 | [0051](0051-collection-and-dunning.md) | Collecting invoices, dunning, and the billing hold | Accepted |
 | [0052](0052-charging-cards-on-file-with-paymob.md) | Charging merchants' cards on file with Paymob | Accepted |
+| [0053](0053-paying-invoices-and-saving-the-card.md) | Paying an invoice on Paymob's page, and saving the card | Accepted |

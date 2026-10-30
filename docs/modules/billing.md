@@ -155,6 +155,26 @@ client is `platform/paymob`.
 | `BILLING_PAYMOB_<…>_MOTO_INTEGRATION_ID` | Merchant-initiated charges; Paymob enables it on request |
 | `BILLING_PAYMOB_BASE_URL` | Overrides the API (tests) |
 
+## HTTP API (tag `billing`, ADR-0053)
+
+| Operation | Permission | Notes |
+|---|---|---|
+| `getBilling` `GET /v1/stores/{id}/billing` | `billing.manage` (owner) | The plan's names, the status and its dates, the card on file, the open invoices |
+| `payInvoice` `POST …/billing/invoices/{invoice}/pay` | `billing.manage` | `{checkout_url}` on Paymob, where the card is also saved. 404 for an invoice that is not open or not the store's; 503 for a currency without a checkout |
+
+Paymob's callbacks reach `/v1/webhooks/paymob_billing` (billing's
+platform provider):
+- **Signature.** A callback is verified with a region's HMAC secret.
+- **Placement.** It is placed in its store through
+  `app.billing_checkout_store`.
+- **Processing.** `billing.process_callback` handles it:
+  - a card token becomes the card on file;
+  - a payment is confirmed by asking Paymob, then settles the invoice.
+
+| Variable (api and worker) | Meaning |
+|---|---|
+| `BILLING_PAYMOB_<CUR>_PUBLIC_KEY`, `…_CARD_INTEGRATION_ID`, `…_HMAC_SECRET` | The region's checkout: all three, on a region with the account's keys |
+
 ## The subscription lifecycle
 
 | From | Step | To |
@@ -185,6 +205,7 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
 | `billing_payment_methods` | account (RLS) | The card on file, sealed (00060) |
 | `payment_attempts` | account (RLS) | Every try: approved, declined, no method, manual; never updated or deleted by merchant code |
+| `billing_checkouts` | tenant (RLS) | A "pay now": our reference `bc_<ULID>`, Paymob's order (00061) |
 | `invoice_counters` | platform | One row per year: gapless numbers |
 | `tax_rates` | platform | VAT by country |
 | `subscriptions` | tenant (RLS) | One row per store; `app_user` cannot delete. Existing stores got a 14-day trial of pro from the migration. `account_id` (who pays) and `renewal_invoice_id` (a billed renewal) from 00058 |
