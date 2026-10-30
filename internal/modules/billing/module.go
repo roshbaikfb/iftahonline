@@ -2,15 +2,21 @@ package billing
 
 import (
 	"errors"
+	"log/slog"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/paymob"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -36,6 +42,13 @@ type Deps struct {
 	Holds    Holds
 	Notifier Notifier
 	Collect  bool
+	// Inbox gives callback jobs their receipts (the worker); Log notes
+	// dropped callbacks; PublicURL is the platform's origin (Paymob's
+	// callbacks) and DashboardURL where merchants come back (ADR-0053).
+	Inbox        webhooks.Inbox
+	Log          *slog.Logger
+	PublicURL    string
+	DashboardURL string
 }
 
 // Module is the wired billing module.
@@ -56,12 +69,14 @@ func New(d Deps) (*Module, error) {
 	if len(d.Paymob.Paymob) > 0 {
 		regions := make(map[string]paymob.Region, len(d.Paymob.Paymob))
 		for cur, a := range d.Paymob.Paymob {
-			regions[cur] = paymob.Region{SecretKey: a.SecretKey, APIKey: a.APIKey, MotoIntegrationID: a.MotoIntegrationID}
+			regions[cur] = paymob.Region{SecretKey: a.SecretKey, APIKey: a.APIKey, MotoIntegrationID: a.MotoIntegrationID,
+				PublicKey: a.PublicKey, CardIntegrationID: a.CardIntegrationID, HMACSecret: a.HMACSecret}
 		}
 		gateways[paymob.Name] = paymob.New(paymob.Options{Regions: regions, BaseURL: d.Paymob.PaymobBaseURL})
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
-		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier}), collect: d.Collect}, nil
+		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier,
+		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL}), collect: d.Collect}, nil
 }
 
 // Grants is what the entitlements module reads.
@@ -73,6 +88,17 @@ func (m *Module) Fees() Fees { return m.svc }
 // RegisterWorkers adds the monthly invoice jobs (the worker; needs
 // Deps.Stores and Deps.Jobs).
 func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorkers(w) }
+
+// Mount registers the billing routes (the api role).
+func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+	httpapi.Mount(mux, m.svc, auth, scope, resp)
+}
+
+// CallbackProvider is billing's platform webhook provider (Paymob's
+// callbacks of merchants' checkouts); ok is false without a checkout.
+func (m *Module) CallbackProvider() (webhooks.PlatformProvider, bool) {
+	return m.svc.CallbackProvider()
+}
 
 // Collections records payments from outside the card on file.
 func (m *Module) Collections() Collections { return m.svc }

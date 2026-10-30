@@ -6,12 +6,14 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
@@ -55,9 +57,14 @@ type Service struct {
 	sealer   Sealer
 	holds    Holds
 	notifier Notifier
-	policy   domain.Policy
-	ids      *ulid.Generator
-	now      func() time.Time
+	inbox    webhooks.Inbox
+	log      *slog.Logger
+	// callbackURL and dashboardURL are where the gateway sends callbacks
+	// and merchants back (ADR-0053).
+	callbackURL, dashboardURL string
+	policy                    domain.Policy
+	ids                       *ulid.Generator
+	now                       func() time.Time
 }
 
 // Deps are the service's dependencies.
@@ -77,6 +84,12 @@ type Deps struct {
 	Sealer   Sealer
 	Holds    Holds
 	Notifier Notifier
+	// Inbox gives callback jobs their receipts (the worker); Log, the
+	// dropped callbacks; PublicURL and DashboardURL, the checkout's URLs.
+	Inbox        webhooks.Inbox
+	Log          *slog.Logger
+	PublicURL    string
+	DashboardURL string
 	// IDs makes accounts' and invoices' IDs; nil is a new generator.
 	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
@@ -95,8 +108,13 @@ func NewService(d Deps) *Service {
 	if d.Events == nil {
 		d.Events = eventbus.Nop{}
 	}
-	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
-		holds: d.Holds, notifier: d.Notifier, policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
+	svc := &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
+		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, dashboardURL: d.DashboardURL,
+		policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
+	if d.PublicURL != "" {
+		svc.callbackURL = CallbackURL(d.PublicURL)
+	}
+	return svc
 }
 
 // Grants are what the store in ctx is granted now, in a transaction of
