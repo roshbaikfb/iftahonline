@@ -73,3 +73,52 @@ func TestUsageLevels(t *testing.T) {
 		}
 	}
 }
+
+func TestFeatureKinds(t *testing.T) {
+	t.Parallel()
+	all := domain.Features()
+	if len(all) != 10 {
+		t.Fatalf("%d enforced features, want 10", len(all))
+	}
+	for f, k := range all {
+		if f.Kind() != k || k == "" {
+			t.Errorf("%s: Kind = %q, listed as %q", f, f.Kind(), k)
+		}
+		if f.Valid() != (k == domain.Monthly) {
+			t.Errorf("%s: Valid = %v for a %s feature", f, f.Valid(), k)
+		}
+	}
+	for _, f := range []domain.Feature{"", "sms", "AdFree", "loyalty_points"} {
+		if f.Kind() != "" || f.Valid() {
+			t.Errorf("%q is not enforced, got kind %q", f, f.Kind())
+		}
+	}
+}
+
+func TestGrantLimit(t *testing.T) {
+	t.Parallel()
+	if l := (domain.Grant{Value: 7}).Limit(); l != 7 {
+		t.Errorf("Limit = %d", l)
+	}
+	if l := (domain.Grant{Value: 7, Unlimited: true}).Limit(); l != domain.Unlimited {
+		t.Errorf("unlimited Limit = %d", l)
+	}
+	if l := (domain.Grant{}).Limit(); l != 0 {
+		t.Errorf("not granted: Limit = %d", l)
+	}
+}
+
+// TestUnlimitedUsage: an unlimited feature never warns, however much is
+// used (Limit*80 would overflow).
+func TestUnlimitedUsage(t *testing.T) {
+	t.Parallel()
+	for _, used := range []int64{0, 1, 1 << 40, domain.Unlimited - 1} {
+		u := domain.Usage{Feature: domain.OrdersPerMonth, Used: used, Limit: domain.Unlimited}
+		if !u.Unlimited() || u.Level() != domain.NoThreshold || u.CrossedBy(1) != domain.NoThreshold {
+			t.Errorf("used %d: unlimited %v, level %d", used, u.Unlimited(), u.Level())
+		}
+	}
+	if (domain.Usage{Limit: 5}).Unlimited() {
+		t.Error("a limit of 5 is not unlimited")
+	}
+}

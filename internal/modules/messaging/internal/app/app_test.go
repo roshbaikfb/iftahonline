@@ -24,7 +24,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
-	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -87,7 +86,7 @@ func newFixture(t *testing.T, o options) fixture {
 	if o.limit == 0 {
 		o.limit = 100
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Config: config.Entitlements{MessagesPerMonth: o.limit}})
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.Fixed{entitlements.Messages: {Value: o.limit}}})
 	if err != nil {
 		t.Fatal(err)
 	}

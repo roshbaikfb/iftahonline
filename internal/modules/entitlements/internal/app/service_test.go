@@ -44,7 +44,7 @@ type fixture struct {
 	ids   *ulid.Generator
 }
 
-func newFixture(t *testing.T, limits app.Limits) fixture {
+func newFixture(t *testing.T, grants app.Source) fixture {
 	t.Helper()
 	pool, err := pgxpool.New(t.Context(), infra.AppURL)
 	if err != nil {
@@ -52,7 +52,7 @@ func newFixture(t *testing.T, limits app.Limits) fixture {
 	}
 	t.Cleanup(pool.Close)
 	f := fixture{pool: pool, clock: newClock(time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)), ids: ulid.NewGenerator()}
-	f.svc = app.NewService(app.Deps{DB: pool, Limits: limits, Now: f.clock.now})
+	f.svc = app.NewService(app.Deps{DB: pool, Source: grants, Now: f.clock.now})
 	return f
 }
 
@@ -88,7 +88,7 @@ func (f fixture) release(ctx context.Context, period time.Time, n int64) (u doma
 
 func TestConsumeUpToTheLimit(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 5})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 5}})
 	ctx := f.store(t)
 	october := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
@@ -133,7 +133,7 @@ func TestConsumeUpToTheLimit(t *testing.T) {
 
 func TestNewMonthStartsAtZero(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 2})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 2}})
 	ctx := f.store(t)
 	if _, err := f.consume(ctx, 2); err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestNewMonthStartsAtZero(t *testing.T) {
 
 func TestRolledBackConsumptionDoesNotCount(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 10})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 10}})
 	ctx := f.store(t)
 	boom := errors.New("send failed")
 	err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
@@ -180,7 +180,7 @@ func TestRolledBackConsumptionDoesNotCount(t *testing.T) {
 func TestLastUnitIsSpentOnce(t *testing.T) {
 	t.Parallel()
 	const limit, senders = 5, 20
-	f := newFixture(t, app.StaticLimits{domain.Messages: limit})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: limit}})
 	ctx := f.store(t)
 	var ok, over atomic.Int64
 	var wg sync.WaitGroup
@@ -215,7 +215,7 @@ func TestLastUnitIsSpentOnce(t *testing.T) {
 // cannot release into another's count.
 func TestStoresCountApart(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 3})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 3}})
 	a, b := f.store(t), f.store(t)
 	if _, err := f.consume(a, 3); err != nil {
 		t.Fatal(err)
@@ -237,7 +237,7 @@ func TestStoresCountApart(t *testing.T) {
 
 func TestZeroLimitSendsNothing(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{})
+	f := newFixture(t, app.Fixed{})
 	ctx := f.store(t)
 	u, err := f.consume(ctx, 1)
 	if !errors.Is(err, domain.ErrQuotaExceeded) || u.Used != 0 || u.Limit != 0 || u.Level() != domain.Reached {
@@ -247,7 +247,7 @@ func TestZeroLimitSendsNothing(t *testing.T) {
 
 func TestReleaseNeverBelowZero(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 10})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 10}})
 	ctx := f.store(t)
 	october := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	if u, err := f.release(ctx, october, 4); err != nil || u.Used != 0 {
@@ -261,15 +261,15 @@ func TestReleaseNeverBelowZero(t *testing.T) {
 	}
 }
 
-type failingLimits struct{}
+type failingSource struct{}
 
-func (failingLimits) Limit(context.Context, domain.Feature) (int64, error) {
-	return 0, errors.New("plans unavailable")
+func (failingSource) GrantsTx(context.Context, pgx.Tx) (domain.Grants, error) {
+	return nil, errors.New("plans unavailable")
 }
 
 func TestInvalidRequests(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, app.StaticLimits{domain.Messages: 10})
+	f := newFixture(t, app.Fixed{domain.Messages: {Value: 10}})
 	ctx := f.store(t)
 	october := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
@@ -296,7 +296,7 @@ func TestInvalidRequests(t *testing.T) {
 		t.Errorf("usage without a store: %v", err)
 	}
 
-	broken := app.NewService(app.Deps{DB: f.pool, Limits: failingLimits{}})
+	broken := app.NewService(app.Deps{DB: f.pool, Source: failingSource{}})
 	if _, err = broken.Usage(ctx, domain.Messages); err == nil {
 		t.Error("usage with failing limits: want error")
 	}
