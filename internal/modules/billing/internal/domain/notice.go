@@ -30,6 +30,17 @@ func amount(minor int64, cur string) string {
 	return fmt.Sprintf("%d.%02d %s", minor/100, minor%100, cur)
 }
 
+// Amount is the notice's total as written in it, e.g. "682.86 EGP".
+func (n Notice) Amount() string { return amount(n.TotalMinor, n.Currency) }
+
+// Date is a notice's day as written in it (UTC), "" for none.
+func Date(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02")
+}
+
 // noticeTexts are a language's words for the notices; %s and %d are
 // filled in Email.
 type noticeTexts struct {
