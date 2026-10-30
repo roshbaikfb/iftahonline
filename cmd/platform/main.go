@@ -713,7 +713,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
 		Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(), Feeds: mkt.Feeds(),
-		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool), CheckoutURL: c.cfg.Payments.CheckoutURL,
+		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool, c.plan), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		EdgeTTL: c.cfg.Edge.CacheTTL, Search: c.cfg.Search.URL != "",
