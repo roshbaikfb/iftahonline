@@ -76,13 +76,21 @@ is told to call them.
    The three go together. Twilio's status callback is set per message
    (`/v1/webhooks/twilio`); nothing to configure in Twilio's console.
 
-## 3. The monthly message quota
+## 3. Plans, prices and quotas
 
-`ENTITLEMENTS_MESSAGES_PER_MONTH` (api and worker; default 500) is how
-many messages, WhatsApp or SMS, each store may send per calendar month
-(UTC). It is the platform's cost per store, until plans set it (P7).
-Merchants are warned at 80% and at the limit, and orders are never
-blocked by it.
+Plans are data (ADR-0045, [billing](modules/billing.md)). Migration 00056
+seeds six plans whose **prices and limits are placeholders**:
+
+- Set the real prices per currency, and each plan's limits and features,
+  before launch (from the console once P7 7e lands; until then with SQL
+  as the owner).
+- The `messages` grant is the platform's cost per store for WhatsApp and
+  SMS. The free plan's is 0.
+- Merchants are warned at 80% and at the limit, and orders are never
+  blocked by a quota.
+- Existing stores got a 14-day trial of pro when 00056 ran.
+
+`ENTITLEMENTS_MESSAGES_PER_MONTH` is gone; remove it from the env files.
 
 ## 4. Email
 

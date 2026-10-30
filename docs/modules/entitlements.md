@@ -1,31 +1,70 @@
 # Module: entitlements
 
-The entitlements module meters **what each store may use per month**.
-Until plans arrive (P7), every store gets the same limits from the
-environment. P7 changes where the limits come from, not the interface.
-Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md).
+The entitlements module is **the one place that answers what a store may
+do**:
+- whether it has a feature;
+- how many of a thing it may hold;
+- how much of a monthly quota it has used.
+
+Grants come from the store's plan, which [billing](billing.md) owns. No
+other module looks at plans.
+
+Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
+(quotas) and [ADR-0045](../adr/0045-plans-as-data-and-one-entitlements-service.md)
+(plans, the one service).
 
 ## Public API (`internal/modules/entitlements/api.go`)
 
 | Symbol | Purpose |
 |---|---|
-| `New(Deps)`, `Module.Entitlements()` | Wiring; the interface metered modules use |
-| `Entitlements.ConsumeTx(ctx, tx, feature, n)` | Counts `n` units this month in the caller's tenant transaction. Past the limit it counts nothing and returns `ErrQuotaExceeded` with the month's usage |
-| `Entitlements.ReleaseTx(ctx, tx, feature, period, n)` | Gives back units counted in `period` (the consumption's `Usage.Period`), never below zero |
-| `Entitlements.Usage(ctx, feature)` | The store's usage this month |
-| `Usage` | `Feature`, `Period` (the month's first day, UTC), `Used`, `Limit`; `Remaining()`, `Level()`, `CrossedBy(n)` |
-| `Messages` | The metered feature for customer messages; a WhatsApp message or an SMS is one unit |
-| `Nearly` (80%), `Reached` (100%) | Warning thresholds. Warn the merchant when `CrossedBy(n)` returns one of them, so each threshold is warned once a month |
-| `ErrQuotaExceeded`, `ErrInvalid` | Over the limit; a programming error (unknown feature, units outside 1..1000, a period that is not a month's first day) |
+| `New(Deps)`, `Module.Entitlements()` | Wiring; the interface other modules use |
+| `FromBilling(billing.GrantSource)` | The production source of grants. `Fixed{...}` grants every store the same (tests, demo tools) |
+| `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
+| `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
+| `Entitlements.CheckCount(ctx, f, after)` | Whether the store may hold `after` units of the counted feature `f`. Returns `ErrLimitReached` when not, with its `Grant` |
+| `Entitlements.ConsumeTx(ctx, tx, f, n)` | Counts `n` units of the monthly feature `f` in the caller's tenant transaction. Past the limit it counts nothing and returns `ErrQuotaExceeded` with the month's usage |
+| `Entitlements.ReleaseTx(ctx, tx, f, period, n)` | Gives back units counted in `period` (the consumption's `Usage.Period`), never below zero |
+| `Entitlements.Usage(ctx, f)` | The store's usage this month |
+| `Usage` | `Feature`, `Period` (the month's first day, UTC), `Used`, `Limit`; `Remaining()`, `Level()`, `CrossedBy(n)`, `Unlimited()` |
+| `Grant`, `Grants` | `Value` or `Unlimited`; a feature not listed is not granted |
+| `Nearly` (80%), `Reached` (100%) | Warning thresholds. Warn the merchant when `CrossedBy(n)` returns one of them, so each threshold is warned once a month. An unlimited feature never warns |
+| `ErrQuotaExceeded`, `ErrLimitReached`, `ErrInvalid` | Over a monthly quota; at a counted limit; a programming error (a feature unknown or of the wrong kind for the call, units outside 1..1000, a period that is not a month's first day) |
 
-## Configuration
+## Features
 
-| Variable | Default | Meaning |
+| Kind | Features | Call |
 |---|---|---|
-| `ENTITLEMENTS_MESSAGES_PER_MONTH` | 500 | Customer messages per store per calendar month (UTC); 0 sends none |
+| flag | `card_payments`, `coupons`, `pixels`, `feeds`, `ad_free` | `Allowed` |
+| count | `products`, `staff`, `custom_domains` | `CheckCount` |
+| monthly | `orders_per_month`, `messages` | `ConsumeTx`, `ReleaseTx`, `Usage` |
 
-Months are counted in UTC for every store. In Cairo or Riyadh time, a new
-month starts two or three hours later than midnight local time.
+- **Listed in code.** These are the features the code enforces
+  (`domain.Features`). `TestFeaturesMatchTheCatalog` holds them to the
+  `features` table.
+- **Display-only keys.** The console may add other keys to plans. They
+  are shown, but left out here, and enforced by nothing until a module
+  asks for them.
+- **Who enforces what.** The modules that enforce each feature are wired
+  in P7 7b. In 7a only `messages` is enforced (by messaging).
+
+## The cache
+
+Grants are cached in memory per instance (`platform/storecache`):
+
+| Setting | Value |
+|---|---|
+| Stores kept | 10,000 |
+| Expiry | 30 s |
+| Invalidation | by generation, through `Module.Invalidate` |
+
+- A cached check costs no query and no transaction.
+- On a miss, `ConsumeTx` and `ReleaseTx` read in the **caller's**
+  transaction, so they never need a second connection. `Allowed`,
+  `CheckCount` and `Usage` open one tenant transaction.
+
+| Benchmark (`go test -bench AllowedCached ./internal/modules/entitlements/internal/app/`) | Result |
+|---|---|
+| `Allowed`, cached, 28 goroutines (28-core dev machine) | ~205 ns/op, 0 allocs |
 
 ## How a consumption works
 
@@ -43,6 +82,11 @@ DO UPDATE SET used = used + n WHERE used + n <= limit RETURNING used
   example, its job could not be enqueued), its units never count.
 - **No row returned means over the limit.** Nothing changes, and
   `ConsumeTx` reads the month's count to return it.
+- **An unlimited feature** is still counted, with a limit of
+  `math.MaxInt64`, so usage can be shown.
+
+Months are counted in UTC for every store. In Cairo or Riyadh time, a new
+month starts two or three hours later than midnight local time.
 
 ## Tables
 
@@ -55,9 +99,13 @@ DO UPDATE SET used = used + n WHERE used + n <= limit RETURNING used
 - **The order is unaffected by a quota.** Metered modules treat
   `ErrQuotaExceeded` as "do not send, warn the merchant", never as a
   failure of the order (P6 acceptance).
-- **No HTTP API yet.** The dashboard shows usage once the messaging
-  screens arrive (P6 6g); plans and billing come in P7.
-- **Testing:** `internal/app` runs on real PostgreSQL. It covers the
-  limit and its warnings, a new month, rollback, the race for the last
-  unit, two stores counting apart, a zero limit, releases, and invalid
-  requests.
+- **Never ask for a plan.** Ask for a feature. `internal/tools/noplannames`
+  fails the build on a plan-name comparison outside billing.
+- **Testing:**
+  - `internal/app` runs on real PostgreSQL. It covers quotas and their
+    warnings, a new month, rollback, the race for the last unit, two
+    stores counting apart, zero and unlimited limits, releases, flags,
+    counts, the cache (hits, TTL, invalidation), reads on a one-connection
+    pool, and invalid requests.
+  - The module test runs against the real billing module and the seeded
+    plans.
