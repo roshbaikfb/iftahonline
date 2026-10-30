@@ -289,6 +289,30 @@ type AdminAuth struct {
 	ExpiresAt time.Time    `json:"expires_at"`
 }
 
+// AdminImpersonation defines model for AdminImpersonation.
+type AdminImpersonation struct {
+	// Code One-time
+	Code          string    `json:"code"`
+	CodeExpiresAt time.Time `json:"code_expires_at"`
+
+	// ExpiresAt When the session ends.
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// Url The dashboard page that exchanges the code (in the fragment).
+	Url string `json:"url"`
+}
+
+// AdminImpersonationRequest defines model for AdminImpersonationRequest.
+type AdminImpersonationRequest struct {
+	Minutes *int `json:"minutes,omitempty"`
+
+	// Reason Kept in the admin and the store's audit logs.
+	Reason string `json:"reason"`
+
+	// Write Allow changes (default read-only).
+	Write *bool `json:"write,omitempty"`
+}
+
 // AdminLoginRequest defines model for AdminLoginRequest.
 type AdminLoginRequest struct {
 	// Code Current 6-digit TOTP code.
@@ -531,6 +555,9 @@ type AdminListStoresParamsStatus string
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
+// AdminImpersonateStoreJSONRequestBody defines body for AdminImpersonateStore for application/json ContentType.
+type AdminImpersonateStoreJSONRequestBody = AdminImpersonationRequest
+
 // AdminReactivateStoreJSONRequestBody defines body for AdminReactivateStore for application/json ContentType.
 type AdminReactivateStoreJSONRequestBody = AdminReason
 
@@ -557,6 +584,9 @@ type ServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminImpersonateStore Open a time-limited support session as the store's owner
+	// (POST /admin/v1/stores/{store_id}/impersonate)
+	AdminImpersonateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -760,6 +790,32 @@ func (siw *ServerInterfaceWrapper) AdminGetStore(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// AdminImpersonateStore operation middleware
+func (siw *ServerInterfaceWrapper) AdminImpersonateStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminImpersonateStore(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminReactivateStore operation middleware
 func (siw *ServerInterfaceWrapper) AdminReactivateStore(w http.ResponseWriter, r *http.Request) {
 
@@ -938,6 +994,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/suspend", wrapper.AdminSuspendStore)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/impersonate", wrapper.AdminImpersonateStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/audit-log", wrapper.AdminAuditLog)
 
@@ -1190,6 +1247,46 @@ func (response AdminGetStoredefaultApplicationProblemPlusJSONResponse) VisitAdmi
 	return err
 }
 
+type AdminImpersonateStoreRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *AdminImpersonateStoreJSONRequestBody
+}
+
+type AdminImpersonateStoreResponseObject interface {
+	VisitAdminImpersonateStoreResponse(w http.ResponseWriter) error
+}
+
+type AdminImpersonateStore201JSONResponse AdminImpersonation
+
+func (response AdminImpersonateStore201JSONResponse) VisitAdminImpersonateStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminImpersonateStoredefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminImpersonateStoredefaultApplicationProblemPlusJSONResponse) VisitAdminImpersonateStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminReactivateStoreRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *AdminReactivateStoreJSONRequestBody
@@ -1290,6 +1387,9 @@ type StrictServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(ctx context.Context, request AdminGetStoreRequestObject) (AdminGetStoreResponseObject, error)
+	// AdminImpersonateStore Open a time-limited support session as the store's owner
+	// (POST /admin/v1/stores/{store_id}/impersonate)
+	AdminImpersonateStore(ctx context.Context, request AdminImpersonateStoreRequestObject) (AdminImpersonateStoreResponseObject, error)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(ctx context.Context, request AdminReactivateStoreRequestObject) (AdminReactivateStoreResponseObject, error)
@@ -1487,6 +1587,39 @@ func (sh *strictHandler) AdminGetStore(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminGetStoreResponseObject); ok {
 		if err := validResponse.VisitAdminGetStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminImpersonateStore operation middleware
+func (sh *strictHandler) AdminImpersonateStore(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminImpersonateStoreRequestObject
+
+	request.StoreId = storeId
+
+	var body AdminImpersonateStoreJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminImpersonateStore(ctx, request.(AdminImpersonateStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminImpersonateStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminImpersonateStoreResponseObject); ok {
+		if err := validResponse.VisitAdminImpersonateStoreResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

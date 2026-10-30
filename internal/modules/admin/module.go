@@ -32,7 +32,11 @@ type Deps struct {
 	Hashing   config.Identity
 	AdminHost string
 	ClientIP  httpapi.ClientIPFunc
-	Limits    *app.Limits // tests
+	// Impersonate opens support sessions (identity, ADR-0055) at
+	// DashboardURL; nil refuses them.
+	Impersonate  Impersonator
+	DashboardURL string
+	Limits       *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -62,7 +66,7 @@ func New(d Deps) (*Module, error) {
 		limits = *d.Limits
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
-		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores})
+		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, DashboardURL: d.DashboardURL})
 	return &Module{svc: svc, deps: d}, nil
 }
 

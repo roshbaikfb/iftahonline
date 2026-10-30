@@ -8,5 +8,12 @@ package admin
 
 import "github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 
+// Impersonation is a support session the identity module opened.
+type Impersonation = app.Impersonation
+
+// Impersonator opens a support session as the owner of the store in ctx
+// (ADR-0055). The console's wiring adapts the identity module to it.
+type Impersonator = app.Impersonator
+
 // Created is a new admin with the TOTP enrolment to show once.
 type Created = app.Created

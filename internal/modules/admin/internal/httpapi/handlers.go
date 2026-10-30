@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
@@ -140,6 +141,30 @@ func (h *Handlers) AdminGetStore(ctx context.Context, req AdminGetStoreRequestOb
 			IsPrimary: d.IsPrimary, VerifiedAt: d.VerifiedAt, LastCheckedAt: d.LastCheckedAt, CreatedAt: d.CreatedAt}
 	}
 	return out, nil
+}
+
+// AdminImpersonateStore implements StrictServerInterface.
+func (h *Handlers) AdminImpersonateStore(ctx context.Context, req AdminImpersonateStoreRequestObject) (AdminImpersonateStoreResponseObject, error) {
+	id, err := storeID(req.StoreId)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	var d time.Duration
+	if m := req.Body.Minutes; m != nil {
+		if *m < 1 {
+			return nil, errs.Validation(errs.FieldError{Field: "minutes", Code: "out_of_range", Message: "minutes must be between 5 and 60"})
+		}
+		d = time.Duration(*m) * time.Minute
+	}
+	imp, err := h.svc.Impersonate(ctx, id, req.Body.Reason, d, req.Body.Write != nil && *req.Body.Write)
+	if err != nil {
+		return nil, err
+	}
+	return AdminImpersonateStore201JSONResponse{Code: imp.Code, CodeExpiresAt: imp.CodeExpiresAt, ExpiresAt: imp.ExpiresAt,
+		Url: h.svc.ImpersonationURL(imp.Code)}, nil
 }
 
 // AdminSuspendStore implements StrictServerInterface.

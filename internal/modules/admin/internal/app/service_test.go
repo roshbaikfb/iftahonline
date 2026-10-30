@@ -44,6 +44,7 @@ type fixture struct {
 	app   *pgxpool.Pool
 	ten   *tenancy.Module
 	ids   *ulid.Generator
+	imp   *fakeImpersonator
 }
 
 const adminPW = "a long admin passphrase"
@@ -82,9 +83,11 @@ func newFixture(t *testing.T) fixture {
 	limits := app.Limits{LoginPerIP: ratelimit.Limit{Burst: 50, Period: time.Hour}, LoginFailPerKey: ratelimit.Limit{Burst: 3, Period: time.Hour}}
 	d := app.Deps{DB: adminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: keyring, IDs: ids, Log: log,
 		Directory: ten.Directory(), Stores: ten.Service()}
+	imp := &fakeImpersonator{}
+	d.Impersonate, d.DashboardURL = imp.open, "https://app.iftahonline.com/"
 	cli := d
-	cli.Limiter, cli.Directory, cli.Stores = nil, nil, nil
-	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids}
+	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate = nil, nil, nil, nil
+	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp}
 }
 
 func (f fixture) device(t *testing.T) context.Context {

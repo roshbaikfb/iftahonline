@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
@@ -56,6 +57,10 @@ type Deps struct {
 	Log       *slog.Logger
 	Directory tenancy.Directory // nil for the CLI
 	Stores    tenancy.Service   // nil for the CLI
+	// Impersonate opens support sessions; nil refuses them (the CLI).
+	Impersonate Impersonator
+	// DashboardURL is where the admin exchanges an impersonation code.
+	DashboardURL string
 }
 
 // Service implements the console.
@@ -358,6 +363,64 @@ func (s *Service) setStatus(ctx context.Context, id tenant.StoreID, rawReason st
 		return tenancy.Store{}, err
 	}
 	return s.d.Stores.SetStatus(tenant.WithStore(ctx, id), to)
+}
+
+// Impersonation is a support session's one-time code.
+type Impersonation struct {
+	Code          string
+	CodeExpiresAt time.Time
+	ExpiresAt     time.Time
+}
+
+// Impersonator opens a support session as the owner of the store in ctx.
+type Impersonator func(ctx context.Context, admin ulid.ID, reason string, d time.Duration, write bool) (Impersonation, error)
+
+// Impersonation bounds (ADR-0055).
+const (
+	DefaultImpersonation = 30 * time.Minute
+	MaxImpersonation     = 60 * time.Minute
+	MinImpersonation     = 5 * time.Minute
+)
+
+var errBadMinutes = errs.Validation(errs.FieldError{Field: "minutes", Code: "out_of_range", Message: "minutes must be between 5 and 60"})
+
+// ImpersonationURL is the dashboard page that exchanges a code; the code
+// travels in the fragment, which browsers never send to a server.
+func (s *Service) ImpersonationURL(code string) string {
+	return strings.TrimRight(s.d.DashboardURL, "/") + "/impersonate#code=" + code
+}
+
+// Impersonate opens a time-limited support session as the owner of store
+// id: read-only unless write, for d (0 = 30 minutes; at most 60). Like
+// setStatus it records the attempt with the reason in the admin log
+// first, so no session exists that the log does not show.
+func (s *Service) Impersonate(ctx context.Context, id tenant.StoreID, rawReason string, d time.Duration, write bool) (Impersonation, error) {
+	who, ok := IdentityFrom(ctx)
+	if !ok {
+		return Impersonation{}, errNoSession
+	}
+	if s.d.Impersonate == nil {
+		return Impersonation{}, errs.Unavailable(0, errors.New("admin: impersonation is not wired"))
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return Impersonation{}, err
+	}
+	if d == 0 {
+		d = DefaultImpersonation
+	}
+	if d < MinImpersonation || d > MaxImpersonation {
+		return Impersonation{}, errBadMinutes
+	}
+	cur, _, err := s.d.Directory.Store(ctx, id)
+	if err != nil {
+		return Impersonation{}, err
+	}
+	if err := s.audit(ctx, &who.AdminID, "store.impersonated", "store", id.String(),
+		map[string]any{"reason": reason, "slug": cur.Slug, "minutes": int(d / time.Minute), "write": write}); err != nil {
+		return Impersonation{}, err
+	}
+	return s.d.Impersonate(tenant.WithStore(ctx, id), who.AdminID, reason, d, write)
 }
 
 // AuditPage is a page of the admin log.
