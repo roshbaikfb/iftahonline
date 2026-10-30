@@ -155,8 +155,8 @@ func SessionByTokenInStore(ctx context.Context, tx Tx, t authtoken.Token) (Activ
 		ReadOnly: r.ReadOnly}, nil
 }
 
-// StoreOwner is the current store's owner.
-func StoreOwner(ctx context.Context, tx Tx) (ulid.ID, error) {
+// Owner is the current store's owner.
+func Owner(ctx context.Context, tx Tx) (ulid.ID, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return ulid.ID{}, err
