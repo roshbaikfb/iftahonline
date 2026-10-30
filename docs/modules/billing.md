@@ -115,6 +115,27 @@ large as the charges, no invoice is written and the credits wait.
   ended. `billing.end_period` moves each to the free plan, keeping
   `trial_used`.
 
+## Collection and dunning (ADR-0051)
+
+| Job | Does |
+|---|---|
+| `billing.dunning` | Hourly with `BILLING_COLLECTION_ENABLED=true`. Lists, through `app.dunning_due`, invoices to charge, stores to suspend and stores to cancel |
+| `billing.charge_invoice` | Charges the account's card on file, outside a transaction, then records the attempt and settles or fails every store of the account |
+| `billing.suspend` / `billing.cancel` | The grace ran out: suspended and held (maintenance page). After 90 days: cancelled, data due for deletion (nothing deleted in P7) |
+| `billing.notify` | Emails the owners: payment failed (retry date, closing date), suspended, paid |
+
+- **Retries.** A failed charge is retried 1, 3 and 5 days after the
+  first failure.
+- **Grace.** The store is past due from that failure, with 7 days of
+  grace.
+- **Paying,** by card or a confirmed transfer (`Collections.SettleInvoice`):
+  - closes the invoice;
+  - renews the period the invoice billed;
+  - brings every store back and releases its hold.
+- **Cards on file.** They are sealed in `billing_payment_methods` and
+  saved by the gateway's token callback (7d-2) through
+  `Collections.SavePaymentMethod`.
+
 ## The subscription lifecycle
 
 | From | Step | To |
@@ -143,6 +164,8 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `sell_fees` | tenant (RLS) | `(store_id, order_id)`; `sell_fees_store_period` serves invoices; `app_user` cannot delete (00057) |
 | `billing_accounts`, `billing_account_stores` | account (RLS on `app.account_id`) | A store is in one account (00058) |
 | `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
+| `billing_payment_methods` | account (RLS) | The card on file, sealed (00060) |
+| `payment_attempts` | account (RLS) | Every try: approved, declined, no method, manual; never updated or deleted by merchant code |
 | `invoice_counters` | platform | One row per year: gapless numbers |
 | `tax_rates` | platform | VAT by country |
 | `subscriptions` | tenant (RLS) | One row per store; `app_user` cannot delete. Existing stores got a 14-day trial of pro from the migration. `account_id` (who pays) and `renewal_invoice_id` (a billed renewal) from 00058 |

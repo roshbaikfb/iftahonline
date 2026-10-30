@@ -92,6 +92,16 @@ seeds six plans whose **prices and limits are placeholders**:
 
 `ENTITLEMENTS_MESSAGES_PER_MONTH` is gone; remove it from the env files.
 
+### Collecting invoices
+
+- **`BILLING_COLLECTION_ENABLED`** (worker; default `false`) turns on
+  the hourly dunning: charges, retries, suspensions (ADR-0051). Leave it
+  off until merchants can save a card (P7 7d-2).
+- **Paymob setup.** Charging a saved card needs Paymob to enable
+  recurring payments on the platform's account and issue a **MOTO
+  integration ID**. Ask the Paymob account manager first.
+
+
 ## 4. Email
 
 Without SMTP, emails (sign-up, invitations, quota warnings) are not sent;
