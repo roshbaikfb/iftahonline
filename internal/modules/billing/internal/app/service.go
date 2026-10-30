@@ -12,6 +12,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -49,6 +50,7 @@ type Service struct {
 	orders Orders
 	stores Stores
 	jobs   jobs.Inserter
+	events eventbus.Publisher
 	ids    *ulid.Generator
 	now    func() time.Time
 }
@@ -61,6 +63,8 @@ type Deps struct {
 	Orders Orders
 	Stores Stores
 	Jobs   jobs.Inserter
+	// Events receives SubscriptionChanged; nil discards.
+	Events eventbus.Publisher
 	// IDs makes accounts' and invoices' IDs; nil is a new generator.
 	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
@@ -76,7 +80,10 @@ func NewService(d Deps) *Service {
 	if d.IDs == nil {
 		d.IDs = ulid.NewGenerator()
 	}
-	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, ids: d.IDs, now: now}
+	if d.Events == nil {
+		d.Events = eventbus.Nop{}
+	}
+	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, ids: d.IDs, now: now}
 }
 
 // Grants are what the store in ctx is granted now, in a transaction of

@@ -34,7 +34,14 @@ type (
 	StoreInfo = app.StoreInfo
 	// Stores reads the store in ctx (cmd/platform adapts tenancy).
 	Stores = app.Stores
+	// SubscriptionChanged is published when a store's subscription
+	// changes: what its plan grants may have changed (ADR-0050).
+	SubscriptionChanged = domain.SubscriptionChanged
 )
+
+// EventSubscriptionChanged is SubscriptionChanged's type. Caches of what
+// a store may do (entitlements, the storefront's pages) follow it.
+const EventSubscriptionChanged = domain.EventSubscriptionChanged
 
 // Order statuses.
 const (
