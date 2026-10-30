@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions/internal/httpapi"
@@ -23,6 +24,9 @@ type Deps struct {
 	IDs  *ulid.Generator
 	// Audit records merchant actions (identity's audit log); nil discards.
 	Audit audit.Recorder
+	// Plan says whether the store's plan includes coupons (ADR-0046); nil
+	// includes them (tests).
+	Plan entitlements.Entitlements
 }
 
 // Module is the wired promotions module.
@@ -35,7 +39,7 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil || d.IDs == nil {
 		return nil, errors.New("promotions: missing dependency")
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Plan: d.Plan})}, nil
 }
 
 // Coupons is what orders use.

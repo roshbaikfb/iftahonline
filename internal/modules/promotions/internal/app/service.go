@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -33,6 +34,7 @@ type Service struct {
 	db    postgres.Beginner
 	ids   *ulid.Generator
 	audit audit.Recorder
+	plan  entitlements.Entitlements
 	now   func() time.Time
 }
 
@@ -44,6 +46,9 @@ type Deps struct {
 	Audit audit.Recorder
 	// Now is the clock (tests); nil is time.Now.
 	Now func() time.Time
+	// Plan says whether the store's plan includes coupons (ADR-0046);
+	// nil includes them (tests).
+	Plan entitlements.Entitlements
 }
 
 // NewService builds the service.
@@ -54,7 +59,10 @@ func NewService(d Deps) *Service {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, now: d.Now}
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
+	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, plan: d.Plan, now: d.Now}
 }
 
 // Page sizes of the coupons' list.
@@ -142,6 +150,9 @@ func clean(c domain.Coupon) (domain.Coupon, error) {
 
 // Create adds a coupon.
 func (s *Service) Create(ctx context.Context, in domain.Coupon) (domain.Coupon, error) {
+	if err := s.plan.Require(ctx, entitlements.Coupons); err != nil {
+		return domain.Coupon{}, err
+	}
 	c, err := clean(in)
 	if err != nil {
 		return domain.Coupon{}, err
@@ -206,10 +217,18 @@ func (s *Service) Delete(ctx context.Context, id ulid.ID) error {
 // Preview is what a code would take off an order whose items cost
 // subtotal, for the store in ctx: a quote before the order (the
 // per-customer limit is checked when it is placed). A code that does
-// not apply is a *domain.Rejected.
+// not apply is a *domain.Rejected. Without coupons in the store's plan,
+// no code exists for the shopper; orders preview every code before they
+// redeem it, so that holds at checkout too.
 func (s *Service) Preview(ctx context.Context, code string, subtotal money.Money) (domain.Discount, error) {
 	norm, ok := domain.NormalizeCode(code)
 	if !ok {
+		return domain.Discount{}, &domain.Rejected{Reason: domain.NotFound}
+	}
+	if allowed, err := s.plan.Allowed(ctx, entitlements.Coupons); err != nil || !allowed {
+		if err != nil {
+			return domain.Discount{}, err
+		}
 		return domain.Discount{}, &domain.Rejected{Reason: domain.NotFound}
 	}
 	var d domain.Discount
