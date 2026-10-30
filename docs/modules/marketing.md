@@ -124,6 +124,13 @@ Built to the approved 6g mockups:
 | `marketing_settings` | Tenant table under RLS. One row per store, absent until the first save (`auto`) |
 | `product_feeds` | Tenant table under RLS. One row per store while its feeds are on; `key` is 32 base32 characters, kept as is (ADR-0044) |
 
+## Plan features (ADR-0047)
+
+| Feature | Without it |
+|---|---|
+| `pixels` | `savePixel` is a 403 `plan_limit`; saved pixels load on no page (`Browser`), and no server conversion is enqueued (`Track`) |
+| `feeds` | `renewProductFeedKey` is a 403 `plan_limit`; a saved key opens nothing (`FeedAllowed`) |
+
 ## Rules worth knowing
 
 - **Testing:**

@@ -89,6 +89,13 @@ Built to the approved 6g mockups:
 | `coupons` | Tenant table under RLS. PK `(store_id, id)`; unique `(store_id, code)` serves the checkout's lookup (an index search, pinned by a plan test). `uses` is taken by a conditional update, the order's last step |
 | `coupon_redemptions` | Tenant table under RLS. One per order (PK `(store_id, order_id)`): the coupon, the customer, the discount; `released_at` once given back. `(store_id, coupon_id, customer_id)` counts a customer's uses and covers the FK. `app_user` cannot delete |
 
+## Plan feature (ADR-0047)
+
+`coupons` gates codes:
+- `createCoupon` is a 403 `plan_limit` without it;
+- saved codes stay but do not apply: `Preview` (the storefront's quote,
+  and every order before it redeems) answers `not_found`.
+
 ## Rules worth knowing
 
 - **Testing:**
