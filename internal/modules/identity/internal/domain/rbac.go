@@ -23,6 +23,8 @@ import (
 //     confirmations); the owner and manager also write the texts.
 //   - coupons are the owner's and the manager's (they set prices), and
 //     so are the ad pixels (they run the store's ads).
+//   - billing (the plan, the card on file, paying invoices) is the
+//     owner's alone (ADR-0053).
 //   - shipping: fulfils orders (packs, ships, records deliveries and
 //     returns); sees the catalog and keeps stock counts right (they
 //     handle the goods), but does not edit products or confirm orders.
