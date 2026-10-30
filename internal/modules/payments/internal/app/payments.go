@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
@@ -76,6 +77,14 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	}
 	if o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting || o.Status != orders.StatusPending {
 		return Checkout{}, ErrNotPayable
+	}
+	// A plan without card payments (a lapsed trial, a downgrade) sends no
+	// shopper to the gateway, connected or not.
+	if ok, pErr := s.plan.Allowed(ctx, entitlements.CardPayments); pErr != nil || !ok {
+		if pErr != nil {
+			return Checkout{}, pErr
+		}
+		return Checkout{}, ErrCardUnavailable
 	}
 	var conn store.SealedConnection
 	var reuse *domain.Payment
