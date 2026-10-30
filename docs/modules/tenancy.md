@@ -132,6 +132,19 @@ from a row read just before the commit.
 - a second instance is served from Redis with 0 queries;
 - a suspension reaches both instances.
 
+## Billing hold (ADR-0051)
+
+`Service.SetBillingHoldTx(ctx, tx, hold)` holds or releases the store
+for billing, in billing's transaction:
+- it sets `stores.billing_hold`;
+- it writes the audit entry `store.billing_held` or
+  `store.billing_hold_released`;
+- it invalidates the store's hosts.
+
+The hold is separate from the platform's suspension (`status`).
+`app.resolve_host` reports a held active store as `held`
+(`StatusHeld`, a resolution and never a store's own status).
+
 ## Storefront behaviour
 
 | Resolution | Response |
@@ -139,6 +152,7 @@ from a row read just before the commit.
 | Active | The page, with the store in tenant context |
 | Unknown host or closed store | Branded 404 (indistinguishable) |
 | Suspended | 503 "store unavailable" |
+| Held for billing | 503 "under maintenance", `Retry-After: 3600` |
 | Resolver error | 503 with `Retry-After: 5` |
 
 ## HTTP API (tag `tenancy`)

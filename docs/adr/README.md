@@ -56,3 +56,4 @@ supersedes it.
 | [0048](0048-pay-as-you-sell-fees.md) | Pay-as-you-sell fees | Accepted |
 | [0049](0049-billing-accounts-and-monthly-invoices.md) | Billing accounts and monthly invoices | Accepted |
 | [0050](0050-plan-changes-reach-every-cache.md) | Plan changes reach every cache | Accepted |
+| [0051](0051-collection-and-dunning.md) | Collecting invoices, dunning, and the billing hold | Accepted |
