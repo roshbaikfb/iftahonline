@@ -200,6 +200,9 @@ type clients struct {
 	// planLimits handles entitlements.usage.crossed for messaging (the
 	// merchant's warning); the worker sets it.
 	planLimits *lateHandler
+	// sellFees handles orders.order.status_changed for billing (a
+	// delivered order's fee); the worker sets it.
+	sellFees *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -280,6 +283,11 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(entitlements.EventUsageCrossed, messaging.PlanLimitsSubscriber, limits.Handle); err != nil {
 		return clients{}, err
 	}
+	// A delivered or returned order's pay-as-you-sell fee (ADR-0048).
+	fees := &lateHandler{}
+	if err = bus.Subscribe(orders.EventOrderStatusChanged, billing.SellFeesSubscriber, fees.Handle); err != nil {
+		return clients{}, err
+	}
 	bill, err := billing.New(billing.Deps{Pool: pool})
 	if err != nil {
 		return clients{}, err
@@ -289,7 +297,7 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 		return clients{}, err
 	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), watchOrders: watch, countSales: sales,
-		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits}, nil
+		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits, sellFees: fees}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -904,6 +912,11 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.countSales.Set(counter)
+	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords)})
+	if err != nil {
+		return err
+	}
+	c.sellFees.Set(sellFeesHandler(bill.Fees()))
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
 		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
 	}); err != nil {
