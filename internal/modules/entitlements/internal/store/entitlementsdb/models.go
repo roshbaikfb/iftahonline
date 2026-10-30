@@ -104,6 +104,22 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type BillingAccount struct {
+	ID        ulid.ID
+	Kind      string
+	Name      string
+	Currency  string
+	Country   string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type BillingAccountStore struct {
+	AccountID     ulid.ID
+	MemberStoreID ulid.ID
+	AddedAt       pgtype.Timestamptz
+}
+
 type CarrierConnection struct {
 	ID                ulid.ID
 	StoreID           ulid.ID
@@ -240,6 +256,39 @@ type InventoryLevel struct {
 	OnHand    int32
 	Reserved  int32
 	UpdatedAt pgtype.Timestamptz
+}
+
+type Invoice struct {
+	ID            ulid.ID
+	AccountID     ulid.ID
+	Number        string
+	Period        time.Time
+	Currency      string
+	SubtotalMinor int64
+	TaxBps        int32
+	TaxMinor      int64
+	TotalMinor    int64
+	Status        string
+	IssuedAt      pgtype.Timestamptz
+	DueAt         pgtype.Timestamptz
+	PaidAt        pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type InvoiceCounter struct {
+	Year int32
+	Last int64
+}
+
+type InvoiceLine struct {
+	InvoiceID   ulid.ID
+	AccountID   ulid.ID
+	LineNo      int32
+	Kind        string
+	LineStoreID pgtype.UUID
+	Description string
+	Quantity    int64
+	AmountMinor int64
 }
 
 type MarketingSetting struct {
@@ -613,6 +662,7 @@ type SellFee struct {
 	ReturnedAt  pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+	InvoiceID   pgtype.UUID
 }
 
 type Shipment struct {
@@ -857,6 +907,15 @@ type Subscription struct {
 	TrialUsed         bool
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	AccountID         pgtype.UUID
+	RenewalInvoiceID  pgtype.UUID
+}
+
+type TaxRate struct {
+	Country string
+	RateBps int32
+	NameAr  string
+	NameEn  string
 }
 
 type UsageCounter struct {

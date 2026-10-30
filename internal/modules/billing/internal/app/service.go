@@ -12,6 +12,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -46,15 +47,22 @@ type Orders func(ctx context.Context, tx pgx.Tx, id ulid.ID) (Order, error)
 type Service struct {
 	db     postgres.Beginner
 	orders Orders
+	stores Stores
+	jobs   jobs.Inserter
+	ids    *ulid.Generator
 	now    func() time.Time
 }
 
 // Deps are the service's dependencies.
 type Deps struct {
 	DB postgres.Beginner
-	// Orders reads delivered and returned orders (the worker); nil
-	// elsewhere.
+	// Orders reads delivered and returned orders, Stores names stores on
+	// invoices, Jobs enqueues invoice jobs (the worker); nil elsewhere.
 	Orders Orders
+	Stores Stores
+	Jobs   jobs.Inserter
+	// IDs makes accounts' and invoices' IDs; nil is a new generator.
+	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
 	Now func() time.Time
 }
@@ -65,7 +73,10 @@ func NewService(d Deps) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{db: d.DB, orders: d.Orders, now: now}
+	if d.IDs == nil {
+		d.IDs = ulid.NewGenerator()
+	}
+	return &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, ids: d.IDs, now: now}
 }
 
 // Grants are what the store in ctx is granted now, in a transaction of

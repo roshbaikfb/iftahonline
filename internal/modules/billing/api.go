@@ -30,6 +30,10 @@ type (
 	// Orders reads an order in the store's tenant transaction; a missing
 	// one is OrderOther.
 	Orders = app.Orders
+	// StoreInfo is what invoices need of a store: its name and currency.
+	StoreInfo = app.StoreInfo
+	// Stores reads the store in ctx (cmd/platform adapts tenancy).
+	Stores = app.Stores
 )
 
 // Order statuses.
