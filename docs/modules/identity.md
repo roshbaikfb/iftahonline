@@ -260,6 +260,13 @@ Removal is immediate: the member's next request to the store gets 404.
 These actions are audited: `member.invited`, `invitation.revoked`,
 `member.joined`, `member.role_changed` and `member.removed`.
 
+### Plan limit (ADR-0046)
+
+An invitation passes `entitlements.AdmitTx(staff)`:
+- seats are members (the owner included) and open invitations;
+- past the plan's grant it is a 403 with code `plan_limit`;
+- revoking an invitation gives its seat back.
+
 ## Tables
 
 | Table | Scope | Notes |

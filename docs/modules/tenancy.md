@@ -84,6 +84,12 @@ adds at their DNS provider:
 
 Verification remains TXT-only.
 
+### Plan limit (ADR-0046)
+
+`AddCustomDomain` passes `entitlements.AdmitTx(custom_domains)` after the
+fixed maximum of 5. Past the plan's grant it is a 403 with code
+`plan_limit`; the free plan grants none.
+
 ## Host resolution and caches
 
 | Layer | What | Default |

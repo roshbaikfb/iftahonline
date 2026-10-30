@@ -51,3 +51,4 @@ supersedes it.
 | [0043](0043-ad-pixels-and-conversions.md) | Ad pixels, consent, and server-side conversions | Accepted |
 | [0044](0044-product-feeds.md) | Product feeds for Google and Meta | Accepted |
 | [0045](0045-plans-as-data-and-one-entitlements-service.md) | Plans as data, and one entitlements service | Accepted |
+| [0046](0046-enforcing-plan-limits.md) | Enforcing plan limits | Accepted |

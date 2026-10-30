@@ -166,6 +166,17 @@ The merchant dashboard follows the approved 6g mockups:
 - **The order page**: the customer confirmation card (the message's way, the
   answer, the auto-cancel time), shown first on a phone.
 
+### Plan-limit notices (ADR-0046)
+
+`Module.PlanLimitHandler`, subscribed as `messaging.plan_limits` to
+`entitlements.usage.crossed` in the worker, adds a `plan_limit_nearly` or
+`plan_limit_reached` notice:
+- one per feature, month and threshold;
+- with the `feature`, `used`, `limit` and `period`;
+- emailed to the staff with a link to `/billing`.
+
+Orders still come in; the notice asks for an upgrade.
+
 ## Webhooks
 
 Each event is placed in its store by our reference

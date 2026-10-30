@@ -10,8 +10,9 @@ Grants come from the store's plan, which [billing](billing.md) owns. No
 other module looks at plans.
 
 Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
-(quotas) and [ADR-0045](../adr/0045-plans-as-data-and-one-entitlements-service.md)
-(plans, the one service).
+(quotas), [ADR-0045](../adr/0045-plans-as-data-and-one-entitlements-service.md)
+(plans, the one service) and [ADR-0046](../adr/0046-enforcing-plan-limits.md)
+(how modules enforce them).
 
 ## Public API (`internal/modules/entitlements/api.go`)
 
@@ -20,14 +21,17 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | `New(Deps)`, `Module.Entitlements()` | Wiring; the interface other modules use |
 | `FromBilling(billing.GrantSource)` | The production source of grants. `Fixed{...}` grants every store the same (tests, demo tools) |
 | `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
+| `Unrestricted()` | Allows everything and counts nothing, without a database: the default of a module built without entitlements (its own tests) |
 | `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
-| `Entitlements.CheckCount(ctx, f, after)` | Whether the store may hold `after` units of the counted feature `f`. Returns `ErrLimitReached` when not, with its `Grant` |
+| `Entitlements.AdmitTx(ctx, tx, f, n, count)` | Admits `n` more of the counted feature `f` in the caller's transaction. `count` (the module's own count) runs under an advisory lock on (store, `f`) held until the transaction ends. Past the grant it returns a 403 with code `plan_limit` (`errors.Is ErrLimitReached`) |
+| `Entitlements.CountTx(ctx, tx, f, n)` | Counts `n` units of a monthly feature and never refuses (a soft limit: orders). Publishes `UsageCrossed` (`entitlements.usage.crossed`) at 80% and 100% |
 | `Entitlements.ConsumeTx(ctx, tx, f, n)` | Counts `n` units of the monthly feature `f` in the caller's tenant transaction. Past the limit it counts nothing and returns `ErrQuotaExceeded` with the month's usage |
 | `Entitlements.ReleaseTx(ctx, tx, f, period, n)` | Gives back units counted in `period` (the consumption's `Usage.Period`), never below zero |
 | `Entitlements.Usage(ctx, f)` | The store's usage this month |
 | `Usage` | `Feature`, `Period` (the month's first day, UTC), `Used`, `Limit`; `Remaining()`, `Level()`, `CrossedBy(n)`, `Unlimited()` |
 | `Grant`, `Grants` | `Value` or `Unlimited`; a feature not listed is not granted |
 | `Nearly` (80%), `Reached` (100%) | Warning thresholds. Warn the merchant when `CrossedBy(n)` returns one of them, so each threshold is warned once a month. An unlimited feature never warns |
+| `PlanLimitCode` | `plan_limit`: the problem code of every hard-limit refusal |
 | `ErrQuotaExceeded`, `ErrLimitReached`, `ErrInvalid` | Over a monthly quota; at a counted limit; a programming error (a feature unknown or of the wrong kind for the call, units outside 1..1000, a period that is not a month's first day) |
 
 ## Features
@@ -35,8 +39,8 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | Kind | Features | Call |
 |---|---|---|
 | flag | `card_payments`, `coupons`, `pixels`, `feeds`, `ad_free` | `Allowed` |
-| count | `products`, `staff`, `custom_domains` | `CheckCount` |
-| monthly | `orders_per_month`, `messages` | `ConsumeTx`, `ReleaseTx`, `Usage` |
+| count | `products`, `staff`, `custom_domains` | `AdmitTx` |
+| monthly | `orders_per_month` (soft), `messages` (hard) | `CountTx`, or `ConsumeTx`/`ReleaseTx`; `Usage` |
 
 - **Listed in code.** These are the features the code enforces
   (`domain.Features`). `TestFeaturesMatchTheCatalog` holds them to the
@@ -44,8 +48,17 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 - **Display-only keys.** The console may add other keys to plans. They
   are shown, but left out here, and enforced by nothing until a module
   asks for them.
-- **Who enforces what.** The modules that enforce each feature are wired
-  in P7 7b. In 7a only `messages` is enforced (by messaging).
+- **Who enforces what:**
+
+  | Feature | Enforced by | How |
+  |---|---|---|
+  | `products` | catalog, every creation (API, imports, starter samples) | `AdmitTx`: products not deleted |
+  | `staff` | identity, invitations | `AdmitTx`: members (the owner included) and open invitations |
+  | `custom_domains` | tenancy, `AddCustomDomain` | `AdmitTx`: custom domains |
+  | `orders_per_month` | orders, every placement | `CountTx`: never refused; messaging warns the merchant |
+  | `messages` | messaging | `ConsumeTx` (ADR-0038) |
+
+  The flags are enforced from P7 7b-2; `ad_free` from 7g.
 
 ## The cache
 
@@ -58,9 +71,9 @@ Grants are cached in memory per instance (`platform/storecache`):
 | Invalidation | by generation, through `Module.Invalidate` |
 
 - A cached check costs no query and no transaction.
-- On a miss, `ConsumeTx` and `ReleaseTx` read in the **caller's**
-  transaction, so they never need a second connection. `Allowed`,
-  `CheckCount` and `Usage` open one tenant transaction.
+- On a miss, `AdmitTx`, `CountTx`, `ConsumeTx` and `ReleaseTx` read in
+  the **caller's** transaction, so they never need a second connection.
+  `Allowed` and `Usage` open one tenant transaction.
 
 | Benchmark (`go test -bench AllowedCached ./internal/modules/entitlements/internal/app/`) | Result |
 |---|---|
