@@ -1794,6 +1794,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/agencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every agency, newest first */
+        get: operations["adminListAgencies"];
+        put?: never;
+        /**
+         * Open an agency account
+         * @description Many stores on one agency plan, one period and one invoice, in
+         *     one currency (ADR-0059). `plan_code` is an agency plan on sale;
+         *     its stores renew into the code's newest version.
+         */
+        post: operations["adminCreateAgency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/agencies/{agency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+            };
+            cookie?: never;
+        };
+        /** An agency and its stores */
+        get: operations["adminGetAgency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/agencies/{agency_id}/stores/{store_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a store into an agency
+         * @description From no account, or from its own once that owes nothing (409
+         *     open_invoice); its old invoices stay there. It takes the agency's
+         *     plan, status and period; the first store's period runs to the
+         *     first of next month. The store's currency must be the agency's.
+         *     Recorded in the admin log first.
+         */
+        post: operations["adminAddAgencyStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/agencies/{agency_id}/stores/{store_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a store out of an agency, onto the free plan
+         * @description Its next invoice opens its own account. Recorded in the admin log first.
+         */
+        post: operations["adminRemoveAgencyStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/features": {
         parameters: {
             query?: never;
@@ -3618,6 +3710,32 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AdminAgency: {
+            id: components["schemas"]["ULID"];
+            name: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            plan_code: string;
+            /** Format: int64 */
+            stores: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminAgencyList: {
+            items: components["schemas"]["AdminAgency"][];
+        };
+        AdminAgencyDetail: {
+            agency: components["schemas"]["AdminAgency"];
+            store_ids: components["schemas"]["ULID"][];
+        };
+        AdminAgencyInput: {
+            name: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            plan_code: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
         AdminSettleInput: {
             /** @description The transfer's reference, kept with the payment. */
             reference: string;
@@ -5388,6 +5506,7 @@ export interface components {
         };
     };
     parameters: {
+        AgencyID: components["schemas"]["ULID"];
         FeatureKey: string;
         InvoiceID: components["schemas"]["ULID"];
         StoreID: components["schemas"]["ULID"];
@@ -7937,6 +8056,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminHealth"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListAgencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agencies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateAgency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAgencyInput"];
+            };
+        };
+        responses: {
+            /** @description Opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetAgency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agency. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminAddAgencyStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Moved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRemoveAgencyStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyDetail"];
                 };
             };
             default: components["responses"]["Problem"];

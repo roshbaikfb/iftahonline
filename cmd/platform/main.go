@@ -636,9 +636,10 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	// Holds and Events: the console settles invoices here (ADR-0058).
+	// Stores, Holds and Events: the console settles invoices and sets up
+	// agencies here (ADR-0058, ADR-0059).
 	bill, err := billing.New(billing.Deps{Pool: c.pool, Jobs: billJobs, IDs: c.ids, Log: c.log, Paymob: c.cfg.Billing,
-		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL, Holds: billingHolds(ten), Events: c.events})
+		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL, Stores: billingStores(ten), Holds: billingHolds(ten), Events: c.events})
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +656,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
-			Billing: bill.Console(),
+			Billing: bill.Console(), Agencies: bill.Agencies(),
 		}); err != nil {
 			return nil, err
 		}
