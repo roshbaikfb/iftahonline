@@ -100,7 +100,16 @@ type Console interface {
 	// account as paid outside the card (a confirmed transfer); any other
 	// invoice is 404.
 	SettleStoreInvoice(ctx context.Context, invoice ulid.ID, reference string) error
+	// DuplicatePayments are payments of invoices no longer open, to
+	// refund by hand, those to refund first (ADR-0063).
+	DuplicatePayments(ctx context.Context) ([]DuplicatePayment, error)
+	// MarkRefunded records a duplicate payment refunded on the gateway
+	// under reference.
+	MarkRefunded(ctx context.Context, id ulid.ID, reference string) error
 }
+
+// DuplicatePayment is a payment of an invoice no longer open.
+type DuplicatePayment = app.DuplicatePayment
 
 var _ Console = (*app.Service)(nil)
 

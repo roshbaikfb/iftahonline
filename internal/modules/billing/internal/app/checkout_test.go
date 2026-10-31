@@ -27,6 +27,7 @@ type checkoutGateway struct {
 	*fakeGateway
 	pages []app.CheckoutRequest
 	paid  map[string]bool
+	base  int // Paymob's order numbers start after it (4546 when zero): one per test in the shared database
 }
 
 func storeOf(ctx context.Context) [16]byte {
@@ -39,7 +40,11 @@ func (g *checkoutGateway) Checkout(_ context.Context, c app.CheckoutRequest) (ap
 		return app.CheckoutPage{}, app.ErrNoCheckout
 	}
 	g.pages = append(g.pages, c)
-	return app.CheckoutPage{URL: "https://pay.example.com/" + c.Reference, ProviderOrderID: strconv.Itoa(4546 + len(g.pages))}, nil
+	base := g.base
+	if base == 0 {
+		base = 4546
+	}
+	return app.CheckoutPage{URL: "https://pay.example.com/" + c.Reference, ProviderOrderID: strconv.Itoa(base + len(g.pages))}, nil
 }
 
 func (g *checkoutGateway) ParseCallback(q url.Values, body []byte) (app.Callback, error) {
@@ -257,5 +262,110 @@ func TestCallbacksOfNothing(t *testing.T) {
 	}
 	if parts, vErr := p.VerifyPlatform(t.Context(), webhooks.Request{Query: url.Values{"hmac": {"ok"}}, Body: []byte("x")}); vErr != nil || len(parts) != 0 {
 		t.Errorf("unreadable signed callback = %v, %v", parts, vErr)
+	}
+}
+
+// TestASecondPaymentIsKeptForRefund: the owner pays one invoice on two
+// gateway pages. The second payment reaches an invoice already paid: it
+// is recorded as a duplicate for the console to refund by hand (the
+// owner's decision, 2026-10-31), never dropped.
+func TestASecondPaymentIsKeptForRefund(t *testing.T) {
+	t.Parallel()
+	d := newDunning(t)
+	gw := &checkoutGateway{fakeGateway: d.gw, paid: map[string]bool{}, base: 91000}
+	inbox := webhookstest.NewInbox()
+	d.svc = app.NewService(app.Deps{DB: d.pool, Jobs: d.jobs, IDs: d.ids, Events: d.events, Now: func() time.Time { return *d.clock },
+		Stores: func(context.Context) (app.StoreInfo, error) {
+			return app.StoreInfo{Name: "متجر", Currency: "EGP"}, nil
+		},
+		Gateways: map[string]app.Gateway{"paymob": gw}, Sealer: plainSealer{}, Holds: d.holds.set, Inbox: inbox,
+		Notifier: func(context.Context, app.Notice) error { return nil }, PublicURL: "https://api.example.com/", DashboardURL: "https://app.example.com"})
+	ctx := d.store(t)
+	d.subscribe(ctx, t, "pro", "active", "cycle, period_start, period_end='monthly', '2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z'")
+	if err := d.svc.InvoiceStore(ctx, october); err != nil {
+		t.Fatal(err)
+	}
+	js := d.accountJobs()
+	if err := d.svc.InvoiceAccount(t.Context(), js[0].AccountID, js[0].Period); err != nil {
+		t.Fatal(err)
+	}
+	account := js[0].AccountID
+	d.own(ctx, account)
+	invoice := d.invoiceID(t, account)
+
+	for range 2 {
+		if _, err := d.svc.PayNow(ctx, invoice, app.Payer{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, second := gw.pages[0], gw.pages[1]
+	gw.paid[first.Reference], gw.paid[second.Reference] = true, true
+	pay := func(p app.CheckoutRequest, order string) string {
+		r := inbox.Put("paymob_billing", []byte("transaction "+p.Reference+" "+order+" -"))
+		if err := d.svc.ProcessCallback(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+		return inbox.Outcome(r)
+	}
+	if o := pay(first, "91001"); o != "paid" {
+		t.Fatalf("first payment = %q", o)
+	}
+	if o := pay(second, "91002"); o != "duplicate" {
+		t.Fatalf("second payment = %q, want duplicate", o)
+	}
+	if o := pay(second, "91002"); o != "duplicate" {
+		t.Fatalf("its callback again = %q", o)
+	}
+
+	// The console lists it once, with what the admin needs to refund it.
+	dups, err := d.svc.DuplicatePayments(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mine []app.DuplicatePayment
+	for _, p := range dups {
+		if p.Store == storeOf(ctx) {
+			mine = append(mine, p)
+		}
+	}
+	if len(mine) != 1 {
+		t.Fatalf("duplicates = %+v", mine)
+	}
+	p := mine[0]
+	if p.Gateway != "paymob" || p.Reference != "txn-"+second.Reference || p.AmountMinor != second.AmountMinor || p.Currency != "EGP" ||
+		!strings.HasPrefix(p.InvoiceNumber, "INV-") || p.RefundedAt != nil {
+		t.Fatalf("duplicate = %+v", p)
+	}
+
+	if err = d.svc.MarkRefunded(t.Context(), p.ID, " "); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("no reference: %v", err)
+	}
+	if err = d.svc.MarkRefunded(t.Context(), p.ID, "PMB-REF-77"); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.svc.MarkRefunded(t.Context(), p.ID, "PMB-REF-77"); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("refunded twice: %v", err)
+	}
+	if err = d.svc.MarkRefunded(t.Context(), d.ids.New(), "x"); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("unknown payment: %v", err)
+	}
+	if dups, err = d.svc.DuplicatePayments(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range dups {
+		if q.ID == p.ID && (q.RefundedAt == nil || q.RefundReference != "PMB-REF-77") {
+			t.Fatalf("after refund = %+v", q)
+		}
+	}
+	// The invoice stays paid once; a transfer of it now is refused, and
+	// its card on file is not charged.
+	if s, _, _ := d.invoice(t, account); s != "paid" {
+		t.Fatalf("invoice = %s", s)
+	}
+	if err = d.svc.SettleInvoice(t.Context(), account, invoice, "TR-9"); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("settle a paid invoice: %v", err)
+	}
+	if err = d.svc.ChargeInvoice(t.Context(), account, invoice); err != nil {
+		t.Fatalf("charge a paid invoice: %v", err)
 	}
 }

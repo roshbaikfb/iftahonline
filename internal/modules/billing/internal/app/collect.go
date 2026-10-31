@@ -187,7 +187,8 @@ func (s *Service) ChargeInvoice(ctx context.Context, account, invoice ulid.ID) e
 	} else {
 		a.Gateway, a.Reason = "none", "no card on file"
 	}
-	return s.recordAttempt(ctx, account, a)
+	_, err = s.recordAttempt(ctx, account, a)
+	return err
 }
 
 func (s *Service) charge(ctx context.Context, account ulid.ID, m store.Method, inv store.OpenInvoice) (ChargeResult, error) {
@@ -208,22 +209,39 @@ func (s *Service) charge(ctx context.Context, account ulid.ID, m store.Method, i
 // SettleInvoice records an invoice paid outside the card on file (a
 // transfer the platform confirmed: the console, 7e), with reference.
 func (s *Service) SettleInvoice(ctx context.Context, account, invoice ulid.ID, reference string) error {
-	return s.recordAttempt(ctx, account, store.Attempt{ID: s.ids.New(), Invoice: invoice, Account: account, Gateway: "manual",
+	_, err := s.recordAttempt(ctx, account, store.Attempt{ID: s.ids.New(), Invoice: invoice, Account: account, Gateway: "manual",
 		Outcome: "manual", Reference: reference})
+	return err
 }
 
 // recordAttempt writes an attempt and its consequences in one
 // transaction, with the invoice locked: a payment settles, anything else
-// counts a failure. An invoice no longer open records nothing.
-func (s *Service) recordAttempt(ctx context.Context, account ulid.ID, a store.Attempt) error {
-	var members []ulid.ID
-	return postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
+// counts a failure. For an invoice no longer open, a failure records
+// nothing, a transfer is refused, and a payment the gateway took is
+// recorded as a duplicate for the console to refund (ADR-0063):
+// duplicate is then true.
+func (s *Service) recordAttempt(ctx context.Context, account ulid.ID, a store.Attempt) (bool, error) {
+	var (
+		members   []ulid.ID
+		duplicate bool
+	)
+	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
 		if err := store.UseAccount(ctx, tx, account); err != nil {
 			return err
 		}
 		inv, open, err := store.LockOpenInvoice(ctx, tx, a.Invoice)
-		if err != nil || !open {
+		if err != nil {
 			return err
+		}
+		if !open {
+			switch a.Outcome {
+			case "approved":
+				duplicate = true
+				return s.duplicateTx(ctx, tx, a)
+			case "manual":
+				return errInvoiceNotOpen
+			}
+			return nil
 		}
 		if a.AmountMinor == 0 {
 			a.AmountMinor = inv.TotalMinor
@@ -242,6 +260,22 @@ func (s *Service) recordAttempt(ctx context.Context, account ulid.ID, a store.At
 		}
 		return s.failTx(ctx, tx, inv, members, a.Reason)
 	})
+	return duplicate, err
+}
+
+// duplicateTx records a's payment of an invoice no longer open, once
+// per gateway transaction, and says so in the log: money was taken that
+// is not owed.
+func (s *Service) duplicateTx(ctx context.Context, tx pgx.Tx, a store.Attempt) error {
+	if a.AmountMinor <= 0 {
+		return fmt.Errorf("billing: duplicate payment of invoice %s without an amount", a.Invoice)
+	}
+	added, err := store.InsertDuplicate(ctx, tx, a)
+	if err == nil && added && s.log != nil {
+		s.log.ErrorContext(ctx, "billing: a payment of an invoice no longer open, to refund from the console",
+			"invoice", a.Invoice.String(), "account", a.Account.String(), "gateway", a.Gateway, "reference", a.Reference, "amount_minor", a.AmountMinor)
+	}
+	return err
 }
 
 // settleTx closes the invoice and settles each store: its next period

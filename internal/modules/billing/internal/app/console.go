@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -62,4 +63,49 @@ func (s *Service) SettleStoreInvoice(ctx context.Context, invoice ulid.ID, refer
 		return err
 	}
 	return s.SettleInvoice(ctx, account, invoice, reference)
+}
+
+// DuplicatePayment is a payment of an invoice no longer open, to refund
+// by hand (ADR-0063).
+type DuplicatePayment = store.DuplicatePayment
+
+var (
+	errNoDuplicate     = errs.NotFound("duplicate_not_found", "no duplicate payment to refund with this ID")
+	errRefundReference = errs.Validation(errs.FieldError{Field: "reference", Code: "invalid", Message: "1 to 120 characters"})
+)
+
+// DuplicatePayments lists every account's duplicate payments, those to
+// refund first.
+func (s *Service) DuplicatePayments(ctx context.Context) (out []DuplicatePayment, err error) {
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.DuplicatePayments(ctx, tx)
+		return txErr
+	})
+	return out, err
+}
+
+// MarkRefunded records duplicate payment id refunded on the gateway under
+// reference; one already refunded, or no such duplicate, is 404.
+func (s *Service) MarkRefunded(ctx context.Context, id ulid.ID, reference string) error {
+	reference = strings.TrimSpace(reference)
+	if reference == "" || len(reference) > 120 {
+		return errRefundReference
+	}
+	return postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
+		account, ok, err := store.DuplicateAccount(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errNoDuplicate
+		}
+		if err = store.UseAccount(ctx, tx, account); err != nil {
+			return err
+		}
+		done, err := store.MarkRefunded(ctx, tx, id, reference, s.now().UTC())
+		if err == nil && !done {
+			err = errNoDuplicate
+		}
+		return err
+	})
 }

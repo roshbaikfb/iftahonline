@@ -300,9 +300,13 @@ func (s *Service) ProcessCallback(ctx context.Context, receipt ulid.ID) error {
 	if !paid {
 		return s.finishCheckout(ctx, receipt, c, "failed", "not_paid")
 	}
-	if err = s.recordAttempt(ctx, c.Account, store.Attempt{ID: s.ids.New(), Invoice: c.Invoice, Account: c.Account,
-		Gateway: CheckoutGatewayName, Outcome: "approved", Reference: txn, AmountMinor: c.AmountMinor}); err != nil {
+	duplicate, err := s.recordAttempt(ctx, c.Account, store.Attempt{ID: s.ids.New(), Invoice: c.Invoice, Account: c.Account,
+		Gateway: CheckoutGatewayName, Outcome: "approved", Reference: txn, AmountMinor: c.AmountMinor})
+	if err != nil {
 		return err
+	}
+	if duplicate { // the invoice was paid meanwhile: kept for a refund (ADR-0063)
+		return s.finishCheckout(ctx, receipt, c, "paid", "duplicate")
 	}
 	return s.finishCheckout(ctx, receipt, c, "paid", "paid")
 }

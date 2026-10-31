@@ -541,15 +541,17 @@ type Payment struct {
 }
 
 type PaymentAttempt struct {
-	ID          ulid.ID
-	InvoiceID   ulid.ID
-	AccountID   ulid.ID
-	Gateway     string
-	Outcome     string
-	Reason      string
-	Reference   string
-	AmountMinor int64
-	CreatedAt   pgtype.Timestamptz
+	ID              ulid.ID
+	InvoiceID       ulid.ID
+	AccountID       ulid.ID
+	Gateway         string
+	Outcome         string
+	Reason          string
+	Reference       string
+	AmountMinor     int64
+	CreatedAt       pgtype.Timestamptz
+	RefundedAt      pgtype.Timestamptz
+	RefundReference pgtype.Text
 }
 
 type PaymentConnection struct {

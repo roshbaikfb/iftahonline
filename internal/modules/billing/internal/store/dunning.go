@@ -183,3 +183,70 @@ func ClearRenewal(ctx context.Context, tx Tx) error {
 	}
 	return nil
 }
+
+// DuplicatePayment is a payment of an invoice no longer open, for the
+// console to refund by hand (ADR-0063).
+type DuplicatePayment struct {
+	ID, Account, Store ulid.ID
+	InvoiceNumber      string
+	Currency           string
+	AmountMinor        int64
+	Gateway, Reference string // the gateway's transaction, to refund
+	CreatedAt          time.Time
+	RefundedAt         *time.Time
+	RefundReference    string
+}
+
+// InsertDuplicate records a duplicate payment once per gateway
+// transaction; false when it was already recorded.
+func InsertDuplicate(ctx context.Context, tx Tx, a Attempt) (bool, error) {
+	n, err := billingdb.New(tx).InsertDuplicateAttempt(ctx, billingdb.InsertDuplicateAttemptParams{
+		ID: a.ID, InvoiceID: a.Invoice, AccountID: a.Account, Gateway: a.Gateway, Reference: a.Reference, AmountMinor: a.AmountMinor,
+	})
+	if err != nil {
+		return false, fmt.Errorf("billing store: insert duplicate: %w", err)
+	}
+	return n == 1, nil
+}
+
+// DuplicatePayments lists every account's duplicates, those to refund
+// first (at most 200), through app.duplicate_payments.
+func DuplicatePayments(ctx context.Context, tx Tx) ([]DuplicatePayment, error) {
+	rows, err := billingdb.New(tx).ListDuplicatePayments(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: duplicate payments: %w", err)
+	}
+	out := make([]DuplicatePayment, len(rows))
+	for i, r := range rows {
+		out[i] = DuplicatePayment{ID: r.ID, Account: r.AccountID, Store: r.StoreID, InvoiceNumber: r.InvoiceNumber, Currency: r.Currency,
+			AmountMinor: r.AmountMinor, Gateway: r.Gateway, Reference: r.Reference, CreatedAt: r.CreatedAt, RefundReference: r.RefundReference}
+		if r.Refunded {
+			at := r.RefundedAt
+			out[i].RefundedAt = &at
+		}
+	}
+	return out, nil
+}
+
+// DuplicateAccount is the account of duplicate payment id; ok is false
+// for no such duplicate.
+func DuplicateAccount(ctx context.Context, tx Tx, id ulid.ID) (ulid.ID, bool, error) {
+	account, err := billingdb.New(tx).DuplicatePaymentAccount(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ulid.ID{}, false, nil
+	}
+	if err != nil {
+		return ulid.ID{}, false, fmt.Errorf("billing store: duplicate account: %w", err)
+	}
+	return account, true, nil
+}
+
+// MarkRefunded records duplicate id refunded under reference; false when
+// it was already, or is no duplicate of the account in tx.
+func MarkRefunded(ctx context.Context, tx Tx, id ulid.ID, reference string, at time.Time) (bool, error) {
+	n, err := billingdb.New(tx).MarkAttemptRefunded(ctx, billingdb.MarkAttemptRefundedParams{ID: id, RefundedAt: &at, RefundReference: &reference})
+	if err != nil {
+		return false, fmt.Errorf("billing store: mark refunded: %w", err)
+	}
+	return n == 1, nil
+}

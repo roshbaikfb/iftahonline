@@ -53,6 +53,17 @@ func (q *Queries) DunningDue(ctx context.Context, now time.Time) ([]DunningDueRo
 	return items, nil
 }
 
+const duplicatePaymentAccount = `-- name: DuplicatePaymentAccount :one
+SELECT account_id::uuid FROM (SELECT app.payment_attempt_account($1::uuid) AS account_id) a WHERE account_id IS NOT NULL
+`
+
+func (q *Queries) DuplicatePaymentAccount(ctx context.Context, id ulid.ID) (ulid.ID, error) {
+	row := q.db.QueryRow(ctx, duplicatePaymentAccount, id)
+	var account_id ulid.ID
+	err := row.Scan(&account_id)
+	return account_id, err
+}
+
 const getOpenInvoice = `-- name: GetOpenInvoice :one
 SELECT id, number, currency, total_minor, attempts, first_failed_at, purpose, plan_id, cycle, for_store_id
 FROM invoices WHERE id = $1 AND status = 'open'
@@ -124,6 +135,37 @@ func (q *Queries) GetRenewalInvoice(ctx context.Context, storeID ulid.ID) (GetRe
 	return i, err
 }
 
+const insertDuplicateAttempt = `-- name: InsertDuplicateAttempt :execrows
+INSERT INTO payment_attempts (id, invoice_id, account_id, gateway, outcome, reference, amount_minor)
+VALUES ($1, $2, $3, $4, 'duplicate', $5, $6)
+ON CONFLICT (invoice_id, gateway, reference) WHERE outcome = 'duplicate' DO NOTHING
+`
+
+type InsertDuplicateAttemptParams struct {
+	ID          ulid.ID
+	InvoiceID   ulid.ID
+	AccountID   ulid.ID
+	Gateway     string
+	Reference   string
+	AmountMinor int64
+}
+
+// A payment of an invoice no longer open (ADR-0063), once per gateway transaction.
+func (q *Queries) InsertDuplicateAttempt(ctx context.Context, arg InsertDuplicateAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertDuplicateAttempt,
+		arg.ID,
+		arg.InvoiceID,
+		arg.AccountID,
+		arg.Gateway,
+		arg.Reference,
+		arg.AmountMinor,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertPaymentAttempt = `-- name: InsertPaymentAttempt :exec
 INSERT INTO payment_attempts (id, invoice_id, account_id, gateway, outcome, reason, reference, amount_minor)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -152,6 +194,80 @@ func (q *Queries) InsertPaymentAttempt(ctx context.Context, arg InsertPaymentAtt
 		arg.AmountMinor,
 	)
 	return err
+}
+
+const listDuplicatePayments = `-- name: ListDuplicatePayments :many
+SELECT id::uuid, account_id::uuid, store_id::uuid, invoice_number::text, currency::text, amount_minor::bigint, gateway::text,
+       reference::text, created_at::timestamptz, (refunded_at IS NOT NULL)::bool AS refunded,
+       coalesce(refunded_at, created_at)::timestamptz AS refunded_at, coalesce(refund_reference, '')::text AS refund_reference
+FROM app.duplicate_payments()
+`
+
+type ListDuplicatePaymentsRow struct {
+	ID              ulid.ID
+	AccountID       ulid.ID
+	StoreID         ulid.ID
+	InvoiceNumber   string
+	Currency        string
+	AmountMinor     int64
+	Gateway         string
+	Reference       string
+	CreatedAt       time.Time
+	Refunded        bool
+	RefundedAt      time.Time
+	RefundReference string
+}
+
+func (q *Queries) ListDuplicatePayments(ctx context.Context) ([]ListDuplicatePaymentsRow, error) {
+	rows, err := q.db.Query(ctx, listDuplicatePayments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDuplicatePaymentsRow{}
+	for rows.Next() {
+		var i ListDuplicatePaymentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.StoreID,
+			&i.InvoiceNumber,
+			&i.Currency,
+			&i.AmountMinor,
+			&i.Gateway,
+			&i.Reference,
+			&i.CreatedAt,
+			&i.Refunded,
+			&i.RefundedAt,
+			&i.RefundReference,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markAttemptRefunded = `-- name: MarkAttemptRefunded :execrows
+UPDATE payment_attempts SET refunded_at = $1, refund_reference = $2
+WHERE id = $3 AND outcome = 'duplicate' AND refunded_at IS NULL
+`
+
+type MarkAttemptRefundedParams struct {
+	RefundedAt      *time.Time
+	RefundReference *string
+	ID              ulid.ID
+}
+
+func (q *Queries) MarkAttemptRefunded(ctx context.Context, arg MarkAttemptRefundedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markAttemptRefunded, arg.RefundedAt, arg.RefundReference, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markInvoiceFailed = `-- name: MarkInvoiceFailed :exec
