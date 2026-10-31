@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { api } from './api/client';
 
+import { Billing } from './pages/Billing';
 import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
@@ -25,6 +26,7 @@ import { Overview } from './pages/Overview';
 import { Pages } from './pages/Pages';
 import { Payments } from './pages/Payments';
 import { Pixels } from './pages/Pixels';
+import { Plans } from './pages/Plans';
 import { PolicyEditor } from './pages/PolicyEditor';
 import { ProductEditor } from './pages/ProductEditor';
 import { Products } from './pages/Products';
@@ -116,6 +118,8 @@ function Gate() {
           <Route path="/stores/:storeId/coupons/:couponId" element={<CouponEditor key="edit" />} />
           <Route path="/stores/:storeId/messages/log" element={<MessageLog />} />
           <Route path="/stores/:storeId/gateways" element={<Gateways />} />
+          <Route path="/stores/:storeId/billing" element={<Billing />} />
+          <Route path="/stores/:storeId/billing/plans" element={<Plans />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       );

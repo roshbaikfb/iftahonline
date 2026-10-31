@@ -513,3 +513,27 @@ test('a merchant connects a pixel and turns the product feeds on', async ({ page
   await expect(page.getByRole('heading', { name: 'الكتالوج متوقف' })).toBeVisible();
   expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
 });
+
+// Billing (7f) against the real API: the plan, the usage meters and the
+// plan picker with its comparison; nothing is changed.
+test('a merchant reads the billing page and compares the plans', async ({ page }) => {
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByLabel('البريد الإلكتروني').fill('owner@demo.test');
+  await page.getByLabel('كلمة المرور').fill('demo-password-123');
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الفوترة والباقة' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('الفوترة والباقة');
+  await expect(page.getByRole('heading', { name: 'باقتك' })).toBeVisible();
+  await expect(page.getByRole('meter', { name: 'الطلبات' })).toBeVisible();
+  await expect(page.getByRole('meter', { name: 'المنتجات' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'قارن الباقات' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('اختر الباقة المناسبة لمتجرك');
+  await expect(page.getByText('باقتك الحالية').first()).toBeVisible();
+  await page.getByRole('button', { name: /^سنوي/ }).click();
+  await expect(page.getByRole('table')).toBeVisible();
+  expect(errors, 'no console errors (e.g. CSP violations)').toEqual([]);
+});
