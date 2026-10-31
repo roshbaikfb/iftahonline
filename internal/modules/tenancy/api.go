@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -105,3 +106,10 @@ var (
 	_ Service      = (*app.Service)(nil)
 	_ HostResolver = (*app.Resolver)(nil)
 )
+
+// CountCustomDomains counts the store-in-ctx's custom domains in its
+// tenant transaction tx: the domains usage meter (ADR-0061).
+func CountCustomDomains(ctx context.Context, tx pgx.Tx) (int64, error) {
+	n, err := store.CountCustomDomains(ctx, tx)
+	return int64(n), err
+}

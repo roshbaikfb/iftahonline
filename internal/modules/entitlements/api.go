@@ -144,6 +144,16 @@ type (
 	GrantsChanged = domain.GrantsChanged
 )
 
+// Usage meters (ADR-0061).
+type (
+	// Counter counts what the store in ctx holds of a counted feature, in
+	// its tenant transaction (catalog.CountProducts, identity.CountStaff,
+	// tenancy.CountCustomDomains).
+	Counter = app.Counter
+	// Meter is one feature's usage against its grant.
+	Meter = app.Meter
+)
+
 // EventGrantsChanged is GrantsChanged's type. Subscribe the same cache
 // handlers as to billing.EventSubscriptionChanged.
 const EventGrantsChanged = domain.EventGrantsChanged

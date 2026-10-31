@@ -145,6 +145,11 @@ tags:
       ADR-0053). An invoice is paid on Paymob's page, which also saves
       the card for the next invoices; the platform charges that card
       itself after. Permission: billing.manage (the owner).
+  - name: entitlements
+    description: |
+      What the store uses of what it is granted: this month's orders and
+      messages, and the products, team seats and custom domains it holds
+      (ADR-0061).
   - name: marketing
     description: |
       The store's ad pixels and the shopper's consent (ADR-0043). A store
@@ -4026,6 +4031,25 @@ paths:
               schema: { $ref: "#/components/schemas/Billing" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/usage:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [entitlements]
+      operationId: getUsage
+      summary: The store's usage against what it is granted
+      description: |
+        Permission: billing.manage. Monthly features count the current
+        calendar month (UTC); counted ones are what the store holds now.
+        `limit` is absent when unlimited.
+      responses:
+        "200":
+          description: The meters, in the billing page's order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageMeters" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -6161,6 +6185,22 @@ components:
         open_invoices:
           type: array
           items: { $ref: "#/components/schemas/OpenInvoice" }
+    UsageMeters:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UsageMeter" }
+    UsageMeter:
+      type: object
+      required: [feature, kind, used, unlimited]
+      properties:
+        feature: { type: string, enum: [orders_per_month, messages, products, staff, custom_domains] }
+        kind: { type: string, enum: [monthly, count] }
+        used: { type: integer, format: int64 }
+        limit: { type: integer, format: int64 }
+        unlimited: { type: boolean }
     BillingPlans:
       type: object
       required: [currency, features, plans]
