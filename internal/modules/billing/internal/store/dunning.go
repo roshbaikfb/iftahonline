@@ -130,21 +130,27 @@ func MarkInvoiceFailed(ctx context.Context, tx Tx, id ulid.ID, failedAt, next ti
 	return nil
 }
 
-// RenewalInvoice is the invoice that billed the store-in-ctx's renewal,
-// if any.
-func RenewalInvoice(ctx context.Context, tx Tx) (*ulid.ID, error) {
+// BilledRenewal is the invoice that billed the store-in-ctx's renewal
+// and the plan version it charged for (ADR-0056).
+type BilledRenewal struct {
+	Invoice ulid.ID
+	Plan    *ulid.ID // nil for renewals billed before versions renewed
+}
+
+// RenewalInvoice is the store-in-ctx's billed renewal, if any.
+func RenewalInvoice(ctx context.Context, tx Tx) (*BilledRenewal, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return nil, err
 	}
-	id, err := billingdb.New(tx).GetRenewalInvoice(ctx, store)
-	if errors.Is(err, pgx.ErrNoRows) {
+	r, err := billingdb.New(tx).GetRenewalInvoice(ctx, store)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && r.RenewalInvoiceID == nil {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("billing store: renewal invoice: %w", err)
 	}
-	return id, nil
+	return &BilledRenewal{Invoice: *r.RenewalInvoiceID, Plan: r.RenewalPlanID}, nil
 }
 
 // ClearRenewal forgets the billed renewal of the store in ctx: its

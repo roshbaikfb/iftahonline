@@ -950,6 +950,7 @@ type Subscription struct {
 	UpdatedAt         time.Time
 	AccountID         *ulid.ID
 	RenewalInvoiceID  *ulid.ID
+	RenewalPlanID     *ulid.ID
 }
 
 type TaxRate struct {

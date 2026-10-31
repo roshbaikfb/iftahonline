@@ -30,7 +30,7 @@ UPDATE invoices SET attempts = attempts + 1, first_failed_at = coalesce(first_fa
 WHERE id = @id AND status = 'open';
 
 -- name: GetRenewalInvoice :one
-SELECT renewal_invoice_id FROM subscriptions WHERE store_id = @store_id;
+SELECT renewal_invoice_id, renewal_plan_id FROM subscriptions WHERE store_id = @store_id;
 
 -- name: ClearRenewal :exec
-UPDATE subscriptions SET renewal_invoice_id = NULL, updated_at = now() WHERE store_id = @store_id;
+UPDATE subscriptions SET renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now() WHERE store_id = @store_id;

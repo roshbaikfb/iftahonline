@@ -947,6 +947,7 @@ type Subscription struct {
 	UpdatedAt         pgtype.Timestamptz
 	AccountID         pgtype.UUID
 	RenewalInvoiceID  pgtype.UUID
+	RenewalPlanID     pgtype.UUID
 }
 
 type TaxRate struct {
