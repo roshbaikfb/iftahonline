@@ -34,3 +34,22 @@ SELECT renewal_invoice_id, renewal_plan_id FROM subscriptions WHERE store_id = @
 
 -- name: ClearRenewal :exec
 UPDATE subscriptions SET renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now() WHERE store_id = @store_id;
+
+-- name: InsertDuplicateAttempt :execrows
+-- A payment of an invoice no longer open (ADR-0063), once per gateway transaction.
+INSERT INTO payment_attempts (id, invoice_id, account_id, gateway, outcome, reference, amount_minor)
+VALUES (@id, @invoice_id, @account_id, @gateway, 'duplicate', @reference, @amount_minor)
+ON CONFLICT (invoice_id, gateway, reference) WHERE outcome = 'duplicate' DO NOTHING;
+
+-- name: ListDuplicatePayments :many
+SELECT id::uuid, account_id::uuid, store_id::uuid, invoice_number::text, currency::text, amount_minor::bigint, gateway::text,
+       reference::text, created_at::timestamptz, (refunded_at IS NOT NULL)::bool AS refunded,
+       coalesce(refunded_at, created_at)::timestamptz AS refunded_at, coalesce(refund_reference, '')::text AS refund_reference
+FROM app.duplicate_payments();
+
+-- name: DuplicatePaymentAccount :one
+SELECT account_id::uuid FROM (SELECT app.payment_attempt_account(@id::uuid) AS account_id) a WHERE account_id IS NOT NULL;
+
+-- name: MarkAttemptRefunded :execrows
+UPDATE payment_attempts SET refunded_at = @refunded_at, refund_reference = @refund_reference
+WHERE id = @id AND outcome = 'duplicate' AND refunded_at IS NULL;
