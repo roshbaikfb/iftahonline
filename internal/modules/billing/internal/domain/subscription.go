@@ -100,6 +100,11 @@ type Subscription struct {
 	SuspendedAt       time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool // a store gets one trial
+	// A change the merchant scheduled (ADR-0060): the plan and cycle of
+	// the next renewal, or, with CancelAtPeriodEnd, the plan (pay as you
+	// sell) the store moves to when the paid period ends.
+	NextPlanID ulid.ID
+	NextCycle  Cycle
 }
 
 // OnFree is a store on the free plan; a store without a subscription
@@ -192,7 +197,11 @@ func (s Subscription) Settle(renewed bool) (Subscription, bool, error) {
 		if !s.Kind.Paid() || s.Cycle == "" || s.PeriodEnd.IsZero() {
 			return Subscription{}, false, refuse(s, "renew")
 		}
+		if s.NextCycle != "" {
+			s.Cycle = s.NextCycle
+		}
 		s.PeriodStart, s.PeriodEnd = s.PeriodEnd, NextPeriodEnd(s.PeriodEnd, s.Cycle)
+		s.NextPlanID, s.NextCycle = ulid.ID{}, ""
 		changed = true
 	}
 	switch s.Status {
@@ -242,12 +251,16 @@ func (s Subscription) Resume() (Subscription, error) {
 }
 
 // EndPeriod moves the store to the free plan when its trial or its
-// cancelled period has ended.
-func (s Subscription) EndPeriod(now time.Time, free Plan) (Subscription, error) {
+// cancelled period has ended, or to next (pay as you sell, ADR-0060)
+// when the cancellation was to it.
+func (s Subscription) EndPeriod(now time.Time, free Plan, next *Plan) (Subscription, error) {
 	trialOver := s.Status == Trialing && !now.Before(s.TrialEndsAt)
 	cancelled := s.Status == Active && s.CancelAtPeriodEnd && !now.Before(s.PeriodEnd)
 	if !trialOver && !cancelled {
 		return Subscription{}, refuse(s, "end period")
+	}
+	if cancelled && next != nil && next.Kind == KindPays {
+		return Subscription{PlanID: next.ID, Kind: KindPays, Status: Active, TrialUsed: s.TrialUsed}, nil
 	}
 	f := OnFree(free)
 	f.TrialUsed = s.TrialUsed

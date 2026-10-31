@@ -48,8 +48,12 @@ type Summary struct {
 	PeriodEnd              time.Time
 	GraceUntil             time.Time
 	CancelAtPeriodEnd      bool
-	Card                   string // the card on file's label; "" without one
-	OpenInvoices           []store.OpenInvoiceRow
+	// A change waiting for the period's end (ADR-0060): the plan it moves
+	// to (names empty for the free plan after a cancellation) and cycle.
+	NextPlanNameAr, NextPlanNameEn string
+	NextCycle                      domain.Cycle
+	Card                           string // the card on file's label; "" without one
+	OpenInvoices                   []store.OpenInvoiceRow
 }
 
 func (s *Service) checkout() (CheckoutGateway, bool) {
@@ -87,7 +91,12 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 			return err
 		}
 		out.Status, out.Cycle, out.TrialEndsAt, out.PeriodEnd = sub.Status, sub.Cycle, sub.TrialEndsAt, sub.PeriodEnd
-		out.GraceUntil, out.CancelAtPeriodEnd = sub.GraceUntil, sub.CancelAtPeriodEnd
+		out.GraceUntil, out.CancelAtPeriodEnd, out.NextCycle = sub.GraceUntil, sub.CancelAtPeriodEnd, sub.NextCycle
+		if !sub.NextPlanID.IsZero() {
+			if out.NextPlanNameAr, out.NextPlanNameEn, err = store.PlanNames(ctx, tx, sub.NextPlanID); err != nil {
+				return err
+			}
+		}
 		account, has, err := accountOf(ctx, tx)
 		if err != nil || !has {
 			return err

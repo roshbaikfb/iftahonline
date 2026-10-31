@@ -5,7 +5,7 @@ SELECT d.task::text AS task, d.id::uuid AS id, coalesce(d.account_id, d.id)::uui
 
 -- name: GetOpenInvoice :one
 -- The invoice to charge, locked until the charge is recorded.
-SELECT id, number, currency, total_minor, attempts, first_failed_at
+SELECT id, number, currency, total_minor, attempts, first_failed_at, purpose, plan_id, cycle, for_store_id
 FROM invoices WHERE id = @id AND status = 'open'
 FOR UPDATE;
 

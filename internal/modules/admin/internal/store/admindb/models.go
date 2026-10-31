@@ -311,6 +311,10 @@ type Invoice struct {
 	FirstFailedAt *time.Time
 	NextAttemptAt *time.Time
 	LastError     *string
+	Purpose       string
+	PlanID        *ulid.ID
+	Cycle         *string
+	ForStoreID    *ulid.ID
 }
 
 type InvoiceCounter struct {
@@ -961,6 +965,8 @@ type Subscription struct {
 	AccountID         *ulid.ID
 	RenewalInvoiceID  *ulid.ID
 	RenewalPlanID     *ulid.ID
+	NextPlanID        *ulid.ID
+	NextCycle         *string
 }
 
 type TaxRate struct {

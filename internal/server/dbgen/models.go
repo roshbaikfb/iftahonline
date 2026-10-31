@@ -309,6 +309,10 @@ type Invoice struct {
 	FirstFailedAt pgtype.Timestamptz
 	NextAttemptAt pgtype.Timestamptz
 	LastError     pgtype.Text
+	Purpose       string
+	PlanID        pgtype.UUID
+	Cycle         pgtype.Text
+	ForStoreID    pgtype.UUID
 }
 
 type InvoiceCounter struct {
@@ -959,6 +963,8 @@ type Subscription struct {
 	AccountID         pgtype.UUID
 	RenewalInvoiceID  pgtype.UUID
 	RenewalPlanID     pgtype.UUID
+	NextPlanID        pgtype.UUID
+	NextCycle         pgtype.Text
 }
 
 type TaxRate struct {

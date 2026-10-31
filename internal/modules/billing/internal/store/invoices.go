@@ -155,10 +155,8 @@ func RenewalDue(ctx context.Context, tx Tx, currency string, renewsBy time.Time)
 	if r.Kind, err = domain.ParseKind(row.Kind); err != nil {
 		return r, false, err
 	}
-	if row.Cycle != nil {
-		if r.Cycle, err = domain.ParseCycle(*row.Cycle); err != nil {
-			return r, false, err
-		}
+	if r.Cycle, err = domain.ParseCycle(row.Cycle); err != nil {
+		return r, false, err
 	}
 	r.PlanID, r.PlanName, r.AmountMinor = row.PlanID, row.NameAr, row.AmountMinor
 	return r, true, nil
@@ -202,17 +200,37 @@ type Invoice struct {
 // InsertInvoice numbers and writes an invoice with its lines, in the
 // account's wall, and returns its number.
 func InsertInvoice(ctx context.Context, tx Tx, inv Invoice) (string, error) {
+	return insertInvoice(ctx, tx, inv, nil)
+}
+
+// InsertSubscribeInvoice writes a first period's invoice (ADR-0060),
+// which dunning never charges: it is paid on the gateway's page.
+func InsertSubscribeInvoice(ctx context.Context, tx Tx, inv Invoice, sub Subscribe) (string, error) {
+	return insertInvoice(ctx, tx, inv, &sub)
+}
+
+func insertInvoice(ctx context.Context, tx Tx, inv Invoice, sub *Subscribe) (string, error) {
 	q := billingdb.New(tx)
 	n, err := q.NextInvoiceNumber(ctx, int32(inv.Issued.UTC().Year())) //nolint:gosec // a year fits
 	if err != nil {
 		return "", fmt.Errorf("billing store: invoice number: %w", err)
 	}
 	number := domain.InvoiceNumber(inv.Issued.UTC().Year(), n)
-	if err = q.InsertInvoice(ctx, billingdb.InsertInvoiceParams{
-		ID: inv.ID, AccountID: inv.Account, Number: number, Period: inv.Period, Currency: inv.Currency,
-		SubtotalMinor: inv.Totals.SubtotalMinor, TaxBps: inv.Totals.TaxBps, TaxMinor: inv.Totals.TaxMinor, TotalMinor: inv.Totals.TotalMinor,
-		IssuedAt: inv.Issued, DueAt: domain.DueAt(inv.Issued),
-	}); err != nil {
+	if sub == nil {
+		err = q.InsertInvoice(ctx, billingdb.InsertInvoiceParams{
+			ID: inv.ID, AccountID: inv.Account, Number: number, Period: inv.Period, Currency: inv.Currency,
+			SubtotalMinor: inv.Totals.SubtotalMinor, TaxBps: inv.Totals.TaxBps, TaxMinor: inv.Totals.TaxMinor, TotalMinor: inv.Totals.TotalMinor,
+			IssuedAt: inv.Issued, DueAt: domain.DueAt(inv.Issued),
+		})
+	} else {
+		cycle := string(sub.Cycle)
+		err = q.InsertSubscribeInvoice(ctx, billingdb.InsertSubscribeInvoiceParams{
+			ID: inv.ID, AccountID: inv.Account, Number: number, Period: inv.Period, Currency: inv.Currency,
+			SubtotalMinor: inv.Totals.SubtotalMinor, TaxBps: inv.Totals.TaxBps, TaxMinor: inv.Totals.TaxMinor, TotalMinor: inv.Totals.TotalMinor,
+			IssuedAt: inv.Issued, DueAt: inv.Issued, PlanID: &sub.Plan, Cycle: &cycle, ForStoreID: &sub.ForStore,
+		})
+	}
+	if err != nil {
 		return "", fmt.Errorf("billing store: insert invoice: %w", err)
 	}
 	for i, l := range inv.Lines {
@@ -249,6 +267,15 @@ func MarkBilled(ctx context.Context, tx Tx, invoice ulid.ID, period time.Time, c
 		if err = q.MarkRenewalBilled(ctx, billingdb.MarkRenewalBilledParams{StoreID: store, InvoiceID: &invoice, PlanID: renewal}); err != nil {
 			return fmt.Errorf("billing store: mark renewal: %w", err)
 		}
+	}
+	return nil
+}
+
+// VoidSubscribeInvoices voids the account's unpaid first-period invoices
+// (a new choice replaces them); tx must be behind the account's wall.
+func VoidSubscribeInvoices(ctx context.Context, tx Tx, account ulid.ID) error {
+	if _, err := billingdb.New(tx).VoidSubscribeInvoices(ctx, account); err != nil {
+		return fmt.Errorf("billing store: void subscribe invoices: %w", err)
 	}
 	return nil
 }

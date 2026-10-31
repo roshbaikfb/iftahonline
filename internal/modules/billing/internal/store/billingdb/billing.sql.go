@@ -82,9 +82,62 @@ func (q *Queries) GetFreePlan(ctx context.Context) (GetFreePlanRow, error) {
 	return i, err
 }
 
+const getPlan = `-- name: GetPlan :one
+SELECT id, code, version, kind, name_ar, name_en, trial_days, public, status = 'active' AS active, sort
+FROM plans WHERE id = $1
+`
+
+type GetPlanRow struct {
+	ID        ulid.ID
+	Code      string
+	Version   int32
+	Kind      string
+	NameAr    string
+	NameEn    string
+	TrialDays int32
+	Public    bool
+	Active    bool
+	Sort      int32
+}
+
+func (q *Queries) GetPlan(ctx context.Context, id ulid.ID) (GetPlanRow, error) {
+	row := q.db.QueryRow(ctx, getPlan, id)
+	var i GetPlanRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Version,
+		&i.Kind,
+		&i.NameAr,
+		&i.NameEn,
+		&i.TrialDays,
+		&i.Public,
+		&i.Active,
+		&i.Sort,
+	)
+	return i, err
+}
+
+const getPlanPrice = `-- name: GetPlanPrice :one
+SELECT amount_minor FROM plan_prices WHERE plan_id = $1 AND currency = $2 AND cycle = $3
+`
+
+type GetPlanPriceParams struct {
+	PlanID   ulid.ID
+	Currency string
+	Cycle    string
+}
+
+func (q *Queries) GetPlanPrice(ctx context.Context, arg GetPlanPriceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getPlanPrice, arg.PlanID, arg.Currency, arg.Cycle)
+	var amount_minor int64
+	err := row.Scan(&amount_minor)
+	return amount_minor, err
+}
+
 const getSubscription = `-- name: GetSubscription :one
 SELECT s.plan_id, p.kind, s.status, s.cycle, s.trial_ends_at, s.period_start, s.period_end,
-       s.grace_until, s.suspended_at, s.cancel_at_period_end, s.trial_used
+       s.grace_until, s.suspended_at, s.cancel_at_period_end, s.trial_used, s.next_plan_id, s.next_cycle
 FROM subscriptions s
 JOIN plans p ON p.id = s.plan_id
 WHERE s.store_id = $1
@@ -102,6 +155,8 @@ type GetSubscriptionRow struct {
 	SuspendedAt       *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
+	NextPlanID        *ulid.ID
+	NextCycle         *string
 }
 
 // The store's subscription and its plan's kind; no row is the free plan.
@@ -120,6 +175,8 @@ func (q *Queries) GetSubscription(ctx context.Context, storeID ulid.ID) (GetSubs
 		&i.SuspendedAt,
 		&i.CancelAtPeriodEnd,
 		&i.TrialUsed,
+		&i.NextPlanID,
+		&i.NextCycle,
 	)
 	return i, err
 }
@@ -180,8 +237,9 @@ func (q *Queries) PeriodsEnded(ctx context.Context, now time.Time) ([]ulid.ID, e
 const saveSubscription = `-- name: SaveSubscription :exec
 UPDATE subscriptions SET plan_id = $1, status = $2, cycle = $3, trial_ends_at = $4,
   period_start = $5, period_end = $6, grace_until = $7, suspended_at = $8,
-  cancel_at_period_end = $9, trial_used = $10, updated_at = now()
-WHERE store_id = $11
+  cancel_at_period_end = $9, trial_used = $10, next_plan_id = $11,
+  next_cycle = $12, updated_at = now()
+WHERE store_id = $13
 `
 
 type SaveSubscriptionParams struct {
@@ -195,6 +253,8 @@ type SaveSubscriptionParams struct {
 	SuspendedAt       *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
+	NextPlanID        *ulid.ID
+	NextCycle         *string
 	StoreID           ulid.ID
 }
 
@@ -210,6 +270,8 @@ func (q *Queries) SaveSubscription(ctx context.Context, arg SaveSubscriptionPara
 		arg.SuspendedAt,
 		arg.CancelAtPeriodEnd,
 		arg.TrialUsed,
+		arg.NextPlanID,
+		arg.NextCycle,
 		arg.StoreID,
 	)
 	return err

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store/billingdb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -40,6 +41,15 @@ type OpenInvoice struct {
 	TotalMinor  int64
 	Attempts    int
 	FirstFailed time.Time
+	// A first period paid on the gateway's page (ADR-0060): for ForStore,
+	// of Plan and Cycle. Zero for a monthly invoice.
+	Subscribe *Subscribe
+}
+
+// Subscribe is what a first-period invoice starts once paid.
+type Subscribe struct {
+	ForStore, Plan ulid.ID
+	Cycle          domain.Cycle
 }
 
 // LockOpenInvoice reads an open invoice of the account tx is behind and
@@ -52,8 +62,16 @@ func LockOpenInvoice(ctx context.Context, tx Tx, id ulid.ID) (OpenInvoice, bool,
 	case err != nil:
 		return OpenInvoice{}, false, fmt.Errorf("billing store: open invoice: %w", err)
 	}
-	return OpenInvoice{ID: r.ID, Number: r.Number, Currency: r.Currency, TotalMinor: r.TotalMinor, Attempts: int(r.Attempts),
-		FirstFailed: at(r.FirstFailedAt)}, true, nil
+	inv := OpenInvoice{ID: r.ID, Number: r.Number, Currency: r.Currency, TotalMinor: r.TotalMinor, Attempts: int(r.Attempts),
+		FirstFailed: at(r.FirstFailedAt)}
+	if r.Purpose == "subscribe" && r.PlanID != nil && r.ForStoreID != nil && r.Cycle != nil {
+		c, err := domain.ParseCycle(*r.Cycle)
+		if err != nil {
+			return OpenInvoice{}, false, err
+		}
+		inv.Subscribe = &Subscribe{ForStore: *r.ForStoreID, Plan: *r.PlanID, Cycle: c}
+	}
+	return inv, true, nil
 }
 
 // Method is an account's card on file; Token is sealed.

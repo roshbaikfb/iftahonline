@@ -28,7 +28,7 @@ SELECT id, kind, name, currency, country FROM billing_accounts WHERE id = @id;
 SELECT member_store_id FROM billing_account_stores WHERE account_id = @account_id ORDER BY added_at, member_store_id LIMIT 1000;
 
 -- name: InvoiceExists :one
-SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = @account_id AND period = @period);
+SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = @account_id AND period = @period AND purpose = 'monthly');
 
 -- name: GetTaxRate :one
 SELECT rate_bps FROM tax_rates WHERE country = @country;
@@ -50,20 +50,22 @@ VALUES (@invoice_id, @account_id, @line_no, @kind, @line_store_id, @description,
 
 -- name: RenewalDue :one
 -- The store's paid subscription whose period ends by renews_by and is
--- not billed yet. It renews into the newest active version of its plan
--- that sells its cycle in the currency, or its own version (ADR-0056).
-SELECT t.id AS plan_id, t.kind, t.name_ar, s.cycle, pp.amount_minor
+-- not billed yet. It renews into its scheduled plan and cycle when it
+-- has them (ADR-0060), else its own: the newest active version of that
+-- plan's code that sells the cycle in the currency, or the version
+-- itself (ADR-0056).
+SELECT t.id AS plan_id, t.kind, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
 FROM subscriptions s
-JOIN plans cur ON cur.id = s.plan_id
+JOIN plans cur ON cur.id = coalesce(s.next_plan_id, s.plan_id)
 CROSS JOIN LATERAL (
   SELECT p.id, p.kind, p.name_ar
   FROM plans p
-  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = @currency AND x.cycle = s.cycle
-  WHERE p.id = s.plan_id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
+  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = @currency AND x.cycle = coalesce(s.next_cycle, s.cycle)
+  WHERE p.id = cur.id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
   ORDER BY p.version DESC
   LIMIT 1
 ) t
-JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = @currency AND pp.cycle = s.cycle
+JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = @currency AND pp.cycle = coalesce(s.next_cycle, s.cycle)
 WHERE s.store_id = @store_id AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
   AND t.kind IN ('subscription', 'agency') AND s.period_end <= @renews_by;
 
@@ -87,3 +89,15 @@ WHERE store_id = @store_id AND period <= @period AND status = 'due' AND currency
 -- name: MarkCreditsUsed :execrows
 UPDATE sell_fees SET status = 'credited', invoice_id = @invoice_id, updated_at = now()
 WHERE store_id = @store_id AND status = 'credit_due' AND currency = @currency;
+
+-- name: InsertSubscribeInvoice :exec
+-- A first period paid on the gateway's page (ADR-0060): never charged by
+-- dunning, so no next attempt.
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at,
+                      purpose, plan_id, cycle, for_store_id)
+VALUES (@id, @account_id, @number, @period, @currency, @subtotal_minor, @tax_bps, @tax_minor, @total_minor, @issued_at, @due_at,
+        'subscribe', @plan_id, @cycle, @for_store_id);
+
+-- name: VoidSubscribeInvoices :execrows
+-- The account's unpaid first-period invoices, replaced by a new choice.
+UPDATE invoices SET status = 'void' WHERE account_id = @account_id AND purpose = 'subscribe' AND status = 'open';

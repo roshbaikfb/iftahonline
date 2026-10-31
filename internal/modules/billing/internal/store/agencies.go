@@ -113,16 +113,12 @@ func PutSubscription(ctx context.Context, tx Tx, s domain.Subscription, account 
 	if err != nil {
 		return err
 	}
-	var cycle *string
-	if s.Cycle != "" {
-		c := string(s.Cycle)
-		cycle = &c
-	}
 	if err = billingdb.New(tx).PutSubscription(ctx, billingdb.PutSubscriptionParams{
-		StoreID: store, PlanID: s.PlanID, Status: string(s.Status), Cycle: cycle,
+		StoreID: store, PlanID: s.PlanID, Status: string(s.Status), Cycle: cycleOf(s.Cycle),
 		TrialEndsAt: ptr(s.TrialEndsAt), PeriodStart: ptr(s.PeriodStart), PeriodEnd: ptr(s.PeriodEnd),
 		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt),
 		CancelAtPeriodEnd: s.CancelAtPeriodEnd, TrialUsed: s.TrialUsed, AccountID: account,
+		NextPlanID: idOf(s.NextPlanID), NextCycle: cycleOf(s.NextCycle),
 	}); err != nil {
 		return fmt.Errorf("billing store: put subscription: %w", err)
 	}
