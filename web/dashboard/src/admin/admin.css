@@ -1,0 +1,194 @@
+/* The console (7f-3b, the approved mockups): the dashboard's type and
+   colours, with a dark sidebar and an amber "أدمن" badge so it is never
+   mistaken for a store's dashboard. */
+body {
+  background: #f1f5f9;
+}
+.console {
+  display: flex;
+  flex-wrap: wrap;
+  min-block-size: 100vh;
+}
+.console-side {
+  flex: 1 1 13.75rem;
+  max-inline-size: 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 0.75rem;
+  background: #111827;
+}
+.console-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem 1.1rem;
+  color: #fff;
+  font-size: 1.05rem;
+}
+.admin-badge {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: #fbbf24;
+  color: #111827;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.console-item {
+  display: flex;
+  align-items: center;
+  min-block-size: 2.5rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  color: #cbd5e1;
+}
+.console-item:hover {
+  background: #1f2937;
+  color: #fff;
+}
+.console-item.active {
+  background: #1f2937;
+  color: #fff;
+  font-weight: 700;
+}
+.console-who {
+  display: grid;
+  gap: 0.1rem;
+  margin-block-start: auto;
+  padding: 0.9rem 0.75rem 0;
+  border-block-start: 1px solid #1f2937;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.console-who .link-button {
+  justify-self: start;
+  min-block-size: 2.25rem;
+  padding: 0;
+  color: #cbd5e1;
+}
+.console-main {
+  flex: 999 1 35rem;
+  min-inline-size: 0;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  max-inline-size: 70rem;
+  margin-inline: auto;
+  padding: 1.75rem 2rem 3rem;
+}
+.console-login form {
+  inline-size: min(24rem, 100%);
+}
+.console-login h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.health-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.9rem;
+}
+.health-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dot {
+  inline-size: 0.6rem;
+  block-size: 0.6rem;
+  border-radius: 50%;
+}
+.dot.ok {
+  background: var(--green);
+}
+.dot.down {
+  background: var(--red);
+}
+.health-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.9rem;
+}
+.health-groups h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.health-groups .fact {
+  display: contents;
+}
+.health-groups dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: end;
+}
+.health-groups dd.warn {
+  color: #9a3412;
+}
+.status.store-active {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.store-suspended {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.status.store-closed {
+  background: #e2e8f0;
+  color: #334155;
+}
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.inline-form label {
+  display: grid;
+  gap: 0.2rem;
+}
+.inline-form label.grow {
+  flex: 1 1 14rem;
+}
+.inline-form label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 2.625rem;
+}
+.inline-form.foot {
+  padding: 0.9rem 1rem;
+  border-block-start: 1px solid var(--line);
+}
+.support-card {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.support-card h2 {
+  margin: 0;
+}
+.console-danger summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--red);
+  border-color: #fca5a5;
+}
+.console-danger[open] summary {
+  margin-block-end: 0.5rem;
+}
+.console-invoice {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.console-invoice .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.console-invoice p {
+  margin: 0;
+}
