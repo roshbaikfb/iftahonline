@@ -29,12 +29,12 @@ DELETE FROM billing_account_stores WHERE account_id = @account_id AND member_sto
 -- The store's subscription as a whole, created when it had none, in
 -- account (NULL: none yet); a billed renewal is forgotten.
 INSERT INTO subscriptions (store_id, plan_id, status, cycle, trial_ends_at, period_start, period_end, grace_until,
-                           suspended_at, cancel_at_period_end, trial_used, account_id)
+                           suspended_at, cancel_at_period_end, trial_used, account_id, next_plan_id, next_cycle)
 VALUES (@store_id, @plan_id, @status, @cycle, @trial_ends_at, @period_start, @period_end, @grace_until,
-        @suspended_at, @cancel_at_period_end, @trial_used, @account_id)
+        @suspended_at, @cancel_at_period_end, @trial_used, @account_id, @next_plan_id, @next_cycle)
 ON CONFLICT (store_id) DO UPDATE SET
   plan_id = excluded.plan_id, status = excluded.status, cycle = excluded.cycle, trial_ends_at = excluded.trial_ends_at,
   period_start = excluded.period_start, period_end = excluded.period_end, grace_until = excluded.grace_until,
   suspended_at = excluded.suspended_at, cancel_at_period_end = excluded.cancel_at_period_end,
-  trial_used = excluded.trial_used, account_id = excluded.account_id,
-  renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now();
+  trial_used = excluded.trial_used, account_id = excluded.account_id, next_plan_id = excluded.next_plan_id,
+  next_cycle = excluded.next_cycle, renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now();

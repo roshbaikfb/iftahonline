@@ -88,7 +88,7 @@ func TestStartTrial(t *testing.T) {
 	if _, err = onFree().StartTrial(agency, t0); err != nil {
 		t.Errorf("agency trial: %v", err)
 	}
-	ended, err := s.EndPeriod(t0.Add(14*day), free)
+	ended, err := s.EndPeriod(t0.Add(14*day), free, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +117,10 @@ func TestEndOfTrialFallsBackToFree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.EndPeriod(t0.Add(13*day), free); !errors.Is(err, domain.ErrTransition) {
+	if _, err = s.EndPeriod(t0.Add(13*day), free, nil); !errors.Is(err, domain.ErrTransition) {
 		t.Fatalf("before the end: err = %v", err)
 	}
-	s, err = s.EndPeriod(t0.Add(14*day), free)
+	s, err = s.EndPeriod(t0.Add(14*day), free, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,17 +236,17 @@ func TestCancelAtPeriodEnd(t *testing.T) {
 	if r, rErr := s.Resume(); rErr != nil || r.CancelAtPeriodEnd {
 		t.Errorf("resume = %+v, %v", r, rErr)
 	}
-	if _, err = s.EndPeriod(s.PeriodEnd.Add(-time.Second), free); !errors.Is(err, domain.ErrTransition) {
+	if _, err = s.EndPeriod(s.PeriodEnd.Add(-time.Second), free, nil); !errors.Is(err, domain.ErrTransition) {
 		t.Errorf("end before the period's end: err = %v", err)
 	}
-	ended, err := s.EndPeriod(s.PeriodEnd, free)
+	ended, err := s.EndPeriod(s.PeriodEnd, free, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ended.Status != domain.Active || ended.PlanID != free.ID || ended.Cycle != "" || !ended.PeriodEnd.IsZero() || ended.CancelAtPeriodEnd {
 		t.Fatalf("on free = %+v", ended)
 	}
-	if _, err = active(t).EndPeriod(t0.AddDate(0, 2, 0), free); !errors.Is(err, domain.ErrTransition) {
+	if _, err = active(t).EndPeriod(t0.AddDate(0, 2, 0), free, nil); !errors.Is(err, domain.ErrTransition) {
 		t.Errorf("a period ends without a cancellation (renewal is a payment): err = %v", err)
 	}
 	for name, from := range map[string]domain.Subscription{"free": onFree(), "past due": pastDue(t), "suspended": suspended(t)} {

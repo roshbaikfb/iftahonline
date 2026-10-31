@@ -187,8 +187,54 @@ func (q *Queries) InsertInvoiceLine(ctx context.Context, arg InsertInvoiceLinePa
 	return err
 }
 
+const insertSubscribeInvoice = `-- name: InsertSubscribeInvoice :exec
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at,
+                      purpose, plan_id, cycle, for_store_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        'subscribe', $12, $13, $14)
+`
+
+type InsertSubscribeInvoiceParams struct {
+	ID            ulid.ID
+	AccountID     ulid.ID
+	Number        string
+	Period        time.Time
+	Currency      string
+	SubtotalMinor int64
+	TaxBps        int32
+	TaxMinor      int64
+	TotalMinor    int64
+	IssuedAt      time.Time
+	DueAt         time.Time
+	PlanID        *ulid.ID
+	Cycle         *string
+	ForStoreID    *ulid.ID
+}
+
+// A first period paid on the gateway's page (ADR-0060): never charged by
+// dunning, so no next attempt.
+func (q *Queries) InsertSubscribeInvoice(ctx context.Context, arg InsertSubscribeInvoiceParams) error {
+	_, err := q.db.Exec(ctx, insertSubscribeInvoice,
+		arg.ID,
+		arg.AccountID,
+		arg.Number,
+		arg.Period,
+		arg.Currency,
+		arg.SubtotalMinor,
+		arg.TaxBps,
+		arg.TaxMinor,
+		arg.TotalMinor,
+		arg.IssuedAt,
+		arg.DueAt,
+		arg.PlanID,
+		arg.Cycle,
+		arg.ForStoreID,
+	)
+	return err
+}
+
 const invoiceExists = `-- name: InvoiceExists :one
-SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = $1 AND period = $2)
+SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = $1 AND period = $2 AND purpose = 'monthly')
 `
 
 type InvoiceExistsParams struct {
@@ -301,18 +347,18 @@ func (q *Queries) NextInvoiceNumber(ctx context.Context, year int32) (int64, err
 }
 
 const renewalDue = `-- name: RenewalDue :one
-SELECT t.id AS plan_id, t.kind, t.name_ar, s.cycle, pp.amount_minor
+SELECT t.id AS plan_id, t.kind, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
 FROM subscriptions s
-JOIN plans cur ON cur.id = s.plan_id
+JOIN plans cur ON cur.id = coalesce(s.next_plan_id, s.plan_id)
 CROSS JOIN LATERAL (
   SELECT p.id, p.kind, p.name_ar
   FROM plans p
-  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = $1 AND x.cycle = s.cycle
-  WHERE p.id = s.plan_id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
+  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = $1 AND x.cycle = coalesce(s.next_cycle, s.cycle)
+  WHERE p.id = cur.id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
   ORDER BY p.version DESC
   LIMIT 1
 ) t
-JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = $1 AND pp.cycle = s.cycle
+JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = $1 AND pp.cycle = coalesce(s.next_cycle, s.cycle)
 WHERE s.store_id = $2 AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
   AND t.kind IN ('subscription', 'agency') AND s.period_end <= $3
 `
@@ -327,13 +373,15 @@ type RenewalDueRow struct {
 	PlanID      ulid.ID
 	Kind        string
 	NameAr      string
-	Cycle       *string
+	Cycle       string
 	AmountMinor int64
 }
 
 // The store's paid subscription whose period ends by renews_by and is
-// not billed yet. It renews into the newest active version of its plan
-// that sells its cycle in the currency, or its own version (ADR-0056).
+// not billed yet. It renews into its scheduled plan and cycle when it
+// has them (ADR-0060), else its own: the newest active version of that
+// plan's code that sells the cycle in the currency, or the version
+// itself (ADR-0056).
 func (q *Queries) RenewalDue(ctx context.Context, arg RenewalDueParams) (RenewalDueRow, error) {
 	row := q.db.QueryRow(ctx, renewalDue, arg.Currency, arg.StoreID, arg.RenewsBy)
 	var i RenewalDueRow
@@ -429,4 +477,17 @@ SELECT set_config('app.store_id', $1::uuid::text, true)
 func (q *Queries) UseStore(ctx context.Context, storeID ulid.ID) error {
 	_, err := q.db.Exec(ctx, useStore, storeID)
 	return err
+}
+
+const voidSubscribeInvoices = `-- name: VoidSubscribeInvoices :execrows
+UPDATE invoices SET status = 'void' WHERE account_id = $1 AND purpose = 'subscribe' AND status = 'open'
+`
+
+// The account's unpaid first-period invoices, replaced by a new choice.
+func (q *Queries) VoidSubscribeInvoices(ctx context.Context, accountID ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, voidSubscribeInvoices, accountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

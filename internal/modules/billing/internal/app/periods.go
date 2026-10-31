@@ -72,8 +72,8 @@ func (s *Service) EndPeriods(ctx context.Context) error {
 }
 
 // EndPeriod moves the store in ctx to the free plan if its trial or its
-// cancelled period has ended; otherwise (paid, renewed meanwhile) it
-// does nothing.
+// cancelled period has ended, or to the pay-as-you-sell plan it chose
+// (ADR-0060); otherwise (paid, renewed meanwhile) it does nothing.
 func (s *Service) EndPeriod(ctx context.Context) error {
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		sub, ok, err := store.Subscription(ctx, tx)
@@ -84,7 +84,15 @@ func (s *Service) EndPeriod(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		next, err := sub.EndPeriod(s.now(), free)
+		var to *domain.Plan
+		if !sub.NextPlanID.IsZero() {
+			p, pErr := store.Plan(ctx, tx, sub.NextPlanID)
+			if pErr != nil {
+				return pErr
+			}
+			to = &p
+		}
+		next, err := sub.EndPeriod(s.now(), free, to)
 		if errors.Is(err, domain.ErrTransition) {
 			return nil
 		}

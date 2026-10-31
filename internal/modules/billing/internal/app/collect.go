@@ -237,6 +237,9 @@ func (s *Service) recordAttempt(ctx context.Context, account ulid.ID, a store.At
 		if a.Outcome == "approved" || a.Outcome == "manual" {
 			return s.settleTx(ctx, tx, inv, members)
 		}
+		if inv.Subscribe != nil {
+			return nil // a first period not paid: nothing was owed yet (ADR-0060)
+		}
 		return s.failTx(ctx, tx, inv, members, a.Reason)
 	})
 }
@@ -255,6 +258,15 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, inv store.OpenInvoice
 		sub, ok, err := store.Subscription(sctx, tx)
 		if err != nil || !ok {
 			return err
+		}
+		if inv.Subscribe != nil {
+			if m != inv.Subscribe.ForStore {
+				continue
+			}
+			if err = s.startPaidTx(sctx, tx, sub, *inv.Subscribe, inv); err != nil {
+				return err
+			}
+			continue
 		}
 		billed, err := store.RenewalInvoice(sctx, tx)
 		if err != nil {
@@ -287,6 +299,26 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, inv store.OpenInvoice
 		}
 	}
 	return nil
+}
+
+// startPaidTx starts the first period an invoice paid, now, for the
+// store in ctx (ADR-0060), and tells its owners.
+func (s *Service) startPaidTx(ctx context.Context, tx pgx.Tx, sub domain.Subscription, paid store.Subscribe, inv store.OpenInvoice) error {
+	p, err := store.Plan(ctx, tx, paid.Plan)
+	if err != nil {
+		return err
+	}
+	next, err := sub.StartPaid(p, paid.Cycle, s.now().UTC())
+	if err != nil {
+		return err
+	}
+	if err = s.saveTx(ctx, tx, next); err != nil {
+		return err
+	}
+	if err = s.hold(ctx, tx, false); err != nil {
+		return err
+	}
+	return s.notifyTx(ctx, tx, Notice{Kind: domain.NoticePaid, Invoice: inv.Number, TotalMinor: inv.TotalMinor, Currency: inv.Currency})
 }
 
 // failTx counts a failed attempt: the next retry, and the stores past

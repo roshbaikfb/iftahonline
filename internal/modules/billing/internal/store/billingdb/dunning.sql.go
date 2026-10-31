@@ -54,7 +54,7 @@ func (q *Queries) DunningDue(ctx context.Context, now time.Time) ([]DunningDueRo
 }
 
 const getOpenInvoice = `-- name: GetOpenInvoice :one
-SELECT id, number, currency, total_minor, attempts, first_failed_at
+SELECT id, number, currency, total_minor, attempts, first_failed_at, purpose, plan_id, cycle, for_store_id
 FROM invoices WHERE id = $1 AND status = 'open'
 FOR UPDATE
 `
@@ -66,6 +66,10 @@ type GetOpenInvoiceRow struct {
 	TotalMinor    int64
 	Attempts      int32
 	FirstFailedAt *time.Time
+	Purpose       string
+	PlanID        *ulid.ID
+	Cycle         *string
+	ForStoreID    *ulid.ID
 }
 
 // The invoice to charge, locked until the charge is recorded.
@@ -79,6 +83,10 @@ func (q *Queries) GetOpenInvoice(ctx context.Context, id ulid.ID) (GetOpenInvoic
 		&i.TotalMinor,
 		&i.Attempts,
 		&i.FirstFailedAt,
+		&i.Purpose,
+		&i.PlanID,
+		&i.Cycle,
+		&i.ForStoreID,
 	)
 	return i, err
 }
