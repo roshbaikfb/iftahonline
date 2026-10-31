@@ -4888,3 +4888,175 @@ button.prov[aria-pressed='true'] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Billing (7f, the approved mockups): the plan, the card, the meters and
+   the open invoices; the plan picker. */
+.card-head.wrap {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.link-button {
+  font: inherit;
+  font-weight: 700;
+  min-block-size: 2.625rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  cursor: pointer;
+}
+.link-button.danger {
+  color: var(--red);
+}
+.ltr {
+  direction: ltr;
+  text-align: end;
+}
+.bill-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-card);
+}
+.bill-banner p {
+  margin: 0.15rem 0 0;
+}
+.bill-banner.trial {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.bill-banner.late {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+}
+.bill-banner.late strong {
+  color: #991b1b;
+}
+.bill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.25rem;
+}
+.bill-plan {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.bill-plan strong {
+  font-size: 1.75rem;
+}
+.bill-card {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.bill-meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1.1rem 1.75rem;
+}
+.bill-meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-block-end: 0.35rem;
+}
+.bill-meter-head strong.warn {
+  color: #9a3412;
+}
+.bill-meters p {
+  margin: 0.25rem 0 0;
+}
+.status.bill-trialing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.status.bill-active {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.bill-past_due,
+.status.bill-suspended {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.status.bill-cancelled {
+  background: #e2e8f0;
+  color: #334155;
+}
+.plans-head {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+.plans-head h1 {
+  margin: 0.5rem 0 0;
+}
+.plans-head p {
+  margin: 0;
+  max-inline-size: 40rem;
+}
+.plan-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+.plan-card {
+  position: relative;
+  align-content: start;
+}
+.plan-card.current {
+  border: 2px solid var(--navy);
+}
+.plan-card h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.plan-badge {
+  position: absolute;
+  inset-block-start: -0.75rem;
+  inset-inline-start: 1rem;
+  padding: 0.1rem 0.65rem;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.plan-price {
+  display: grid;
+  min-block-size: 3.5rem;
+}
+.plan-price strong {
+  font-size: 1.6rem;
+}
+.plan-points {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.plan-points li::before {
+  content: '✓';
+  margin-inline-end: 0.5rem;
+  color: var(--green);
+  font-weight: 700;
+}
+.plan-actions {
+  display: grid;
+  gap: 0.5rem;
+  align-self: end;
+}
+p.center {
+  text-align: center;
+}

@@ -47,7 +47,7 @@ export function navGroups(storeId: string): NavGroup[] {
       ],
     },
     { title: 'المتجر', items: [{ label: 'التصميم', to: at('design') }, { label: 'الصفحة الرئيسية', to: at('home-page') }, { label: 'الصفحات', to: at('pages') }, { label: 'الدومينات', to: at('domains') }] },
-    { title: 'الإعدادات', items: [{ label: 'الدفع بالبطاقة', to: at('gateways') }, { label: 'فريق العمل', to: at('team') }, { label: 'إعدادات المتجر', to: at('settings') }] },
+    { title: 'الإعدادات', items: [{ label: 'الدفع بالبطاقة', to: at('gateways') }, { label: 'فريق العمل', to: at('team') }, { label: 'الفوترة والباقة', to: at('billing') }, { label: 'إعدادات المتجر', to: at('settings') }] },
   ];
 }
 
