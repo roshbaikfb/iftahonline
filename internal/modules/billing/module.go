@@ -107,6 +107,10 @@ func (m *Module) Collections() Collections { return m.svc }
 // invoice needs Deps.Holds, Deps.Jobs and Deps.Events, as in the worker.
 func (m *Module) Console() Console { return m.svc }
 
+// Agencies are set up from the console (ADR-0059); they need Deps.Stores,
+// Deps.Holds and Deps.Events.
+func (m *Module) Agencies() Agencies { return m.svc }
+
 // PeriodicJobs start each month's invoices (daily), end trials and
 // cancelled periods (hourly) and, with Deps.Collect, run the dunning
 // (hourly); all at worker start.

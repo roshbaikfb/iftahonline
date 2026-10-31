@@ -113,6 +113,7 @@ type BillingAccount struct {
 	Country   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	PlanCode  *string
 }
 
 type BillingAccountStore struct {

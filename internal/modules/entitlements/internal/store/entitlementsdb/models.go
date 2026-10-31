@@ -112,6 +112,7 @@ type BillingAccount struct {
 	Country   string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	PlanCode  pgtype.Text
 }
 
 type BillingAccountStore struct {

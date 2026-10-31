@@ -220,7 +220,7 @@ func TestAgencyGetsOneInvoice(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SELECT set_config('app.account_id', $1::uuid::text, true)`, agency); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(t.Context(), `INSERT INTO billing_accounts (id, kind, name, currency, country) VALUES ($1, 'agency', 'وكالة', 'EGP', 'EG')`, agency); err != nil {
+		if _, err := tx.Exec(t.Context(), `INSERT INTO billing_accounts (id, kind, name, currency, country, plan_code) VALUES ($1, 'agency', 'وكالة', 'EGP', 'EG', 'agency')`, agency); err != nil {
 			return err
 		}
 		for _, ctx := range []context.Context{one, two} {
