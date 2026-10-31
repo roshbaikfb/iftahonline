@@ -1658,6 +1658,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The features catalog plans grant from */
+        get: operations["adminListFeatures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/features/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add a feature, or rename and reorder one
+         * @description A key's kind never changes (409). A key the code does not know
+         *     is shown on plans but not enforced (`enforced: false`) until a
+         *     module asks for it. Recorded in the admin log first.
+         */
+        put: operations["adminSaveFeature"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every version of every plan */
+        get: operations["adminListPlans"];
+        put?: never;
+        /**
+         * Put a plan version on sale
+         * @description The next version of `code` (the first for a new code) goes on
+         *     sale and the version on sale is retired. Stores keep the version
+         *     they bought and renew into the new one at their next renewal.
+         *     A code keeps its kind; one free plan is on sale at a time.
+         *     Recorded in the admin log first.
+         */
+        post: operations["adminPublishPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/plans/{code}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a plan off sale
+         * @description Stores on it keep it and renew into the same version. The free plan cannot be retired (409).
+         */
+        post: operations["adminRetirePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/audit-log": {
         parameters: {
             query?: never;
@@ -3393,6 +3481,98 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+        };
+        /** @enum {string} */
+        AdminFeatureKind: "flag" | "count" | "monthly";
+        AdminFeature: {
+            key: string;
+            kind: components["schemas"]["AdminFeatureKind"];
+            name_ar: string;
+            name_en: string;
+            sort: number;
+            /** @description The code checks it; false for a display-only key. */
+            enforced: boolean;
+        };
+        AdminFeatureList: {
+            items: components["schemas"]["AdminFeature"][];
+        };
+        AdminFeatureInput: {
+            kind: components["schemas"]["AdminFeatureKind"];
+            name_ar: string;
+            name_en: string;
+            /** @default 0 */
+            sort: number;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        /** @enum {string} */
+        AdminPlanKind: "free" | "pays" | "subscription" | "agency";
+        AdminPlanPrice: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** @enum {string} */
+            cycle: "monthly" | "annual";
+            /** Format: int64 */
+            amount_minor: number;
+        };
+        AdminPlanGrant: {
+            feature: string;
+            /** @default false */
+            unlimited: boolean;
+            /**
+             * Format: int64
+             * @description Ignored when unlimited. A flag is 0 or 1.
+             */
+            value?: number;
+        };
+        AdminPlanFee: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** @description 250 is 2.5%. */
+            rate_bps: number;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            min_minor: number;
+            /** Format: int64 */
+            max_minor?: number;
+        };
+        AdminPlanInput: {
+            code: string;
+            kind: components["schemas"]["AdminPlanKind"];
+            name_ar: string;
+            name_en: string;
+            /** @default 0 */
+            trial_days: number;
+            /** @default true */
+            public: boolean;
+            /** @default 0 */
+            sort: number;
+            prices?: components["schemas"]["AdminPlanPrice"][];
+            grants: components["schemas"]["AdminPlanGrant"][];
+            fees?: components["schemas"]["AdminPlanFee"][];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminPlan: {
+            id: components["schemas"]["ULID"];
+            code: string;
+            version: number;
+            kind: components["schemas"]["AdminPlanKind"];
+            name_ar: string;
+            name_en: string;
+            trial_days: number;
+            public: boolean;
+            sort: number;
+            /** @description On sale. */
+            active: boolean;
+            prices: components["schemas"]["AdminPlanPrice"][];
+            grants: components["schemas"]["AdminPlanGrant"][];
+            fees: components["schemas"]["AdminPlanFee"][];
+        };
+        AdminPlanList: {
+            items: components["schemas"]["AdminPlan"][];
         };
         AdminAuditPage: {
             items: components["schemas"]["AdminAuditEntry"][];
@@ -7373,6 +7553,125 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Store"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every feature, in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFeatureList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminFeatureInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFeature"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plans in display order, newest version first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPlanList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminPublishPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPlanInput"];
+            };
+        };
+        responses: {
+            /** @description On sale. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPlan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRetirePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Off sale. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
