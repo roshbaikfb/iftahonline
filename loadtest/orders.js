@@ -40,7 +40,8 @@ export const options = {
 
 export function setup() {
   const res = http.get(`${base}/p/load-test`);
-  const m = res.body && res.body.match(/name="variant" value="([0-9A-Z]{26})"/);
+  // The product page lists its variants as JSON (data-variants, HTML-escaped).
+  const m = res.body && res.body.match(/data-variants="\[\{&#34;id&#34;:&#34;([0-9A-Z]{26})&#34;/);
   if (res.status !== 200 || !m) {
     throw new Error(`load-test product not found (${res.status}); start sfdemo with -load`);
   }
