@@ -23,6 +23,8 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/health` | Database and Redis checks, and counts: stores by state, subscriptions by status, open and overdue invoices, the job queue (ADR-0058). A failed section is absent and named in `errors`; the page still answers |
 | `GET /admin/v1/stores/{id}/billing` | The store's billing page: plan, status, period, card, open invoices |
 | `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
+| `GET /admin/v1/agencies`, `POST /admin/v1/agencies`, `GET /admin/v1/agencies/{id}` | Agency accounts (ADR-0059): name, currency and agency plan; the view lists its store IDs. Creation is recorded once it has an ID (`agency.created`) |
+| `POST /admin/v1/agencies/{id}/stores/{store_id}`, `POST …/{store_id}/remove` | A store joins (from no account, or from its own once that owes nothing: 409 `open_invoice`; the currency must match) or leaves onto the free plan. Recorded first (`store.agency_joined`, `store.agency_left`) |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -46,8 +48,10 @@ same-origin.
   are recorded here first (`feature.saved`, `plan.published`,
   `plan.retired`), with the reason.
 - **Per-store flags:** `Deps.Overrides` is `entitlements.Module.Overrides()`.
-- **Billing:** `Deps.Billing` is `billing.Module.Console()`. The API
-  role's billing has the holds and the bus, which settling needs.
+- **Billing:** `Deps.Billing` is `billing.Module.Console()` and
+  `Deps.Agencies` is `billing.Module.Agencies()`. The API role's billing
+  has the stores, the holds and the bus, which settling and agencies
+  need.
 - **Health:** the job counts come from `app.job_health()` (migration
   00065), granted to `app_admin`. It returns numbers only.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
