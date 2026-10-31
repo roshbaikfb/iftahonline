@@ -102,6 +102,46 @@ type Fees interface {
 	OrderMoved(ctx context.Context, order ulid.ID) error
 }
 
+// The plan catalog (ADR-0056).
+type (
+	// Feature is an entry of the features catalog.
+	Feature = domain.Feature
+	// FeatureKind is how a feature is granted.
+	FeatureKind = domain.FeatureKind
+	// Plan is one version of a plan.
+	Plan = domain.Plan
+	// PlanVersion is a plan version with its prices, grants and fees.
+	PlanVersion = domain.PlanVersion
+	// Price is a plan's price in one currency and cycle.
+	Price = domain.Price
+	// CurrencyFee is a pay-as-you-sell fee rule in one currency.
+	CurrencyFee = domain.CurrencyFee
+	// FeeRule is a fee's rate and bounds.
+	FeeRule = domain.FeeRule
+	// Kind is how a plan is paid for.
+	Kind = domain.Kind
+	// Cycle is how often a paid plan is billed.
+	Cycle = domain.Cycle
+)
+
+// Catalog is the console's plan catalog. It runs as the console's role;
+// see NewCatalog.
+type Catalog interface {
+	Features(ctx context.Context) ([]Feature, error)
+	// SaveFeature adds a key, or renames and reorders one (its kind is
+	// fixed).
+	SaveFeature(ctx context.Context, f Feature) error
+	// Plans lists every version of every plan.
+	Plans(ctx context.Context) ([]PlanVersion, error)
+	// PublishPlan puts v on sale as its code's next version; stores renew
+	// into it.
+	PublishPlan(ctx context.Context, v PlanVersion) (PlanVersion, error)
+	// RetirePlan takes a code off sale (never the free plan).
+	RetirePlan(ctx context.Context, code string) error
+}
+
+var _ Catalog = (*app.Catalog)(nil)
+
 // GrantSource is what the entitlements module reads.
 type GrantSource interface {
 	// GrantsTx are what the store in ctx is granted now, read in its

@@ -13,7 +13,7 @@ import (
 )
 
 const clearRenewal = `-- name: ClearRenewal :exec
-UPDATE subscriptions SET renewal_invoice_id = NULL, updated_at = now() WHERE store_id = $1
+UPDATE subscriptions SET renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now() WHERE store_id = $1
 `
 
 func (q *Queries) ClearRenewal(ctx context.Context, storeID ulid.ID) error {
@@ -101,14 +101,19 @@ func (q *Queries) GetPaymentMethod(ctx context.Context, accountID ulid.ID) (GetP
 }
 
 const getRenewalInvoice = `-- name: GetRenewalInvoice :one
-SELECT renewal_invoice_id FROM subscriptions WHERE store_id = $1
+SELECT renewal_invoice_id, renewal_plan_id FROM subscriptions WHERE store_id = $1
 `
 
-func (q *Queries) GetRenewalInvoice(ctx context.Context, storeID ulid.ID) (*ulid.ID, error) {
+type GetRenewalInvoiceRow struct {
+	RenewalInvoiceID *ulid.ID
+	RenewalPlanID    *ulid.ID
+}
+
+func (q *Queries) GetRenewalInvoice(ctx context.Context, storeID ulid.ID) (GetRenewalInvoiceRow, error) {
 	row := q.db.QueryRow(ctx, getRenewalInvoice, storeID)
-	var renewal_invoice_id *ulid.ID
-	err := row.Scan(&renewal_invoice_id)
-	return renewal_invoice_id, err
+	var i GetRenewalInvoiceRow
+	err := row.Scan(&i.RenewalInvoiceID, &i.RenewalPlanID)
+	return i, err
 }
 
 const insertPaymentAttempt = `-- name: InsertPaymentAttempt :exec

@@ -113,3 +113,9 @@ func (m *Module) PeriodicJobs() []*river.PeriodicJob {
 	}
 	return jobs
 }
+
+// NewCatalog is the console's plan catalog on adminPool, the console's
+// role (app_admin): the only role that may change plans.
+func NewCatalog(adminPool *pgxpool.Pool, ids *ulid.Generator) Catalog {
+	return app.NewCatalog(adminPool, ids)
+}

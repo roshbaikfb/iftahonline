@@ -272,16 +272,17 @@ func (q *Queries) MarkFeesInvoiced(ctx context.Context, arg MarkFeesInvoicedPara
 }
 
 const markRenewalBilled = `-- name: MarkRenewalBilled :exec
-UPDATE subscriptions SET renewal_invoice_id = $1, updated_at = now() WHERE store_id = $2
+UPDATE subscriptions SET renewal_invoice_id = $1, renewal_plan_id = $2, updated_at = now() WHERE store_id = $3
 `
 
 type MarkRenewalBilledParams struct {
 	InvoiceID *ulid.ID
+	PlanID    *ulid.ID
 	StoreID   ulid.ID
 }
 
 func (q *Queries) MarkRenewalBilled(ctx context.Context, arg MarkRenewalBilledParams) error {
-	_, err := q.db.Exec(ctx, markRenewalBilled, arg.InvoiceID, arg.StoreID)
+	_, err := q.db.Exec(ctx, markRenewalBilled, arg.InvoiceID, arg.PlanID, arg.StoreID)
 	return err
 }
 
@@ -300,12 +301,20 @@ func (q *Queries) NextInvoiceNumber(ctx context.Context, year int32) (int64, err
 }
 
 const renewalDue = `-- name: RenewalDue :one
-SELECT p.kind, p.name_ar, s.cycle, pp.amount_minor
+SELECT t.id AS plan_id, t.kind, t.name_ar, s.cycle, pp.amount_minor
 FROM subscriptions s
-JOIN plans p ON p.id = s.plan_id
-JOIN plan_prices pp ON pp.plan_id = s.plan_id AND pp.currency = $1 AND pp.cycle = s.cycle
+JOIN plans cur ON cur.id = s.plan_id
+CROSS JOIN LATERAL (
+  SELECT p.id, p.kind, p.name_ar
+  FROM plans p
+  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = $1 AND x.cycle = s.cycle
+  WHERE p.id = s.plan_id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
+  ORDER BY p.version DESC
+  LIMIT 1
+) t
+JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = $1 AND pp.cycle = s.cycle
 WHERE s.store_id = $2 AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
-  AND p.kind IN ('subscription', 'agency') AND s.period_end <= $3
+  AND t.kind IN ('subscription', 'agency') AND s.period_end <= $3
 `
 
 type RenewalDueParams struct {
@@ -315,6 +324,7 @@ type RenewalDueParams struct {
 }
 
 type RenewalDueRow struct {
+	PlanID      ulid.ID
 	Kind        string
 	NameAr      string
 	Cycle       *string
@@ -322,11 +332,13 @@ type RenewalDueRow struct {
 }
 
 // The store's paid subscription whose period ends by renews_by and is
-// not billed yet, with the price of its plan version and cycle.
+// not billed yet. It renews into the newest active version of its plan
+// that sells its cycle in the currency, or its own version (ADR-0056).
 func (q *Queries) RenewalDue(ctx context.Context, arg RenewalDueParams) (RenewalDueRow, error) {
 	row := q.db.QueryRow(ctx, renewalDue, arg.Currency, arg.StoreID, arg.RenewsBy)
 	var i RenewalDueRow
 	err := row.Scan(
+		&i.PlanID,
 		&i.Kind,
 		&i.NameAr,
 		&i.Cycle,

@@ -260,10 +260,14 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, inv store.OpenInvoice
 		if err != nil {
 			return err
 		}
-		renewed := billed != nil && *billed == inv.ID
+		renewed := billed != nil && billed.Invoice == inv.ID
 		if renewed {
 			if err = store.ClearRenewal(sctx, tx); err != nil {
 				return err
+			}
+			// The paid period is of the version the invoice charged for.
+			if billed.Plan != nil {
+				sub.PlanID = *billed.Plan
 			}
 		}
 		next, changed, err := sub.Settle(renewed)

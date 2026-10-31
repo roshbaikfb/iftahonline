@@ -50,16 +50,25 @@ VALUES (@invoice_id, @account_id, @line_no, @kind, @line_store_id, @description,
 
 -- name: RenewalDue :one
 -- The store's paid subscription whose period ends by renews_by and is
--- not billed yet, with the price of its plan version and cycle.
-SELECT p.kind, p.name_ar, s.cycle, pp.amount_minor
+-- not billed yet. It renews into the newest active version of its plan
+-- that sells its cycle in the currency, or its own version (ADR-0056).
+SELECT t.id AS plan_id, t.kind, t.name_ar, s.cycle, pp.amount_minor
 FROM subscriptions s
-JOIN plans p ON p.id = s.plan_id
-JOIN plan_prices pp ON pp.plan_id = s.plan_id AND pp.currency = @currency AND pp.cycle = s.cycle
+JOIN plans cur ON cur.id = s.plan_id
+CROSS JOIN LATERAL (
+  SELECT p.id, p.kind, p.name_ar
+  FROM plans p
+  JOIN plan_prices x ON x.plan_id = p.id AND x.currency = @currency AND x.cycle = s.cycle
+  WHERE p.id = s.plan_id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
+  ORDER BY p.version DESC
+  LIMIT 1
+) t
+JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = @currency AND pp.cycle = s.cycle
 WHERE s.store_id = @store_id AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
-  AND p.kind IN ('subscription', 'agency') AND s.period_end <= @renews_by;
+  AND t.kind IN ('subscription', 'agency') AND s.period_end <= @renews_by;
 
 -- name: MarkRenewalBilled :exec
-UPDATE subscriptions SET renewal_invoice_id = @invoice_id, updated_at = now() WHERE store_id = @store_id;
+UPDATE subscriptions SET renewal_invoice_id = @invoice_id, renewal_plan_id = @plan_id, updated_at = now() WHERE store_id = @store_id;
 
 -- name: SumDueFees :one
 -- Due up to the period: a fee recorded after its month's invoice (a late

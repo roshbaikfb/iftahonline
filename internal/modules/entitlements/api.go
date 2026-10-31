@@ -38,6 +38,11 @@ type (
 // EventUsageCrossed is UsageCrossed's type.
 const EventUsageCrossed = domain.EventUsageCrossed
 
+// Enforced reports whether the code checks the catalog feature key; a
+// key the console added is shown on plans but enforced by nothing until
+// a module asks for it (ADR-0045).
+func Enforced(key string) bool { return Feature(key).Kind() != "" }
+
 // PlanLimitCode is the problem code of a request the store's plan does
 // not allow.
 const PlanLimitCode = domain.PlanLimitCode

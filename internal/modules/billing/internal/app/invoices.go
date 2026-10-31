@@ -115,7 +115,7 @@ func (s *Service) InvoiceStore(ctx context.Context, period time.Time) error {
 type member struct {
 	id      ulid.ID
 	name    string
-	renewed bool // its renewal is on the invoice (or the agency's one)
+	renewal *ulid.ID // the plan version its renewal on the invoice (or the agency's one) is into
 }
 
 // InvoiceAccount writes an account's invoice of period, once: each of its
@@ -196,7 +196,7 @@ func (s *Service) invoiceTx(ctx context.Context, tx pgx.Tx, account ulid.ID, per
 		if sErr != nil {
 			return sErr
 		}
-		if sErr = store.MarkBilled(sctx, tx, inv.ID, period, acct.Currency, m.renewed); sErr != nil {
+		if sErr = store.MarkBilled(sctx, tx, inv.ID, period, acct.Currency, m.renewal); sErr != nil {
 			return sErr
 		}
 	}
@@ -216,7 +216,7 @@ func linesOf(ctx context.Context, tx pgx.Tx, acct domain.Account, period time.Ti
 		return nil, err
 	}
 	if ok {
-		m.renewed = true
+		m.renewal = &r.PlanID
 		if r.Kind != domain.KindAgency || !*agencyBilled {
 			*agencyBilled = *agencyBilled || r.Kind == domain.KindAgency
 			lines = append(lines, domain.Line{Kind: domain.LineSubscription, StoreID: m.id, Quantity: 1, AmountMinor: r.AmountMinor,

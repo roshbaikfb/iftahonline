@@ -131,6 +131,7 @@ func TaxRate(ctx context.Context, tx Tx, country string) (int32, error) {
 
 // Renewal is a paid period due to be billed.
 type Renewal struct {
+	PlanID      ulid.ID // the version it renews into
 	Kind        domain.Kind
 	PlanName    string
 	Cycle       domain.Cycle
@@ -159,7 +160,7 @@ func RenewalDue(ctx context.Context, tx Tx, currency string, renewsBy time.Time)
 			return r, false, err
 		}
 	}
-	r.PlanName, r.AmountMinor = row.NameAr, row.AmountMinor
+	r.PlanID, r.PlanName, r.AmountMinor = row.PlanID, row.NameAr, row.AmountMinor
 	return r, true, nil
 }
 
@@ -230,8 +231,9 @@ func InsertInvoice(ctx context.Context, tx Tx, inv Invoice) (string, error) {
 }
 
 // MarkBilled records, in the store-in-ctx's wall, what invoice billed:
-// its due fees of period, its credits, and its renewal when renewed.
-func MarkBilled(ctx context.Context, tx Tx, invoice ulid.ID, period time.Time, currency string, renewed bool) error {
+// its due fees of period, its credits, and its renewal into the plan
+// version renewal when not nil.
+func MarkBilled(ctx context.Context, tx Tx, invoice ulid.ID, period time.Time, currency string, renewal *ulid.ID) error {
 	store, err := current(ctx)
 	if err != nil {
 		return err
@@ -243,8 +245,8 @@ func MarkBilled(ctx context.Context, tx Tx, invoice ulid.ID, period time.Time, c
 	if _, err = q.MarkCreditsUsed(ctx, billingdb.MarkCreditsUsedParams{StoreID: store, Currency: currency, InvoiceID: &invoice}); err != nil {
 		return fmt.Errorf("billing store: mark credits: %w", err)
 	}
-	if renewed {
-		if err = q.MarkRenewalBilled(ctx, billingdb.MarkRenewalBilledParams{StoreID: store, InvoiceID: &invoice}); err != nil {
+	if renewal != nil {
+		if err = q.MarkRenewalBilled(ctx, billingdb.MarkRenewalBilledParams{StoreID: store, InvoiceID: &invoice, PlanID: renewal}); err != nil {
 			return fmt.Errorf("billing store: mark renewal: %w", err)
 		}
 	}
