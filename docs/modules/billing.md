@@ -33,6 +33,7 @@ are in place.
 | `SellFeesSubscriber` | `billing.sell_fees`, subscribed to `orders.order.status_changed` in the worker |
 
 | `Module.Console()`, `Console` | The console's view (ADR-0058): `Health` (counts through `app.billing_health()`), `Summary` of the store in ctx, `SettleStoreInvoice` (a confirmed transfer; 404 unless it is an open invoice of the store's account) |
+| `Module.Agencies()`, `Agencies`, `Agency` | Agencies from the console (ADR-0059): create, list, view, `JoinAgency` and `LeaveAgency` for the store in ctx |
 | `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions, publish, retire |
 | `Feature`, `PlanVersion`, `Price`, `CurrencyFee` | The catalog's DTOs; `Validate()` checks them |
 
@@ -100,7 +101,7 @@ The seeded prices and limits are **placeholders**: set them before launch
 
 - **Accounts.** An account is who pays: a store's own account, made the
   first time it has something to bill, or an agency's, which the console
-  sets up (7e).
+  sets up (ADR-0059).
 - **The account wall.** Account tables sit behind their own RLS on
   `app.account_id`, which billing sets from the store's own subscription
   or from a system job.
@@ -134,6 +135,20 @@ large as the charges, no invoice is written and the credits wait.
   `app.periods_ended`, the stores whose trial or cancelled period
   ended. `billing.end_period` moves each to the free plan, keeping
   `trial_used`.
+
+### Agencies (ADR-0059)
+
+- **The plan:** an agency account names its plan code
+  (`billing_accounts.plan_code`).
+- **Joining:** a store joins from no account, or from its own once that
+  owes nothing; its old invoices stay there.
+  - It takes the agency's plan version, status and period.
+  - The first store's period runs from now to the first of next month.
+  - The agency is locked while a store joins.
+- **Leaving:** the store goes to the free plan with no account; its next
+  invoice opens its own.
+- **Listing:** `app.agency_accounts()` lists agencies for the console
+  (names and counts).
 
 ## Collection and dunning (ADR-0051)
 
