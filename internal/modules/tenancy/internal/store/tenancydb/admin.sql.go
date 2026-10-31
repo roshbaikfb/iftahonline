@@ -13,18 +13,30 @@ import (
 )
 
 const adminGetStore = `-- name: AdminGetStore :one
-SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
 `
 
-func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) {
+type AdminGetStoreRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+}
+
+func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (AdminGetStoreRow, error) {
 	row := q.db.QueryRow(ctx, adminGetStore, id)
-	var i Store
+	var i AdminGetStoreRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Name,
 		&i.Status,
-		&i.Plan,
 		&i.Currency,
 		&i.Locale,
 		&i.Timezone,
@@ -74,7 +86,7 @@ func (q *Queries) AdminListDomains(ctx context.Context, storeID ulid.ID) ([]Stor
 
 const adminSearchStores = `-- name: AdminSearchStores :many
 
-SELECT s.id, s.slug, s.name, s.status, s.plan, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
 WHERE ($1::text = '' OR s.slug::text LIKE $1::text || '%' OR s.name ILIKE '%' || $1::text || '%')
@@ -98,7 +110,6 @@ type AdminSearchStoresRow struct {
 	Slug        string
 	Name        string
 	Status      string
-	Plan        string
 	Currency    string
 	Locale      string
 	Timezone    string
@@ -131,7 +142,6 @@ func (q *Queries) AdminSearchStores(ctx context.Context, arg AdminSearchStoresPa
 			&i.Slug,
 			&i.Name,
 			&i.Status,
-			&i.Plan,
 			&i.Currency,
 			&i.Locale,
 			&i.Timezone,

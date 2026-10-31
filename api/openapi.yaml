@@ -5026,7 +5026,11 @@ components:
         slug: { type: string, example: my-shop }
         name: { type: string, example: متجر أحمد }
         status: { type: string, enum: [active, suspended, closed] }
-        plan: { type: string, enum: [free, basic, pro] }
+        plan:
+          type: string
+          enum: [free, basic, pro]
+          deprecated: true
+          description: "Always `free`: plans are billing's (GET /v1/stores/{store_id}/billing, ADR-0045). Kept in /v1, gone in /v2."
         currency: { type: string, enum: [EGP, SAR, AED] }
         locale: { type: string, enum: [ar, en] }
         timezone: { type: string, example: Africa/Cairo }

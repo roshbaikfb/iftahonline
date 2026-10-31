@@ -7,23 +7,36 @@ package tenancydb
 
 import (
 	"context"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 const getStore = `-- name: GetStore :one
-SELECT id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
 `
 
-func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (Store, error) {
+type GetStoreRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+}
+
+func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (GetStoreRow, error) {
 	row := q.db.QueryRow(ctx, getStore, storeID)
-	var i Store
+	var i GetStoreRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Name,
 		&i.Status,
-		&i.Plan,
 		&i.Currency,
 		&i.Locale,
 		&i.Timezone,
@@ -38,7 +51,7 @@ const insertStore = `-- name: InsertStore :one
 
 INSERT INTO stores (id, slug, name, currency, locale, timezone)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type InsertStoreParams struct {
@@ -50,9 +63,26 @@ type InsertStoreParams struct {
 	Timezone string
 }
 
+type InsertStoreRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+}
+
 // Every query on a tenant table takes store_id; the store layer reads it
 // from tenant.FromContext (CLAUDE.md rule 5). RLS checks it again.
-func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (Store, error) {
+//
+// Stores' columns are listed, never *: the legacy plan column is not
+// read (billing owns plans, ADR-0045) and is dropped once no release
+// reads it (expand, migrate, contract).
+func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (InsertStoreRow, error) {
 	row := q.db.QueryRow(ctx, insertStore,
 		arg.ID,
 		arg.Slug,
@@ -61,13 +91,12 @@ func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (Store
 		arg.Locale,
 		arg.Timezone,
 	)
-	var i Store
+	var i InsertStoreRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Name,
 		&i.Status,
-		&i.Plan,
 		&i.Currency,
 		&i.Locale,
 		&i.Timezone,
@@ -119,7 +148,7 @@ func (q *Queries) SetBillingHold(ctx context.Context, arg SetBillingHoldParams) 
 const setStoreStatus = `-- name: SetStoreStatus :one
 UPDATE stores SET status = $1, updated_at = now()
 WHERE id = $2
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type SetStoreStatusParams struct {
@@ -127,15 +156,27 @@ type SetStoreStatusParams struct {
 	StoreID ulid.ID
 }
 
-func (q *Queries) SetStoreStatus(ctx context.Context, arg SetStoreStatusParams) (Store, error) {
+type SetStoreStatusRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+}
+
+func (q *Queries) SetStoreStatus(ctx context.Context, arg SetStoreStatusParams) (SetStoreStatusRow, error) {
 	row := q.db.QueryRow(ctx, setStoreStatus, arg.Status, arg.StoreID)
-	var i Store
+	var i SetStoreStatusRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Name,
 		&i.Status,
-		&i.Plan,
 		&i.Currency,
 		&i.Locale,
 		&i.Timezone,
@@ -150,7 +191,7 @@ const updateStore = `-- name: UpdateStore :one
 UPDATE stores
 SET name = $1, locale = $2, timezone = $3, updated_at = now()
 WHERE id = $4
-RETURNING id, slug, name, status, plan, currency, locale, timezone, created_at, updated_at, billing_hold
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
 `
 
 type UpdateStoreParams struct {
@@ -160,20 +201,32 @@ type UpdateStoreParams struct {
 	StoreID  ulid.ID
 }
 
-func (q *Queries) UpdateStore(ctx context.Context, arg UpdateStoreParams) (Store, error) {
+type UpdateStoreRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+}
+
+func (q *Queries) UpdateStore(ctx context.Context, arg UpdateStoreParams) (UpdateStoreRow, error) {
 	row := q.db.QueryRow(ctx, updateStore,
 		arg.Name,
 		arg.Locale,
 		arg.Timezone,
 		arg.StoreID,
 	)
-	var i Store
+	var i UpdateStoreRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Name,
 		&i.Status,
-		&i.Plan,
 		&i.Currency,
 		&i.Locale,
 		&i.Timezone,

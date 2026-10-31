@@ -130,7 +130,7 @@ func TestCreateStore(t *testing.T) {
 	slug := f.slug("shop")
 	ctx, st := f.createStore(t, slug)
 
-	if st.Slug != slug || st.Status != domain.StatusActive || st.Plan != domain.PlanFree || st.Currency != "EGP" {
+	if st.Slug != slug || st.Status != domain.StatusActive || st.Currency != "EGP" {
 		t.Fatalf("store = %+v", st)
 	}
 	ds, err := f.svc.ListDomains(ctx)

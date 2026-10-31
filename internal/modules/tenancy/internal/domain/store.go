@@ -50,16 +50,6 @@ func ParseStoreStatus(s string) (StoreStatus, bool) {
 	return st, slices.Contains([]StoreStatus{StatusActive, StatusSuspended, StatusClosed}, st)
 }
 
-// Plan is the subscription plan. Billing changes it, never the merchant.
-type Plan string
-
-// Plans.
-const (
-	PlanFree  Plan = "free"
-	PlanBasic Plan = "basic"
-	PlanPro   Plan = "pro"
-)
-
 // Locale is the store's default language.
 type Locale string
 
@@ -84,7 +74,6 @@ type Store struct {
 	Slug      string
 	Name      string
 	Status    StoreStatus
-	Plan      Plan
 	Currency  money.Currency
 	Locale    Locale
 	Timezone  string

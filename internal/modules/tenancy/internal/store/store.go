@@ -46,7 +46,7 @@ func InsertStore(ctx context.Context, tx Tx, in domain.NewStore) (domain.Store, 
 		}
 		return domain.Store{}, fmt.Errorf("tenancy store: insert store: %w", err)
 	}
-	return toStore(row), nil
+	return toStore(tenancydb.GetStoreRow(row)), nil
 }
 
 // GetStore returns the current store.
@@ -68,7 +68,7 @@ func UpdateStore(ctx context.Context, tx Tx, s domain.StoreSettings) (domain.Sto
 	row, err := tenancydb.New(tx).UpdateStore(ctx, tenancydb.UpdateStoreParams{
 		StoreID: id, Name: s.Name, Locale: s.Locale, Timezone: s.Timezone,
 	})
-	return storeResult(row, err, "update store")
+	return storeResult(tenancydb.GetStoreRow(row), err, "update store")
 }
 
 // SetStoreStatus changes the current store's status.
@@ -78,7 +78,7 @@ func SetStoreStatus(ctx context.Context, tx Tx, st domain.StoreStatus) (domain.S
 		return domain.Store{}, err
 	}
 	row, err := tenancydb.New(tx).SetStoreStatus(ctx, tenancydb.SetStoreStatusParams{StoreID: id, Status: string(st)})
-	return storeResult(row, err, "set status")
+	return storeResult(tenancydb.GetStoreRow(row), err, "set status")
 }
 
 // SetBillingHold holds or releases the store in ctx for billing; changed
@@ -95,7 +95,7 @@ func SetBillingHold(ctx context.Context, tx Tx, hold bool) (changed bool, err er
 	return n == 1, nil
 }
 
-func storeResult(row tenancydb.Store, err error, op string) (domain.Store, error) {
+func storeResult(row tenancydb.GetStoreRow, err error, op string) (domain.Store, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Store{}, domain.ErrNotFound
 	}
@@ -105,10 +105,12 @@ func storeResult(row tenancydb.Store, err error, op string) (domain.Store, error
 	return toStore(row), nil
 }
 
-func toStore(r tenancydb.Store) domain.Store {
+// toStore maps a store's listed columns (every query lists the same
+// ones, so their rows convert to GetStoreRow).
+func toStore(r tenancydb.GetStoreRow) domain.Store {
 	return domain.Store{
 		ID: tenant.StoreID{ID: r.ID}, Slug: r.Slug, Name: r.Name,
-		Status: domain.StoreStatus(r.Status), Plan: domain.Plan(r.Plan),
+		Status:   domain.StoreStatus(r.Status),
 		Currency: money.Currency(r.Currency), Locale: domain.Locale(r.Locale), Timezone: r.Timezone,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}

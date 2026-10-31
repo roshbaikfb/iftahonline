@@ -161,10 +161,12 @@ func (h *Handlers) SetPrimaryDomain(ctx context.Context, req SetPrimaryDomainReq
 	return SetPrimaryDomain200JSONResponse(h.toDomain(d)), nil
 }
 
+// toStore is a store as the API shows it; plan is deprecated in /v1 and
+// always free: plans are billing's (ADR-0045).
 func toStore(s domain.Store) Store {
 	return Store{
 		Id: s.ID.String(), Slug: s.Slug, Name: s.Name,
-		Status: StoreStatus(s.Status), Plan: StorePlan(s.Plan), Currency: StoreCurrency(s.Currency),
+		Status: StoreStatus(s.Status), Plan: Free, Currency: StoreCurrency(s.Currency),
 		Locale: StoreLocale(s.Locale), Timezone: s.Timezone,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}

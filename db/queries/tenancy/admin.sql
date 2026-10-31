@@ -3,7 +3,7 @@
 -- every store; as app_user they would return nothing (RLS).
 
 -- name: AdminSearchStores :many
-SELECT s.*,
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
 WHERE (@query::text = '' OR s.slug::text LIKE @query::text || '%' OR s.name ILIKE '%' || @query::text || '%')
@@ -14,7 +14,7 @@ ORDER BY s.created_at DESC, s.id DESC
 LIMIT @lim;
 
 -- name: AdminGetStore :one
-SELECT * FROM stores WHERE id = @id;
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = @id;
 
 -- name: AdminListDomains :many
 SELECT * FROM store_domains WHERE store_id = @store_id ORDER BY created_at, id;

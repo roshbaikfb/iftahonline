@@ -32,7 +32,7 @@ The new store gets a verified, primary subdomain `<slug>.<PLATFORM_BASE_DOMAIN>`
 
 | Table | Tenant key | Notes |
 |---|---|---|
-| `stores` | `id` (the tenant root) | `slug` is unique, a DNS label, and not in the reserved list. `status`: active, suspended, closed. Currency is EGP, SAR or AED |
+| `stores` | `id` (the tenant root) | `slug` is unique, a DNS label, and not in the reserved list. `status`: active, suspended, closed. Currency is EGP, SAR or AED. The legacy `plan` column is no longer read (queries list their columns; plans are billing's, ADR-0045); the API's `Store.plan` is deprecated and always `free`; a later contract migration drops the column |
 | `store_domains` | `store_id` | A host is unique **among verified rows only**, so nobody can squat a domain with a pending claim. At most one primary per store, and the primary must be verified |
 
 Both tables have forced RLS. Cross-tenant host lookups go only through
