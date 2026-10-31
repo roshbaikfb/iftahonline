@@ -2,8 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { api } from '../api/client';
+import { AgenciesPage } from './AgenciesPage';
+import { AgencyPage } from './AgencyPage';
+import { AuditPage } from './AuditPage';
 import { Login } from './Login';
 import { Overview } from './Overview';
+import { PlansPage } from './PlansPage';
 import { AdminSessionContext, fetchAdmin, type Admin, type AdminState } from './session';
 import { StorePage } from './StorePage';
 
@@ -13,6 +17,10 @@ export function ConsoleRoutes() {
     <Routes>
       <Route path="/" element={<Overview />} />
       <Route path="/stores/:storeId" element={<StorePage />} />
+      <Route path="/plans" element={<PlansPage />} />
+      <Route path="/agencies" element={<AgenciesPage />} />
+      <Route path="/agencies/:agencyId" element={<AgencyPage />} />
+      <Route path="/audit" element={<AuditPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

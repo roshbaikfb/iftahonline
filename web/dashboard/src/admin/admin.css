@@ -192,3 +192,86 @@ body {
 .console-invoice p {
   margin: 0;
 }
+.plans-console {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.plans-list {
+  flex: 1 1 15rem;
+  max-inline-size: 19rem;
+}
+.plans-list h2,
+.plan-editor h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.plans-list ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-pick {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.plan-pick.current,
+.plan-pick:hover {
+  background: #eef2f7;
+}
+.plan-editor {
+  flex: 999 1 32rem;
+  min-inline-size: 0;
+}
+.plan-editor fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-x: auto;
+}
+.plan-editor legend {
+  margin-block-end: 0.4rem;
+  font-weight: 700;
+}
+.editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+.editor-fields label {
+  display: grid;
+  gap: 0.2rem;
+}
+.editor-fields label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+table.compact th,
+table.compact td {
+  padding: 0.4rem 0.5rem;
+}
+table.compact input {
+  inline-size: 8rem;
+}
+td.wrap-cell {
+  white-space: normal;
+  min-inline-size: 18rem;
+}
+

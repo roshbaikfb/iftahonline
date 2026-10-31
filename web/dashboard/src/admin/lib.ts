@@ -75,3 +75,11 @@ export function waited(seconds: number): string {
 export function dateTimeAr(iso: string): string {
   return new Date(iso).toLocaleString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
 }
+
+// details are an admin log entry's metadata as one line, its reason first.
+export function details(meta: Record<string, unknown>): string {
+  const entries = Object.entries(meta);
+  entries.sort(([a], [b]) => (a === 'reason' ? -1 : b === 'reason' ? 1 : a.localeCompare(b)));
+  return entries.map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ');
+}
+
