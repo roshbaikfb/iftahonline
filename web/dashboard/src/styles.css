@@ -5060,3 +5060,20 @@ button.prov[aria-pressed='true'] {
 p.center {
   text-align: center;
 }
+
+/* A platform admin's support session (ADR-0055): always on top. */
+.support-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
+  background: #fbbf24;
+  color: #111827;
+  font-size: 0.9rem;
+}
+.support-bar button {
+  min-block-size: 2.25rem;
+}
+
