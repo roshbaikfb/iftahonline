@@ -22,6 +22,7 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | `FromBilling(billing.GrantSource)` | The production source of grants. `Fixed{...}` grants every store the same (tests, demo tools) |
 | `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
 | `Unrestricted()` | Allows everything and counts nothing, without a database: the default of a module built without entitlements (its own tests) |
+| `Module.Overrides()`, `Overrides` | Per-store feature flags (ADR-0057): `StoreGrants`, `SetOverride`, `ClearOverride` on the store in ctx; each publishes `EventGrantsChanged` |
 | `Enforced(key)` | Whether the code checks a catalog key; the console marks display-only keys with it (ADR-0056) |
 | `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
 | `Entitlements.Require(ctx, f)` | `Allowed` as an error for a merchant's request: a 403 with code `plan_limit` (`NotInPlan`) |
@@ -66,6 +67,21 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
   | `feeds` | marketing: `renewProductFeedKey`; `FeedAllowed` | `Require` to turn on; the feed URL opens nothing without it |
 
   `ad_free` is enforced from 7g.
+
+## Per-store overrides (ADR-0057)
+
+- **What:** `entitlement_overrides` (migration 00064) holds one row per
+  (store, feature). The row replaces the plan's grant of that feature
+  until `expires_at` (NULL means until cleared). `value` NULL is
+  unlimited.
+- **Merging:** on a cache miss, the store's overrides are read after the
+  plan's grants (one more query) and applied with `Grants.With`.
+- **Validation:** only enforced features; a flag is 0 or 1; a deadline
+  must be in the future; a reason is required.
+- **Propagation:** a change publishes `entitlements.grants.changed`.
+  `cmd/platform` subscribes the same cache invalidation and edge purge as
+  for `billing.subscription.changed`.
+- **Expiry:** checks follow within the cache's 30 s.
 
 ## The cache
 
