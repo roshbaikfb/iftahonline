@@ -275,3 +275,42 @@ td.wrap-cell {
   min-inline-size: 18rem;
 }
 
+
+/* Ads in free stores (7g-2, the approved mockup). */
+.ads-sources {
+  display: grid;
+  gap: 0.9rem;
+}
+.ads-sources td input {
+  inline-size: 100%;
+  max-inline-size: 16rem;
+}
+.ad-banner-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ad-banner-cell strong,
+.ad-banner-cell small {
+  display: block;
+}
+.ad-thumb {
+  flex: none;
+  inline-size: 4rem;
+  block-size: 2rem;
+  border-radius: 0.375rem;
+  background: #e2e8f0;
+  object-fit: cover;
+}
+.status.ad-live {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.ad-scheduled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.status.ad-stopped {
+  background: #fef3c7;
+  color: #92400e;
+}

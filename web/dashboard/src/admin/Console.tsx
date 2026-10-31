@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { api } from '../api/client';
+import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
 import { AuditPage } from './AuditPage';
@@ -20,6 +21,7 @@ export function ConsoleRoutes() {
       <Route path="/plans" element={<PlansPage />} />
       <Route path="/agencies" element={<AgenciesPage />} />
       <Route path="/agencies/:agencyId" element={<AgencyPage />} />
+      <Route path="/ads" element={<AdsPage />} />
       <Route path="/audit" element={<AuditPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
