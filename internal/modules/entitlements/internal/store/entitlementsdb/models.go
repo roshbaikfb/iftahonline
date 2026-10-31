@@ -187,23 +187,6 @@ type CarrierConnection struct {
 	DisconnectedAt    pgtype.Timestamptz
 }
 
-type Cart struct {
-	ID        ulid.ID
-	StoreID   ulid.ID
-	TokenHash []byte
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type CartItem struct {
-	StoreID   ulid.ID
-	CartID    ulid.ID
-	VariantID ulid.ID
-	Qty       int32
-	AddedAt   pgtype.Timestamptz
-}
-
 type CatalogImport struct {
 	ID             ulid.ID
 	StoreID        ulid.ID

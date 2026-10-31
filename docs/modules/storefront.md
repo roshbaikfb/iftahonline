@@ -392,7 +392,7 @@ Both are tenant-owned with RLS (`db/migrations/00019_storefront.sql`).
 |---|---|
 | `store_themes` | One row per store (`store_id` PK); `settings` JSON; `version` |
 | `store_assets` | `kind` (logo); `pending` → `processing` → `ready` / `failed`; at most one `ready` per (store, kind) (partial unique index); `upload_key`, master `object_key`, size |
-| `carts`, `cart_items` | No longer used (carts moved to Redis, ADR-0022); a contract migration drops them |
+| `carts`, `cart_items` | Dropped by migration 00070: carts live in Redis (ADR-0022) |
 | `store_pages` | `kind` home/landing/policy; `slug` (text, lower-case) unique per (store, kind); `sections` JSON; `body` (policies); `status`; `version` |
 
 ## HTTP API (tag `storefront`, permission `storefront.manage`)
