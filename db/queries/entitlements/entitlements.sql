@@ -23,3 +23,17 @@ WHERE store_id = @store_id AND feature = @feature AND period = @period;
 -- Serializes a store's creations of one counted feature until the
 -- transaction ends (AdmitTx).
 SELECT pg_advisory_xact_lock(hashtextextended(concat('entitlements:', sqlc.arg(store_id)::uuid, ':', sqlc.arg(feature)::text), 0));
+
+-- name: ListOverrides :many
+-- The store's per-store grants (ADR-0057), expired ones included.
+SELECT feature, value, expires_at, reason, updated_at FROM entitlement_overrides
+WHERE store_id = @store_id ORDER BY feature;
+
+-- name: UpsertOverride :exec
+INSERT INTO entitlement_overrides (store_id, feature, value, expires_at, reason)
+VALUES (@store_id, @feature, @value, @expires_at, @reason)
+ON CONFLICT (store_id, feature) DO UPDATE
+SET value = excluded.value, expires_at = excluded.expires_at, reason = excluded.reason, updated_at = now();
+
+-- name: DeleteOverride :execrows
+DELETE FROM entitlement_overrides WHERE store_id = @store_id AND feature = @feature;

@@ -24,7 +24,8 @@ type Deps struct {
 	// Source is where grants come from: FromBilling in production, Fixed
 	// in tests and demo tools.
 	Source Source
-	// IDs and Events publish UsageCrossed; nil Events discards.
+	// IDs and Events publish UsageCrossed and GrantsChanged; nil Events
+	// discards.
 	IDs    *ulid.Generator
 	Events eventbus.Publisher
 }
@@ -44,6 +45,9 @@ func New(d Deps) (*Module, error) {
 
 // Entitlements is what other modules check and meter with.
 func (m *Module) Entitlements() Entitlements { return m.svc }
+
+// Overrides are the console's per-store feature flags (ADR-0057).
+func (m *Module) Overrides() Overrides { return m.svc }
 
 // Invalidate drops this instance's cached grants of store, after its
 // plan changed.

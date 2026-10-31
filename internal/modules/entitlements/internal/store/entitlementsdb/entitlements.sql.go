@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -44,6 +45,23 @@ func (q *Queries) ConsumeUsage(ctx context.Context, arg ConsumeUsageParams) (int
 	return used, err
 }
 
+const deleteOverride = `-- name: DeleteOverride :execrows
+DELETE FROM entitlement_overrides WHERE store_id = $1 AND feature = $2
+`
+
+type DeleteOverrideParams struct {
+	StoreID ulid.ID
+	Feature string
+}
+
+func (q *Queries) DeleteOverride(ctx context.Context, arg DeleteOverrideParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOverride, arg.StoreID, arg.Feature)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getUsage = `-- name: GetUsage :one
 SELECT used FROM usage_counters
 WHERE store_id = $1 AND feature = $2 AND period = $3
@@ -60,6 +78,46 @@ func (q *Queries) GetUsage(ctx context.Context, arg GetUsageParams) (int64, erro
 	var used int64
 	err := row.Scan(&used)
 	return used, err
+}
+
+const listOverrides = `-- name: ListOverrides :many
+SELECT feature, value, expires_at, reason, updated_at FROM entitlement_overrides
+WHERE store_id = $1 ORDER BY feature
+`
+
+type ListOverridesRow struct {
+	Feature   string
+	Value     pgtype.Int8
+	ExpiresAt pgtype.Timestamptz
+	Reason    string
+	UpdatedAt pgtype.Timestamptz
+}
+
+// The store's per-store grants (ADR-0057), expired ones included.
+func (q *Queries) ListOverrides(ctx context.Context, storeID ulid.ID) ([]ListOverridesRow, error) {
+	rows, err := q.db.Query(ctx, listOverrides, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOverridesRow{}
+	for rows.Next() {
+		var i ListOverridesRow
+		if err := rows.Scan(
+			&i.Feature,
+			&i.Value,
+			&i.ExpiresAt,
+			&i.Reason,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockFeature = `-- name: LockFeature :exec
@@ -103,4 +161,30 @@ func (q *Queries) ReleaseUsage(ctx context.Context, arg ReleaseUsageParams) (int
 	var used int64
 	err := row.Scan(&used)
 	return used, err
+}
+
+const upsertOverride = `-- name: UpsertOverride :exec
+INSERT INTO entitlement_overrides (store_id, feature, value, expires_at, reason)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (store_id, feature) DO UPDATE
+SET value = excluded.value, expires_at = excluded.expires_at, reason = excluded.reason, updated_at = now()
+`
+
+type UpsertOverrideParams struct {
+	StoreID   ulid.ID
+	Feature   string
+	Value     pgtype.Int8
+	ExpiresAt pgtype.Timestamptz
+	Reason    string
+}
+
+func (q *Queries) UpsertOverride(ctx context.Context, arg UpsertOverrideParams) error {
+	_, err := q.db.Exec(ctx, upsertOverride,
+		arg.StoreID,
+		arg.Feature,
+		arg.Value,
+		arg.ExpiresAt,
+		arg.Reason,
+	)
+	return err
 }

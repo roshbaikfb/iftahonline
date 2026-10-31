@@ -132,6 +132,36 @@ var (
 	_ Entitlements = app.Unrestricted{}
 )
 
+// Per-store feature flags (ADR-0057).
+type (
+	// Override is what one store is granted of a feature instead of its
+	// plan's grant, until ExpiresAt (zero: until cleared).
+	Override = domain.Override
+	// StoreGrants are a store's plan grants, its overrides and the result.
+	StoreGrants = app.StoreGrants
+	// GrantsChanged is published when a store's override is set or
+	// cleared.
+	GrantsChanged = domain.GrantsChanged
+)
+
+// EventGrantsChanged is GrantsChanged's type. Subscribe the same cache
+// handlers as to billing.EventSubscriptionChanged.
+const EventGrantsChanged = domain.EventGrantsChanged
+
+// Overrides are the console's per-store feature flags; every method acts
+// on the store in ctx. The console records who and why.
+type Overrides interface {
+	StoreGrants(ctx context.Context) (StoreGrants, error)
+	// SetOverride validates o (an enforced feature, a flag of 0 or 1, a
+	// future deadline, a reason) and grants it.
+	SetOverride(ctx context.Context, o Override) error
+	// ClearOverride gives the store its plan's grant of f again (404
+	// when it had none).
+	ClearOverride(ctx context.Context, f Feature) error
+}
+
+var _ Overrides = (*app.Service)(nil)
+
 // Unrestricted allows everything and counts nothing: the default of a
 // module built without entitlements, in its own tests. cmd/platform
 // always wires the real service.

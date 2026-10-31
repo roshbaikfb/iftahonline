@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/store/entitlementsdb"
@@ -96,4 +97,59 @@ func Lock(ctx context.Context, tx Tx, f domain.Feature) error {
 		return fmt.Errorf("entitlements store: lock: %w", err)
 	}
 	return nil
+}
+
+// Overrides are the store-in-ctx's per-store grants, expired ones
+// included, by feature.
+func Overrides(ctx context.Context, tx Tx) ([]domain.Override, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := entitlementsdb.New(tx).ListOverrides(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("entitlements store: overrides: %w", err)
+	}
+	out := make([]domain.Override, len(rows))
+	for i, r := range rows {
+		o := domain.Override{Feature: domain.Feature(r.Feature), Reason: r.Reason, UpdatedAt: r.UpdatedAt.Time}
+		if r.Value.Valid {
+			o.Grant.Value = r.Value.Int64
+		} else {
+			o.Grant.Unlimited = true
+		}
+		if r.ExpiresAt.Valid {
+			o.ExpiresAt = r.ExpiresAt.Time
+		}
+		out[i] = o
+	}
+	return out, nil
+}
+
+// SaveOverride sets the store-in-ctx's grant of o.Feature.
+func SaveOverride(ctx context.Context, tx Tx, o domain.Override) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	p := entitlementsdb.UpsertOverrideParams{StoreID: store, Feature: string(o.Feature), Reason: o.Reason,
+		Value: pgtype.Int8{Int64: o.Grant.Value, Valid: !o.Grant.Unlimited}, ExpiresAt: pgtype.Timestamptz{Time: o.ExpiresAt, Valid: !o.ExpiresAt.IsZero()}}
+	if err = entitlementsdb.New(tx).UpsertOverride(ctx, p); err != nil {
+		return fmt.Errorf("entitlements store: save override: %w", err)
+	}
+	return nil
+}
+
+// DeleteOverride clears the store-in-ctx's grant of f; it reports
+// whether there was one.
+func DeleteOverride(ctx context.Context, tx Tx, f domain.Feature) (bool, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := entitlementsdb.New(tx).DeleteOverride(ctx, entitlementsdb.DeleteOverrideParams{StoreID: store, Feature: string(f)})
+	if err != nil {
+		return false, fmt.Errorf("entitlements store: delete override: %w", err)
+	}
+	return n > 0, nil
 }

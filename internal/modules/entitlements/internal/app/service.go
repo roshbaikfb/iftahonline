@@ -94,11 +94,28 @@ func (s *Service) grantsTx(ctx context.Context, tx pgx.Tx) (domain.Grants, error
 	if ok {
 		return g, nil
 	}
-	if g, err = s.source.GrantsTx(ctx, tx); err != nil {
-		return nil, fmt.Errorf("entitlements: grants: %w", err)
+	if g, err = s.effectiveTx(ctx, tx); err != nil {
+		return nil, err
 	}
 	s.cache.Put(key, g)
 	return g, nil
+}
+
+// effectiveTx are the plan's grants with the store's overrides in place
+// (ADR-0057): two reads, uncached.
+func (s *Service) effectiveTx(ctx context.Context, tx pgx.Tx) (domain.Grants, error) {
+	plan, err := s.source.GrantsTx(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("entitlements: grants: %w", err)
+	}
+	overrides, err := store.Overrides(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if len(overrides) == 0 {
+		return plan, nil
+	}
+	return plan.With(overrides, s.now()), nil
 }
 
 // grant is the store-in-ctx's grant of f. A cache hit costs no query and
