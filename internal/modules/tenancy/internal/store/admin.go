@@ -49,7 +49,7 @@ func SearchDirectory(ctx context.Context, adminDB Tx, f DirectoryFilter) ([]Dire
 	}
 	out := make([]DirectoryEntry, len(rows))
 	for i, r := range rows {
-		out[i] = DirectoryEntry{PrimaryHost: r.PrimaryHost, Store: toStore(tenancydb.GetStoreRow{
+		out[i] = DirectoryEntry{PrimaryHost: r.PrimaryHost, Store: toStore(tenancydb.Store{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, Status: r.Status, Currency: r.Currency,
 			Locale: r.Locale, Timezone: r.Timezone, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, BillingHold: r.BillingHold,
 		})}
@@ -61,7 +61,7 @@ func SearchDirectory(ctx context.Context, adminDB Tx, f DirectoryFilter) ([]Dire
 func DirectoryStore(ctx context.Context, adminDB Tx, id tenant.StoreID) (domain.Store, []domain.Domain, error) {
 	q := tenancydb.New(adminDB)
 	row, err := q.AdminGetStore(ctx, id.ID)
-	st, err := storeResult(tenancydb.GetStoreRow(row), err, "directory store")
+	st, err := storeResult(row, err, "directory store")
 	if err != nil {
 		return domain.Store{}, nil, err
 	}

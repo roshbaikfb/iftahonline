@@ -1,9 +1,8 @@
 -- Every query on a tenant table takes store_id; the store layer reads it
 -- from tenant.FromContext (CLAUDE.md rule 5). RLS checks it again.
 --
--- Stores' columns are listed, never *: the legacy plan column is not
--- read (billing owns plans, ADR-0045) and is dropped once no release
--- reads it (expand, migrate, contract).
+-- Stores' columns are listed, never *, so a column can be contracted
+-- while an older release still runs (the legacy plan: 00071).
 
 -- name: InsertStore :one
 INSERT INTO stores (id, slug, name, currency, locale, timezone)

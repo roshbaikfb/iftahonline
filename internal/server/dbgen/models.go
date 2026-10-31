@@ -838,7 +838,6 @@ type Store struct {
 	Slug        string
 	Name        string
 	Status      string
-	Plan        string
 	Currency    string
 	Locale      string
 	Timezone    string
