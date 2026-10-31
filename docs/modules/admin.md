@@ -15,6 +15,9 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/stores/{id}` | The store and its domains |
 | `POST /admin/v1/stores/{id}/suspend` / `reactivate` | `reason` required (3 to 500 characters). 409 if the store is in the wrong state |
 | `POST /admin/v1/stores/{id}/impersonate` | Support session as the store's owner (ADR-0055). Requires a `reason`. `minutes` is 5 to 60 (default 30). `write` defaults to false, so the session is read-only. Answers with a one-time code and the dashboard URL that exchanges it. Recorded here (`store.impersonated`) before identity opens anything |
+| `GET /admin/v1/features`, `PUT /admin/v1/features/{key}` | The features catalog (ADR-0056). Saving adds a key or renames one; the kind is fixed. `enforced` says whether the code checks it |
+| `GET /admin/v1/plans`, `POST /admin/v1/plans` | Every plan version. Publishing puts the next version on sale; stores renew into it |
+| `POST /admin/v1/plans/{code}/retire` | Off sale; never the free plan |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -33,6 +36,10 @@ same-origin.
   `identity.Module.Impersonate` in `cmd/platform/impersonate.go`.
   `Deps.DashboardURL` is `MAIL_DASHBOARD_URL`. The CLI has neither, and
   refuses with 503.
+- **Plan catalog:** `Deps.Plans` is `billing.NewCatalog` on the admin
+  pool, and `Deps.Enforced` is `entitlements.Enforced`. Catalog changes
+  are recorded here first (`feature.saved`, `plan.published`,
+  `plan.retired`), with the reason.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
   `platform/authtoken`, `platform/email` and `platform/clientinfo`. They
   were moved out of identity when the console became their second user.

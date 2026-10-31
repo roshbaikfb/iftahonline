@@ -22,6 +22,7 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | `FromBilling(billing.GrantSource)` | The production source of grants. `Fixed{...}` grants every store the same (tests, demo tools) |
 | `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
 | `Unrestricted()` | Allows everything and counts nothing, without a database: the default of a module built without entitlements (its own tests) |
+| `Enforced(key)` | Whether the code checks a catalog key; the console marks display-only keys with it (ADR-0056) |
 | `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
 | `Entitlements.Require(ctx, f)` | `Allowed` as an error for a merchant's request: a 403 with code `plan_limit` (`NotInPlan`) |
 | `Entitlements.AdmitTx(ctx, tx, f, n, count)` | Admits `n` more of the counted feature `f` in the caller's transaction. `count` (the module's own count) runs under an advisory lock on (store, `f`) held until the transaction ends. Past the grant it returns a 403 with code `plan_limit` (`errors.Is ErrLimitReached`) |

@@ -82,8 +82,8 @@ Plans are data (ADR-0045, [billing](modules/billing.md)). Migration 00056
 seeds six plans whose **prices and limits are placeholders**:
 
 - Set the real prices per currency, and each plan's limits and features,
-  before launch (from the console once P7 7e lands; until then with SQL
-  as the owner).
+  before launch from the console: publish a new version of each plan
+  (`POST /admin/v1/plans`, ADR-0056).
 - The `messages` grant is the platform's cost per store for WhatsApp and
   SMS. The free plan's is 0.
 - Merchants are warned at 80% and at the limit, and orders are never
