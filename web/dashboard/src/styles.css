@@ -5077,3 +5077,29 @@ p.center {
   min-block-size: 2.25rem;
 }
 
+
+/* A free store's ads notice on the home (7g-2, the approved mockup). */
+.ads-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 0.9rem;
+}
+.ads-notice > div {
+  flex: 1 1 18rem;
+}
+.ads-notice p {
+  margin: 0;
+}
+.ads-notice-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: 0.625rem;
+  background: #eff6ff;
+  color: #1e40af;
+}

@@ -170,6 +170,22 @@ describe('Overview', () => {
     // without finance.read the held amount is left out, not an error
     expect(screen.queryByText('لدى شركات الشحن')).toBeNull();
   });
+
+  it('tells a free store that it shows ads and links to the plans; a paid store sees no notice', async () => {
+    routes({ [`GET ${base}/usage`]: () => ({ status: 200, body: { items: [], ad_free: false } }) });
+    const { unmount } = renderHome();
+    expect(await screen.findByText('متجرك على الباقة المجانية، فتظهر فيه إعلانات')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'أزل الإعلانات' })).toHaveAttribute('href', `/stores/${store}/billing/plans`);
+    unmount();
+    vi.restoreAllMocks();
+
+    const calls = routes({ [`GET ${base}/usage`]: () => ({ status: 200, body: { items: [], ad_free: true } }) });
+    renderHome();
+    await waitFor(() => {
+      expect(calls.some((c) => c.path.endsWith('/usage'))).toBe(true);
+    });
+    expect(screen.queryByText(/فتظهر فيه إعلانات/)).toBeNull();
+  });
 });
 
 describe('home helpers', () => {

@@ -5657,6 +5657,8 @@ export interface components {
         };
         UsageMeters: {
             items: components["schemas"]["UsageMeter"][];
+            /** @description The store has the ad_free feature; without it, its pages show ads (ADR-0062). */
+            ad_free: boolean;
         };
         UsageMeter: {
             /** @enum {string} */

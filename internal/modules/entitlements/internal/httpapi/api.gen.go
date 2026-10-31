@@ -144,7 +144,9 @@ type UsageMeterKind string
 
 // UsageMeters defines model for UsageMeters.
 type UsageMeters struct {
-	Items []UsageMeter `json:"items"`
+	// AdFree The store has the ad_free feature; without it, its pages show ads (ADR-0062).
+	AdFree bool         `json:"ad_free"`
+	Items  []UsageMeter `json:"items"`
 }
 
 // AgencyID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
