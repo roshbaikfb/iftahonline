@@ -67,3 +67,4 @@ supersedes it.
 | [0059](0059-agencies-set-up-from-the-console.md) | Agencies set up from the console | Accepted |
 | [0060](0060-merchants-choose-their-plan.md) | Merchants choose their plan | Accepted |
 | [0061](0061-usage-meters.md) | Usage meters | Accepted |
+| [0062](0062-ads-in-free-stores.md) | Ads in free stores | Accepted |
