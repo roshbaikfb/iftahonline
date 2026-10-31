@@ -23,3 +23,9 @@ UPDATE subscriptions SET plan_id = @plan_id, status = @status, cycle = @cycle, t
   period_start = @period_start, period_end = @period_end, grace_until = @grace_until, suspended_at = @suspended_at,
   cancel_at_period_end = @cancel_at_period_end, trial_used = @trial_used, updated_at = now()
 WHERE store_id = @store_id;
+
+-- name: BillingHealth :one
+-- Counts for the console's health page (ADR-0058).
+SELECT trialing::bigint, active::bigint, past_due::bigint, suspended::bigint, cancelled::bigint,
+       invoices_open::bigint, invoices_overdue::bigint
+FROM app.billing_health(@now::timestamptz);

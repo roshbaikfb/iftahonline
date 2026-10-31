@@ -100,3 +100,8 @@ func decodeDirCursor(c string) (time.Time, ulid.ID, error) {
 	id, err := ulid.Parse(ids)
 	return time.UnixMicro(n).UTC(), id, err
 }
+
+// Counts are the platform's stores by state (the health page, ADR-0058).
+func (d *StoreDirectory) Counts(ctx context.Context) (domain.StoreCounts, error) {
+	return store.DirectoryCounts(ctx, d.db)
+}

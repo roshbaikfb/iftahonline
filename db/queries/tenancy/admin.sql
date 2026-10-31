@@ -18,3 +18,12 @@ SELECT * FROM stores WHERE id = @id;
 
 -- name: AdminListDomains :many
 SELECT * FROM store_domains WHERE store_id = @store_id ORDER BY created_at, id;
+
+-- name: AdminStoreCounts :one
+-- Stores by state for the console's health page (ADR-0058).
+SELECT count(*) FILTER (WHERE status = 'active' AND NOT billing_hold)::bigint AS active,
+       count(*) FILTER (WHERE status = 'active' AND billing_hold)::bigint AS held,
+       count(*) FILTER (WHERE status = 'suspended')::bigint AS suspended,
+       count(*) FILTER (WHERE status = 'closed')::bigint AS closed,
+       count(*)::bigint AS total
+FROM stores;

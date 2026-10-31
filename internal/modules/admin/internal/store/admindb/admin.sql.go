@@ -194,6 +194,33 @@ func (q *Queries) InsertAdminSession(ctx context.Context, arg InsertAdminSession
 	return i, err
 }
 
+const jobHealth = `-- name: JobHealth :one
+SELECT available::bigint, running::bigint, retryable::bigint, discarded_24h::bigint, oldest_available_seconds::bigint
+FROM app.job_health($1::timestamptz)
+`
+
+type JobHealthRow struct {
+	Available              int64
+	Running                int64
+	Retryable              int64
+	Discarded24h           int64
+	OldestAvailableSeconds int64
+}
+
+// River's queue for the health page (ADR-0058): counts only.
+func (q *Queries) JobHealth(ctx context.Context, now time.Time) (JobHealthRow, error) {
+	row := q.db.QueryRow(ctx, jobHealth, now)
+	var i JobHealthRow
+	err := row.Scan(
+		&i.Available,
+		&i.Running,
+		&i.Retryable,
+		&i.Discarded24h,
+		&i.OldestAvailableSeconds,
+	)
+	return i, err
+}
+
 const listAdminAudit = `-- name: ListAdminAudit :many
 SELECT id, occurred_at, admin_id, action, target_type, target_id, ip_prefix, metadata FROM admin_audit_log
 WHERE $1::timestamptz IS NULL

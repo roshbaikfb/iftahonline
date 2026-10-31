@@ -47,3 +47,8 @@ WHERE sqlc.narg(before_at)::timestamptz IS NULL
    OR (occurred_at, id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid)
 ORDER BY occurred_at DESC, id DESC
 LIMIT @lim;
+
+-- name: JobHealth :one
+-- River's queue for the health page (ADR-0058): counts only.
+SELECT available::bigint, running::bigint, retryable::bigint, discarded_24h::bigint, oldest_available_seconds::bigint
+FROM app.job_health(@now::timestamptz);

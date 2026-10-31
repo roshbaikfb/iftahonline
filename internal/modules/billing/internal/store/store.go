@@ -129,3 +129,21 @@ func PeriodsEnded(ctx context.Context, tx Tx, now time.Time) ([]ulid.ID, error) 
 	}
 	return ids, nil
 }
+
+// Health counts subscriptions by status and open and overdue invoices
+// of every store and account (ADR-0058).
+type Health struct {
+	Trialing, Active, PastDue, Suspended, Cancelled int64
+	InvoicesOpen, InvoicesOverdue                   int64
+}
+
+// PlatformHealth reads Health through app.billing_health, which returns
+// numbers only.
+func PlatformHealth(ctx context.Context, tx Tx, now time.Time) (Health, error) {
+	r, err := billingdb.New(tx).BillingHealth(ctx, now)
+	if err != nil {
+		return Health{}, fmt.Errorf("billing store: health: %w", err)
+	}
+	return Health{Trialing: r.Trialing, Active: r.Active, PastDue: r.PastDue, Suspended: r.Suspended, Cancelled: r.Cancelled,
+		InvoicesOpen: r.InvoicesOpen, InvoicesOverdue: r.InvoicesOverdue}, nil
+}

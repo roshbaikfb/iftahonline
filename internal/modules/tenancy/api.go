@@ -87,7 +87,13 @@ type DirectoryPage struct {
 type Directory interface {
 	Search(ctx context.Context, query, status, cursor string, limit int) (DirectoryPage, error)
 	Store(ctx context.Context, id tenant.StoreID) (Store, []Domain, error)
+	// Counts are every store by state (active, held for billing,
+	// suspended, closed).
+	Counts(ctx context.Context) (StoreCounts, error)
 }
+
+// StoreCounts are the platform's stores by state.
+type StoreCounts = domain.StoreCounts
 
 // HostResolver maps a raw Host header to its store. A cache hit does no
 // I/O.
