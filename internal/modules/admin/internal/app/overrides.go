@@ -13,20 +13,12 @@ import (
 
 var errNoOverrides = errs.Unavailable(0, errors.New("admin: per-store feature flags are not wired"))
 
-// inStore is ctx inside store id for a signed-in admin, once the store is
-// known to exist (404 otherwise).
+// inStore is storeCtx for the per-store flags.
 func (s *Service) inStore(ctx context.Context, id tenant.StoreID) (Identity, context.Context, error) {
-	who, ok := IdentityFrom(ctx)
-	if !ok {
-		return Identity{}, nil, errNoSession
-	}
-	if s.d.Overrides == nil {
+	if _, ok := IdentityFrom(ctx); ok && s.d.Overrides == nil {
 		return Identity{}, nil, errNoOverrides
 	}
-	if _, _, err := s.d.Directory.Store(ctx, id); err != nil {
-		return Identity{}, nil, err
-	}
-	return who, tenant.WithStore(ctx, id), nil
+	return s.storeCtx(ctx, id)
 }
 
 // StoreGrants are what store id's plan grants, its overrides and the
