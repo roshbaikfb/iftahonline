@@ -77,13 +77,17 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	keyring, _ := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=")
+	ent, err := entitlements.New(entitlements.Deps{Pool: appPool, Source: entitlements.Fixed{entitlements.Coupons: {Value: 0}}, IDs: ids})
+	if err != nil {
+		t.Fatal(err)
+	}
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
 		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
-		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced,
+		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(),
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -362,6 +366,55 @@ func TestConsolePlanCatalog(t *testing.T) {
 		{http.MethodPost, "/admin/v1/plans/" + code + "/retire", `{"reason":"again"}`, http.StatusNotFound},
 		{http.MethodPost, "/admin/v1/plans/" + code + "/retire", ``, http.StatusBadRequest},
 		{http.MethodPut, "/admin/v1/features/" + key, ``, http.StatusBadRequest},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+}
+
+func TestConsoleStoreOverrides(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	path := "/admin/v1/stores/" + f.store(t) + "/entitlements"
+
+	if r := f.do(t, http.MethodGet, adminHost, path, ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, path, "", withCookie(sess))
+	if r.status != http.StatusOK || len(r.body["overrides"].([]any)) != 0 {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	set := `{"value":1,"expires_at":"` + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `","reason":"promo month"}`
+	if r = f.do(t, http.MethodPut, adminHost, path+"/coupons", set, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r = f.do(t, http.MethodPut, adminHost, path+"/coupons", set, withCookie(sess), sameOrigin)
+	ov, _ := r.body["overrides"].([]any)
+	if r.status != http.StatusOK || len(ov) != 1 || ov[0].(map[string]any)["active"] != true || ov[0].(map[string]any)["expires_at"] == nil {
+		t.Fatalf("set = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPut, adminHost, path+"/products", `{"unlimited":true,"reason":"big import"}`, withCookie(sess), sameOrigin); r.status != http.StatusOK {
+		t.Fatalf("unlimited = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodPost, adminHost, path+"/coupons/clear", `{"reason":"promo over"}`, withCookie(sess), sameOrigin)
+	if ov, _ = r.body["overrides"].([]any); r.status != http.StatusOK || len(ov) != 1 {
+		t.Fatalf("clear = %d %v", r.status, r.body)
+	}
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, path + "/coupons", `{"value":2,"reason":"promo"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, path + "/live_chat", `{"value":1,"reason":"promo"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, path + "/coupons", `{"value":1,"expires_at":"2020-01-01T00:00:00Z","reason":"promo"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, path + "/coupons", ``, http.StatusBadRequest},
+		{http.MethodPost, path + "/coupons/clear", `{"reason":"again"}`, http.StatusNotFound},
+		{http.MethodPost, path + "/coupons/clear", ``, http.StatusBadRequest},
+		{http.MethodGet, "/admin/v1/stores/not-an-id/entitlements", "", http.StatusNotFound},
+		{http.MethodPut, "/admin/v1/stores/not-an-id/entitlements/coupons", `{"value":1,"reason":"promo"}`, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/stores/not-an-id/entitlements/coupons/clear", `{"reason":"promo"}`, http.StatusNotFound},
 	} {
 		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
 			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)

@@ -297,6 +297,19 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(billing.EventSubscriptionChanged, storefront.PurgeSubscriber, storefront.PurgeHandler(purger)); err != nil {
 		return clients{}, err
 	}
+	// A store's own grants changed from the console: the same (ADR-0057).
+	for _, s := range []struct {
+		name string
+		h    eventbus.Handler
+	}{
+		{entitlements.InvalidateSubscriber, entitlements.InvalidateHandler(rdb)},
+		{storefront.InvalidateSubscriber, storefront.InvalidateHandler(rdb)},
+		{storefront.PurgeSubscriber, storefront.PurgeHandler(purger)},
+	} {
+		if err = bus.Subscribe(entitlements.EventGrantsChanged, s.name, s.h); err != nil {
+			return clients{}, err
+		}
+	}
 	// A delivered or returned order's pay-as-you-sell fee (ADR-0048).
 	fees := &lateHandler{}
 	if err = bus.Subscribe(orders.EventOrderStatusChanged, billing.SellFeesSubscriber, fees.Handle); err != nil {
@@ -640,7 +653,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
-			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced,
+			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 		}); err != nil {
 			return nil, err
 		}

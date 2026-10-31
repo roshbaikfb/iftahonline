@@ -456,6 +456,31 @@ type AdminLoginRequest struct {
 	Password string `json:"password"`
 }
 
+// AdminOverride defines model for AdminOverride.
+type AdminOverride struct {
+	// Active False once expired.
+	Active    bool       `json:"active"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Feature   string     `json:"feature"`
+	Reason    string     `json:"reason"`
+	Unlimited bool       `json:"unlimited"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	Value     int64      `json:"value"`
+}
+
+// AdminOverrideInput defines model for AdminOverrideInput.
+type AdminOverrideInput struct {
+	// ExpiresAt In the future; none is until cleared.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Reason Kept in the admin audit log and shown with the override.
+	Reason    string `json:"reason"`
+	Unlimited *bool  `json:"unlimited,omitempty"`
+
+	// Value Ignored when unlimited. A flag is 0 or 1.
+	Value *int64 `json:"value,omitempty"`
+}
+
 // AdminPlan defines model for AdminPlan.
 type AdminPlan struct {
 	// Active On sale.
@@ -556,6 +581,13 @@ type AdminReason struct {
 type AdminStoreDetail struct {
 	Domains []Domain `json:"domains"`
 	Store   Store    `json:"store"`
+}
+
+// AdminStoreEntitlements defines model for AdminStoreEntitlements.
+type AdminStoreEntitlements struct {
+	Effective []AdminPlanGrant `json:"effective"`
+	Overrides []AdminOverride  `json:"overrides"`
+	Plan      []AdminPlanGrant `json:"plan"`
 }
 
 // AdminStorePage defines model for AdminStorePage.
@@ -719,6 +751,9 @@ type CustomerID = ULID
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 
+// FeatureKey defines model for FeatureKey.
+type FeatureKey = string
+
 // ImageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImageID = ULID
 
@@ -779,6 +814,12 @@ type AdminPublishPlanJSONRequestBody = AdminPlanInput
 // AdminRetirePlanJSONRequestBody defines body for AdminRetirePlan for application/json ContentType.
 type AdminRetirePlanJSONRequestBody = AdminReason
 
+// AdminSetStoreOverrideJSONRequestBody defines body for AdminSetStoreOverride for application/json ContentType.
+type AdminSetStoreOverrideJSONRequestBody = AdminOverrideInput
+
+// AdminClearStoreOverrideJSONRequestBody defines body for AdminClearStoreOverride for application/json ContentType.
+type AdminClearStoreOverrideJSONRequestBody = AdminReason
+
 // AdminImpersonateStoreJSONRequestBody defines body for AdminImpersonateStore for application/json ContentType.
 type AdminImpersonateStoreJSONRequestBody = AdminImpersonationRequest
 
@@ -823,6 +864,15 @@ type ServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
+	// (GET /admin/v1/stores/{store_id}/entitlements)
+	AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminSetStoreOverride Grant one store a feature instead of its plan's grant
+	// (PUT /admin/v1/stores/{store_id}/entitlements/{feature})
+	AdminSetStoreOverride(w http.ResponseWriter, r *http.Request, storeId StoreID, feature FeatureKey)
+	// AdminClearStoreOverride Give a store its plan's grant of a feature again
+	// (POST /admin/v1/stores/{store_id}/entitlements/{feature}/clear)
+	AdminClearStoreOverride(w http.ResponseWriter, r *http.Request, storeId StoreID, feature FeatureKey)
 	// AdminImpersonateStore Open a time-limited support session as the store's owner
 	// (POST /admin/v1/stores/{store_id}/impersonate)
 	AdminImpersonateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -1123,6 +1173,102 @@ func (siw *ServerInterfaceWrapper) AdminGetStore(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// AdminGetStoreEntitlements operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStoreEntitlements(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetStoreOverride operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetStoreOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "feature" -------------
+	var feature FeatureKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetStoreOverride(w, r, storeId, feature)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminClearStoreOverride operation middleware
+func (siw *ServerInterfaceWrapper) AdminClearStoreOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "feature" -------------
+	var feature FeatureKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminClearStoreOverride(w, r, storeId, feature)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminImpersonateStore operation middleware
 func (siw *ServerInterfaceWrapper) AdminImpersonateStore(w http.ResponseWriter, r *http.Request) {
 
@@ -1328,6 +1474,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/suspend", wrapper.AdminSuspendStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/impersonate", wrapper.AdminImpersonateStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements", wrapper.AdminGetStoreEntitlements)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}", wrapper.AdminSetStoreOverride)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}/clear", wrapper.AdminClearStoreOverride)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
@@ -1774,6 +1923,127 @@ func (response AdminGetStoredefaultApplicationProblemPlusJSONResponse) VisitAdmi
 	return err
 }
 
+type AdminGetStoreEntitlementsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type AdminGetStoreEntitlementsResponseObject interface {
+	VisitAdminGetStoreEntitlementsResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStoreEntitlements200JSONResponse AdminStoreEntitlements
+
+func (response AdminGetStoreEntitlements200JSONResponse) VisitAdminGetStoreEntitlementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreEntitlementsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetStoreEntitlementsdefaultApplicationProblemPlusJSONResponse) VisitAdminGetStoreEntitlementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetStoreOverrideRequestObject struct {
+	StoreId StoreID    `json:"store_id"`
+	Feature FeatureKey `json:"feature"`
+	Body    *AdminSetStoreOverrideJSONRequestBody
+}
+
+type AdminSetStoreOverrideResponseObject interface {
+	VisitAdminSetStoreOverrideResponse(w http.ResponseWriter) error
+}
+
+type AdminSetStoreOverride200JSONResponse AdminStoreEntitlements
+
+func (response AdminSetStoreOverride200JSONResponse) VisitAdminSetStoreOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetStoreOverridedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetStoreOverridedefaultApplicationProblemPlusJSONResponse) VisitAdminSetStoreOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminClearStoreOverrideRequestObject struct {
+	StoreId StoreID    `json:"store_id"`
+	Feature FeatureKey `json:"feature"`
+	Body    *AdminClearStoreOverrideJSONRequestBody
+}
+
+type AdminClearStoreOverrideResponseObject interface {
+	VisitAdminClearStoreOverrideResponse(w http.ResponseWriter) error
+}
+
+type AdminClearStoreOverride200JSONResponse AdminStoreEntitlements
+
+func (response AdminClearStoreOverride200JSONResponse) VisitAdminClearStoreOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminClearStoreOverridedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminClearStoreOverridedefaultApplicationProblemPlusJSONResponse) VisitAdminClearStoreOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminImpersonateStoreRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *AdminImpersonateStoreJSONRequestBody
@@ -1929,6 +2199,15 @@ type StrictServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(ctx context.Context, request AdminGetStoreRequestObject) (AdminGetStoreResponseObject, error)
+	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
+	// (GET /admin/v1/stores/{store_id}/entitlements)
+	AdminGetStoreEntitlements(ctx context.Context, request AdminGetStoreEntitlementsRequestObject) (AdminGetStoreEntitlementsResponseObject, error)
+	// AdminSetStoreOverride Grant one store a feature instead of its plan's grant
+	// (PUT /admin/v1/stores/{store_id}/entitlements/{feature})
+	AdminSetStoreOverride(ctx context.Context, request AdminSetStoreOverrideRequestObject) (AdminSetStoreOverrideResponseObject, error)
+	// AdminClearStoreOverride Give a store its plan's grant of a feature again
+	// (POST /admin/v1/stores/{store_id}/entitlements/{feature}/clear)
+	AdminClearStoreOverride(ctx context.Context, request AdminClearStoreOverrideRequestObject) (AdminClearStoreOverrideResponseObject, error)
 	// AdminImpersonateStore Open a time-limited support session as the store's owner
 	// (POST /admin/v1/stores/{store_id}/impersonate)
 	AdminImpersonateStore(ctx context.Context, request AdminImpersonateStoreRequestObject) (AdminImpersonateStoreResponseObject, error)
@@ -2274,6 +2553,100 @@ func (sh *strictHandler) AdminGetStore(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminGetStoreResponseObject); ok {
 		if err := validResponse.VisitAdminGetStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetStoreEntitlements operation middleware
+func (sh *strictHandler) AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminGetStoreEntitlementsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStoreEntitlements(ctx, request.(AdminGetStoreEntitlementsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStoreEntitlements")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStoreEntitlementsResponseObject); ok {
+		if err := validResponse.VisitAdminGetStoreEntitlementsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetStoreOverride operation middleware
+func (sh *strictHandler) AdminSetStoreOverride(w http.ResponseWriter, r *http.Request, storeId StoreID, feature FeatureKey) {
+	var request AdminSetStoreOverrideRequestObject
+
+	request.StoreId = storeId
+	request.Feature = feature
+
+	var body AdminSetStoreOverrideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetStoreOverride(ctx, request.(AdminSetStoreOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetStoreOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetStoreOverrideResponseObject); ok {
+		if err := validResponse.VisitAdminSetStoreOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminClearStoreOverride operation middleware
+func (sh *strictHandler) AdminClearStoreOverride(w http.ResponseWriter, r *http.Request, storeId StoreID, feature FeatureKey) {
+	var request AdminClearStoreOverrideRequestObject
+
+	request.StoreId = storeId
+	request.Feature = feature
+
+	var body AdminClearStoreOverrideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminClearStoreOverride(ctx, request.(AdminClearStoreOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminClearStoreOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminClearStoreOverrideResponseObject); ok {
+		if err := validResponse.VisitAdminClearStoreOverrideResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
