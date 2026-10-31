@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -49,7 +51,9 @@ type Deps struct {
 	// agency accounts (ADR-0059); nil refuses them.
 	Billing  billing.Console
 	Agencies billing.Agencies
-	Limits   *app.Limits // tests
+	// Ads are free stores' ads (ADR-0062); nil refuses them.
+	Ads    ads.Console
+	Limits *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -80,7 +84,7 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies})
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads})
 	return &Module{svc: svc, deps: d}, nil
 }
 

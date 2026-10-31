@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -45,11 +47,12 @@ const (
 )
 
 type fixture struct {
-	h       http.Handler
-	mod     *admin.Module
-	ten     *tenancy.Module
-	appPool *pgxpool.Pool
-	ids     *ulid.Generator
+	h         http.Handler
+	mod       *admin.Module
+	ten       *tenancy.Module
+	appPool   *pgxpool.Pool
+	adminPool *pgxpool.Pool
+	ids       *ulid.Generator
 }
 
 func newFixture(t *testing.T) fixture {
@@ -89,13 +92,17 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	adv, err := ads.New(ads.Deps{Pool: appPool, AdminPool: adminPool, IDs: ids, Log: log}) // no bucket: uploads are refused
+	if err != nil {
+		t.Fatal(err)
+	}
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
 		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
-		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(),
+		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +111,7 @@ func newFixture(t *testing.T) fixture {
 	if err := mod.Mount(mux, problem.NewResponder(log)); err != nil {
 		t.Fatal(err)
 	}
-	return fixture{h: mux, mod: mod, ten: ten, appPool: appPool, ids: ids}
+	return fixture{h: mux, mod: mod, ten: ten, appPool: appPool, adminPool: adminPool, ids: ids}
 }
 
 type resp struct {
@@ -518,6 +525,73 @@ func TestConsoleAgencies(t *testing.T) {
 		{http.MethodPost, base + "/stores/" + storeID + "/remove", ``, http.StatusBadRequest},
 		{http.MethodPost, "/admin/v1/agencies/junk/stores/" + storeID + "/remove", `{"reason":"x y"}`, http.StatusNotFound},
 		{http.MethodPost, base + "/stores/not-an-id/remove", `{"reason":"x y"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+}
+
+// TestConsoleAds: AdSense's settings and the banners, from the console
+// (ADR-0062). The only test of the package on the ads' tables.
+func TestConsoleAds(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/ads", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	save := `{"adsense_enabled":true,"publisher_id":"ca-pub-1234567890123456","units":{"home_top":"1234567890","grid":""},"reason":"link AdSense"}`
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/ads/settings", save, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r := f.do(t, http.MethodPut, adminHost, "/admin/v1/ads/settings", save, withCookie(sess), sameOrigin)
+	if r.status != http.StatusOK || r.body["ads_txt"] != "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n" {
+		t.Fatalf("save = %d %v", r.status, r.body)
+	}
+	if u := r.body["units"].(map[string]any); u["home_top"] != "1234567890" || u["grid"] != nil {
+		t.Fatalf("units = %v", u)
+	}
+
+	// A banner, as the ads module saves one (the bucket is not wired here).
+	id := f.ids.New()
+	if _, err := f.adminPool.Exec(t.Context(), `INSERT INTO ad_banners (id, title, image_key, width, height, link_url, placement, country, starts_at, weight)
+		VALUES ($1, 'افتح متجرك', 'platform/ads/'||$2||'.png', 640, 200, 'https://iftahonline.com/start', 'home_top', 'EG', now(), 10)`, id, id.String()); err != nil {
+		t.Fatal(err)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/ads", "", withCookie(sess))
+	banners, _ := r.body["banners"].([]any)
+	if r.status != http.StatusOK || len(banners) != 1 || r.body["settings"].(map[string]any)["adsense_enabled"] != true {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	if b := banners[0].(map[string]any); b["id"] != id.String() || b["country"] != "EG" || b["active"] != true || b["clicks"] != float64(0) || b["ends_at"] != nil {
+		t.Fatalf("banner = %v", b)
+	}
+	active := "/admin/v1/ads/banners/" + id.String() + "/active"
+	if r = f.do(t, http.MethodPut, adminHost, active, `{"active":false,"reason":"campaign over"}`, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("stop = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/ads", "", withCookie(sess)); r.body["banners"].([]any)[0].(map[string]any)["active"] != false {
+		t.Fatalf("after stop = %v", r.body)
+	}
+
+	banner := `{"title":"عرض","upload_key":"platform/ads/uploads/x","link_url":"https://iftahonline.com","placement":"grid","starts_at":"2026-11-01T00:00:00Z","weight":5,"reason":"November"}`
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, "/admin/v1/ads/settings", `{"adsense_enabled":true,"publisher_id":"","units":{},"reason":"no publisher"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/ads/settings", `{"adsense_enabled":false,"publisher_id":"","units":{},"reason":"x"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/ads/settings", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/ads/uploads", `{"content_type":"image/png"}`, http.StatusServiceUnavailable},
+		{http.MethodPost, "/admin/v1/ads/uploads", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/ads/banners", banner, http.StatusServiceUnavailable},
+		{http.MethodPost, "/admin/v1/ads/banners", ``, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/ads/banners/junk/active", `{"active":true,"reason":"again"}`, http.StatusNotFound},
+		{http.MethodPut, "/admin/v1/ads/banners/" + f.ids.New().String() + "/active", `{"active":true,"reason":"again"}`, http.StatusNotFound},
+		{http.MethodPut, active, ``, http.StatusBadRequest},
+		{http.MethodPut, active, `{"active":true,"reason":"x"}`, http.StatusUnprocessableEntity},
 	} {
 		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
 			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)

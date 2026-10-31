@@ -1886,6 +1886,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/ads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ads in free stores, their settings and banners
+         * @description Google AdSense's settings and every platform banner, with its
+         *     clicks of the last 30 days (ADR-0062). Changes reach stores'
+         *     pages within a minute, and the edge's cache lifetime.
+         */
+        get: operations["adminGetAds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ads/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Google AdSense's settings
+         * @description On needs a publisher; a placement without a unit shows only
+         *     banners. Free stores then serve /ads.txt naming the publisher.
+         *     Recorded in the admin log first.
+         */
+        put: operations["adminSaveAdSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ads/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a banner's image
+         * @description A presigned POST of at most 2 MiB; pass `key` to
+         *     adminCreateAdBanner, which re-encodes the image (never SVG).
+         */
+        post: operations["adminCreateAdUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ads/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a banner, active
+         * @description Its uploaded image is re-encoded and kept in the platform's space. Recorded in the admin log once saved.
+         */
+        post: operations["adminCreateAdBanner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ads/banners/{banner_id}/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Show or stop a banner
+         * @description Recorded in the admin log first.
+         */
+        put: operations["adminSetAdBannerActive"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/features": {
         parameters: {
             query?: never;
@@ -3877,6 +3984,88 @@ export interface components {
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED";
             plan_code: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminAds: {
+            settings: components["schemas"]["AdminAdSettings"];
+            banners: components["schemas"]["AdminAdBanner"][];
+        };
+        /** @description AdSense's ad unit per placement (10 digits); absent or empty shows only banners there. */
+        AdminAdUnits: {
+            home_top?: string;
+            grid?: string;
+            category_top?: string;
+            product_bottom?: string;
+        };
+        AdminAdSettings: {
+            adsense_enabled: boolean;
+            /** @example ca-pub-0000000000000000 */
+            publisher_id: string;
+            units: components["schemas"]["AdminAdUnits"];
+            /** @description What free stores serve at /ads.txt (empty with AdSense off). */
+            ads_txt: string;
+        };
+        AdminAdSettingsInput: {
+            adsense_enabled: boolean;
+            publisher_id: string;
+            units: components["schemas"]["AdminAdUnits"];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        /** @enum {string} */
+        AdminAdPlacement: "home_top" | "grid" | "category_top" | "product_bottom";
+        AdminAdBanner: {
+            id: components["schemas"]["ULID"];
+            title: string;
+            /** @description A signed thumbnail. */
+            image_url: string;
+            width: number;
+            height: number;
+            link_url: string;
+            placement: components["schemas"]["AdminAdPlacement"];
+            /**
+             * @description Absent for every country.
+             * @enum {string}
+             */
+            country?: "EG" | "SA" | "AE";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at?: string;
+            weight: number;
+            active: boolean;
+            /**
+             * Format: int64
+             * @description The last 30 days.
+             */
+            clicks: number;
+        };
+        AdminAdUploadRequest: {
+            /** @enum {string} */
+            content_type: "image/jpeg" | "image/png" | "image/webp";
+        };
+        AdminAdUpload: {
+            key: string;
+            upload: components["schemas"]["PresignedUpload"];
+        };
+        AdminAdBannerInput: {
+            title: string;
+            upload_key: string;
+            link_url: string;
+            placement: components["schemas"]["AdminAdPlacement"];
+            /** @enum {string} */
+            country?: "EG" | "SA" | "AE";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at?: string;
+            weight: number;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminAdBannerActive: {
+            active: boolean;
             /** @description Kept in the admin audit log. */
             reason: string;
         };
@@ -8413,6 +8602,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminAgencyDetail"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetAds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings and banners. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAds"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveAdSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAdSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAdSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateAdUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAdUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Where to post the image. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAdUpload"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateAdBanner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAdBannerInput"];
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAdBanner"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetAdBannerActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAdBannerActive"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

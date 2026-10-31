@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+
 	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
@@ -78,6 +80,8 @@ type Deps struct {
 	Redis   *redis.Client
 	// Agencies are billing's agency accounts (ADR-0059); nil for the CLI.
 	Agencies billing.Agencies
+	// Ads are free stores' ads (ADR-0062); nil for the CLI.
+	Ads ads.Console
 }
 
 // Service implements the console.

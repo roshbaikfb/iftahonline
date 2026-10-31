@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
@@ -655,7 +657,13 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	}
 	var console *admin.Module
 	if c.adminPool != nil {
+		// The console's ads (ADR-0062): settings, banners and their images.
+		adv, advErr := ads.New(ads.Deps{Pool: c.pool, AdminPool: c.adminPool, Media: &c.cfg.Media, IDs: c.ids, Log: c.log})
+		if advErr != nil {
+			return nil, advErr
+		}
 		if console, err = admin.New(admin.Deps{
+			Ads:       adv.Console(),
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
@@ -774,8 +782,12 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
+	adv, err := ads.New(ads.Deps{Pool: c.pool, IDs: c.ids, Log: c.log})
+	if err != nil {
+		return nil, err
+	}
 	shop, err := storefront.NewShop(storefront.ShopDeps{
-		Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(), Feeds: mkt.Feeds(),
+		Ads: adv.Shop(), Plan: c.plan, Confirmations: links, Pixels: mkt.Pixels(), Conversions: mkt.Conversions(), Feeds: mkt.Feeds(),
 		Orders: shopOrders, Parcels: ship.Tracker(), Captcha: c.cfg.Captcha, Cards: payments.NewCardCheck(c.pool, c.plan), CheckoutURL: c.cfg.Payments.CheckoutURL,
 		Pool: c.pool, Redis: c.rdb, Catalog: products, Stores: ten.Service(), Media: c.cfg.Media, Log: c.log,
 		Cache: storefront.DefaultCacheConfig(), HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
