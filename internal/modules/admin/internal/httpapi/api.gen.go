@@ -18,6 +18,93 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AdminAdBannerCountry.
+const (
+	AdminAdBannerCountryAE AdminAdBannerCountry = "AE"
+	AdminAdBannerCountryEG AdminAdBannerCountry = "EG"
+	AdminAdBannerCountrySA AdminAdBannerCountry = "SA"
+)
+
+// Valid indicates whether the value is a known member of the AdminAdBannerCountry enum.
+func (e AdminAdBannerCountry) Valid() bool {
+	switch e {
+	case AdminAdBannerCountryAE:
+		return true
+	case AdminAdBannerCountryEG:
+		return true
+	case AdminAdBannerCountrySA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminAdBannerInputCountry.
+const (
+	AdminAdBannerInputCountryAE AdminAdBannerInputCountry = "AE"
+	AdminAdBannerInputCountryEG AdminAdBannerInputCountry = "EG"
+	AdminAdBannerInputCountrySA AdminAdBannerInputCountry = "SA"
+)
+
+// Valid indicates whether the value is a known member of the AdminAdBannerInputCountry enum.
+func (e AdminAdBannerInputCountry) Valid() bool {
+	switch e {
+	case AdminAdBannerInputCountryAE:
+		return true
+	case AdminAdBannerInputCountryEG:
+		return true
+	case AdminAdBannerInputCountrySA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminAdPlacement.
+const (
+	CategoryTop   AdminAdPlacement = "category_top"
+	Grid          AdminAdPlacement = "grid"
+	HomeTop       AdminAdPlacement = "home_top"
+	ProductBottom AdminAdPlacement = "product_bottom"
+)
+
+// Valid indicates whether the value is a known member of the AdminAdPlacement enum.
+func (e AdminAdPlacement) Valid() bool {
+	switch e {
+	case CategoryTop:
+		return true
+	case Grid:
+		return true
+	case HomeTop:
+		return true
+	case ProductBottom:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminAdUploadRequestContentType.
+const (
+	Imagejpeg AdminAdUploadRequestContentType = "image/jpeg"
+	Imagepng  AdminAdUploadRequestContentType = "image/png"
+	Imagewebp AdminAdUploadRequestContentType = "image/webp"
+)
+
+// Valid indicates whether the value is a known member of the AdminAdUploadRequestContentType enum.
+func (e AdminAdUploadRequestContentType) Valid() bool {
+	switch e {
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	case Imagewebp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminAgencyCurrency.
 const (
 	AdminAgencyCurrencyAED AdminAgencyCurrency = "AED"
@@ -519,6 +606,116 @@ func (e AdminListStoresParamsStatus) Valid() bool {
 	}
 }
 
+// AdminAdBanner defines model for AdminAdBanner.
+type AdminAdBanner struct {
+	Active bool `json:"active"`
+
+	// Clicks The last 30 days.
+	Clicks int64 `json:"clicks"`
+
+	// Country Absent for every country.
+	Country *AdminAdBannerCountry `json:"country,omitempty"`
+	EndsAt  *time.Time            `json:"ends_at,omitempty"`
+	Height  int                   `json:"height"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// ImageUrl A signed thumbnail.
+	ImageUrl  string           `json:"image_url"`
+	LinkUrl   string           `json:"link_url"`
+	Placement AdminAdPlacement `json:"placement"`
+	StartsAt  time.Time        `json:"starts_at"`
+	Title     string           `json:"title"`
+	Weight    int              `json:"weight"`
+	Width     int              `json:"width"`
+}
+
+// AdminAdBannerCountry Absent for every country.
+type AdminAdBannerCountry string
+
+// AdminAdBannerActive defines model for AdminAdBannerActive.
+type AdminAdBannerActive struct {
+	Active bool `json:"active"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
+// AdminAdBannerInput defines model for AdminAdBannerInput.
+type AdminAdBannerInput struct {
+	Country   *AdminAdBannerInputCountry `json:"country,omitempty"`
+	EndsAt    *time.Time                 `json:"ends_at,omitempty"`
+	LinkUrl   string                     `json:"link_url"`
+	Placement AdminAdPlacement           `json:"placement"`
+
+	// Reason Kept in the admin audit log.
+	Reason    string    `json:"reason"`
+	StartsAt  time.Time `json:"starts_at"`
+	Title     string    `json:"title"`
+	UploadKey string    `json:"upload_key"`
+	Weight    int       `json:"weight"`
+}
+
+// AdminAdBannerInputCountry defines model for AdminAdBannerInput.Country.
+type AdminAdBannerInputCountry string
+
+// AdminAdPlacement defines model for AdminAdPlacement.
+type AdminAdPlacement string
+
+// AdminAdSettings defines model for AdminAdSettings.
+type AdminAdSettings struct {
+	// AdsTxt What free stores serve at /ads.txt (empty with AdSense off).
+	AdsTxt         string `json:"ads_txt"`
+	AdsenseEnabled bool   `json:"adsense_enabled"`
+
+	// PublisherId Example: ca-pub-0000000000000000
+	PublisherId string `json:"publisher_id"`
+
+	// Units AdSense's ad unit per placement (10 digits); absent or empty shows only banners there.
+	Units AdminAdUnits `json:"units"`
+}
+
+// AdminAdSettingsInput defines model for AdminAdSettingsInput.
+type AdminAdSettingsInput struct {
+	AdsenseEnabled bool   `json:"adsense_enabled"`
+	PublisherId    string `json:"publisher_id"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Units AdSense's ad unit per placement (10 digits); absent or empty shows only banners there.
+	Units AdminAdUnits `json:"units"`
+}
+
+// AdminAdUnits AdSense's ad unit per placement (10 digits); absent or empty shows only banners there.
+type AdminAdUnits struct {
+	CategoryTop   *string `json:"category_top,omitempty"`
+	Grid          *string `json:"grid,omitempty"`
+	HomeTop       *string `json:"home_top,omitempty"`
+	ProductBottom *string `json:"product_bottom,omitempty"`
+}
+
+// AdminAdUpload defines model for AdminAdUpload.
+type AdminAdUpload struct {
+	Key    string          `json:"key"`
+	Upload PresignedUpload `json:"upload"`
+}
+
+// AdminAdUploadRequest defines model for AdminAdUploadRequest.
+type AdminAdUploadRequest struct {
+	ContentType AdminAdUploadRequestContentType `json:"content_type"`
+}
+
+// AdminAdUploadRequestContentType defines model for AdminAdUploadRequest.ContentType.
+type AdminAdUploadRequestContentType string
+
+// AdminAds defines model for AdminAds.
+type AdminAds struct {
+	Banners  []AdminAdBanner `json:"banners"`
+	Settings AdminAdSettings `json:"settings"`
+}
+
 // AdminAgency defines model for AdminAgency.
 type AdminAgency struct {
 	CreatedAt time.Time           `json:"created_at"`
@@ -998,6 +1195,14 @@ type OpenInvoice struct {
 // OpenInvoiceCurrency defines model for OpenInvoice.Currency.
 type OpenInvoiceCurrency string
 
+// PresignedUpload defines model for PresignedUpload.
+type PresignedUpload struct {
+	ExpiresAt time.Time         `json:"expires_at"`
+	Fields    map[string]string `json:"fields"`
+	MaxBytes  int64             `json:"max_bytes"`
+	Url       string            `json:"url"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -1116,6 +1321,18 @@ type AdminListStoresParams struct {
 // AdminListStoresParamsStatus defines parameters for AdminListStores.
 type AdminListStoresParamsStatus string
 
+// AdminCreateAdBannerJSONRequestBody defines body for AdminCreateAdBanner for application/json ContentType.
+type AdminCreateAdBannerJSONRequestBody = AdminAdBannerInput
+
+// AdminSetAdBannerActiveJSONRequestBody defines body for AdminSetAdBannerActive for application/json ContentType.
+type AdminSetAdBannerActiveJSONRequestBody = AdminAdBannerActive
+
+// AdminSaveAdSettingsJSONRequestBody defines body for AdminSaveAdSettings for application/json ContentType.
+type AdminSaveAdSettingsJSONRequestBody = AdminAdSettingsInput
+
+// AdminCreateAdUploadJSONRequestBody defines body for AdminCreateAdUpload for application/json ContentType.
+type AdminCreateAdUploadJSONRequestBody = AdminAdUploadRequest
+
 // AdminCreateAgencyJSONRequestBody defines body for AdminCreateAgency for application/json ContentType.
 type AdminCreateAgencyJSONRequestBody = AdminAgencyInput
 
@@ -1157,6 +1374,21 @@ type AdminSuspendStoreJSONRequestBody = AdminReason
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// AdminGetAds Ads in free stores, their settings and banners
+	// (GET /admin/v1/ads)
+	AdminGetAds(w http.ResponseWriter, r *http.Request)
+	// AdminCreateAdBanner Add a banner, active
+	// (POST /admin/v1/ads/banners)
+	AdminCreateAdBanner(w http.ResponseWriter, r *http.Request)
+	// AdminSetAdBannerActive Show or stop a banner
+	// (PUT /admin/v1/ads/banners/{banner_id}/active)
+	AdminSetAdBannerActive(w http.ResponseWriter, r *http.Request, bannerId ULID)
+	// AdminSaveAdSettings Save Google AdSense's settings
+	// (PUT /admin/v1/ads/settings)
+	AdminSaveAdSettings(w http.ResponseWriter, r *http.Request)
+	// AdminCreateAdUpload Upload a banner's image
+	// (POST /admin/v1/ads/uploads)
+	AdminCreateAdUpload(w http.ResponseWriter, r *http.Request)
 	// AdminListAgencies Every agency, newest first
 	// (GET /admin/v1/agencies)
 	AdminListAgencies(w http.ResponseWriter, r *http.Request)
@@ -1242,6 +1474,88 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminGetAds operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetAds(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetAds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateAdBanner operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateAdBanner(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateAdBanner(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetAdBannerActive operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetAdBannerActive(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "banner_id" -------------
+	var bannerId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "banner_id", r.PathValue("banner_id"), &bannerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "banner_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetAdBannerActive(w, r, bannerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveAdSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveAdSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveAdSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateAdUpload operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateAdUpload(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateAdUpload(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // AdminListAgencies operation middleware
 func (siw *ServerInterfaceWrapper) AdminListAgencies(w http.ResponseWriter, r *http.Request) {
@@ -2035,6 +2349,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}", wrapper.AdminGetAgency)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}", wrapper.AdminAddAgencyStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}/remove", wrapper.AdminRemoveAgencyStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/ads", wrapper.AdminGetAds)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/ads/settings", wrapper.AdminSaveAdSettings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/uploads", wrapper.AdminCreateAdUpload)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/banners", wrapper.AdminCreateAdBanner)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/ads/banners/{banner_id}/active", wrapper.AdminSetAdBannerActive)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
@@ -2046,6 +2365,195 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type AdminGetAdsRequestObject struct {
+}
+
+type AdminGetAdsResponseObject interface {
+	VisitAdminGetAdsResponse(w http.ResponseWriter) error
+}
+
+type AdminGetAds200JSONResponse AdminAds
+
+func (response AdminGetAds200JSONResponse) VisitAdminGetAdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetAdsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetAdsdefaultApplicationProblemPlusJSONResponse) VisitAdminGetAdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAdBannerRequestObject struct {
+	Body *AdminCreateAdBannerJSONRequestBody
+}
+
+type AdminCreateAdBannerResponseObject interface {
+	VisitAdminCreateAdBannerResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateAdBanner201JSONResponse AdminAdBanner
+
+func (response AdminCreateAdBanner201JSONResponse) VisitAdminCreateAdBannerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAdBannerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateAdBannerdefaultApplicationProblemPlusJSONResponse) VisitAdminCreateAdBannerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetAdBannerActiveRequestObject struct {
+	BannerId ULID `json:"banner_id"`
+	Body     *AdminSetAdBannerActiveJSONRequestBody
+}
+
+type AdminSetAdBannerActiveResponseObject interface {
+	VisitAdminSetAdBannerActiveResponse(w http.ResponseWriter) error
+}
+
+type AdminSetAdBannerActive204Response struct {
+}
+
+func (response AdminSetAdBannerActive204Response) VisitAdminSetAdBannerActiveResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSetAdBannerActivedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetAdBannerActivedefaultApplicationProblemPlusJSONResponse) VisitAdminSetAdBannerActiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveAdSettingsRequestObject struct {
+	Body *AdminSaveAdSettingsJSONRequestBody
+}
+
+type AdminSaveAdSettingsResponseObject interface {
+	VisitAdminSaveAdSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveAdSettings200JSONResponse AdminAdSettings
+
+func (response AdminSaveAdSettings200JSONResponse) VisitAdminSaveAdSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveAdSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveAdSettingsdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveAdSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAdUploadRequestObject struct {
+	Body *AdminCreateAdUploadJSONRequestBody
+}
+
+type AdminCreateAdUploadResponseObject interface {
+	VisitAdminCreateAdUploadResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateAdUpload201JSONResponse AdminAdUpload
+
+func (response AdminCreateAdUpload201JSONResponse) VisitAdminCreateAdUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAdUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateAdUploaddefaultApplicationProblemPlusJSONResponse) VisitAdminCreateAdUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type AdminListAgenciesRequestObject struct {
 }
@@ -3039,6 +3547,21 @@ func (response AdminSuspendStoredefaultApplicationProblemPlusJSONResponse) Visit
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// AdminGetAds Ads in free stores, their settings and banners
+	// (GET /admin/v1/ads)
+	AdminGetAds(ctx context.Context, request AdminGetAdsRequestObject) (AdminGetAdsResponseObject, error)
+	// AdminCreateAdBanner Add a banner, active
+	// (POST /admin/v1/ads/banners)
+	AdminCreateAdBanner(ctx context.Context, request AdminCreateAdBannerRequestObject) (AdminCreateAdBannerResponseObject, error)
+	// AdminSetAdBannerActive Show or stop a banner
+	// (PUT /admin/v1/ads/banners/{banner_id}/active)
+	AdminSetAdBannerActive(ctx context.Context, request AdminSetAdBannerActiveRequestObject) (AdminSetAdBannerActiveResponseObject, error)
+	// AdminSaveAdSettings Save Google AdSense's settings
+	// (PUT /admin/v1/ads/settings)
+	AdminSaveAdSettings(ctx context.Context, request AdminSaveAdSettingsRequestObject) (AdminSaveAdSettingsResponseObject, error)
+	// AdminCreateAdUpload Upload a banner's image
+	// (POST /admin/v1/ads/uploads)
+	AdminCreateAdUpload(ctx context.Context, request AdminCreateAdUploadRequestObject) (AdminCreateAdUploadResponseObject, error)
 	// AdminListAgencies Every agency, newest first
 	// (GET /admin/v1/agencies)
 	AdminListAgencies(ctx context.Context, request AdminListAgenciesRequestObject) (AdminListAgenciesResponseObject, error)
@@ -3153,6 +3676,156 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminGetAds operation middleware
+func (sh *strictHandler) AdminGetAds(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetAdsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetAds(ctx, request.(AdminGetAdsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetAds")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetAdsResponseObject); ok {
+		if err := validResponse.VisitAdminGetAdsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateAdBanner operation middleware
+func (sh *strictHandler) AdminCreateAdBanner(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateAdBannerRequestObject
+
+	var body AdminCreateAdBannerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateAdBanner(ctx, request.(AdminCreateAdBannerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateAdBanner")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateAdBannerResponseObject); ok {
+		if err := validResponse.VisitAdminCreateAdBannerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetAdBannerActive operation middleware
+func (sh *strictHandler) AdminSetAdBannerActive(w http.ResponseWriter, r *http.Request, bannerId ULID) {
+	var request AdminSetAdBannerActiveRequestObject
+
+	request.BannerId = bannerId
+
+	var body AdminSetAdBannerActiveJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetAdBannerActive(ctx, request.(AdminSetAdBannerActiveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetAdBannerActive")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetAdBannerActiveResponseObject); ok {
+		if err := validResponse.VisitAdminSetAdBannerActiveResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveAdSettings operation middleware
+func (sh *strictHandler) AdminSaveAdSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminSaveAdSettingsRequestObject
+
+	var body AdminSaveAdSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveAdSettings(ctx, request.(AdminSaveAdSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveAdSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveAdSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminSaveAdSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateAdUpload operation middleware
+func (sh *strictHandler) AdminCreateAdUpload(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateAdUploadRequestObject
+
+	var body AdminCreateAdUploadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateAdUpload(ctx, request.(AdminCreateAdUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateAdUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateAdUploadResponseObject); ok {
+		if err := validResponse.VisitAdminCreateAdUploadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AdminListAgencies operation middleware

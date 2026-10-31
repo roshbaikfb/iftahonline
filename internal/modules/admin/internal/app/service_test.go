@@ -110,8 +110,10 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	d.Billing, d.Redis, d.Agencies = bill.Console(), rdb, bill.Agencies()
+	d.Ads = &fakeAds{}
 	cli := d
 	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis, cli.Agencies = nil, nil, nil, nil, nil, nil, nil, nil, nil
+	cli.Ads = nil
 	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp, deps: d}
 }
 

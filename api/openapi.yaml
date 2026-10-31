@@ -2221,6 +2221,116 @@ paths:
               schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/ads:
+    get:
+      tags: [admin]
+      operationId: adminGetAds
+      summary: Ads in free stores, their settings and banners
+      description: |
+        Google AdSense's settings and every platform banner, with its
+        clicks of the last 30 days (ADR-0062). Changes reach stores'
+        pages within a minute, and the edge's cache lifetime.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The settings and banners.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAds" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/ads/settings:
+    put:
+      tags: [admin]
+      operationId: adminSaveAdSettings
+      summary: Save Google AdSense's settings
+      description: |
+        On needs a publisher; a placement without a unit shows only
+        banners. Free stores then serve /ads.txt naming the publisher.
+        Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAdSettingsInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAdSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/ads/uploads:
+    post:
+      tags: [admin]
+      operationId: adminCreateAdUpload
+      summary: Upload a banner's image
+      description: |
+        A presigned POST of at most 2 MiB; pass `key` to
+        adminCreateAdBanner, which re-encodes the image (never SVG).
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAdUploadRequest" }
+      responses:
+        "201":
+          description: Where to post the image.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAdUpload" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/ads/banners:
+    post:
+      tags: [admin]
+      operationId: adminCreateAdBanner
+      summary: Add a banner, active
+      description: Its uploaded image is re-encoded and kept in the platform's space. Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAdBannerInput" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAdBanner" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/ads/banners/{banner_id}/active:
+    parameters:
+      - name: banner_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    put:
+      tags: [admin]
+      operationId: adminSetAdBannerActive
+      summary: Show or stop a banner
+      description: Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAdBannerActive" }
+      responses:
+        "204":
+          description: Done.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/features:
     get:
       tags: [admin]
@@ -4558,6 +4668,88 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         currency: { type: string, enum: [EGP, SAR, AED] }
         plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminAds:
+      type: object
+      required: [settings, banners]
+      properties:
+        settings: { $ref: "#/components/schemas/AdminAdSettings" }
+        banners:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAdBanner" }
+    AdminAdUnits:
+      type: object
+      description: AdSense's ad unit per placement (10 digits); absent or empty shows only banners there.
+      properties:
+        home_top: { type: string, pattern: "^([0-9]{10})?$" }
+        grid: { type: string, pattern: "^([0-9]{10})?$" }
+        category_top: { type: string, pattern: "^([0-9]{10})?$" }
+        product_bottom: { type: string, pattern: "^([0-9]{10})?$" }
+    AdminAdSettings:
+      type: object
+      required: [adsense_enabled, publisher_id, units, ads_txt]
+      properties:
+        adsense_enabled: { type: boolean }
+        publisher_id: { type: string, example: ca-pub-0000000000000000 }
+        units: { $ref: "#/components/schemas/AdminAdUnits" }
+        ads_txt: { type: string, description: "What free stores serve at /ads.txt (empty with AdSense off)." }
+    AdminAdSettingsInput:
+      type: object
+      required: [adsense_enabled, publisher_id, units, reason]
+      properties:
+        adsense_enabled: { type: boolean }
+        publisher_id: { type: string, pattern: "^(ca-pub-[0-9]{16})?$" }
+        units: { $ref: "#/components/schemas/AdminAdUnits" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminAdPlacement:
+      type: string
+      enum: [home_top, grid, category_top, product_bottom]
+    AdminAdBanner:
+      type: object
+      required: [id, title, image_url, width, height, link_url, placement, starts_at, weight, active, clicks]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        title: { type: string }
+        image_url: { type: string, description: A signed thumbnail. }
+        width: { type: integer }
+        height: { type: integer }
+        link_url: { type: string }
+        placement: { $ref: "#/components/schemas/AdminAdPlacement" }
+        country: { type: string, enum: [EG, SA, AE], description: Absent for every country. }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        weight: { type: integer }
+        active: { type: boolean }
+        clicks: { type: integer, format: int64, description: The last 30 days. }
+    AdminAdUploadRequest:
+      type: object
+      required: [content_type]
+      properties:
+        content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+    AdminAdUpload:
+      type: object
+      required: [key, upload]
+      properties:
+        key: { type: string }
+        upload: { $ref: "#/components/schemas/PresignedUpload" }
+    AdminAdBannerInput:
+      type: object
+      required: [title, upload_key, link_url, placement, starts_at, weight, reason]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        upload_key: { type: string, maxLength: 200 }
+        link_url: { type: string, maxLength: 500 }
+        placement: { $ref: "#/components/schemas/AdminAdPlacement" }
+        country: { type: string, enum: [EG, SA, AE] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        weight: { type: integer, minimum: 1, maximum: 100 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminAdBannerActive:
+      type: object
+      required: [active, reason]
+      properties:
+        active: { type: boolean }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminSettleInput:
       type: object
