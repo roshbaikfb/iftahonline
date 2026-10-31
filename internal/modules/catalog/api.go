@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/catalog/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -210,3 +211,10 @@ var (
 	_ Catalog    = (*app.Service)(nil)
 	_ Storefront = (*app.Storefront)(nil)
 )
+
+// CountProducts counts the store-in-ctx's products (not deleted) in its
+// tenant transaction tx: the products usage meter (ADR-0061), the count
+// the plan's limit admits against.
+func CountProducts(ctx context.Context, tx pgx.Tx) (int64, error) {
+	return store.CountLiveProducts(ctx, tx)
+}

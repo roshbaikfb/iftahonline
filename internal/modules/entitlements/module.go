@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,7 +13,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
+	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/redisx"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -28,6 +32,9 @@ type Deps struct {
 	// discards.
 	IDs    *ulid.Generator
 	Events eventbus.Publisher
+	// Counters count what a store holds of each counted feature, for the
+	// usage meters (ADR-0061): catalog.CountProducts and the like.
+	Counters map[Feature]Counter
 }
 
 // Module is the wired entitlements module.
@@ -40,11 +47,16 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil || d.Source == nil {
 		return nil, errors.New("entitlements: missing dependency")
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Source: d.Source, IDs: d.IDs, Events: d.Events})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Source: d.Source, IDs: d.IDs, Events: d.Events, Counters: d.Counters})}, nil
 }
 
 // Entitlements is what other modules check and meter with.
 func (m *Module) Entitlements() Entitlements { return m.svc }
+
+// Mount registers the usage meters' route (ADR-0061).
+func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(http.Handler) http.Handler, resp *problem.Responder) {
+	httpapi.Mount(mux, m.svc, auth, scope, resp)
+}
 
 // Overrides are the console's per-store feature flags (ADR-0057).
 func (m *Module) Overrides() Overrides { return m.svc }

@@ -47,6 +47,8 @@ type Service struct {
 	ids    *ulid.Generator
 	events eventbus.Publisher
 	now    func() time.Time
+	// counters count counted features for the meters (ADR-0061).
+	counters map[domain.Feature]Counter
 }
 
 // Deps are the service's dependencies.
@@ -60,6 +62,9 @@ type Deps struct {
 	Cache storecache.Config
 	// Now is the clock (tests); nil is time.Now.
 	Now func() time.Time
+	// Counters count what a store holds of each counted feature, for the
+	// meters; a feature without one has no meter.
+	Counters map[domain.Feature]Counter
 }
 
 // NewService builds the service.
@@ -77,7 +82,8 @@ func NewService(d Deps) *Service {
 	if d.IDs == nil {
 		d.IDs = ulid.NewGenerator()
 	}
-	return &Service{db: d.DB, source: d.Source, cache: storecache.New[domain.Grants](d.Cache), ids: d.IDs, events: d.Events, now: now}
+	return &Service{db: d.DB, source: d.Source, cache: storecache.New[domain.Grants](d.Cache), ids: d.IDs, events: d.Events, now: now,
+		counters: d.Counters}
 }
 
 // Invalidate drops the store's cached grants, so the next check reads
