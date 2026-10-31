@@ -25,6 +25,7 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
 | `GET /admin/v1/agencies`, `POST /admin/v1/agencies`, `GET /admin/v1/agencies/{id}` | Agency accounts (ADR-0059): name, currency and agency plan; the view lists its store IDs. Creation is recorded once it has an ID (`agency.created`) |
 | `POST /admin/v1/agencies/{id}/stores/{store_id}`, `POST …/{store_id}/remove` | A store joins (from no account, or from its own once that owes nothing: 409 `open_invoice`; the currency must match) or leaves onto the free plan. Recorded first (`store.agency_joined`, `store.agency_left`) |
+| `GET /admin/v1/billing/duplicates`, `POST …/{id}/refunded` | Payments of invoices already paid (ADR-0063), those to refund first; recording a refund takes the gateway's refund reference and a reason, recorded first (`payment.refunded`) |
 | `GET /admin/v1/ads`, `PUT /admin/v1/ads/settings` | Ads in free stores (ADR-0062): AdSense's settings and every banner with its last 30 days' clicks. Settings are validated, then recorded first (`ads.settings_saved`) |
 | `POST /admin/v1/ads/uploads`, `POST /admin/v1/ads/banners`, `PUT /admin/v1/ads/banners/{id}/active` | A banner's image upload (2 MiB, JPEG, PNG or WebP), the banner (re-encoded, recorded once saved: `ads.banner_created`), and show or stop (recorded first: `ads.banner_active_set`) |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
@@ -42,7 +43,7 @@ It follows the approved mockups, with a dark sidebar and the «أدمن» badge.
 | Screen | Path | What |
 |---|---|---|
 | Login | — | Email, password and authenticator code in one step |
-| Health and stores | `/console/` | The checks and counts (a section that could not be read is named), and the directory with search and a status filter |
+| Health and stores | `/console/` | The checks and counts (a section that could not be read is named), duplicate payments waiting for a refund (only while one waits), and the directory with search and a status filter |
 | A store | `/console/stores/{id}` | Support session, suspend or reactivate, billing with "settle as a transfer", join an agency, per-store feature flags |
 | Plans and features | `/console/plans` | Versions per plan; an editor that publishes the next version from the one on sale; retire (not the free plan); the features catalog |
 | Agencies | `/console/agencies`, `/console/agencies/{id}` | List, create, the stores (by name), take a store out |

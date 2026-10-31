@@ -68,3 +68,4 @@ supersedes it.
 | [0060](0060-merchants-choose-their-plan.md) | Merchants choose their plan | Accepted |
 | [0061](0061-usage-meters.md) | Usage meters | Accepted |
 | [0062](0062-ads-in-free-stores.md) | Ads in free stores | Accepted |
+| [0063](0063-duplicate-payments-kept-for-refund.md) | Duplicate payments are kept for a refund | Accepted |

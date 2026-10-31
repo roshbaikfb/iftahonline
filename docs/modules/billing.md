@@ -167,6 +167,13 @@ large as the charges, no invoice is written and the credits wait.
   - closes the invoice;
   - renews the period the invoice billed;
   - brings every store back and releases its hold.
+- **A payment of an invoice no longer open** (paid on two pages, or on
+  the page while the card was charged, or after a transfer was settled)
+  is kept as a `duplicate` attempt, once per gateway transaction, with an
+  error log line (ADR-0063). The console lists it
+  (`Console.DuplicatePayments`) for an admin to refund on the gateway,
+  then records the refund (`Console.MarkRefunded`). A transfer settled on
+  such an invoice is refused.
 - **Cards on file.** They are sealed in `billing_payment_methods` and
   saved by the gateway's token callback (7d-2) through
   `Collections.SavePaymentMethod`.
@@ -275,7 +282,7 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `billing_accounts`, `billing_account_stores` | account (RLS on `app.account_id`) | A store is in one account (00058) |
 | `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
 | `billing_payment_methods` | account (RLS) | The card on file, sealed (00060) |
-| `payment_attempts` | account (RLS) | Every try: approved, declined, no method, manual; never updated or deleted by merchant code |
+| `payment_attempts` | account (RLS) | Every try: approved, declined, no method, manual, duplicate (00069); never deleted; only a duplicate's `refunded_at` and `refund_reference` are ever updated |
 | `billing_checkouts` | tenant (RLS) | A "pay now": our reference `bc_<ULID>`, Paymob's order (00061) |
 | `invoice_counters` | platform | One row per year: gapless numbers |
 | `tax_rates` | platform | VAT by country |
