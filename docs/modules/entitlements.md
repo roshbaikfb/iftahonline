@@ -23,7 +23,7 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 | `Module.Invalidate(store)` | Drops this instance's cached grants of a store after its plan changed |
 | `Unrestricted()` | Allows everything and counts nothing, without a database: the default of a module built without entitlements (its own tests) |
 | `Module.Overrides()`, `Overrides` | Per-store feature flags (ADR-0057): `StoreGrants`, `SetOverride`, `ClearOverride` on the store in ctx; each publishes `EventGrantsChanged` |
-| `Deps.Counters`, `Counter`, `Meter`, `Module.Mount` | The usage meters (ADR-0061): `GET /v1/stores/{id}/usage` (`billing.manage`), monthly counts and the modules' holdings (`catalog.CountProducts`, `identity.CountStaff`, `tenancy.CountCustomDomains`) against the grants |
+| `Deps.Counters`, `Counter`, `Meter`, `Module.Mount` | The usage meters (ADR-0061): `GET /v1/stores/{id}/usage` (`billing.manage`), monthly counts and the modules' holdings (`catalog.CountProducts`, `identity.CountStaff`, `tenancy.CountCustomDomains`) against the grants, and `ad_free`: the dashboard's home tells a free store that it shows ads (ADR-0062) |
 | `Enforced(key)` | Whether the code checks a catalog key; the console marks display-only keys with it (ADR-0056) |
 | `Entitlements.Allowed(ctx, f)` | Whether the store has the flag feature `f` |
 | `Entitlements.Require(ctx, f)` | `Allowed` as an error for a merchant's request: a 403 with code `plan_limit` (`NotInPlan`) |

@@ -71,7 +71,11 @@ mockups (7g, 2026-10-31) and decisions set the rules:
    them. They are served through imgproxy like product images.
 7. **The console** manages it all from `/admin/v1/ads` (settings, an
    image upload, banners, show or stop), each change with a reason in
-   the admin log.
+   the admin log. Its screen is `/console/ads`.
+8. **The dashboard's home** tells the owner of a free store that its
+   pages show ads, with a link to the plans («أزل الإعلانات»). It reads
+   `ad_free` from the usage meters (`billing.manage`), so a member who
+   cannot change the plan is not shown it.
 
 ## Consequences
 
