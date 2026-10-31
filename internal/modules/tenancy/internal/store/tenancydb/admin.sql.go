@@ -16,22 +16,9 @@ const adminGetStore = `-- name: AdminGetStore :one
 SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
 `
 
-type AdminGetStoreRow struct {
-	ID          ulid.ID
-	Slug        string
-	Name        string
-	Status      string
-	Currency    string
-	Locale      string
-	Timezone    string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	BillingHold bool
-}
-
-func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (AdminGetStoreRow, error) {
+func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) {
 	row := q.db.QueryRow(ctx, adminGetStore, id)
-	var i AdminGetStoreRow
+	var i Store
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
