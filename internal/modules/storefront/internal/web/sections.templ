@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 )
 
@@ -79,6 +80,11 @@ templ sectionsPage(p *pageCtx, secs []sectionView) {
 	<div class="secs">
 		for i, s := range secs {
 			@section(p, s, i == 0)
+			if i == 0 {
+				@adSlot(p, ads.HomeTop)
+			} else if i == 1 {
+				@adSlot(p, ads.Grid)
+			}
 		}
 	</div>
 	if len(secs) == 0 {

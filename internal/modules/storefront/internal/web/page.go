@@ -8,6 +8,7 @@ import (
 
 	"github.com/a-h/templ"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 )
@@ -44,7 +45,9 @@ type pageCtx struct {
 	css       string // the page's own rules (a product's merchant colours), after the store's
 	preview   string // a live preview token (ADR-0036): links keep it; nothing is cached
 	homeDraft *domain.HomeDraft
-	events    []pxEvent // conversions for the store's pixels (ADR-0043)
+	events    []pxEvent       // conversions for the store's pixels (ADR-0043)
+	ads       []ads.Placement // the placements this page shows (ADR-0062)
+	adsURL    string          // ads.js, on pages with an AdSense unit
 }
 
 // head is the short header a page shows on phones instead of the full

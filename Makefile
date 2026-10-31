@@ -83,6 +83,7 @@ gen: dash-deps ## Regenerate code: oapi-codegen, sqlc, templ, TS client
 	go tool esbuild $(SF_ASSETS)/src/app.js --minify --format=esm --target=es2020 --log-level=warning --outfile=$(SF_ASSETS)/dist/app.js
 	go tool esbuild $(SF_ASSETS)/src/checkout.js --minify --format=esm --target=es2020 --log-level=warning --outfile=$(SF_ASSETS)/dist/checkout.js
 	go tool esbuild $(SF_ASSETS)/src/px.js --minify --format=esm --target=es2020 --log-level=warning --outfile=$(SF_ASSETS)/dist/px.js
+	go tool esbuild $(SF_ASSETS)/src/ads.js --minify --format=esm --target=es2020 --log-level=warning --outfile=$(SF_ASSETS)/dist/ads.js
 	cd $(DASH) && npm run --silent gen:api
 
 .PHONY: gen-check

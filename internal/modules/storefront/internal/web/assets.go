@@ -14,7 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/domain"
 )
 
-//go:embed assets/dist/site.css assets/dist/checkout.css assets/dist/app.js assets/dist/checkout.js assets/dist/px.js assets/fonts/*.woff2
+//go:embed assets/dist/site.css assets/dist/checkout.css assets/dist/app.js assets/dist/checkout.js assets/dist/px.js assets/dist/ads.js assets/fonts/*.woff2
 var assetFiles embed.FS
 
 // AssetsPrefix is where static files are served, on every store host.
@@ -38,6 +38,7 @@ type Assets struct {
 	checkoutURL string            // checkout.css: the cart, checkout and thank-you pages only
 	checkoutJS  string            // checkout.js: the checkout page only
 	pxURL       string            // px.js: the ad pixels, on stores with any (ADR-0043)
+	adsURL      string            // ads.js: AdSense, on free stores' pages with a unit (ADR-0062)
 	fonts       map[string]string // "cairo-arabic-400" → URL
 	files       map[string]asset  // "app.3f2a9c1b.js" → file
 }
@@ -69,6 +70,11 @@ func LoadAssets() (*Assets, error) {
 		return nil, fmt.Errorf("web: %w", err)
 	}
 	a.pxURL = a.add("px", ".js", "text/javascript; charset=utf-8", px)
+	adsJS, err := assetFiles.ReadFile("assets/dist/ads.js")
+	if err != nil {
+		return nil, fmt.Errorf("web: %w", err)
+	}
+	a.adsURL = a.add("ads", ".js", "text/javascript; charset=utf-8", adsJS)
 	fonts, err := fs.Glob(assetFiles, "assets/fonts/*.woff2")
 	if err != nil {
 		return nil, fmt.Errorf("web: %w", err)

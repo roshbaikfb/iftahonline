@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 )
 
@@ -125,6 +126,7 @@ templ productPage(p *pageCtx, crumb *catalog.Category, v productView) {
 			}
 		</div>
 	</div>
+	@adSlot(p, ads.ProductBottom)
 	if len(v.related) > 0 {
 		<section class="sec">
 			<div class="head"><h2>{ p.l.T(MsgYouMayLike) }</h2></div>
@@ -261,9 +263,13 @@ templ categoryPage(p *pageCtx, c catalog.Category, products []catalog.Storefront
 		if len(products) == 0 {
 			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
 		} else {
+			@adSlot(p, ads.CategoryTop)
 			<div class="grid">
-				for _, pr := range products {
+				for i, pr := range products {
 					@card(p, pr)
+					if i == gridAdAfter-1 {
+						@adSlot(p, ads.Grid)
+					}
 				}
 			</div>
 		}

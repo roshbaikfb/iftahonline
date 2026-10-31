@@ -1,0 +1,37 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+)
+
+// adSlot is a placement's ad (ADR-0062), in a box of the placement's size
+// reserved before it loads, so nothing on the page moves. A banner is our
+// own picture and link; an AdSense unit is filled by ads.js once the
+// shopper nears it, non-personalized.
+templ adSlot(p *pageCtx, place ads.Placement) {
+	if sl, ok := p.slot(place); ok {
+		<aside class={ "ad", "ad-" + string(place) } aria-label={ p.l.T(MsgAd) }>
+			<span class="ad-tag">{ p.l.T(MsgAd) }</span>
+			if b := sl.Banner; b != nil {
+				<a href={ p.URL("/ad/" + b.ID.String()) } rel="sponsored nofollow">
+					<picture>
+						<source type="image/avif" srcset={ p.v.ads.avif(b) }/>
+						<img src={ p.v.ads.webp(b) } alt={ b.Title } width={ strconv.Itoa(b.Width) } height={ strconv.Itoa(b.Height) } loading="lazy" decoding="async"/>
+					</picture>
+				</a>
+			} else {
+				<ins class="adsbygoogle" data-ad-client={ p.v.ads.publisher } data-ad-slot={ sl.Unit } data-ad-format="auto" data-full-width-responsive="true"></ins>
+			}
+		</aside>
+	}
+}
+
+// adsNote is a free store's footer line: why there are ads, and that they
+// track no one (approved privacy line).
+templ adsNote(p *pageCtx) {
+	if p.v.free() {
+		<p class="ads-note">{ p.l.T(MsgAdsNote) }</p>
+	}
+}

@@ -50,6 +50,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			if p.challenge {
 				<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 			}
+			if p.adSense() {
+				<script type="module" src={ p.adsURL } data-client={ p.v.ads.publisher }></script>
+			}
 		</head>
 		<body
 			class={ templ.KV("compact", p.head != headFull), templ.KV("soft", p.soft) }
@@ -200,6 +203,7 @@ templ footer(p *pageCtx) {
 				</ul>
 			</div>
 		</div>
+		@adsNote(p)
 		<p class="copy">
 			© { p.v.name } · { p.l.T(MsgPoweredBy) } ·
 			<a href={ templ.SafeURL(p.localize(p.l.Other(), p.path)) } hreflang={ string(p.l.Other()) } lang={ string(p.l.Other()) }>{ p.l.Other().T(MsgLanguageName) }</a>
