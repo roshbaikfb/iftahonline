@@ -97,8 +97,11 @@ func (s *standIn) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// gateway and checkoutGateway talk to srv through its own client:
+// http.DefaultTransport is shared, and another parallel test's server
+// closing breaks requests in flight on it.
 func gateway(srv *httptest.Server) *paymob.Gateway {
-	return paymob.New(paymob.Options{BaseURL: srv.URL, Regions: map[string]paymob.Region{
+	return paymob.New(paymob.Options{BaseURL: srv.URL, Client: srv.Client(), Regions: map[string]paymob.Region{
 		"EGP": {SecretKey: "secret-key", APIKey: "api-key", MotoIntegrationID: 777},
 	}})
 }
@@ -156,14 +159,14 @@ func TestChargeRefusals(t *testing.T) {
 			t.Errorf("%s: charged", name)
 		}
 	}
-	bad := paymob.New(paymob.Options{BaseURL: srv.URL, Regions: map[string]paymob.Region{"EGP": {SecretKey: "secret-key", APIKey: "wrong", MotoIntegrationID: 777}}})
+	bad := paymob.New(paymob.Options{BaseURL: srv.URL, Client: srv.Client(), Regions: map[string]paymob.Region{"EGP": {SecretKey: "secret-key", APIKey: "wrong", MotoIntegrationID: 777}}})
 	if _, err := bad.Charge(t.Context(), app.Charge{Token: "t", AmountMinor: 1, Currency: "EGP", Reference: "r"}); err == nil {
 		t.Error("a refused API key charged")
 	}
 }
 
 func checkoutGateway(srv *httptest.Server) *paymob.Gateway {
-	return paymob.New(paymob.Options{BaseURL: srv.URL, Regions: map[string]paymob.Region{
+	return paymob.New(paymob.Options{BaseURL: srv.URL, Client: srv.Client(), Regions: map[string]paymob.Region{
 		"EGP": {SecretKey: "secret-key", APIKey: "api-key", MotoIntegrationID: 777, PublicKey: "egy_pk", CardIntegrationID: 555, HMACSecret: "hmac-eg"},
 		"SAR": {SecretKey: "secret-sa", APIKey: "api-sa", MotoIntegrationID: 778, PublicKey: "sa_pk", CardIntegrationID: 556, HMACSecret: "hmac-sa"},
 	}})
