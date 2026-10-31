@@ -170,6 +170,12 @@ per IP. It is advisory: sign-up checks again (422 `store.slug` `taken`).
     route and `refused`;
   - `impersonated_by` added to every other entry written during it.
 
+- **The dashboard** (7f-3a):
+  - **`/impersonate`** reads the code from the fragment, wipes it from
+    the address bar, exchanges it once, and opens the store.
+  - **The banner.** Every screen of a support session shows an amber bar
+    with read-only or write, the end time and "إنهاء الجلسة".
+
 ## Second factor (TOTP)
 
 **Enrolment:**
