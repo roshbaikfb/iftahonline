@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/paymob"
@@ -256,4 +257,50 @@ func TestPaid(t *testing.T) {
 	if _, _, err := g.Paid(t.Context(), "AED", "bc_paid", 1); err == nil {
 		t.Error("a region without an account answered")
 	}
+}
+
+// FuzzParseCallback: a callback is accepted only with a region's HMAC of
+// its fields, and what is read from it is usable: our reference or
+// Paymob's order to place it, a card label that fits its column.
+func FuzzParseCallback(f *testing.F) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	f.Cleanup(srv.Close)
+	g := checkoutGateway(srv)
+	f.Add([]byte(`{"type":"TRANSACTION","obj":{"id":9001,"success":true,"order":{"id":4547,"merchant_order_id":"bc_01"}}}`), "00")
+	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"xxxx-2346","card_subtype":"Visa","order_id":"7"}}`), "") // nocarddata:allow a masked card
+	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"éé","card_subtype":"","order_id":"7"}}`), "")      // nocarddata:allow a masked card
+	f.Add([]byte(`{"obj":null}`), "ab")
+	f.Fuzz(func(t *testing.T, body []byte, mac string) {
+		cb, err := g.ParseCallback(url.Values{"hmac": {mac}}, body)
+		if err == nil {
+			fields := platformpaymob.TransactionFields()
+			if cb.Kind == app.CallbackToken {
+				fields = platformpaymob.TokenFields()
+			}
+			okEG, _ := platformpaymob.Sign("hmac-eg", body, fields)
+			okSA, _ := platformpaymob.Sign("hmac-sa", body, fields)
+			if !strings.EqualFold(mac, okEG) && !strings.EqualFold(mac, okSA) {
+				t.Fatalf("accepted %q with hmac %q", body, mac)
+			}
+		}
+		read, err := g.ReadCallback(body)
+		if err != nil {
+			if !errors.Is(err, app.ErrBadCallback) {
+				t.Fatalf("read %q: %v", body, err)
+			}
+			return
+		}
+		switch read.Kind {
+		case app.CallbackToken:
+			if read.Token == "" || read.ProviderOrderID == "" || !utf8.ValidString(read.Label) || utf8.RuneCountInString(read.Label) > 60 {
+				t.Fatalf("token %q read as %+v", body, read)
+			}
+		case app.CallbackTransaction:
+			if read.Reference == "" || read.TransactionID == "" || read.EventID == "" {
+				t.Fatalf("transaction %q read as %+v", body, read)
+			}
+		default:
+			t.Fatalf("%q read as kind %v", body, read.Kind)
+		}
+	})
 }
