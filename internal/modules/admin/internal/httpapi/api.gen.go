@@ -17,6 +17,111 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AdminFeatureKind.
+const (
+	AdminFeatureKindCount   AdminFeatureKind = "count"
+	AdminFeatureKindFlag    AdminFeatureKind = "flag"
+	AdminFeatureKindMonthly AdminFeatureKind = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the AdminFeatureKind enum.
+func (e AdminFeatureKind) Valid() bool {
+	switch e {
+	case AdminFeatureKindCount:
+		return true
+	case AdminFeatureKindFlag:
+		return true
+	case AdminFeatureKindMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPlanFeeCurrency.
+const (
+	AdminPlanFeeCurrencyAED AdminPlanFeeCurrency = "AED"
+	AdminPlanFeeCurrencyEGP AdminPlanFeeCurrency = "EGP"
+	AdminPlanFeeCurrencySAR AdminPlanFeeCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminPlanFeeCurrency enum.
+func (e AdminPlanFeeCurrency) Valid() bool {
+	switch e {
+	case AdminPlanFeeCurrencyAED:
+		return true
+	case AdminPlanFeeCurrencyEGP:
+		return true
+	case AdminPlanFeeCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPlanKind.
+const (
+	AdminPlanKindAgency       AdminPlanKind = "agency"
+	AdminPlanKindFree         AdminPlanKind = "free"
+	AdminPlanKindPays         AdminPlanKind = "pays"
+	AdminPlanKindSubscription AdminPlanKind = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the AdminPlanKind enum.
+func (e AdminPlanKind) Valid() bool {
+	switch e {
+	case AdminPlanKindAgency:
+		return true
+	case AdminPlanKindFree:
+		return true
+	case AdminPlanKindPays:
+		return true
+	case AdminPlanKindSubscription:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPlanPriceCurrency.
+const (
+	AdminPlanPriceCurrencyAED AdminPlanPriceCurrency = "AED"
+	AdminPlanPriceCurrencyEGP AdminPlanPriceCurrency = "EGP"
+	AdminPlanPriceCurrencySAR AdminPlanPriceCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminPlanPriceCurrency enum.
+func (e AdminPlanPriceCurrency) Valid() bool {
+	switch e {
+	case AdminPlanPriceCurrencyAED:
+		return true
+	case AdminPlanPriceCurrencyEGP:
+		return true
+	case AdminPlanPriceCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPlanPriceCycle.
+const (
+	AdminPlanPriceCycleAnnual  AdminPlanPriceCycle = "annual"
+	AdminPlanPriceCycleMonthly AdminPlanPriceCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the AdminPlanPriceCycle enum.
+func (e AdminPlanPriceCycle) Valid() bool {
+	switch e {
+	case AdminPlanPriceCycleAnnual:
+		return true
+	case AdminPlanPriceCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DnsRecordType.
 const (
 	A     DnsRecordType = "A"
@@ -136,19 +241,19 @@ func (e MessageTextKind) Valid() bool {
 
 // Defines values for StoreCurrency.
 const (
-	AED StoreCurrency = "AED"
-	EGP StoreCurrency = "EGP"
-	SAR StoreCurrency = "SAR"
+	StoreCurrencyAED StoreCurrency = "AED"
+	StoreCurrencyEGP StoreCurrency = "EGP"
+	StoreCurrencySAR StoreCurrency = "SAR"
 )
 
 // Valid indicates whether the value is a known member of the StoreCurrency enum.
 func (e StoreCurrency) Valid() bool {
 	switch e {
-	case AED:
+	case StoreCurrencyAED:
 		return true
-	case EGP:
+	case StoreCurrencyEGP:
 		return true
-	case SAR:
+	case StoreCurrencySAR:
 		return true
 	default:
 		return false
@@ -175,19 +280,19 @@ func (e StoreLocale) Valid() bool {
 
 // Defines values for StorePlan.
 const (
-	Basic StorePlan = "basic"
-	Free  StorePlan = "free"
-	Pro   StorePlan = "pro"
+	StorePlanBasic StorePlan = "basic"
+	StorePlanFree  StorePlan = "free"
+	StorePlanPro   StorePlan = "pro"
 )
 
 // Valid indicates whether the value is a known member of the StorePlan enum.
 func (e StorePlan) Valid() bool {
 	switch e {
-	case Basic:
+	case StorePlanBasic:
 		return true
-	case Free:
+	case StorePlanFree:
 		return true
-	case Pro:
+	case StorePlanPro:
 		return true
 	default:
 		return false
@@ -289,6 +394,36 @@ type AdminAuth struct {
 	ExpiresAt time.Time    `json:"expires_at"`
 }
 
+// AdminFeature defines model for AdminFeature.
+type AdminFeature struct {
+	// Enforced The code checks it; false for a display-only key.
+	Enforced bool             `json:"enforced"`
+	Key      string           `json:"key"`
+	Kind     AdminFeatureKind `json:"kind"`
+	NameAr   string           `json:"name_ar"`
+	NameEn   string           `json:"name_en"`
+	Sort     int              `json:"sort"`
+}
+
+// AdminFeatureInput defines model for AdminFeatureInput.
+type AdminFeatureInput struct {
+	Kind   AdminFeatureKind `json:"kind"`
+	NameAr string           `json:"name_ar"`
+	NameEn string           `json:"name_en"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+	Sort   *int   `json:"sort,omitempty"`
+}
+
+// AdminFeatureKind defines model for AdminFeatureKind.
+type AdminFeatureKind string
+
+// AdminFeatureList defines model for AdminFeatureList.
+type AdminFeatureList struct {
+	Items []AdminFeature `json:"items"`
+}
+
 // AdminImpersonation defines model for AdminImpersonation.
 type AdminImpersonation struct {
 	// Code One-time
@@ -320,6 +455,86 @@ type AdminLoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
+// AdminPlan defines model for AdminPlan.
+type AdminPlan struct {
+	// Active On sale.
+	Active bool             `json:"active"`
+	Code   string           `json:"code"`
+	Fees   []AdminPlanFee   `json:"fees"`
+	Grants []AdminPlanGrant `json:"grants"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id        ULID             `json:"id"`
+	Kind      AdminPlanKind    `json:"kind"`
+	NameAr    string           `json:"name_ar"`
+	NameEn    string           `json:"name_en"`
+	Prices    []AdminPlanPrice `json:"prices"`
+	Public    bool             `json:"public"`
+	Sort      int              `json:"sort"`
+	TrialDays int              `json:"trial_days"`
+	Version   int              `json:"version"`
+}
+
+// AdminPlanFee defines model for AdminPlanFee.
+type AdminPlanFee struct {
+	Currency AdminPlanFeeCurrency `json:"currency"`
+	MaxMinor *int64               `json:"max_minor,omitempty"`
+	MinMinor *int64               `json:"min_minor,omitempty"`
+
+	// RateBps 250 is 2.5%.
+	RateBps int `json:"rate_bps"`
+}
+
+// AdminPlanFeeCurrency defines model for AdminPlanFee.Currency.
+type AdminPlanFeeCurrency string
+
+// AdminPlanGrant defines model for AdminPlanGrant.
+type AdminPlanGrant struct {
+	Feature   string `json:"feature"`
+	Unlimited *bool  `json:"unlimited,omitempty"`
+
+	// Value Ignored when unlimited. A flag is 0 or 1.
+	Value *int64 `json:"value,omitempty"`
+}
+
+// AdminPlanInput defines model for AdminPlanInput.
+type AdminPlanInput struct {
+	Code   string            `json:"code"`
+	Fees   *[]AdminPlanFee   `json:"fees,omitempty"`
+	Grants []AdminPlanGrant  `json:"grants"`
+	Kind   AdminPlanKind     `json:"kind"`
+	NameAr string            `json:"name_ar"`
+	NameEn string            `json:"name_en"`
+	Prices *[]AdminPlanPrice `json:"prices,omitempty"`
+	Public *bool             `json:"public,omitempty"`
+
+	// Reason Kept in the admin audit log.
+	Reason    string `json:"reason"`
+	Sort      *int   `json:"sort,omitempty"`
+	TrialDays *int   `json:"trial_days,omitempty"`
+}
+
+// AdminPlanKind defines model for AdminPlanKind.
+type AdminPlanKind string
+
+// AdminPlanList defines model for AdminPlanList.
+type AdminPlanList struct {
+	Items []AdminPlan `json:"items"`
+}
+
+// AdminPlanPrice defines model for AdminPlanPrice.
+type AdminPlanPrice struct {
+	AmountMinor int64                  `json:"amount_minor"`
+	Currency    AdminPlanPriceCurrency `json:"currency"`
+	Cycle       AdminPlanPriceCycle    `json:"cycle"`
+}
+
+// AdminPlanPriceCurrency defines model for AdminPlanPrice.Currency.
+type AdminPlanPriceCurrency string
+
+// AdminPlanPriceCycle defines model for AdminPlanPrice.Cycle.
+type AdminPlanPriceCycle string
 
 // AdminProfile defines model for AdminProfile.
 type AdminProfile struct {
@@ -555,6 +770,15 @@ type AdminListStoresParamsStatus string
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
+// AdminSaveFeatureJSONRequestBody defines body for AdminSaveFeature for application/json ContentType.
+type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
+
+// AdminPublishPlanJSONRequestBody defines body for AdminPublishPlan for application/json ContentType.
+type AdminPublishPlanJSONRequestBody = AdminPlanInput
+
+// AdminRetirePlanJSONRequestBody defines body for AdminRetirePlan for application/json ContentType.
+type AdminRetirePlanJSONRequestBody = AdminReason
+
 // AdminImpersonateStoreJSONRequestBody defines body for AdminImpersonateStore for application/json ContentType.
 type AdminImpersonateStoreJSONRequestBody = AdminImpersonationRequest
 
@@ -575,9 +799,24 @@ type ServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(w http.ResponseWriter, r *http.Request)
+	// AdminListFeatures The features catalog plans grant from
+	// (GET /admin/v1/features)
+	AdminListFeatures(w http.ResponseWriter, r *http.Request)
+	// AdminSaveFeature Add a feature, or rename and reorder one
+	// (PUT /admin/v1/features/{key})
+	AdminSaveFeature(w http.ResponseWriter, r *http.Request, key string)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(w http.ResponseWriter, r *http.Request)
+	// AdminListPlans Every version of every plan
+	// (GET /admin/v1/plans)
+	AdminListPlans(w http.ResponseWriter, r *http.Request)
+	// AdminPublishPlan Put a plan version on sale
+	// (POST /admin/v1/plans)
+	AdminPublishPlan(w http.ResponseWriter, r *http.Request)
+	// AdminRetirePlan Take a plan off sale
+	// (POST /admin/v1/plans/{code}/retire)
+	AdminRetirePlan(w http.ResponseWriter, r *http.Request, code string)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(w http.ResponseWriter, r *http.Request, params AdminListStoresParams)
@@ -678,11 +917,105 @@ func (siw *ServerInterfaceWrapper) AdminLogout(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// AdminListFeatures operation middleware
+func (siw *ServerInterfaceWrapper) AdminListFeatures(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListFeatures(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveFeature operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveFeature(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveFeature(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminMe operation middleware
 func (siw *ServerInterfaceWrapper) AdminMe(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListPlans operation middleware
+func (siw *ServerInterfaceWrapper) AdminListPlans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListPlans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminPublishPlan operation middleware
+func (siw *ServerInterfaceWrapper) AdminPublishPlan(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminPublishPlan(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRetirePlan operation middleware
+func (siw *ServerInterfaceWrapper) AdminRetirePlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "code" -------------
+	var code string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "code", r.PathValue("code"), &code, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRetirePlan(w, r, code)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -996,6 +1329,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/suspend", wrapper.AdminSuspendStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/impersonate", wrapper.AdminImpersonateStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminPublishPlan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/plans/{code}/retire", wrapper.AdminRetirePlan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/audit-log", wrapper.AdminAuditLog)
 
 	return m
@@ -1131,6 +1469,84 @@ func (response AdminLogoutdefaultApplicationProblemPlusJSONResponse) VisitAdminL
 	return err
 }
 
+type AdminListFeaturesRequestObject struct {
+}
+
+type AdminListFeaturesResponseObject interface {
+	VisitAdminListFeaturesResponse(w http.ResponseWriter) error
+}
+
+type AdminListFeatures200JSONResponse AdminFeatureList
+
+func (response AdminListFeatures200JSONResponse) VisitAdminListFeaturesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListFeaturesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListFeaturesdefaultApplicationProblemPlusJSONResponse) VisitAdminListFeaturesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFeatureRequestObject struct {
+	Key  string `json:"key"`
+	Body *AdminSaveFeatureJSONRequestBody
+}
+
+type AdminSaveFeatureResponseObject interface {
+	VisitAdminSaveFeatureResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveFeature200JSONResponse AdminFeature
+
+func (response AdminSaveFeature200JSONResponse) VisitAdminSaveFeatureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFeatureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminMeRequestObject struct {
 }
 
@@ -1158,6 +1574,117 @@ type AdminMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminMedefaultApplicationProblemPlusJSONResponse) VisitAdminMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListPlansRequestObject struct {
+}
+
+type AdminListPlansResponseObject interface {
+	VisitAdminListPlansResponse(w http.ResponseWriter) error
+}
+
+type AdminListPlans200JSONResponse AdminPlanList
+
+func (response AdminListPlans200JSONResponse) VisitAdminListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListPlansdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListPlansdefaultApplicationProblemPlusJSONResponse) VisitAdminListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPublishPlanRequestObject struct {
+	Body *AdminPublishPlanJSONRequestBody
+}
+
+type AdminPublishPlanResponseObject interface {
+	VisitAdminPublishPlanResponse(w http.ResponseWriter) error
+}
+
+type AdminPublishPlan201JSONResponse AdminPlan
+
+func (response AdminPublishPlan201JSONResponse) VisitAdminPublishPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPublishPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminPublishPlandefaultApplicationProblemPlusJSONResponse) VisitAdminPublishPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRetirePlanRequestObject struct {
+	Code string `json:"code"`
+	Body *AdminRetirePlanJSONRequestBody
+}
+
+type AdminRetirePlanResponseObject interface {
+	VisitAdminRetirePlanResponse(w http.ResponseWriter) error
+}
+
+type AdminRetirePlan204Response struct {
+}
+
+func (response AdminRetirePlan204Response) VisitAdminRetirePlanResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRetirePlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRetirePlandefaultApplicationProblemPlusJSONResponse) VisitAdminRetirePlanResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1378,9 +1905,24 @@ type StrictServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(ctx context.Context, request AdminLogoutRequestObject) (AdminLogoutResponseObject, error)
+	// AdminListFeatures The features catalog plans grant from
+	// (GET /admin/v1/features)
+	AdminListFeatures(ctx context.Context, request AdminListFeaturesRequestObject) (AdminListFeaturesResponseObject, error)
+	// AdminSaveFeature Add a feature, or rename and reorder one
+	// (PUT /admin/v1/features/{key})
+	AdminSaveFeature(ctx context.Context, request AdminSaveFeatureRequestObject) (AdminSaveFeatureResponseObject, error)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(ctx context.Context, request AdminMeRequestObject) (AdminMeResponseObject, error)
+	// AdminListPlans Every version of every plan
+	// (GET /admin/v1/plans)
+	AdminListPlans(ctx context.Context, request AdminListPlansRequestObject) (AdminListPlansResponseObject, error)
+	// AdminPublishPlan Put a plan version on sale
+	// (POST /admin/v1/plans)
+	AdminPublishPlan(ctx context.Context, request AdminPublishPlanRequestObject) (AdminPublishPlanResponseObject, error)
+	// AdminRetirePlan Take a plan off sale
+	// (POST /admin/v1/plans/{code}/retire)
+	AdminRetirePlan(ctx context.Context, request AdminRetirePlanRequestObject) (AdminRetirePlanResponseObject, error)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(ctx context.Context, request AdminListStoresRequestObject) (AdminListStoresResponseObject, error)
@@ -1518,6 +2060,63 @@ func (sh *strictHandler) AdminLogout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AdminListFeatures operation middleware
+func (sh *strictHandler) AdminListFeatures(w http.ResponseWriter, r *http.Request) {
+	var request AdminListFeaturesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListFeatures(ctx, request.(AdminListFeaturesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListFeatures")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListFeaturesResponseObject); ok {
+		if err := validResponse.VisitAdminListFeaturesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveFeature operation middleware
+func (sh *strictHandler) AdminSaveFeature(w http.ResponseWriter, r *http.Request, key string) {
+	var request AdminSaveFeatureRequestObject
+
+	request.Key = key
+
+	var body AdminSaveFeatureJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveFeature(ctx, request.(AdminSaveFeatureRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveFeature")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveFeatureResponseObject); ok {
+		if err := validResponse.VisitAdminSaveFeatureResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminMe operation middleware
 func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 	var request AdminMeRequestObject
@@ -1535,6 +2134,94 @@ func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminMeResponseObject); ok {
 		if err := validResponse.VisitAdminMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListPlans operation middleware
+func (sh *strictHandler) AdminListPlans(w http.ResponseWriter, r *http.Request) {
+	var request AdminListPlansRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListPlans(ctx, request.(AdminListPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListPlansResponseObject); ok {
+		if err := validResponse.VisitAdminListPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminPublishPlan operation middleware
+func (sh *strictHandler) AdminPublishPlan(w http.ResponseWriter, r *http.Request) {
+	var request AdminPublishPlanRequestObject
+
+	var body AdminPublishPlanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminPublishPlan(ctx, request.(AdminPublishPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminPublishPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminPublishPlanResponseObject); ok {
+		if err := validResponse.VisitAdminPublishPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRetirePlan operation middleware
+func (sh *strictHandler) AdminRetirePlan(w http.ResponseWriter, r *http.Request, code string) {
+	var request AdminRetirePlanRequestObject
+
+	request.Code = code
+
+	var body AdminRetirePlanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRetirePlan(ctx, request.(AdminRetirePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRetirePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRetirePlanResponseObject); ok {
+		if err := validResponse.VisitAdminRetirePlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -21,6 +21,8 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -81,7 +83,8 @@ func newFixture(t *testing.T) fixture {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
-		Hashing:      config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
+		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced,
+		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,5 +303,68 @@ func TestConsoleImpersonate(t *testing.T) {
 	}
 	if r := f.do(t, http.MethodPost, adminHost, path, ``, withCookie(sess), sameOrigin); r.status != http.StatusBadRequest {
 		t.Errorf("no body = %d", r.status)
+	}
+}
+
+func TestConsolePlanCatalog(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	suffix := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return 'a' + (r - '0')
+		}
+		return r
+	}, strings.ToLower(f.ids.New().String()[16:]))
+	key, code := "t_"+suffix, "t_"+suffix
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/plans", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	feature := `{"kind":"flag","name_ar":"ميزة","name_en":"Perk","sort":900,"reason":"sales request"}`
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/features/"+key, feature, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r := f.do(t, http.MethodPut, adminHost, "/admin/v1/features/"+key, feature, withCookie(sess), sameOrigin)
+	if r.status != http.StatusOK || r.body["enforced"] != false || r.body["key"] != key {
+		t.Fatalf("save feature = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/features", "", withCookie(sess))
+	if items, _ := r.body["items"].([]any); r.status != http.StatusOK || len(items) < 11 {
+		t.Fatalf("features = %d %v", r.status, r.body)
+	}
+
+	plan := fmt.Sprintf(`{"code":%q,"kind":"subscription","name_ar":"نمو","name_en":"Growth","trial_days":7,
+		"prices":[{"currency":"EGP","cycle":"monthly","amount_minor":9900},{"currency":"SAR","cycle":"monthly","amount_minor":1900},
+		          {"currency":"AED","cycle":"monthly","amount_minor":1900}],
+		"grants":[{"feature":%q,"value":1},{"feature":"products","unlimited":true}],"reason":"launch"}`, code, key)
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/plans", plan, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["version"] != float64(1) || r.body["active"] != true || len(r.body["grants"].([]any)) != 2 {
+		t.Fatalf("publish = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/plans", "", withCookie(sess))
+	if items, _ := r.body["items"].([]any); r.status != http.StatusOK || len(items) < 7 {
+		t.Fatalf("plans = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/plans/"+code+"/retire", `{"reason":"done"}`, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("retire = %d %v", r.status, r.body)
+	}
+
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, "/admin/v1/features/" + key, `{"kind":"count","name_ar":"م","name_en":"P","reason":"change kind"}`, http.StatusConflict},
+		{http.MethodPost, "/admin/v1/plans", strings.Replace(plan, `{"feature":"products","unlimited":true}`, `{"feature":"products","value":1},{"feature":"products","value":2}`, 1), http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/plans", strings.Replace(plan, `"value":1}`, `"value":1},{"feature":"no_such_key","value":1}`, 1), http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/plans", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/plans/free/retire", `{"reason":"never"}`, http.StatusConflict},
+		{http.MethodPost, "/admin/v1/plans/" + code + "/retire", `{"reason":"again"}`, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/plans/" + code + "/retire", ``, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/features/" + key, ``, http.StatusBadRequest},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
 	}
 }

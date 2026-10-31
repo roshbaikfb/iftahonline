@@ -15,6 +15,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
@@ -61,6 +62,10 @@ type Deps struct {
 	Impersonate Impersonator
 	// DashboardURL is where the admin exchanges an impersonation code.
 	DashboardURL string
+	// Plans is billing's plan catalog on the console's role; Enforced
+	// tells keys the code checks. Nil refuses the catalog (the CLI).
+	Plans    billing.Catalog
+	Enforced func(key string) bool
 }
 
 // Service implements the console.

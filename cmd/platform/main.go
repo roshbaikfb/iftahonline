@@ -640,6 +640,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
+			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced,
 		}); err != nil {
 			return nil, err
 		}

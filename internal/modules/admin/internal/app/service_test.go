@@ -18,6 +18,8 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
@@ -85,8 +87,9 @@ func newFixture(t *testing.T) fixture {
 		Directory: ten.Directory(), Stores: ten.Service()}
 	imp := &fakeImpersonator{}
 	d.Impersonate, d.DashboardURL = imp.open, "https://app.iftahonline.com/"
+	d.Plans, d.Enforced = billing.NewCatalog(adminPool, ids), entitlements.Enforced
 	cli := d
-	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate = nil, nil, nil, nil
+	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans = nil, nil, nil, nil, nil
 	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp}
 }
 

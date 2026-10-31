@@ -1974,6 +1974,113 @@ paths:
               schema: { $ref: "#/components/schemas/Store" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/features:
+    get:
+      tags: [admin]
+      operationId: adminListFeatures
+      summary: The features catalog plans grant from
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: Every feature, in display order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFeatureList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/features/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[a-z][a-z_]{0,31}$" }
+    put:
+      tags: [admin]
+      operationId: adminSaveFeature
+      summary: Add a feature, or rename and reorder one
+      description: |
+        A key's kind never changes (409). A key the code does not know
+        is shown on plans but not enforced (`enforced: false`) until a
+        module asks for it. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminFeatureInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFeature" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/plans:
+    get:
+      tags: [admin]
+      operationId: adminListPlans
+      summary: Every version of every plan
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: Plans in display order, newest version first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPlanList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [admin]
+      operationId: adminPublishPlan
+      summary: Put a plan version on sale
+      description: |
+        The next version of `code` (the first for a new code) goes on
+        sale and the version on sale is retired. Stores keep the version
+        they bought and renew into the new one at their next renewal.
+        A code keeps its kind; one free plan is on sale at a time.
+        Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPlanInput" }
+      responses:
+        "201":
+          description: On sale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPlan" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/plans/{code}/retire:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+    post:
+      tags: [admin]
+      operationId: adminRetirePlan
+      summary: Take a plan off sale
+      description: Stores on it keep it and renew into the same version. The free plan cannot be retired (409).
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Off sale.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/audit-log:
     get:
       tags: [admin]
@@ -4038,6 +4145,114 @@ components:
         metadata:
           type: object
           additionalProperties: true
+    AdminFeatureKind:
+      type: string
+      enum: [flag, count, monthly]
+    AdminFeature:
+      type: object
+      required: [key, kind, name_ar, name_en, sort, enforced]
+      properties:
+        key: { type: string }
+        kind: { $ref: "#/components/schemas/AdminFeatureKind" }
+        name_ar: { type: string }
+        name_en: { type: string }
+        sort: { type: integer }
+        enforced: { type: boolean, description: The code checks it; false for a display-only key. }
+    AdminFeatureList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFeature" }
+    AdminFeatureInput:
+      type: object
+      required: [kind, name_ar, name_en, reason]
+      properties:
+        kind: { $ref: "#/components/schemas/AdminFeatureKind" }
+        name_ar: { type: string, minLength: 1, maxLength: 80 }
+        name_en: { type: string, minLength: 1, maxLength: 80 }
+        sort: { type: integer, default: 0 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminPlanKind:
+      type: string
+      enum: [free, pays, subscription, agency]
+    AdminPlanPrice:
+      type: object
+      required: [currency, cycle, amount_minor]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        cycle: { type: string, enum: [monthly, annual] }
+        amount_minor: { type: integer, format: int64, minimum: 0 }
+    AdminPlanGrant:
+      type: object
+      required: [feature]
+      properties:
+        feature: { type: string }
+        unlimited: { type: boolean, default: false }
+        value: { type: integer, format: int64, minimum: 0, description: "Ignored when unlimited. A flag is 0 or 1." }
+    AdminPlanFee:
+      type: object
+      required: [currency, rate_bps]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        rate_bps: { type: integer, minimum: 0, maximum: 10000, description: "250 is 2.5%." }
+        min_minor: { type: integer, format: int64, minimum: 0, default: 0 }
+        max_minor: { type: integer, format: int64, minimum: 0 }
+    AdminPlanInput:
+      type: object
+      required: [code, kind, name_ar, name_en, grants, reason]
+      properties:
+        code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+        kind: { $ref: "#/components/schemas/AdminPlanKind" }
+        name_ar: { type: string, minLength: 1, maxLength: 80 }
+        name_en: { type: string, minLength: 1, maxLength: 80 }
+        trial_days: { type: integer, minimum: 0, maximum: 90, default: 0 }
+        public: { type: boolean, default: true }
+        sort: { type: integer, default: 0 }
+        prices:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AdminPlanPrice" }
+        grants:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/AdminPlanGrant" }
+        fees:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/AdminPlanFee" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminPlan:
+      type: object
+      required: [id, code, version, kind, name_ar, name_en, trial_days, public, sort, active, prices, grants, fees]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        code: { type: string }
+        version: { type: integer }
+        kind: { $ref: "#/components/schemas/AdminPlanKind" }
+        name_ar: { type: string }
+        name_en: { type: string }
+        trial_days: { type: integer }
+        public: { type: boolean }
+        sort: { type: integer }
+        active: { type: boolean, description: On sale. }
+        prices:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlanPrice" }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlanGrant" }
+        fees:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlanFee" }
+    AdminPlanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlan" }
     AdminAuditPage:
       type: object
       required: [items]
