@@ -240,6 +240,9 @@ type CustomerID = ULID
 // DomainID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type DomainID = ULID
 
+// FeatureKey defines model for FeatureKey.
+type FeatureKey = string
+
 // ImageID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImageID = ULID
 
