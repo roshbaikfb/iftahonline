@@ -96,22 +96,13 @@ func (s *Shop) allowTrack(r *http.Request, store tenant.StoreID) (bool, time.Dur
 // guards a secret (an order code, a link's token): when limited it says
 // how long to wait, and a limiter outage refuses (with no wait to give).
 func (s *Shop) allowGuarded(r *http.Request, store tenant.StoreID, name string, perIP, perStore ratelimit.Limit) (bool, time.Duration) {
-	if s.limiter == nil {
-		return true, 0
+	ok, retry, err := s.limited(r.Context(), limitCheck{name + ":ip:" + s.clientIP(r), perIP}, limitCheck{name + ":store:" + store.String(), perStore})
+	if err != nil {
+		s.log.WarnContext(r.Context(), "storefront: "+name+" limiter unavailable", "err", err)
+		return false, 0
 	}
-	ctx := r.Context()
-	for _, c := range []struct {
-		key   string
-		limit ratelimit.Limit
-	}{{name + ":ip:" + s.clientIP(r), perIP}, {name + ":store:" + store.String(), perStore}} {
-		res, err := s.limiter.Allow(ctx, c.key, c.limit)
-		if err != nil {
-			s.log.WarnContext(ctx, "storefront: "+name+" limiter unavailable", "err", err)
-			return false, 0
-		}
-		if !res.Allowed {
-			return false, max(res.RetryAfter, time.Second) // > 0: limited, not an outage
-		}
+	if !ok {
+		return false, max(retry, time.Second) // > 0: limited, not an outage
 	}
 	return true, 0
 }

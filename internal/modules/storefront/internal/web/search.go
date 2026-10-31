@@ -66,24 +66,12 @@ func (q query) cacheKey(l Locale, rest string) string {
 // allowSearch applies the search limits; a limiter failure lets the
 // search through (it changes nothing, and the index has its own timeout).
 func (s *Shop) allowSearch(r *http.Request, store tenant.StoreID) (bool, time.Duration) {
-	if s.limiter == nil {
+	ok, retry, err := s.limited(r.Context(), limitCheck{"search:ip:" + s.clientIP(r), searchPerIP}, limitCheck{"search:store:" + store.String(), searchPerStore})
+	if err != nil {
+		s.log.WarnContext(r.Context(), "storefront: search limiter unavailable", "err", err)
 		return true, 0
 	}
-	ctx := r.Context()
-	for _, c := range []struct {
-		key   string
-		limit ratelimit.Limit
-	}{{"search:ip:" + s.clientIP(r), searchPerIP}, {"search:store:" + store.String(), searchPerStore}} {
-		res, err := s.limiter.Allow(ctx, c.key, c.limit)
-		if err != nil {
-			s.log.WarnContext(ctx, "storefront: search limiter unavailable", "err", err)
-			return true, 0
-		}
-		if !res.Allowed {
-			return false, res.RetryAfter
-		}
-	}
-	return true, 0
+	return ok, retry
 }
 
 // search is /search: the store's active products matching the text, a

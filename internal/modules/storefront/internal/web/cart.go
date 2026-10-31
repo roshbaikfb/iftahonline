@@ -202,6 +202,31 @@ type Limiter interface {
 	Allow(ctx context.Context, key string, lim ratelimit.Limit) (ratelimit.Result, error)
 }
 
+// limitCheck is one limit on one key.
+type limitCheck struct {
+	key   string
+	limit ratelimit.Limit
+}
+
+// limited applies checks in order: ok is false with the wait of the first
+// that refuses; err when the limiter cannot answer (each caller decides
+// whether that lets the request through). No limiter allows everything.
+func (s *Shop) limited(ctx context.Context, checks ...limitCheck) (ok bool, retry time.Duration, err error) {
+	if s.limiter == nil {
+		return true, 0, nil
+	}
+	for _, c := range checks {
+		res, err := s.limiter.Allow(ctx, c.key, c.limit)
+		if err != nil {
+			return false, 0, err
+		}
+		if !res.Allowed {
+			return false, res.RetryAfter, nil
+		}
+	}
+	return true, 0, nil
+}
+
 // Cart limits on public writes (CLAUDE.md: rate-limit public endpoints
 // per store and per IP).
 var (
