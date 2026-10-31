@@ -176,3 +176,9 @@ func checkLocaleTZ(locale, tz string) []errs.FieldError {
 	}
 	return fields
 }
+
+// StoreCounts are the platform's stores by state: active (and not held),
+// held for billing, suspended by the platform, closed by their owner.
+type StoreCounts struct {
+	Active, Held, Suspended, Closed, Total int64
+}

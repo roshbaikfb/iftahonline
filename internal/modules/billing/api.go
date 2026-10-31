@@ -79,6 +79,31 @@ type Collections interface {
 
 var _ Collections = (*app.Service)(nil)
 
+// What the console reads and does about billing (ADR-0058).
+type (
+	// Summary is what the store in ctx is on and owes.
+	Summary = app.Summary
+	// OpenInvoice is an open invoice of an account.
+	OpenInvoice = app.OpenInvoice
+	// Health is the platform's subscriptions and invoices, counted.
+	Health = app.Health
+)
+
+// Console is billing for the super-admin console.
+type Console interface {
+	// Health counts every store's subscription by status, and the open
+	// and overdue invoices.
+	Health(ctx context.Context) (Health, error)
+	// Summary is the store in ctx's plan, status, card and open invoices.
+	Summary(ctx context.Context) (Summary, error)
+	// SettleStoreInvoice records an open invoice of the store-in-ctx's
+	// account as paid outside the card (a confirmed transfer); any other
+	// invoice is 404.
+	SettleStoreInvoice(ctx context.Context, invoice ulid.ID, reference string) error
+}
+
+var _ Console = (*app.Service)(nil)
+
 // EventSubscriptionChanged is SubscriptionChanged's type. Caches of what
 // a store may do (entitlements, the storefront's pages) follow it.
 const EventSubscriptionChanged = domain.EventSubscriptionChanged

@@ -103,6 +103,10 @@ func (m *Module) CallbackProvider() (webhooks.PlatformProvider, bool) {
 // Collections records payments from outside the card on file.
 func (m *Module) Collections() Collections { return m.svc }
 
+// Console is billing for the super-admin console (ADR-0058). Settling an
+// invoice needs Deps.Holds, Deps.Jobs and Deps.Events, as in the worker.
+func (m *Module) Console() Console { return m.svc }
+
 // PeriodicJobs start each month's invoices (daily), end trials and
 // cancelled periods (hourly) and, with Deps.Collect, run the dunning
 // (hourly); all at worker start.

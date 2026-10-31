@@ -149,3 +149,34 @@ func (q *Queries) AdminSearchStores(ctx context.Context, arg AdminSearchStoresPa
 	}
 	return items, nil
 }
+
+const adminStoreCounts = `-- name: AdminStoreCounts :one
+SELECT count(*) FILTER (WHERE status = 'active' AND NOT billing_hold)::bigint AS active,
+       count(*) FILTER (WHERE status = 'active' AND billing_hold)::bigint AS held,
+       count(*) FILTER (WHERE status = 'suspended')::bigint AS suspended,
+       count(*) FILTER (WHERE status = 'closed')::bigint AS closed,
+       count(*)::bigint AS total
+FROM stores
+`
+
+type AdminStoreCountsRow struct {
+	Active    int64
+	Held      int64
+	Suspended int64
+	Closed    int64
+	Total     int64
+}
+
+// Stores by state for the console's health page (ADR-0058).
+func (q *Queries) AdminStoreCounts(ctx context.Context) (AdminStoreCountsRow, error) {
+	row := q.db.QueryRow(ctx, adminStoreCounts)
+	var i AdminStoreCountsRow
+	err := row.Scan(
+		&i.Active,
+		&i.Held,
+		&i.Suspended,
+		&i.Closed,
+		&i.Total,
+	)
+	return i, err
+}

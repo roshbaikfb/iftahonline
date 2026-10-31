@@ -12,6 +12,38 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const billingHealth = `-- name: BillingHealth :one
+SELECT trialing::bigint, active::bigint, past_due::bigint, suspended::bigint, cancelled::bigint,
+       invoices_open::bigint, invoices_overdue::bigint
+FROM app.billing_health($1::timestamptz)
+`
+
+type BillingHealthRow struct {
+	Trialing        int64
+	Active          int64
+	PastDue         int64
+	Suspended       int64
+	Cancelled       int64
+	InvoicesOpen    int64
+	InvoicesOverdue int64
+}
+
+// Counts for the console's health page (ADR-0058).
+func (q *Queries) BillingHealth(ctx context.Context, now time.Time) (BillingHealthRow, error) {
+	row := q.db.QueryRow(ctx, billingHealth, now)
+	var i BillingHealthRow
+	err := row.Scan(
+		&i.Trialing,
+		&i.Active,
+		&i.PastDue,
+		&i.Suspended,
+		&i.Cancelled,
+		&i.InvoicesOpen,
+		&i.InvoicesOverdue,
+	)
+	return i, err
+}
+
 const getFreePlan = `-- name: GetFreePlan :one
 SELECT id, code, version, kind, name_ar, name_en, trial_days, public, status = 'active' AS active, sort
 FROM plans

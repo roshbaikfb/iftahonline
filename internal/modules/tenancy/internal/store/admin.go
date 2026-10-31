@@ -75,3 +75,12 @@ func DirectoryStore(ctx context.Context, adminDB Tx, id tenant.StoreID) (domain.
 	}
 	return st, ds, nil
 }
+
+// DirectoryCounts counts every store by state (the health page).
+func DirectoryCounts(ctx context.Context, adminDB Tx) (domain.StoreCounts, error) {
+	r, err := tenancydb.New(adminDB).AdminStoreCounts(ctx)
+	if err != nil {
+		return domain.StoreCounts{}, fmt.Errorf("tenancy store: directory counts: %w", err)
+	}
+	return domain.StoreCounts{Active: r.Active, Held: r.Held, Suspended: r.Suspended, Closed: r.Closed, Total: r.Total}, nil
+}
