@@ -1286,7 +1286,10 @@ type Store struct {
 	Locale StoreLocale `json:"locale"`
 
 	// Name Example: متجر أحمد
-	Name string    `json:"name"`
+	Name string `json:"name"`
+
+	// Plan Always `free`: plans are billing's (GET /v1/stores/{store_id}/billing, ADR-0045). Kept in /v1, gone in /v2.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Plan StorePlan `json:"plan"`
 
 	// Slug Example: my-shop
@@ -1304,7 +1307,9 @@ type StoreCurrency string
 // StoreLocale defines model for Store.Locale.
 type StoreLocale string
 
-// StorePlan defines model for Store.Plan.
+// StorePlan Always `free`: plans are billing's (GET /v1/stores/{store_id}/billing, ADR-0045). Kept in /v1, gone in /v2.
+//
+// Deprecated: this type has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 type StorePlan string
 
 // StoreStatus defines model for Store.Status.

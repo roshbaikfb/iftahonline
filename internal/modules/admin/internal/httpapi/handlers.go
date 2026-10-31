@@ -235,7 +235,7 @@ func (h *Handlers) AdminAuditLog(ctx context.Context, req AdminAuditLogRequestOb
 }
 
 func toStore(s tenancy.Store) Store {
-	return Store{Id: s.ID.String(), Slug: s.Slug, Name: s.Name, Status: StoreStatus(s.Status), Plan: StorePlan(s.Plan),
+	return Store{Id: s.ID.String(), Slug: s.Slug, Name: s.Name, Status: StoreStatus(s.Status), Plan: StorePlanFree,
 		Currency: StoreCurrency(s.Currency), Locale: StoreLocale(s.Locale), Timezone: s.Timezone,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
 }

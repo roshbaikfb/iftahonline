@@ -206,6 +206,9 @@ func TestHappyPath(t *testing.T) {
 	a := f.storeA
 
 	code, body := f.do(t, req(t, http.MethodGet, storePath(a, ""), tokOwnerA, ""))
+	if _, ok := body["plan"]; !ok { // deprecated, kept in /v1 (no breaking change); plans are billing's
+		t.Fatalf("no plan in %v", body)
+	}
 	if code != http.StatusOK || body["id"] != a.String() || body["currency"] != "EGP" {
 		t.Fatalf("getStore = %d %v", code, body)
 	}

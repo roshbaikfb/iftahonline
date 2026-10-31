@@ -4342,7 +4342,11 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "active" | "suspended" | "closed";
-            /** @enum {string} */
+            /**
+             * @deprecated
+             * @description Always `free`: plans are billing's (GET /v1/stores/{store_id}/billing, ADR-0045). Kept in /v1, gone in /v2.
+             * @enum {string}
+             */
             plan: "free" | "basic" | "pro";
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED";
