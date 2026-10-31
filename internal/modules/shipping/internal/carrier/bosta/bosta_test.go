@@ -25,7 +25,7 @@ var codes = map[carrier.Status]int{carrier.StatusInTransit: 24, carrier.StatusOu
 func standIn(t *testing.T) (*bosta.Carrier, *bostatest.Server) {
 	t.Helper()
 	srv := bostatest.New(t)
-	return bosta.New(bosta.Options{BaseURL: srv.URL + "/api/v2", Retry: &fast}), srv
+	return bosta.New(bosta.Options{Client: srv.Client(), BaseURL: srv.URL + "/api/v2", Retry: &fast}), srv
 }
 
 // TestContract runs the shared suite against the stand-in: the adapter
@@ -223,7 +223,7 @@ func TestRefusalsCarryNoPersonalData(t *testing.T) {
 		_, _ = w.Write([]byte(`{"success":false,"message":"Receiver phone 01012345678 or email mona@example.com is invalid"}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := bosta.New(bosta.Options{BaseURL: srv.URL})
+	c := bosta.New(bosta.Options{Client: srv.Client(), BaseURL: srv.URL})
 	err := c.Verify(t.Context(), carrier.Credentials{APIKey: "key"})
 	if !errors.Is(err, carrier.ErrRejected) {
 		t.Fatalf("want a refusal, got %v", err)

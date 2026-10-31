@@ -24,7 +24,7 @@ var fast = retry.Policy{MaxAttempts: 3, Initial: time.Millisecond, Max: 2 * time
 func standIn(t *testing.T) (*paymob.Gateway, *paymobtest.Server) {
 	t.Helper()
 	srv := paymobtest.New(t)
-	return paymob.New(paymob.Options{BaseURL: srv.URL, Retry: &fast}), srv
+	return paymob.New(paymob.Options{Client: srv.Client(), BaseURL: srv.URL, Retry: &fast}), srv
 }
 
 func TestContract(t *testing.T) {
@@ -176,7 +176,7 @@ func TestCallbackHMAC(t *testing.T) {
 
 func FuzzVerifyWebhook(f *testing.F) {
 	srv := paymobtest.New(f)
-	g := paymob.New(paymob.Options{BaseURL: srv.URL, Retry: &fast})
+	g := paymob.New(paymob.Options{Client: srv.Client(), BaseURL: srv.URL, Retry: &fast})
 	creds := paymobtest.Credentials()
 	f.Add([]byte(`{"type":"TRANSACTION","obj":{"id":1,"order":{"id":2,"merchant_order_id":"r"}}}`), "00")
 	f.Add([]byte(`{"obj":null}`), "")
@@ -283,7 +283,7 @@ func TestRefusalsCarryNoPersonalData(t *testing.T) {
 		_, _ = w.Write([]byte(`{"billing_data":{"phone_number":["+201012345678 is not valid"],"email":["mona.ahmed@example.com is taken"]}}`))
 	}))
 	t.Cleanup(srv.Close)
-	g := paymob.New(paymob.Options{BaseURL: srv.URL, Retry: &fast})
+	g := paymob.New(paymob.Options{Client: srv.Client(), BaseURL: srv.URL, Retry: &fast})
 	_, err := g.CreatePayment(t.Context(), paymobtest.Credentials(), gatewaytest.Request(t, money.EGP))
 	if !errors.Is(err, gateway.ErrRejected) {
 		t.Fatalf("want a refusal, got %v", err)

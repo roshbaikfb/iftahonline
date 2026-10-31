@@ -38,6 +38,7 @@ func Credentials() gateway.Credentials {
 // Server is the stand-in.
 type Server struct {
 	URL string
+	ts  *httptest.Server
 
 	mu      sync.Mutex
 	seq     int64
@@ -113,7 +114,7 @@ func New(t testing.TB) *Server {
 	s := &Server{byRef: map[string]*txn{}, byID: map[int64]*txn{}, intents: map[string]map[string]any{}, tokens: map[string]bool{}}
 	ts := httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(ts.Close)
-	s.URL = ts.URL
+	s.URL, s.ts = ts.URL, ts
 	return s
 }
 
@@ -283,3 +284,7 @@ func reply(w http.ResponseWriter, code int, body any) {
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(body) //nolint:errcheck // test server
 }
+
+// Client talks to the stand-in through its own transport: tests sharing
+// http.DefaultTransport break each other's requests when a server closes.
+func (s *Server) Client() *http.Client { return s.ts.Client() }
