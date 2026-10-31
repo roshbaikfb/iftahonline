@@ -18,7 +18,7 @@ are in place.
 | Invoices, agency accounts | 7c-2 (done) |
 | Payments and dunning | 7d (done) |
 | The console's plan editor | 7e-2a (done) |
-| The merchant's billing page | 7f |
+| The merchant's billing page | 7f-2 (done) |
 
 ## Public API (`internal/modules/billing/api.go`)
 
@@ -189,6 +189,25 @@ client is `platform/paymob`.
 | `BILLING_PAYMOB_<…>_API_KEY` | For inquiries |
 | `BILLING_PAYMOB_<…>_MOTO_INTEGRATION_ID` | Merchant-initiated charges; Paymob enables it on request |
 | `BILLING_PAYMOB_BASE_URL` | Overrides the API (tests) |
+
+## The dashboard (7f-2, the approved mockups)
+
+- **`/stores/{id}/billing`** (owner only) has four parts:
+  - **The plan:** status, cycle, the period's date, how it renews, and
+    a scheduled change or a cancellation, with "تراجع" to undo it.
+  - **Actions:** "change plan", "switch to annual" (a paid monthly plan
+    with an annual price) and "cancel renewal" (asks first).
+  - **The card on file.**
+  - **This month's usage** (ADR-0061), and the open invoices with
+    "pay now", which goes to Paymob. Trial and past-due banners sit
+    above.
+- **`/stores/{id}/billing/plans`:** a monthly or annual toggle and a card
+  per plan on sale, with "try N days free" while a trial is available.
+  - **A paid plan** goes to Paymob.
+  - **Other choices** return to the billing page with what happened.
+  - **The comparison** is one row per catalog feature.
+- **Prices before VAT.** The picker's prices are before VAT, which
+  invoices add.
 
 ## Choosing a plan (ADR-0060)
 
