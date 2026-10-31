@@ -19,9 +19,13 @@ import (
 // every request (store view and page rebuilt; the catalog is a fake, so
 // this is the cost of our own code, not the database). Both report p95.
 func BenchmarkProductPage(b *testing.B) {
-	for _, mode := range []string{"warm", "cold"} {
+	for _, mode := range []string{"warm", "cold", "free-warm", "free-cold"} {
 		b.Run(mode, func(b *testing.B) {
-			f := newFixture(b)
+			var opts []func(*web.Deps)
+			if strings.HasPrefix(mode, "free-") { // a free store's ads (ADR-0062)
+				opts = append(opts, withAds(mixed(), fakePlan{}))
+			}
+			f := newFixture(b, opts...)
 			if rec := f.get(b, "/p/cotton-tee"); rec.Code != http.StatusOK {
 				b.Fatalf("status %d", rec.Code)
 			}
@@ -29,7 +33,7 @@ func BenchmarkProductPage(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				if mode == "cold" {
+				if strings.HasSuffix(mode, "cold") {
 					f.shop.Invalidate(f.store)
 				}
 				start := time.Now()

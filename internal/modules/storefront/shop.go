@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
@@ -153,6 +155,9 @@ type ShopDeps struct {
 	Conversions marketing.Conversions
 	// Feeds opens the store's product feeds (ADR-0044); nil serves none.
 	Feeds marketing.Feeds
+	// Ads and Plan show ads in free stores (ADR-0062); nil shows none.
+	Ads  ads.Shop
+	Plan web.Plan // entitlements
 }
 
 var _ web.Stores = (tenancy.Service)(nil)
@@ -202,7 +207,7 @@ func NewShop(d ShopDeps) (*Shop, error) {
 		Catalog: d.Catalog, Stores: d.Stores, Content: content, Carts: content, Orders: ords, Payments: pays, Confirmations: confirms,
 		Limiter: limiter, ClientIP: d.ClientIP, Captcha: verifier, CaptchaSiteKey: d.Captcha.SiteKey,
 		Signer: media.NewSigner(d.Media.ImgproxyURL, d.Media.S3Bucket, d.Media.ImgproxyKey, d.Media.ImgproxySalt),
-		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions, Feeds: d.Feeds, Added: store.NewAdded(d.Redis),
+		Assets: assets, Log: d.Log, Cache: d.Cache, HTTPS: d.HTTPS, EdgeTTL: d.EdgeTTL, Search: d.Search, Pixels: d.Pixels, Conversions: d.Conversions, Feeds: d.Feeds, Ads: d.Ads, Plan: d.Plan, Added: store.NewAdded(d.Redis),
 	})
 	if err != nil {
 		return nil, err

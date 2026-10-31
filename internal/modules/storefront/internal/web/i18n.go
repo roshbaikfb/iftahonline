@@ -265,6 +265,8 @@ const (
 	MsgConsentText
 	MsgConsentYes
 	MsgConsentNo
+	MsgAd
+	MsgAdsNote
 	msgCount
 )
 
@@ -487,6 +489,8 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgConsentText:           {"نستخدم ملفات تعريف الارتباط لقياس الإعلانات وتحسين عروضنا. هل توافق؟", "We use cookies to measure our ads and improve our offers. Do you agree?"},
 	MsgConsentYes:            {"موافق", "Accept"},
 	MsgConsentNo:             {"لا، شكرًا", "No, thanks"},
+	MsgAd:                    {"إعلان", "Ad"},
+	MsgAdsNote:               {"هذا المتجر على الباقة المجانية من افتح أونلاين، لذلك تظهر فيه إعلانات. الإعلانات غير مخصصة لك ولا نتتبعك بها، وقد يستخدم Google ملفات تعريف الارتباط لقياس أدائها.", "This store is on iftahonline's free plan, so it shows ads. They are not personalized and we do not track you with them; Google may use cookies to measure them."},
 }
 
 // T returns the message in l.

@@ -63,7 +63,8 @@ type storeView struct {
 	policies   []domain.Page
 	cards      bool // checkout offers card payment: the footer says so
 	pixels     marketing.Browser
-	askConsent bool // ask the shopper before loading the pixels
+	askConsent bool     // ask the shopper before loading the pixels
+	ads        *adsView // a free store's ads (ADR-0062); nil for one with ad_free
 }
 
 type logoView struct {
@@ -127,6 +128,7 @@ func (s *Shop) buildView(ctx context.Context) (*storeView, error) {
 	}
 	v.cards = s.cardOffered(ctx, false)
 	v.pixels, v.askConsent = s.pixelsOf(ctx, country)
+	v.ads = s.adsOf(ctx, country)
 	v.css = s.assets.themeCSS(content.Theme)
 	v.styleHash = styleHash(v.css)
 	if lg := content.Logo; lg != nil {

@@ -401,3 +401,59 @@ main { display: block; min-block-size: 50vh; }
 .consent p { flex: 1 1 16rem; margin: 0; font-size: .9rem; }
 .consent-do { display: flex; gap: .5rem; }
 .consent-no { padding: .5rem .875rem; border: 1px solid #cbd5e1; border-radius: var(--radius); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+
+/* Ads in free stores (ADR-0062): a box of the placement's size, reserved
+   before the ad loads so nothing moves, marked "Ad". */
+.ad {
+  position: relative;
+  margin: 1rem auto;
+  max-inline-size: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+.ad-home_top,
+.ad-category_top {
+  inline-size: 320px;
+  block-size: 100px;
+}
+.ad-grid,
+.ad-product_bottom {
+  inline-size: 300px;
+  block-size: 250px;
+}
+.grid .ad {
+  grid-column: 1 / -1;
+}
+.ad-tag {
+  position: absolute;
+  inset-block-start: 0.35rem;
+  inset-inline-start: 0.35rem;
+  z-index: 1;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.ad a,
+.ad picture,
+.ad img,
+.ad ins {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+.ad img {
+  object-fit: cover;
+}
+.ads-note {
+  margin: 0;
+  padding: 0.75rem 1rem 0;
+  color: #475569;
+  font-size: 0.8rem;
+  text-align: center;
+}
+

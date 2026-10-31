@@ -13,6 +13,7 @@ import (
 
 	"github.com/a-h/templ"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
@@ -68,6 +69,9 @@ type Deps struct {
 	// Added keeps an AddToCart for the cart page (ADR-0043); nil reports
 	// no AddToCart.
 	Added Added
+	// Ads and Plan show ads in free stores (ADR-0062); nil shows none.
+	Ads  Ads
+	Plan Plan
 }
 
 // Shop serves a store's pages. The tenant must already be in the request
@@ -97,6 +101,8 @@ type Shop struct {
 	feeds       Feeds
 	added       Added
 	ids         *ulid.Generator // event IDs of conversions (ADR-0043)
+	ads         Ads
+	plan        Plan
 }
 
 // New builds the shop.
@@ -124,7 +130,7 @@ func New(d Deps) (*Shop, error) {
 	return &Shop{catalog: d.Catalog, stores: d.Stores, content: d.Content, signer: d.Signer, assets: d.Assets,
 		log: d.Log, caches: newCaches(d.Cache), scheme: scheme, edge: edge, carts: d.Carts, orders: d.Orders, confirms: d.Confirmations,
 		payments: d.Payments, limiter: d.Limiter, captcha: d.Captcha, siteKey: d.CaptchaSiteKey, clientIP: d.ClientIP, now: d.Now, searchOn: d.Search,
-		pixels: d.Pixels, conversions: d.Conversions, feeds: d.Feeds, added: d.Added, ids: ulid.NewGenerator()}, nil
+		pixels: d.Pixels, conversions: d.Conversions, feeds: d.Feeds, added: d.Added, ids: ulid.NewGenerator(), ads: d.Ads, plan: d.Plan}, nil
 }
 
 // Invalidate drops everything cached for a store: its next request
@@ -158,9 +164,9 @@ func (s *Shop) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rest = "/"
 		}
 	}
-	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, pxURL: s.assets.pxURL, fonts: s.assets.fontPreload(v.theme, l),
+	p := &pageCtx{v: v, store: store.String(), l: l, base: s.scheme + "://" + r.Host, path: rest, jsURL: s.assets.jsURL, pxURL: s.assets.pxURL, adsURL: s.assets.adsURL, fonts: s.assets.fontPreload(v.theme, l),
 		search: s.searchOn, track: s.orders != nil}
-	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) || s.feedRoute(w, r, store, p, rest) {
+	if s.cartRoute(w, r, store, p, rest) || s.orderRoute(w, r, store, p, rest) || s.feedRoute(w, r, store, p, rest) || s.adRoute(w, r, store, p, rest) {
 		return
 	}
 	if token := r.URL.Query().Get("preview"); token != "" && isRead(r) {
@@ -263,6 +269,9 @@ func (s *Shop) home(ctx context.Context, p *pageCtx) (result, error) {
 		p.tag("pg-" + page.ID.String())
 	}
 	p.tagListing()
+	// Under the first section, and under the second: only what the page
+	// has (ads.js and its CSP follow the slots shown).
+	p.showAds([]ads.Placement{ads.HomeTop, ads.Grid}[:min(len(secs), 2)]...)
 	return s.render(p, http.StatusOK, sectionsPage(p, secs))
 }
 
@@ -306,6 +315,7 @@ func (s *Shop) product(ctx context.Context, p *pageCtx, slug string) (result, er
 	if from := pr.PriceFrom(); len(pr.Variants) > 0 {
 		p.event(EventViewContent, "", from.Price, []string{from.ID.String()})
 	}
+	p.showAds(ads.ProductBottom)
 	return s.render(p, http.StatusOK, productPage(p, crumb, s.productView(p, pr, related)))
 }
 
@@ -325,6 +335,11 @@ func (s *Shop) category(ctx context.Context, p *pageCtx, slug, after string) (re
 	more := ""
 	if page.NextCursor != "" {
 		more = p.localize(p.l, categoryPath(c.Slug)) + "?after=" + page.NextCursor
+	}
+	if len(page.Items) > gridAdAfter {
+		p.showAds(ads.CategoryTop, ads.Grid)
+	} else if len(page.Items) > 0 {
+		p.showAds(ads.CategoryTop) // a short list is not interrupted
 	}
 	return s.render(p, http.StatusOK, categoryPage(p, c, page.Items, more))
 }
@@ -376,7 +391,7 @@ func (s *Shop) render(p *pageCtx, status int, body templ.Component) (result, err
 		return result{}, fmt.Errorf("web: render: %w", err)
 	}
 	html := buf.Bytes()
-	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, px: p.v.pxSources(), language: p.l, private: p.preview != ""}
+	c := cached{status: status, body: html, gz: compress(html), styleHash: p.v.styleHash, px: p.sources(), language: p.l, private: p.preview != ""}
 	if p.css != "" {
 		c.pageStyle = styleHash(p.css)
 	}
