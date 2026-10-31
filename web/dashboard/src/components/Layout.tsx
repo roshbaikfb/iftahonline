@@ -111,6 +111,18 @@ export function Layout({ storeId, children }: { storeId: string; children: React
         />
       )}
       <div className="frame">
+        {me?.impersonation && (
+          <div className="support-bar" role="status">
+            <span>
+              <strong>جلسة دعم من فريق افتح أونلاين</strong>
+              {me.impersonation.read_only ? ' — للقراءة فقط' : ' — مسموح بالتعديل'} · تنتهي {supportEnds(me.impersonation.expires_at)}. كل ما يحدث فيها
+              مسجّل في سجل المتجر.
+            </span>
+            <button type="button" className="secondary" onClick={() => void signOut()}>
+              إنهاء الجلسة
+            </button>
+          </div>
+        )}
         <header className="top">
           <button
             type="button"
@@ -162,6 +174,11 @@ export function Layout({ storeId, children }: { storeId: string; children: React
       </div>
     </div>
   );
+}
+
+// supportEnds is when a support session ends, as a time of day.
+function supportEnds(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
 }
 
 // initial is the first letter of a name, for the avatar (a whole

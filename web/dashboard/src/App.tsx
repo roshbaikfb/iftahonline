@@ -14,6 +14,7 @@ import { Domains } from './pages/Domains';
 import { Feeds } from './pages/Feeds';
 import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
+import { Impersonate } from './pages/Impersonate';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
 import { LandingEditor } from './pages/LandingEditor';
@@ -77,6 +78,7 @@ function Gate() {
       return (
         <Routes>
           <Route path="/signup" element={<Signup />} />
+          <Route path="/impersonate" element={<Impersonate />} />
           <Route path="*" element={<Login />} />
         </Routes>
       );
@@ -84,6 +86,7 @@ function Gate() {
       return (
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/impersonate" element={<Impersonate />} />
           <Route path="/stores/:storeId/setup" element={<Setup />} />
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
