@@ -25,6 +25,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -219,8 +221,15 @@ func wire(pool *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) (*storefront.
 	if err != nil {
 		return nil, demo{}, nil, err
 	}
+	// Orders count against the month's quota as in production (ADR-0045):
+	// one counter row per store, in the order's transaction.
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, IDs: ids, Events: bus,
+		Source: entitlements.Fixed{entitlements.OrdersPerMonth: {Unlimited: true}}})
+	if err != nil {
+		return nil, demo{}, nil, err
+	}
 	shopOrders, err := orders.NewShop(orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
-		Shipping: ship.Quoter(),
+		Shipping: ship.Quoter(), Plan: ent.Entitlements(),
 		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
 			c, infoErr := country(ctx)
 			return orders.StoreInfo{Currency: money.EGP, Country: c, Location: time.UTC}, infoErr
