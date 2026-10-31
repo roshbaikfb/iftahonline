@@ -65,3 +65,4 @@ supersedes it.
 | [0057](0057-per-store-feature-flags.md) | Per-store feature flags | Accepted |
 | [0058](0058-console-health-and-store-billing.md) | The console's health page and a store's billing | Accepted |
 | [0059](0059-agencies-set-up-from-the-console.md) | Agencies set up from the console | Accepted |
+| [0060](0060-merchants-choose-their-plan.md) | Merchants choose their plan | Accepted |
