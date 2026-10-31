@@ -47,6 +47,8 @@ identity. Identity's sign-up depends on tenancy, not the other way around.
 ## Exported helpers
 
 - `NewAuditRecorder` writes the audit log for other modules.
+- `CountStaff(ctx, tx)` counts the store's seats (members and open
+  invitations) in its tenant transaction: the usage meter (ADR-0061).
 - `StaffEmails(db, roles…)` lists the store's members' emails for those
   roles; messaging uses it to email quota warnings to the owner and
   managers.
