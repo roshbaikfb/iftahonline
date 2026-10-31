@@ -101,13 +101,17 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	d.Overrides = ent.Overrides()
-	bill, err := billing.New(billing.Deps{Pool: appPool})
+	bill, err := billing.New(billing.Deps{Pool: appPool,
+		Stores: func(context.Context) (billing.StoreInfo, error) {
+			return billing.StoreInfo{Name: "Test", Currency: "EGP"}, nil
+		},
+		Holds: func(context.Context, pgx.Tx, bool) error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
-	d.Billing, d.Redis = bill.Console(), rdb
+	d.Billing, d.Redis, d.Agencies = bill.Console(), rdb, bill.Agencies()
 	cli := d
-	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis = nil, nil, nil, nil, nil, nil, nil, nil
+	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis, cli.Agencies = nil, nil, nil, nil, nil, nil, nil, nil, nil
 	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp, deps: d}
 }
 

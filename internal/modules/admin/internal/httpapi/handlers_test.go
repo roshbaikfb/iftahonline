@@ -81,7 +81,11 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bill, err := billing.New(billing.Deps{Pool: appPool})
+	bill, err := billing.New(billing.Deps{Pool: appPool,
+		Stores: func(context.Context) (billing.StoreInfo, error) {
+			return billing.StoreInfo{Name: "Test", Currency: "EGP"}, nil
+		},
+		Holds: func(context.Context, pgx.Tx, bool) error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +95,7 @@ func newFixture(t *testing.T) fixture {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
-		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(),
+		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(),
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -462,5 +466,61 @@ func TestConsoleHealthAndStoreBilling(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodPost, adminHost, settle, `{"reference":"TRX-1","reason":"transfer received"}`, withCookie(sess)); r.status != http.StatusForbidden {
 		t.Fatalf("cross-site = %d", r.status)
+	}
+}
+
+func TestConsoleAgencies(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	storeID := f.store(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/agencies", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	create := `{"name":"وكالة","currency":"EGP","plan_code":"agency","reason":"new agency"}`
+	if r := f.do(t, http.MethodPost, adminHost, "/admin/v1/agencies", create, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r := f.do(t, http.MethodPost, adminHost, "/admin/v1/agencies", create, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated {
+		t.Fatalf("create = %d %v", r.status, r.body)
+	}
+	id := r.body["agency"].(map[string]any)["id"].(string)
+	base := "/admin/v1/agencies/" + id
+	r = f.do(t, http.MethodPost, adminHost, base+"/stores/"+storeID, `{"reason":"joins"}`, withCookie(sess), sameOrigin)
+	if ids, _ := r.body["store_ids"].([]any); r.status != http.StatusOK || len(ids) != 1 {
+		t.Fatalf("add = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, base, "", withCookie(sess))
+	if r.status != http.StatusOK || r.body["agency"].(map[string]any)["stores"] != float64(1) {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/agencies", "", withCookie(sess)); r.status != http.StatusOK || len(r.body["items"].([]any)) == 0 {
+		t.Fatalf("list = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodPost, adminHost, base+"/stores/"+storeID+"/remove", `{"reason":"leaves"}`, withCookie(sess), sameOrigin)
+	if ids, _ := r.body["store_ids"].([]any); r.status != http.StatusOK || len(ids) != 0 {
+		t.Fatalf("remove = %d %v", r.status, r.body)
+	}
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPost, "/admin/v1/agencies", `{"name":"وكالة","currency":"EGP","plan_code":"pro","reason":"bad plan"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/agencies", ``, http.StatusBadRequest},
+		{http.MethodGet, "/admin/v1/agencies/junk", "", http.StatusNotFound},
+		{http.MethodGet, "/admin/v1/agencies/" + f.ids.New().String(), "", http.StatusNotFound},
+		{http.MethodPost, base + "/stores/" + storeID + "/remove", `{"reason":"again"}`, http.StatusNotFound},
+		{http.MethodPost, base + "/stores/not-an-id", `{"reason":"joins"}`, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/agencies/junk/stores/" + storeID, `{"reason":"joins"}`, http.StatusNotFound},
+		{http.MethodPost, base + "/stores/" + storeID, ``, http.StatusBadRequest},
+		{http.MethodPost, base + "/stores/" + storeID + "/remove", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/agencies/junk/stores/" + storeID + "/remove", `{"reason":"x y"}`, http.StatusNotFound},
+		{http.MethodPost, base + "/stores/not-an-id/remove", `{"reason":"x y"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
 	}
 }

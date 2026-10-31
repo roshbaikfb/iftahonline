@@ -18,6 +18,48 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AdminAgencyCurrency.
+const (
+	AdminAgencyCurrencyAED AdminAgencyCurrency = "AED"
+	AdminAgencyCurrencyEGP AdminAgencyCurrency = "EGP"
+	AdminAgencyCurrencySAR AdminAgencyCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminAgencyCurrency enum.
+func (e AdminAgencyCurrency) Valid() bool {
+	switch e {
+	case AdminAgencyCurrencyAED:
+		return true
+	case AdminAgencyCurrencyEGP:
+		return true
+	case AdminAgencyCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminAgencyInputCurrency.
+const (
+	AdminAgencyInputCurrencyAED AdminAgencyInputCurrency = "AED"
+	AdminAgencyInputCurrencyEGP AdminAgencyInputCurrency = "EGP"
+	AdminAgencyInputCurrencySAR AdminAgencyInputCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminAgencyInputCurrency enum.
+func (e AdminAgencyInputCurrency) Valid() bool {
+	switch e {
+	case AdminAgencyInputCurrencyAED:
+		return true
+	case AdminAgencyInputCurrencyEGP:
+		return true
+	case AdminAgencyInputCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminFeatureKind.
 const (
 	AdminFeatureKindCount   AdminFeatureKind = "count"
@@ -457,6 +499,45 @@ func (e AdminListStoresParamsStatus) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AdminAgency defines model for AdminAgency.
+type AdminAgency struct {
+	CreatedAt time.Time           `json:"created_at"`
+	Currency  AdminAgencyCurrency `json:"currency"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id       ULID   `json:"id"`
+	Name     string `json:"name"`
+	PlanCode string `json:"plan_code"`
+	Stores   int64  `json:"stores"`
+}
+
+// AdminAgencyCurrency defines model for AdminAgency.Currency.
+type AdminAgencyCurrency string
+
+// AdminAgencyDetail defines model for AdminAgencyDetail.
+type AdminAgencyDetail struct {
+	Agency   AdminAgency `json:"agency"`
+	StoreIds []ULID      `json:"store_ids"`
+}
+
+// AdminAgencyInput defines model for AdminAgencyInput.
+type AdminAgencyInput struct {
+	Currency AdminAgencyInputCurrency `json:"currency"`
+	Name     string                   `json:"name"`
+	PlanCode string                   `json:"plan_code"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
+// AdminAgencyInputCurrency defines model for AdminAgencyInput.Currency.
+type AdminAgencyInputCurrency string
+
+// AdminAgencyList defines model for AdminAgencyList.
+type AdminAgencyList struct {
+	Items []AdminAgency `json:"items"`
 }
 
 // AdminAuditEntry defines model for AdminAuditEntry.
@@ -941,6 +1022,9 @@ type StoreStatus string
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
+// AgencyID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type AgencyID = ULID
+
 // AssetID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type AssetID = ULID
 
@@ -1004,6 +1088,15 @@ type AdminListStoresParams struct {
 // AdminListStoresParamsStatus defines parameters for AdminListStores.
 type AdminListStoresParamsStatus string
 
+// AdminCreateAgencyJSONRequestBody defines body for AdminCreateAgency for application/json ContentType.
+type AdminCreateAgencyJSONRequestBody = AdminAgencyInput
+
+// AdminAddAgencyStoreJSONRequestBody defines body for AdminAddAgencyStore for application/json ContentType.
+type AdminAddAgencyStoreJSONRequestBody = AdminReason
+
+// AdminRemoveAgencyStoreJSONRequestBody defines body for AdminRemoveAgencyStore for application/json ContentType.
+type AdminRemoveAgencyStoreJSONRequestBody = AdminReason
+
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
@@ -1036,6 +1129,21 @@ type AdminSuspendStoreJSONRequestBody = AdminReason
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// AdminListAgencies Every agency, newest first
+	// (GET /admin/v1/agencies)
+	AdminListAgencies(w http.ResponseWriter, r *http.Request)
+	// AdminCreateAgency Open an agency account
+	// (POST /admin/v1/agencies)
+	AdminCreateAgency(w http.ResponseWriter, r *http.Request)
+	// AdminGetAgency An agency and its stores
+	// (GET /admin/v1/agencies/{agency_id})
+	AdminGetAgency(w http.ResponseWriter, r *http.Request, agencyId AgencyID)
+	// AdminAddAgencyStore Move a store into an agency
+	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id})
+	AdminAddAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID)
+	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
+	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
+	AdminRemoveAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID)
 	// AdminAuditLog Every admin action, newest first
 	// (GET /admin/v1/audit-log)
 	AdminAuditLog(w http.ResponseWriter, r *http.Request, params AdminAuditLogParams)
@@ -1106,6 +1214,130 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminListAgencies operation middleware
+func (siw *ServerInterfaceWrapper) AdminListAgencies(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListAgencies(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateAgency operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateAgency(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateAgency(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetAgency operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetAgency(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agency_id" -------------
+	var agencyId AgencyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agency_id", r.PathValue("agency_id"), &agencyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agency_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetAgency(w, r, agencyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminAddAgencyStore operation middleware
+func (siw *ServerInterfaceWrapper) AdminAddAgencyStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agency_id" -------------
+	var agencyId AgencyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agency_id", r.PathValue("agency_id"), &agencyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agency_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminAddAgencyStore(w, r, agencyId, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRemoveAgencyStore operation middleware
+func (siw *ServerInterfaceWrapper) AdminRemoveAgencyStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agency_id" -------------
+	var agencyId AgencyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agency_id", r.PathValue("agency_id"), &agencyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agency_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRemoveAgencyStore(w, r, agencyId, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // AdminAuditLog operation middleware
 func (siw *ServerInterfaceWrapper) AdminAuditLog(w http.ResponseWriter, r *http.Request) {
@@ -1770,6 +2002,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminListAgencies)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminCreateAgency)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}", wrapper.AdminGetAgency)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}", wrapper.AdminAddAgencyStore)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}/remove", wrapper.AdminRemoveAgencyStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
@@ -1781,6 +2018,204 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type AdminListAgenciesRequestObject struct {
+}
+
+type AdminListAgenciesResponseObject interface {
+	VisitAdminListAgenciesResponse(w http.ResponseWriter) error
+}
+
+type AdminListAgencies200JSONResponse AdminAgencyList
+
+func (response AdminListAgencies200JSONResponse) VisitAdminListAgenciesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListAgenciesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListAgenciesdefaultApplicationProblemPlusJSONResponse) VisitAdminListAgenciesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAgencyRequestObject struct {
+	Body *AdminCreateAgencyJSONRequestBody
+}
+
+type AdminCreateAgencyResponseObject interface {
+	VisitAdminCreateAgencyResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateAgency201JSONResponse AdminAgencyDetail
+
+func (response AdminCreateAgency201JSONResponse) VisitAdminCreateAgencyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateAgencydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateAgencydefaultApplicationProblemPlusJSONResponse) VisitAdminCreateAgencyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetAgencyRequestObject struct {
+	AgencyId AgencyID `json:"agency_id"`
+}
+
+type AdminGetAgencyResponseObject interface {
+	VisitAdminGetAgencyResponse(w http.ResponseWriter) error
+}
+
+type AdminGetAgency200JSONResponse AdminAgencyDetail
+
+func (response AdminGetAgency200JSONResponse) VisitAdminGetAgencyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetAgencydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetAgencydefaultApplicationProblemPlusJSONResponse) VisitAdminGetAgencyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAddAgencyStoreRequestObject struct {
+	AgencyId AgencyID `json:"agency_id"`
+	StoreId  StoreID  `json:"store_id"`
+	Body     *AdminAddAgencyStoreJSONRequestBody
+}
+
+type AdminAddAgencyStoreResponseObject interface {
+	VisitAdminAddAgencyStoreResponse(w http.ResponseWriter) error
+}
+
+type AdminAddAgencyStore200JSONResponse AdminAgencyDetail
+
+func (response AdminAddAgencyStore200JSONResponse) VisitAdminAddAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAddAgencyStoredefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminAddAgencyStoredefaultApplicationProblemPlusJSONResponse) VisitAdminAddAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveAgencyStoreRequestObject struct {
+	AgencyId AgencyID `json:"agency_id"`
+	StoreId  StoreID  `json:"store_id"`
+	Body     *AdminRemoveAgencyStoreJSONRequestBody
+}
+
+type AdminRemoveAgencyStoreResponseObject interface {
+	VisitAdminRemoveAgencyStoreResponse(w http.ResponseWriter) error
+}
+
+type AdminRemoveAgencyStore200JSONResponse AdminAgencyDetail
+
+func (response AdminRemoveAgencyStore200JSONResponse) VisitAdminRemoveAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse) VisitAdminRemoveAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type AdminAuditLogRequestObject struct {
 	Params AdminAuditLogParams
@@ -2576,6 +3011,21 @@ func (response AdminSuspendStoredefaultApplicationProblemPlusJSONResponse) Visit
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// AdminListAgencies Every agency, newest first
+	// (GET /admin/v1/agencies)
+	AdminListAgencies(ctx context.Context, request AdminListAgenciesRequestObject) (AdminListAgenciesResponseObject, error)
+	// AdminCreateAgency Open an agency account
+	// (POST /admin/v1/agencies)
+	AdminCreateAgency(ctx context.Context, request AdminCreateAgencyRequestObject) (AdminCreateAgencyResponseObject, error)
+	// AdminGetAgency An agency and its stores
+	// (GET /admin/v1/agencies/{agency_id})
+	AdminGetAgency(ctx context.Context, request AdminGetAgencyRequestObject) (AdminGetAgencyResponseObject, error)
+	// AdminAddAgencyStore Move a store into an agency
+	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id})
+	AdminAddAgencyStore(ctx context.Context, request AdminAddAgencyStoreRequestObject) (AdminAddAgencyStoreResponseObject, error)
+	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
+	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
+	AdminRemoveAgencyStore(ctx context.Context, request AdminRemoveAgencyStoreRequestObject) (AdminRemoveAgencyStoreResponseObject, error)
 	// AdminAuditLog Every admin action, newest first
 	// (GET /admin/v1/audit-log)
 	AdminAuditLog(ctx context.Context, request AdminAuditLogRequestObject) (AdminAuditLogResponseObject, error)
@@ -2675,6 +3125,155 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminListAgencies operation middleware
+func (sh *strictHandler) AdminListAgencies(w http.ResponseWriter, r *http.Request) {
+	var request AdminListAgenciesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListAgencies(ctx, request.(AdminListAgenciesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListAgencies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListAgenciesResponseObject); ok {
+		if err := validResponse.VisitAdminListAgenciesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateAgency operation middleware
+func (sh *strictHandler) AdminCreateAgency(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateAgencyRequestObject
+
+	var body AdminCreateAgencyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateAgency(ctx, request.(AdminCreateAgencyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateAgency")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateAgencyResponseObject); ok {
+		if err := validResponse.VisitAdminCreateAgencyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetAgency operation middleware
+func (sh *strictHandler) AdminGetAgency(w http.ResponseWriter, r *http.Request, agencyId AgencyID) {
+	var request AdminGetAgencyRequestObject
+
+	request.AgencyId = agencyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetAgency(ctx, request.(AdminGetAgencyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetAgency")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetAgencyResponseObject); ok {
+		if err := validResponse.VisitAdminGetAgencyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminAddAgencyStore operation middleware
+func (sh *strictHandler) AdminAddAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID) {
+	var request AdminAddAgencyStoreRequestObject
+
+	request.AgencyId = agencyId
+	request.StoreId = storeId
+
+	var body AdminAddAgencyStoreJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminAddAgencyStore(ctx, request.(AdminAddAgencyStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminAddAgencyStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminAddAgencyStoreResponseObject); ok {
+		if err := validResponse.VisitAdminAddAgencyStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRemoveAgencyStore operation middleware
+func (sh *strictHandler) AdminRemoveAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID) {
+	var request AdminRemoveAgencyStoreRequestObject
+
+	request.AgencyId = agencyId
+	request.StoreId = storeId
+
+	var body AdminRemoveAgencyStoreJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRemoveAgencyStore(ctx, request.(AdminRemoveAgencyStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRemoveAgencyStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRemoveAgencyStoreResponseObject); ok {
+		if err := validResponse.VisitAdminRemoveAgencyStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AdminAuditLog operation middleware

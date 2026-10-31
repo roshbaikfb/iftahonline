@@ -76,6 +76,8 @@ type Deps struct {
 	// health page (ADR-0058); nil for the CLI.
 	Billing billing.Console
 	Redis   *redis.Client
+	// Agencies are billing's agency accounts (ADR-0059); nil for the CLI.
+	Agencies billing.Agencies
 }
 
 // Service implements the console.

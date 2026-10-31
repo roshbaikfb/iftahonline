@@ -564,6 +564,9 @@ type ThemeSettingsRadius string
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
+// AgencyID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type AgencyID = ULID
+
 // AssetID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type AssetID = ULID
 

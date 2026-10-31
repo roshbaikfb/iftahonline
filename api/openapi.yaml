@@ -2108,6 +2108,114 @@ paths:
               schema: { $ref: "#/components/schemas/AdminHealth" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/agencies:
+    get:
+      tags: [admin]
+      operationId: adminListAgencies
+      summary: Every agency, newest first
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The agencies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyList" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [admin]
+      operationId: adminCreateAgency
+      summary: Open an agency account
+      description: |
+        Many stores on one agency plan, one period and one invoice, in
+        one currency (ADR-0059). `plan_code` is an agency plan on sale;
+        its stores renew into the code's newest version.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAgencyInput" }
+      responses:
+        "201":
+          description: Opened.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/agencies/{agency_id}:
+    parameters:
+      - $ref: "#/components/parameters/AgencyID"
+    get:
+      tags: [admin]
+      operationId: adminGetAgency
+      summary: An agency and its stores
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The agency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/agencies/{agency_id}/stores/{store_id}:
+    parameters:
+      - $ref: "#/components/parameters/AgencyID"
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminAddAgencyStore
+      summary: Move a store into an agency
+      description: |
+        From no account, or from its own once that owes nothing (409
+        open_invoice); its old invoices stay there. It takes the agency's
+        plan, status and period; the first store's period runs to the
+        first of next month. The store's currency must be the agency's.
+        Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: Moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/agencies/{agency_id}/stores/{store_id}/remove:
+    parameters:
+      - $ref: "#/components/parameters/AgencyID"
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminRemoveAgencyStore
+      summary: Take a store out of an agency, onto the free plan
+      description: Its next invoice opens its own account. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: Removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/features:
     get:
       tags: [admin]
@@ -3865,6 +3973,11 @@ components:
       description: "`__Host-asid=<token>; Path=/; HttpOnly; Secure; SameSite=Strict` (cleared on logout)."
       schema: { type: string }
   parameters:
+    AgencyID:
+      name: agency_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
     FeatureKey:
       name: feature
       in: path
@@ -4284,6 +4397,39 @@ components:
         metadata:
           type: object
           additionalProperties: true
+    AdminAgency:
+      type: object
+      required: [id, name, currency, plan_code, stores, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        plan_code: { type: string }
+        stores: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+    AdminAgencyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAgency" }
+    AdminAgencyDetail:
+      type: object
+      required: [agency, store_ids]
+      properties:
+        agency: { $ref: "#/components/schemas/AdminAgency" }
+        store_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ULID" }
+    AdminAgencyInput:
+      type: object
+      required: [name, currency, plan_code, reason]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminSettleInput:
       type: object
       required: [reference, reason]
