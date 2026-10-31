@@ -2020,6 +2020,52 @@ paths:
               schema: { $ref: "#/components/schemas/AdminStoreEntitlements" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/billing:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStoreBilling
+      summary: A store's plan, status, card and open invoices
+      description: What the merchant's billing page shows, for support.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The store's billing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/InvoiceID"
+    post:
+      tags: [admin]
+      operationId: adminSettleInvoice
+      summary: Record an invoice as paid outside the card (a confirmed transfer)
+      description: |
+        An open invoice of the store's account (404 otherwise). Its
+        stores settle as on any payment: the next period when it renewed
+        them, back to active, released from the billing hold. Recorded in
+        the admin log first with the reason and the transfer's reference.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSettleInput" }
+      responses:
+        "200":
+          description: Settled; the store's billing now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/reactivate:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -2040,6 +2086,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/health:
+    get:
+      tags: [admin]
+      operationId: adminHealth
+      summary: The platform at a glance
+      description: |
+        Live checks of the database and Redis, and counts: stores by
+        state, subscriptions by status, open and overdue invoices, and
+        the job queue. A section that could not be read is absent and
+        named in `errors`.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminHealth" }
         default:
           $ref: "#/components/responses/Problem"
   /admin/v1/features:
@@ -4218,6 +4284,54 @@ components:
         metadata:
           type: object
           additionalProperties: true
+    AdminSettleInput:
+      type: object
+      required: [reference, reason]
+      properties:
+        reference: { type: string, minLength: 1, maxLength: 120, description: "The transfer's reference, kept with the payment." }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminHealth:
+      type: object
+      required: [checked_at, database, redis, errors]
+      properties:
+        checked_at: { type: string, format: date-time }
+        database: { type: boolean, description: The console's database answers. }
+        redis: { type: boolean }
+        stores: { $ref: "#/components/schemas/AdminStoreCounts" }
+        billing: { $ref: "#/components/schemas/AdminBillingHealth" }
+        jobs: { $ref: "#/components/schemas/AdminJobHealth" }
+        errors:
+          type: array
+          items: { type: string, enum: [database, redis, stores, billing, jobs] }
+    AdminStoreCounts:
+      type: object
+      required: [active, held, suspended, closed, total]
+      properties:
+        active: { type: integer, format: int64 }
+        held: { type: integer, format: int64, description: Active but held for an unpaid invoice. }
+        suspended: { type: integer, format: int64 }
+        closed: { type: integer, format: int64 }
+        total: { type: integer, format: int64 }
+    AdminBillingHealth:
+      type: object
+      required: [trialing, active, past_due, suspended, cancelled, invoices_open, invoices_overdue]
+      properties:
+        trialing: { type: integer, format: int64 }
+        active: { type: integer, format: int64 }
+        past_due: { type: integer, format: int64 }
+        suspended: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        invoices_open: { type: integer, format: int64 }
+        invoices_overdue: { type: integer, format: int64 }
+    AdminJobHealth:
+      type: object
+      required: [available, running, retryable, discarded_24h, oldest_available_seconds]
+      properties:
+        available: { type: integer, format: int64 }
+        running: { type: integer, format: int64 }
+        retryable: { type: integer, format: int64 }
+        discarded_24h: { type: integer, format: int64 }
+        oldest_available_seconds: { type: integer, format: int64, description: How long the oldest due job has waited. }
     AdminFeatureKind:
       type: string
       enum: [flag, count, monthly]

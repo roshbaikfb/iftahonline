@@ -45,7 +45,9 @@ type Deps struct {
 	// Overrides are entitlements' per-store feature flags (ADR-0057); nil
 	// refuses them.
 	Overrides entitlements.Overrides
-	Limits    *app.Limits // tests
+	// Billing is billing for the console (ADR-0058); nil refuses it.
+	Billing billing.Console
+	Limits  *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -76,7 +78,7 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides})
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis})
 	return &Module{svc: svc, deps: d}, nil
 }
 

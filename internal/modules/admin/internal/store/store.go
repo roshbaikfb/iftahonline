@@ -165,3 +165,19 @@ func ListAudit(ctx context.Context, db DB, beforeAt *time.Time, beforeID *ulid.I
 	}
 	return out, nil
 }
+
+// JobHealth is River's queue, counted (ADR-0058).
+type JobHealth struct {
+	Available, Running, Retryable, Discarded24h, OldestAvailableSeconds int64
+}
+
+// Jobs counts the queue through app.job_health, which returns numbers
+// only: the console's role reads no job.
+func Jobs(ctx context.Context, db DB, now time.Time) (JobHealth, error) {
+	r, err := admindb.New(db).JobHealth(ctx, now)
+	if err != nil {
+		return JobHealth{}, fmt.Errorf("admin store: job health: %w", err)
+	}
+	return JobHealth{Available: r.Available, Running: r.Running, Retryable: r.Retryable, Discarded24h: r.Discarded24h,
+		OldestAvailableSeconds: r.OldestAvailableSeconds}, nil
+}

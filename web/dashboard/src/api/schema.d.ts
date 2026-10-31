@@ -1704,6 +1704,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/stores/{store_id}/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A store's plan, status, card and open invoices
+         * @description What the merchant's billing page shows, for support.
+         */
+        get: operations["adminGetStoreBilling"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an invoice as paid outside the card (a confirmed transfer)
+         * @description An open invoice of the store's account (404 otherwise). Its
+         *     stores settle as on any payment: the next period when it renewed
+         *     them, back to active, released from the billing hold. Recorded in
+         *     the admin log first with the reason and the transfer's reference.
+         */
+        post: operations["adminSettleInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/stores/{store_id}/reactivate": {
         parameters: {
             query?: never;
@@ -1717,6 +1765,29 @@ export interface paths {
         put?: never;
         /** Reactivate a suspended store */
         post: operations["adminReactivateStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The platform at a glance
+         * @description Live checks of the database and Redis, and counts: stores by
+         *     state, subscriptions by status, open and overdue invoices, and
+         *     the job queue. A section that could not be read is absent and
+         *     named in `errors`.
+         */
+        get: operations["adminHealth"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3546,6 +3617,69 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+        };
+        AdminSettleInput: {
+            /** @description The transfer's reference, kept with the payment. */
+            reference: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminHealth: {
+            /** Format: date-time */
+            checked_at: string;
+            /** @description The console's database answers. */
+            database: boolean;
+            redis: boolean;
+            stores?: components["schemas"]["AdminStoreCounts"];
+            billing?: components["schemas"]["AdminBillingHealth"];
+            jobs?: components["schemas"]["AdminJobHealth"];
+            errors: ("database" | "redis" | "stores" | "billing" | "jobs")[];
+        };
+        AdminStoreCounts: {
+            /** Format: int64 */
+            active: number;
+            /**
+             * Format: int64
+             * @description Active but held for an unpaid invoice.
+             */
+            held: number;
+            /** Format: int64 */
+            suspended: number;
+            /** Format: int64 */
+            closed: number;
+            /** Format: int64 */
+            total: number;
+        };
+        AdminBillingHealth: {
+            /** Format: int64 */
+            trialing: number;
+            /** Format: int64 */
+            active: number;
+            /** Format: int64 */
+            past_due: number;
+            /** Format: int64 */
+            suspended: number;
+            /** Format: int64 */
+            cancelled: number;
+            /** Format: int64 */
+            invoices_open: number;
+            /** Format: int64 */
+            invoices_overdue: number;
+        };
+        AdminJobHealth: {
+            /** Format: int64 */
+            available: number;
+            /** Format: int64 */
+            running: number;
+            /** Format: int64 */
+            retryable: number;
+            /** Format: int64 */
+            discarded_24h: number;
+            /**
+             * Format: int64
+             * @description How long the oldest due job has waited.
+             */
+            oldest_available_seconds: number;
         };
         /** @enum {string} */
         AdminFeatureKind: "flag" | "count" | "monthly";
@@ -7709,6 +7843,57 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    adminGetStoreBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store's billing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSettleInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSettleInput"];
+            };
+        };
+        responses: {
+            /** @description Settled; the store's billing now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     adminReactivateStore: {
         parameters: {
             query?: never;
@@ -7731,6 +7916,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminHealth"];
                 };
             };
             default: components["responses"]["Problem"];

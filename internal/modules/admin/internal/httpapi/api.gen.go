@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AdminFeatureKind.
@@ -32,6 +33,33 @@ func (e AdminFeatureKind) Valid() bool {
 	case AdminFeatureKindFlag:
 		return true
 	case AdminFeatureKindMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminHealthErrors.
+const (
+	AdminHealthErrorsBilling  AdminHealthErrors = "billing"
+	AdminHealthErrorsDatabase AdminHealthErrors = "database"
+	AdminHealthErrorsJobs     AdminHealthErrors = "jobs"
+	AdminHealthErrorsRedis    AdminHealthErrors = "redis"
+	AdminHealthErrorsStores   AdminHealthErrors = "stores"
+)
+
+// Valid indicates whether the value is a known member of the AdminHealthErrors enum.
+func (e AdminHealthErrors) Valid() bool {
+	switch e {
+	case AdminHealthErrorsBilling:
+		return true
+	case AdminHealthErrorsDatabase:
+		return true
+	case AdminHealthErrorsJobs:
+		return true
+	case AdminHealthErrorsRedis:
+		return true
+	case AdminHealthErrorsStores:
 		return true
 	default:
 		return false
@@ -116,6 +144,51 @@ func (e AdminPlanPriceCycle) Valid() bool {
 	case AdminPlanPriceCycleAnnual:
 		return true
 	case AdminPlanPriceCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingCycle.
+const (
+	BillingCycleAnnual  BillingCycle = "annual"
+	BillingCycleMonthly BillingCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the BillingCycle enum.
+func (e BillingCycle) Valid() bool {
+	switch e {
+	case BillingCycleAnnual:
+		return true
+	case BillingCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingStatus.
+const (
+	BillingStatusActive    BillingStatus = "active"
+	BillingStatusCancelled BillingStatus = "cancelled"
+	BillingStatusPastDue   BillingStatus = "past_due"
+	BillingStatusSuspended BillingStatus = "suspended"
+	BillingStatusTrialing  BillingStatus = "trialing"
+)
+
+// Valid indicates whether the value is a known member of the BillingStatus enum.
+func (e BillingStatus) Valid() bool {
+	switch e {
+	case BillingStatusActive:
+		return true
+	case BillingStatusCancelled:
+		return true
+	case BillingStatusPastDue:
+		return true
+	case BillingStatusSuspended:
+		return true
+	case BillingStatusTrialing:
 		return true
 	default:
 		return false
@@ -233,6 +306,27 @@ const (
 func (e MessageTextKind) Valid() bool {
 	switch e {
 	case OrderConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpenInvoiceCurrency.
+const (
+	OpenInvoiceCurrencyAED OpenInvoiceCurrency = "AED"
+	OpenInvoiceCurrencyEGP OpenInvoiceCurrency = "EGP"
+	OpenInvoiceCurrencySAR OpenInvoiceCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the OpenInvoiceCurrency enum.
+func (e OpenInvoiceCurrency) Valid() bool {
+	switch e {
+	case OpenInvoiceCurrencyAED:
+		return true
+	case OpenInvoiceCurrencyEGP:
+		return true
+	case OpenInvoiceCurrencySAR:
 		return true
 	default:
 		return false
@@ -394,6 +488,17 @@ type AdminAuth struct {
 	ExpiresAt time.Time    `json:"expires_at"`
 }
 
+// AdminBillingHealth defines model for AdminBillingHealth.
+type AdminBillingHealth struct {
+	Active          int64 `json:"active"`
+	Cancelled       int64 `json:"cancelled"`
+	InvoicesOpen    int64 `json:"invoices_open"`
+	InvoicesOverdue int64 `json:"invoices_overdue"`
+	PastDue         int64 `json:"past_due"`
+	Suspended       int64 `json:"suspended"`
+	Trialing        int64 `json:"trialing"`
+}
+
 // AdminFeature defines model for AdminFeature.
 type AdminFeature struct {
 	// Enforced The code checks it; false for a display-only key.
@@ -424,6 +529,22 @@ type AdminFeatureList struct {
 	Items []AdminFeature `json:"items"`
 }
 
+// AdminHealth defines model for AdminHealth.
+type AdminHealth struct {
+	Billing   *AdminBillingHealth `json:"billing,omitempty"`
+	CheckedAt time.Time           `json:"checked_at"`
+
+	// Database The console's database answers.
+	Database bool                `json:"database"`
+	Errors   []AdminHealthErrors `json:"errors"`
+	Jobs     *AdminJobHealth     `json:"jobs,omitempty"`
+	Redis    bool                `json:"redis"`
+	Stores   *AdminStoreCounts   `json:"stores,omitempty"`
+}
+
+// AdminHealthErrors defines model for AdminHealth.Errors.
+type AdminHealthErrors string
+
 // AdminImpersonation defines model for AdminImpersonation.
 type AdminImpersonation struct {
 	// Code One-time
@@ -446,6 +567,17 @@ type AdminImpersonationRequest struct {
 
 	// Write Allow changes (default read-only).
 	Write *bool `json:"write,omitempty"`
+}
+
+// AdminJobHealth defines model for AdminJobHealth.
+type AdminJobHealth struct {
+	Available    int64 `json:"available"`
+	Discarded24h int64 `json:"discarded_24h"`
+
+	// OldestAvailableSeconds How long the oldest due job has waited.
+	OldestAvailableSeconds int64 `json:"oldest_available_seconds"`
+	Retryable              int64 `json:"retryable"`
+	Running                int64 `json:"running"`
 }
 
 // AdminLoginRequest defines model for AdminLoginRequest.
@@ -577,6 +709,26 @@ type AdminReason struct {
 	Reason string `json:"reason"`
 }
 
+// AdminSettleInput defines model for AdminSettleInput.
+type AdminSettleInput struct {
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Reference The transfer's reference, kept with the payment.
+	Reference string `json:"reference"`
+}
+
+// AdminStoreCounts defines model for AdminStoreCounts.
+type AdminStoreCounts struct {
+	Active int64 `json:"active"`
+	Closed int64 `json:"closed"`
+
+	// Held Active but held for an unpaid invoice.
+	Held      int64 `json:"held"`
+	Suspended int64 `json:"suspended"`
+	Total     int64 `json:"total"`
+}
+
 // AdminStoreDetail defines model for AdminStoreDetail.
 type AdminStoreDetail struct {
 	Domains []Domain `json:"domains"`
@@ -601,6 +753,32 @@ type AdminStoreSummary struct {
 	PrimaryHost string `json:"primary_host"`
 	Store       Store  `json:"store"`
 }
+
+// Billing defines model for Billing.
+type Billing struct {
+	CancelAtPeriodEnd *bool `json:"cancel_at_period_end,omitempty"`
+
+	// Card The card on file; absent without one.
+	//
+	// Example: MasterCard •••• 2346
+	Card  *string       `json:"card,omitempty"`
+	Cycle *BillingCycle `json:"cycle,omitempty"`
+
+	// GraceUntil Past due: when the store closes unpaid.
+	GraceUntil   *time.Time    `json:"grace_until,omitempty"`
+	OpenInvoices []OpenInvoice `json:"open_invoices"`
+	PeriodEnd    *time.Time    `json:"period_end,omitempty"`
+	PlanNameAr   string        `json:"plan_name_ar"`
+	PlanNameEn   string        `json:"plan_name_en"`
+	Status       BillingStatus `json:"status"`
+	TrialEndsAt  *time.Time    `json:"trial_ends_at,omitempty"`
+}
+
+// BillingCycle defines model for Billing.Cycle.
+type BillingCycle string
+
+// BillingStatus defines model for Billing.Status.
+type BillingStatus string
 
 // DnsRecord defines model for DnsRecord.
 type DnsRecord struct {
@@ -686,6 +864,30 @@ type FieldError struct {
 
 // MessageTextKind The kinds whose SMS text a store writes.
 type MessageTextKind string
+
+// OpenInvoice defines model for OpenInvoice.
+type OpenInvoice struct {
+	// Attempts Charges tried.
+	Attempts int                 `json:"attempts"`
+	Currency OpenInvoiceCurrency `json:"currency"`
+	DueAt    time.Time           `json:"due_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id            ULID       `json:"id"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"`
+
+	// Number Example: INV-2026-000001
+	Number string `json:"number"`
+
+	// Period Example: 2026-10-01
+	Period openapi_types.Date `json:"period"`
+
+	// TotalMinor With tax.
+	TotalMinor int64 `json:"total_minor"`
+}
+
+// OpenInvoiceCurrency defines model for OpenInvoice.Currency.
+type OpenInvoiceCurrency string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -823,6 +1025,9 @@ type AdminClearStoreOverrideJSONRequestBody = AdminReason
 // AdminImpersonateStoreJSONRequestBody defines body for AdminImpersonateStore for application/json ContentType.
 type AdminImpersonateStoreJSONRequestBody = AdminImpersonationRequest
 
+// AdminSettleInvoiceJSONRequestBody defines body for AdminSettleInvoice for application/json ContentType.
+type AdminSettleInvoiceJSONRequestBody = AdminSettleInput
+
 // AdminReactivateStoreJSONRequestBody defines body for AdminReactivateStore for application/json ContentType.
 type AdminReactivateStoreJSONRequestBody = AdminReason
 
@@ -846,6 +1051,9 @@ type ServerInterface interface {
 	// AdminSaveFeature Add a feature, or rename and reorder one
 	// (PUT /admin/v1/features/{key})
 	AdminSaveFeature(w http.ResponseWriter, r *http.Request, key string)
+	// AdminHealth The platform at a glance
+	// (GET /admin/v1/health)
+	AdminHealth(w http.ResponseWriter, r *http.Request)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(w http.ResponseWriter, r *http.Request)
@@ -864,6 +1072,9 @@ type ServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminGetStoreBilling A store's plan, status, card and open invoices
+	// (GET /admin/v1/stores/{store_id}/billing)
+	AdminGetStoreBilling(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
 	// (GET /admin/v1/stores/{store_id}/entitlements)
 	AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -876,6 +1087,9 @@ type ServerInterface interface {
 	// AdminImpersonateStore Open a time-limited support session as the store's owner
 	// (POST /admin/v1/stores/{store_id}/impersonate)
 	AdminImpersonateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminSettleInvoice Record an invoice as paid outside the card (a confirmed transfer)
+	// (POST /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle)
+	AdminSettleInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -998,6 +1212,20 @@ func (siw *ServerInterfaceWrapper) AdminSaveFeature(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSaveFeature(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminHealth operation middleware
+func (siw *ServerInterfaceWrapper) AdminHealth(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminHealth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1173,6 +1401,32 @@ func (siw *ServerInterfaceWrapper) AdminGetStore(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// AdminGetStoreBilling operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStoreBilling(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStoreBilling(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminGetStoreEntitlements operation middleware
 func (siw *ServerInterfaceWrapper) AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request) {
 
@@ -1286,6 +1540,41 @@ func (siw *ServerInterfaceWrapper) AdminImpersonateStore(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminImpersonateStore(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSettleInvoice operation middleware
+func (siw *ServerInterfaceWrapper) AdminSettleInvoice(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "invoice_id" -------------
+	var invoiceId InvoiceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invoice_id", r.PathValue("invoice_id"), &invoiceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invoice_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSettleInvoice(w, r, storeId, invoiceId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1477,7 +1766,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements", wrapper.AdminGetStoreEntitlements)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}", wrapper.AdminSetStoreOverride)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}/clear", wrapper.AdminClearStoreOverride)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/billing", wrapper.AdminGetStoreBilling)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
@@ -1685,6 +1977,44 @@ type AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFeatureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminHealthRequestObject struct {
+}
+
+type AdminHealthResponseObject interface {
+	VisitAdminHealthResponse(w http.ResponseWriter) error
+}
+
+type AdminHealth200JSONResponse AdminHealth
+
+func (response AdminHealth200JSONResponse) VisitAdminHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminHealthdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminHealthdefaultApplicationProblemPlusJSONResponse) VisitAdminHealthResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1923,6 +2253,45 @@ func (response AdminGetStoredefaultApplicationProblemPlusJSONResponse) VisitAdmi
 	return err
 }
 
+type AdminGetStoreBillingRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type AdminGetStoreBillingResponseObject interface {
+	VisitAdminGetStoreBillingResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStoreBilling200JSONResponse Billing
+
+func (response AdminGetStoreBilling200JSONResponse) VisitAdminGetStoreBillingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreBillingdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetStoreBillingdefaultApplicationProblemPlusJSONResponse) VisitAdminGetStoreBillingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminGetStoreEntitlementsRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 }
@@ -2084,6 +2453,47 @@ func (response AdminImpersonateStoredefaultApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type AdminSettleInvoiceRequestObject struct {
+	StoreId   StoreID   `json:"store_id"`
+	InvoiceId InvoiceID `json:"invoice_id"`
+	Body      *AdminSettleInvoiceJSONRequestBody
+}
+
+type AdminSettleInvoiceResponseObject interface {
+	VisitAdminSettleInvoiceResponse(w http.ResponseWriter) error
+}
+
+type AdminSettleInvoice200JSONResponse Billing
+
+func (response AdminSettleInvoice200JSONResponse) VisitAdminSettleInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSettleInvoicedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSettleInvoicedefaultApplicationProblemPlusJSONResponse) VisitAdminSettleInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminReactivateStoreRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *AdminReactivateStoreJSONRequestBody
@@ -2181,6 +2591,9 @@ type StrictServerInterface interface {
 	// AdminSaveFeature Add a feature, or rename and reorder one
 	// (PUT /admin/v1/features/{key})
 	AdminSaveFeature(ctx context.Context, request AdminSaveFeatureRequestObject) (AdminSaveFeatureResponseObject, error)
+	// AdminHealth The platform at a glance
+	// (GET /admin/v1/health)
+	AdminHealth(ctx context.Context, request AdminHealthRequestObject) (AdminHealthResponseObject, error)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(ctx context.Context, request AdminMeRequestObject) (AdminMeResponseObject, error)
@@ -2199,6 +2612,9 @@ type StrictServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(ctx context.Context, request AdminGetStoreRequestObject) (AdminGetStoreResponseObject, error)
+	// AdminGetStoreBilling A store's plan, status, card and open invoices
+	// (GET /admin/v1/stores/{store_id}/billing)
+	AdminGetStoreBilling(ctx context.Context, request AdminGetStoreBillingRequestObject) (AdminGetStoreBillingResponseObject, error)
 	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
 	// (GET /admin/v1/stores/{store_id}/entitlements)
 	AdminGetStoreEntitlements(ctx context.Context, request AdminGetStoreEntitlementsRequestObject) (AdminGetStoreEntitlementsResponseObject, error)
@@ -2211,6 +2627,9 @@ type StrictServerInterface interface {
 	// AdminImpersonateStore Open a time-limited support session as the store's owner
 	// (POST /admin/v1/stores/{store_id}/impersonate)
 	AdminImpersonateStore(ctx context.Context, request AdminImpersonateStoreRequestObject) (AdminImpersonateStoreResponseObject, error)
+	// AdminSettleInvoice Record an invoice as paid outside the card (a confirmed transfer)
+	// (POST /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle)
+	AdminSettleInvoice(ctx context.Context, request AdminSettleInvoiceRequestObject) (AdminSettleInvoiceResponseObject, error)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(ctx context.Context, request AdminReactivateStoreRequestObject) (AdminReactivateStoreResponseObject, error)
@@ -2396,6 +2815,30 @@ func (sh *strictHandler) AdminSaveFeature(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// AdminHealth operation middleware
+func (sh *strictHandler) AdminHealth(w http.ResponseWriter, r *http.Request) {
+	var request AdminHealthRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminHealth(ctx, request.(AdminHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminHealthResponseObject); ok {
+		if err := validResponse.VisitAdminHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminMe operation middleware
 func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 	var request AdminMeRequestObject
@@ -2560,6 +3003,32 @@ func (sh *strictHandler) AdminGetStore(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
+// AdminGetStoreBilling operation middleware
+func (sh *strictHandler) AdminGetStoreBilling(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminGetStoreBillingRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStoreBilling(ctx, request.(AdminGetStoreBillingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStoreBilling")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStoreBillingResponseObject); ok {
+		if err := validResponse.VisitAdminGetStoreBillingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminGetStoreEntitlements operation middleware
 func (sh *strictHandler) AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request, storeId StoreID) {
 	var request AdminGetStoreEntitlementsRequestObject
@@ -2680,6 +3149,40 @@ func (sh *strictHandler) AdminImpersonateStore(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminImpersonateStoreResponseObject); ok {
 		if err := validResponse.VisitAdminImpersonateStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSettleInvoice operation middleware
+func (sh *strictHandler) AdminSettleInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID) {
+	var request AdminSettleInvoiceRequestObject
+
+	request.StoreId = storeId
+	request.InvoiceId = invoiceId
+
+	var body AdminSettleInvoiceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSettleInvoice(ctx, request.(AdminSettleInvoiceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSettleInvoice")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSettleInvoiceResponseObject); ok {
+		if err := validResponse.VisitAdminSettleInvoiceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

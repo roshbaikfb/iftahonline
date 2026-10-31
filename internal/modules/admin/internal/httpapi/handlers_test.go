@@ -81,13 +81,17 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bill, err := billing.New(billing.Deps{Pool: appPool})
+	if err != nil {
+		t.Fatal(err)
+	}
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
 		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
-		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(),
+		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(),
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -419,5 +423,44 @@ func TestConsoleStoreOverrides(t *testing.T) {
 		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
 			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
 		}
+	}
+}
+
+func TestConsoleHealthAndStoreBilling(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	storeID := f.store(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/health", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/health", "", withCookie(sess))
+	if r.status != http.StatusOK || r.body["database"] != true || r.body["redis"] != true || len(r.body["errors"].([]any)) != 0 ||
+		r.body["stores"] == nil || r.body["billing"] == nil || r.body["jobs"] == nil {
+		t.Fatalf("health = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+storeID+"/billing", "", withCookie(sess))
+	if r.status != http.StatusOK || r.body["status"] != "active" || r.body["plan_name_en"] == "" {
+		t.Fatalf("billing = %d %v", r.status, r.body)
+	}
+	settle := "/admin/v1/stores/" + storeID + "/invoices/" + f.ids.New().String() + "/settle"
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPost, settle, `{"reference":"TRX-1","reason":"transfer received"}`, http.StatusNotFound},
+		{http.MethodPost, settle, `{"reference":"","reason":"transfer received"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, settle, ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/stores/" + storeID + "/invoices/junk/settle", `{"reference":"TRX-1","reason":"transfer"}`, http.StatusNotFound},
+		{http.MethodGet, "/admin/v1/stores/not-an-id/billing", "", http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/stores/not-an-id/invoices/" + f.ids.New().String() + "/settle", `{"reference":"T","reason":"transfer"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+	if r = f.do(t, http.MethodPost, adminHost, settle, `{"reference":"TRX-1","reason":"transfer received"}`, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
 	}
 }

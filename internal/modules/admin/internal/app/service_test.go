@@ -47,6 +47,14 @@ type fixture struct {
 	ten   *tenancy.Module
 	ids   *ulid.Generator
 	imp   *fakeImpersonator
+	deps  app.Deps
+}
+
+// withoutBilling is the console without Redis and billing.
+func (f fixture) withoutBilling() *app.Service {
+	d := f.deps
+	d.Billing, d.Redis = nil, nil
+	return app.NewService(d)
 }
 
 const adminPW = "a long admin passphrase"
@@ -93,9 +101,14 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	d.Overrides = ent.Overrides()
+	bill, err := billing.New(billing.Deps{Pool: appPool})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Billing, d.Redis = bill.Console(), rdb
 	cli := d
-	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides = nil, nil, nil, nil, nil, nil
-	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp}
+	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis = nil, nil, nil, nil, nil, nil, nil, nil
+	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp, deps: d}
 }
 
 func (f fixture) device(t *testing.T) context.Context {

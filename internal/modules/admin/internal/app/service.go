@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
@@ -70,6 +72,10 @@ type Deps struct {
 	// Overrides are entitlements' per-store feature flags (ADR-0057);
 	// nil refuses them (the CLI).
 	Overrides entitlements.Overrides
+	// Billing is billing for the console and Redis is pinged by the
+	// health page (ADR-0058); nil for the CLI.
+	Billing billing.Console
+	Redis   *redis.Client
 }
 
 // Service implements the console.
