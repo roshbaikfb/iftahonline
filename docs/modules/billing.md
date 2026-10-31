@@ -16,8 +16,8 @@ are in place.
 |---|---|
 | Fees on delivered orders | 7c-1 (done) |
 | Invoices, agency accounts | 7c-2 (done) |
-| Payments and dunning | 7d |
-| The console's plan editor | 7e |
+| Payments and dunning | 7d (done) |
+| The console's plan editor | 7e-2a (done) |
 | The merchant's billing page | 7f |
 
 ## Public API (`internal/modules/billing/api.go`)
@@ -31,6 +31,9 @@ are in place.
 | `Fees.OrderMoved(ctx, order)` | Follows an order to its current status: a delivered order's fee (once), a returned order's fee cancelled or credited |
 | `Orders`, `Order`, `OrderStatus` | The order reader fees need; `cmd/platform` adapts `orders.Fulfilment` (billing does not import orders) |
 | `SellFeesSubscriber` | `billing.sell_fees`, subscribed to `orders.order.status_changed` in the worker |
+
+| `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions, publish, retire |
+| `Feature`, `PlanVersion`, `Price`, `CurrencyFee` | The catalog's DTOs; `Validate()` checks them |
 
 It exports no plan codes. `internal/tools/noplannames` fails the build
 on any plan-name comparison outside this module.
@@ -59,6 +62,22 @@ The seeded prices and limits are **placeholders**: set them before launch
 | `pixels` | flag | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `feeds` | flag | — | ✓ | — | ✓ | ✓ | ✓ |
 | `ad_free` | flag | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### Editing the catalog (ADR-0056)
+
+- **Features:** the console adds keys and renames or reorders them. A
+  key's kind is fixed. A key the code does not know is display-only.
+- **Publishing:** the next version of a code goes on sale and the
+  previous one is retired. A code keeps its kind, and one free plan is
+  on sale at a time.
+- **Retiring:** takes a code off sale. Its stores keep their version.
+  The free plan cannot be retired.
+- **Renewals:** a renewal is invoiced at the newest active version that
+  sells the store's cycle in the account's currency
+  (`subscriptions.renewal_plan_id`). Paying it moves the subscription
+  there.
+- **Free stores:** they follow a new free version within the
+  entitlements cache's 30 s.
 
 ## Pay-as-you-sell fees (ADR-0048)
 
