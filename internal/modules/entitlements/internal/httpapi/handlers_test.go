@@ -147,7 +147,7 @@ func TestGetUsage(t *testing.T) {
 	items, _ := body["items"].([]any)
 	// Monthly meters always; counted ones where the module counts (here
 	// products only).
-	if code != http.StatusOK || len(items) != 3 {
+	if code != http.StatusOK || len(items) != 3 || body["ad_free"] != false {
 		t.Fatalf("usage = %d %v", code, body)
 	}
 	orders, prods := items[0].(map[string]any), items[2].(map[string]any)

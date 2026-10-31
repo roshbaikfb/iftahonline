@@ -6379,11 +6379,12 @@ components:
           items: { $ref: "#/components/schemas/OpenInvoice" }
     UsageMeters:
       type: object
-      required: [items]
+      required: [items, ad_free]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/UsageMeter" }
+        ad_free: { type: boolean, description: "The store has the ad_free feature; without it, its pages show ads (ADR-0062)." }
     UsageMeter:
       type: object
       required: [feature, kind, used, unlimited]

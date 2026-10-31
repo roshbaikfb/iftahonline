@@ -8,6 +8,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/domain"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -48,7 +50,11 @@ func (h *Handlers) GetUsage(ctx context.Context, _ GetUsageRequestObject) (GetUs
 	if err != nil {
 		return nil, err
 	}
-	out := GetUsage200JSONResponse{Items: make([]UsageMeter, len(ms))}
+	adFree, err := h.svc.Allowed(ctx, domain.AdFree) // the dashboard's notice of ads (ADR-0062)
+	if err != nil {
+		return nil, err
+	}
+	out := GetUsage200JSONResponse{Items: make([]UsageMeter, len(ms)), AdFree: adFree}
 	for i, m := range ms {
 		u := UsageMeter{Feature: UsageMeterFeature(m.Feature), Kind: UsageMeterKind(m.Kind), Used: m.Used, Unlimited: m.Unlimited}
 		if !m.Unlimited {

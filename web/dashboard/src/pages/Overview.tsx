@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
+import { AdsNotice } from '../components/AdsNotice';
 import { Layout } from '../components/Layout';
 import { SalesChart } from '../components/SalesChart';
 import { SamplesBanner } from '../components/SamplesBanner';
@@ -153,6 +154,7 @@ export function Overview() {
         </div>
       </div>
       <SamplesBanner storeId={storeId} />
+      <AdsNotice storeId={storeId} />
       {error && <p role="alert">{error}</p>}
 
       {setup && doneSteps < steps.length && (
