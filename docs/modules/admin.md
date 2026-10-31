@@ -46,6 +46,7 @@ It follows the approved mockups, with a dark sidebar and the «أدمن» badge.
 | A store | `/console/stores/{id}` | Support session, suspend or reactivate, billing with "settle as a transfer", join an agency, per-store feature flags |
 | Plans and features | `/console/plans` | Versions per plan; an editor that publishes the next version from the one on sale; retire (not the free plan); the features catalog |
 | Agencies | `/console/agencies`, `/console/agencies/{id}` | List, create, the stores (by name), take a store out |
+| Ads | `/console/ads` | Ads in free stores (ADR-0062): each placement's live banners and AdSense unit, the publisher and the switch, `/ads.txt`'s line; our banners with their clicks of 30 days and state (active, scheduled, ended, stopped), stop or show, and a new banner (the image is uploaded, then re-encoded) |
 | Admin log | `/console/audit` | Newest first, the reason first, paged |
 
 Every change asks for a reason.
