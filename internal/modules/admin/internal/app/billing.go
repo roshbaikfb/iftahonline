@@ -71,3 +71,40 @@ func (s *Service) SettleInvoice(ctx context.Context, id tenant.StoreID, invoice 
 	}
 	return s.d.Billing.Summary(sctx)
 }
+
+// DuplicatePayments are payments of invoices already paid, for the admin
+// to refund on the gateway (ADR-0063).
+func (s *Service) DuplicatePayments(ctx context.Context) ([]billing.DuplicatePayment, error) {
+	if _, ok := IdentityFrom(ctx); !ok {
+		return nil, errNoSession
+	}
+	if s.d.Billing == nil {
+		return nil, errNoBilling
+	}
+	return s.d.Billing.DuplicatePayments(ctx)
+}
+
+// MarkRefunded records duplicate payment id refunded on the gateway
+// under the refund's reference, recorded first in the admin log.
+func (s *Service) MarkRefunded(ctx context.Context, id ulid.ID, rawReference, rawReason string) error {
+	who, ok := IdentityFrom(ctx)
+	if !ok {
+		return errNoSession
+	}
+	if s.d.Billing == nil {
+		return errNoBilling
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return err
+	}
+	reference := strings.TrimSpace(rawReference)
+	if reference == "" || len(reference) > 120 {
+		return errReference
+	}
+	if err = s.audit(ctx, &who.AdminID, "payment.refunded", "payment_attempt", id.String(),
+		map[string]any{"reason": reason, "reference": reference}); err != nil {
+		return err
+	}
+	return s.d.Billing.MarkRefunded(ctx, id, reference)
+}

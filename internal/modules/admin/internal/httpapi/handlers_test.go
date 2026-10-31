@@ -598,3 +598,33 @@ func TestConsoleAds(t *testing.T) {
 		}
 	}
 }
+
+// TestConsoleDuplicatePayments: the list, and a refund's refusals (ADR-0063).
+func TestConsoleDuplicatePayments(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/duplicates", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/duplicates", "", withCookie(sess)); r.status != http.StatusOK || r.body["items"] == nil {
+		t.Fatalf("list = %d %v", r.status, r.body)
+	}
+	refund := "/admin/v1/billing/duplicates/" + f.ids.New().String() + "/refunded"
+	if r := f.do(t, http.MethodPost, adminHost, refund, `{"reference":"PMB-1","reason":"refunded on Paymob"}`, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	for _, bad := range []struct {
+		path, body string
+		status     int
+	}{
+		{refund, `{"reference":"PMB-1","reason":"refunded on Paymob"}`, http.StatusNotFound},
+		{refund, `{"reference":"PMB-1","reason":"x"}`, http.StatusUnprocessableEntity},
+		{refund, ``, http.StatusBadRequest},
+		{"/admin/v1/billing/duplicates/junk/refunded", `{"reference":"PMB-1","reason":"refunded"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, http.MethodPost, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("POST %s = %d %v; want %d", bad.path, got.status, got.body, bad.status)
+		}
+	}
+}

@@ -106,3 +106,39 @@ func toBilling(s billing.Summary) Billing {
 	}
 	return out
 }
+
+var errDuplicateNotFound = errs.NotFound("duplicate_not_found", "no duplicate payment to refund with this ID")
+
+// AdminListDuplicatePayments implements StrictServerInterface.
+func (h *Handlers) AdminListDuplicatePayments(ctx context.Context, _ AdminListDuplicatePaymentsRequestObject) (AdminListDuplicatePaymentsResponseObject, error) {
+	ps, err := h.svc.DuplicatePayments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := AdminListDuplicatePayments200JSONResponse{Items: make([]AdminDuplicatePayment, len(ps))}
+	for i, p := range ps {
+		out.Items[i] = AdminDuplicatePayment{Id: p.ID.String(), StoreId: p.Store.String(), InvoiceNumber: p.InvoiceNumber,
+			Currency: AdminDuplicatePaymentCurrency(p.Currency), AmountMinor: p.AmountMinor, Gateway: p.Gateway, Reference: p.Reference,
+			CreatedAt: p.CreatedAt, RefundedAt: p.RefundedAt}
+		if p.RefundReference != "" {
+			r := p.RefundReference
+			out.Items[i].RefundReference = &r
+		}
+	}
+	return out, nil
+}
+
+// AdminMarkDuplicateRefunded implements StrictServerInterface.
+func (h *Handlers) AdminMarkDuplicateRefunded(ctx context.Context, req AdminMarkDuplicateRefundedRequestObject) (AdminMarkDuplicateRefundedResponseObject, error) {
+	id, err := ulid.Parse(req.PaymentId)
+	if err != nil {
+		return nil, errDuplicateNotFound
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	if err = h.svc.MarkRefunded(ctx, id, req.Body.Reference, req.Body.Reason); err != nil {
+		return nil, err
+	}
+	return AdminMarkDuplicateRefunded204Response{}, nil
+}

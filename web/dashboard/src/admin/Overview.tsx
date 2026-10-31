@@ -5,6 +5,7 @@ import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
+import { DuplicatePayments } from './DuplicatePayments';
 import { dateTimeAr, healthGroups, sectionLabel, storeStatusLabel, type AdminHealth, type StoreStatus } from './lib';
 
 type Summary = components['schemas']['AdminStoreSummary'];
@@ -119,6 +120,7 @@ export function Overview() {
           </div>
         </>
       )}
+      <DuplicatePayments />
 
       <section className="table-card" aria-labelledby="h-stores">
         <div className="card-head wrap">
