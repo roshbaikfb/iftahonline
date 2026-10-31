@@ -205,8 +205,9 @@ describe('Plans', () => {
     const goTo = vi.spyOn(leave, 'goTo').mockImplementation(() => undefined);
     const calls = routes(trialBilling, {
       [`POST ${base}/billing/trial`]: () => ({ status: 200, body: trialBilling }),
+      // A paid plan comes with a cycle and is paid on Paymob first.
       [`POST ${base}/billing/subscription`]: (c) =>
-        (c.body as { plan_code: string }).plan_code === 'pays'
+        (c.body as { cycle?: string }).cycle === undefined
           ? { status: 200, body: { action: 'apply' } }
           : { status: 200, body: { action: 'pay', checkout_url: 'https://accept.paymob.com/pay/y' } },
     });
