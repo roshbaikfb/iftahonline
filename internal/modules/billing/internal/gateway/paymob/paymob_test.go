@@ -240,7 +240,8 @@ func TestPaid(t *testing.T) {
 	s, srv := newStandIn(t)
 	g := checkoutGateway(srv)
 	s.txns["bc_paid"] = map[string]any{"id": 77, "success": true, "pending": false, "amount_cents": 68286, "currency": "EGP", "order": map[string]any{"merchant_order_id": "bc_paid"}}
-	s.txns["bc_short"] = map[string]any{"id": 78, "success": true, "amount_cents": 100, "order": map[string]any{"merchant_order_id": "bc_short"}}
+	s.txns["bc_short"] = map[string]any{"id": 78, "success": true, "amount_cents": 100, "currency": "EGP", "order": map[string]any{"merchant_order_id": "bc_short"}}
+	s.txns["bc_nocur"] = map[string]any{"id": 80, "success": true, "amount_cents": 68286, "order": map[string]any{"merchant_order_id": "bc_nocur"}}
 	s.txns["bc_other"] = map[string]any{"id": 79, "success": true, "amount_cents": 100, "order": map[string]any{"merchant_order_id": "someone-else"}}
 	if txn, paid, err := g.Paid(t.Context(), "EGP", "bc_paid", 68286); err != nil || !paid || txn != "77" {
 		t.Errorf("paid = %s %v %v", txn, paid, err)
@@ -253,6 +254,9 @@ func TestPaid(t *testing.T) {
 	}
 	if _, _, err := g.Paid(t.Context(), "EGP", "bc_other", 100); err == nil {
 		t.Error("an answer about another payment believed")
+	}
+	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_nocur", 68286); err == nil || paid {
+		t.Errorf("an answer without its currency believed: %v %v", paid, err)
 	}
 	if _, _, err := g.Paid(t.Context(), "AED", "bc_paid", 1); err == nil {
 		t.Error("a region without an account answered")

@@ -291,7 +291,7 @@ func (g *Gateway) Paid(ctx context.Context, currency, reference string, amountMi
 	if err != nil || !found {
 		return "", false, err
 	}
-	if t.Order.MerchantOrderID != reference || (t.Currency != "" && t.Currency != currency) {
+	if t.Order.MerchantOrderID != reference || t.Currency != currency {
 		return "", false, fmt.Errorf("paymob: the inquiry for %s answered another payment", reference)
 	}
 	paid := t.Success && !t.Pending && !t.IsVoided && t.AmountCents == amountMinor
