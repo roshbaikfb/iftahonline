@@ -11,9 +11,11 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads/internal/app"
@@ -276,5 +278,42 @@ func TestAdsEndToEnd(t *testing.T) {
 	}
 	if err = shopOnly.SetActive(ctx, saved.ID, true); !errs.Is(err, errs.KindUnavailable) {
 		t.Fatalf("set active: %v", err)
+	}
+}
+
+// countingDB counts the reads that reach the database, slowly enough
+// that concurrent pages meet in one.
+type countingDB struct {
+	app.DB
+	reads atomic.Int64
+}
+
+func (c *countingDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	c.reads.Add(1)
+	time.Sleep(50 * time.Millisecond)
+	return c.DB.QueryRow(ctx, sql, args...)
+}
+
+func (c *countingDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	c.reads.Add(1)
+	return c.DB.Query(ctx, sql, args...)
+}
+
+// TestSlotsReadOnceWhenExpired: pages that find the minute's ads expired
+// together wait for one read of the settings and one of the banners.
+func TestSlotsReadOnceWhenExpired(t *testing.T) {
+	db := &countingDB{DB: open(t, infra.AppURL)}
+	svc := app.NewService(app.Deps{DB: db, IDs: ulid.NewGenerator(), Pick: func(int) int { return 0 }})
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Go(func() {
+			if _, err := svc.Slots(t.Context(), "AE"); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if n := db.reads.Load(); n != 2 {
+		t.Fatalf("%d reads for 20 pages, want 2", n)
 	}
 }

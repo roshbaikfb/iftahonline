@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads/internal/store"
@@ -26,6 +27,9 @@ import (
 // CacheTTL bounds how long a change of banners or settings takes to reach
 // pages (approved: within the caches' lifetime, no mass purge).
 const CacheTTL = time.Minute
+
+// loadTimeout bounds the shared read of the settings and banners.
+const loadTimeout = 5 * time.Second
 
 // DB is a pool: it runs single queries and transactions.
 type DB interface {
@@ -53,9 +57,10 @@ type Deps struct {
 
 // Service implements the use cases.
 type Service struct {
-	d   Deps
-	mu  sync.Mutex
-	hot map[string]live // by country
+	d     Deps
+	mu    sync.Mutex
+	hot   map[string]live // by country
+	loads singleflight.Group
 }
 
 type live struct {
@@ -80,7 +85,8 @@ func NewService(d Deps) *Service {
 
 // liveFor are the settings and banners on show in country, read once a
 // minute per country and kept in memory: every free store of the country
-// shares them.
+// shares them, and pages that find them expired together wait for one
+// read.
 func (s *Service) liveFor(ctx context.Context, country string) (live, error) {
 	now := s.d.Now()
 	s.mu.Lock()
@@ -89,19 +95,25 @@ func (s *Service) liveFor(ctx context.Context, country string) (live, error) {
 	if ok && now.Before(l.until) {
 		return l, nil
 	}
-	settings, err := store.Settings(ctx, s.d.DB)
-	if err != nil {
-		return live{}, err
-	}
-	banners, err := store.LiveBanners(ctx, s.d.DB, now, country)
-	if err != nil {
-		return live{}, err
-	}
-	l = live{settings: settings, banners: banners, until: now.Add(CacheTTL)}
-	s.mu.Lock()
-	s.hot[country] = l
-	s.mu.Unlock()
-	return l, nil
+	v, err, _ := s.loads.Do(country, func() (any, error) {
+		// Shared by every waiting page: one leaving does not cancel it.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
+		defer cancel()
+		settings, err := store.Settings(ctx, s.d.DB)
+		if err != nil {
+			return live{}, err
+		}
+		banners, err := store.LiveBanners(ctx, s.d.DB, now, country)
+		if err != nil {
+			return live{}, err
+		}
+		l := live{settings: settings, banners: banners, until: now.Add(CacheTTL)}
+		s.mu.Lock()
+		s.hot[country] = l
+		s.mu.Unlock()
+		return l, nil
+	})
+	return v.(live), err //nolint:forcetypeassert // the function above returns only live
 }
 
 // Slots are what each placement of a free store in country shows.
