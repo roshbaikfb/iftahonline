@@ -31,6 +31,23 @@ Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
 `admin.<PLATFORM_BASE_DOMAIN>`). Requests that change state must be
 same-origin.
 
+## The console's page (7f-3b)
+
+The UI is `web/dashboard/admin.html`, a second page of the dashboard's
+build, served under `/console` on `ADMIN_HOST` (see `deploy/README.md`).
+It follows the approved mockups, with a dark sidebar and the «أدمن» badge.
+
+| Screen | Path | What |
+|---|---|---|
+| Login | — | Email, password and authenticator code in one step |
+| Health and stores | `/console/` | The checks and counts (a section that could not be read is named), and the directory with search and a status filter |
+| A store | `/console/stores/{id}` | Support session, suspend or reactivate, billing with "settle as a transfer", join an agency, per-store feature flags |
+| Plans and features | `/console/plans` | Versions per plan; an editor that publishes the next version from the one on sale; retire (not the free plan); the features catalog |
+| Agencies | `/console/agencies`, `/console/agencies/{id}` | List, create, the stores (by name), take a store out |
+| Admin log | `/console/audit` | Newest first, the reason first, paged |
+
+Every change asks for a reason.
+
 ## How it is wired (`cmd/platform`)
 
 - **Enabling it:** the api role serves the console only when
