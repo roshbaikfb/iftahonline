@@ -190,12 +190,29 @@ client is `platform/paymob`.
 | `BILLING_PAYMOB_<…>_MOTO_INTEGRATION_ID` | Merchant-initiated charges; Paymob enables it on request |
 | `BILLING_PAYMOB_BASE_URL` | Overrides the API (tests) |
 
+## Choosing a plan (ADR-0060)
+
+| From | To | Effect |
+|---|---|---|
+| Free, trial or pay as you sell | Free or pay as you sell | At once |
+| Free, trial or pay as you sell | A paid plan | The first period is paid on Paymob's page (a `subscribe` invoice, never charged by dunning); it starts when paid |
+| A paid period | Another paid plan or cycle | At the renewal (`next_plan_id`, `next_cycle`), no proration |
+| A paid period | Pay as you sell or free | After the period (a cancellation, to `next_plan_id` for pay as you sell) |
+
+- **Taking a change back:** choosing the current plan and cycle again
+  undoes a scheduled change; `resume` does the same.
+- **Settle first:** a past-due store, or one with a billed renewal,
+  settles first.
+
 ## HTTP API (tag `billing`, ADR-0053)
 
 | Operation | Permission | Notes |
 |---|---|---|
 | `getBilling` `GET /v1/stores/{id}/billing` | `billing.manage` (owner) | The plan's names, the status and its dates, the card on file, the open invoices |
 | `payInvoice` `POST …/billing/invoices/{invoice}/pay` | `billing.manage` | `{checkout_url}` on Paymob, where the card is also saved. 404 for an invoice that is not open or not the store's; 503 for a currency without a checkout |
+| `listBillingPlans` `GET …/billing/plans` | `billing.manage` | The public plans on sale in the store's currency, with the features catalog (ADR-0060) |
+| `choosePlan` `POST …/billing/subscription` | `billing.manage` | `{plan_code, cycle}` → the action (`apply`, `pay` or `schedule`) and, for `pay`, the `checkout_url` |
+| `startTrial`, `cancelRenewal`, `resumeRenewal` | `billing.manage` | A trial (once, from free), stop renewing, keep the plan |
 
 Paymob's callbacks reach `/v1/webhooks/paymob_billing` (billing's
 platform provider):
