@@ -62,3 +62,4 @@ supersedes it.
 | [0054](0054-owners-billing-notices-on-whatsapp.md) | Owners' billing notices on WhatsApp | Accepted |
 | [0055](0055-time-limited-audited-impersonation.md) | Time-limited, audited impersonation | Accepted |
 | [0056](0056-the-plan-catalog-in-the-console.md) | The plan catalog in the console | Accepted |
+| [0057](0057-per-store-feature-flags.md) | Per-store feature flags | Accepted |

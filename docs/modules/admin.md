@@ -18,6 +18,8 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/features`, `PUT /admin/v1/features/{key}` | The features catalog (ADR-0056). Saving adds a key or renames one; the kind is fixed. `enforced` says whether the code checks it |
 | `GET /admin/v1/plans`, `POST /admin/v1/plans` | Every plan version. Publishing puts the next version on sale; stores renew into it |
 | `POST /admin/v1/plans/{code}/retire` | Off sale; never the free plan |
+| `GET /admin/v1/stores/{id}/entitlements` | The store's plan grants, its overrides and the effective grants (ADR-0057) |
+| `PUT /admin/v1/stores/{id}/entitlements/{feature}`, `POST …/{feature}/clear` | Per-store feature flags: a grant instead of the plan's, optionally until a date; only enforced features. Recorded here first (`store.feature_overridden`, `store.feature_override_cleared`) |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -40,6 +42,7 @@ same-origin.
   pool, and `Deps.Enforced` is `entitlements.Enforced`. Catalog changes
   are recorded here first (`feature.saved`, `plan.published`,
   `plan.retired`), with the reason.
+- **Per-store flags:** `Deps.Overrides` is `entitlements.Module.Overrides()`.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
   `platform/authtoken`, `platform/email` and `platform/clientinfo`. They
   were moved out of identity when the console became their second user.
