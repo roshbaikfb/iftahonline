@@ -89,6 +89,13 @@ func toBilling(s billing.Summary) Billing {
 	if s.Card != "" {
 		out.Card = &s.Card
 	}
+	if s.NextPlanNameAr != "" {
+		out.NextPlanNameAr, out.NextPlanNameEn = &s.NextPlanNameAr, &s.NextPlanNameEn
+	}
+	if s.NextCycle != "" {
+		c := BillingNextCycle(s.NextCycle)
+		out.NextCycle = &c
+	}
 	for i, inv := range s.OpenInvoices {
 		o := OpenInvoice{Id: inv.ID.String(), Number: inv.Number, Period: openapi_types.Date{Time: inv.Period}, Currency: OpenInvoiceCurrency(inv.Currency),
 			TotalMinor: inv.TotalMinor, DueAt: inv.DueAt, Attempts: inv.Attempts}

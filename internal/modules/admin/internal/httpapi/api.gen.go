@@ -210,6 +210,24 @@ func (e BillingCycle) Valid() bool {
 	}
 }
 
+// Defines values for BillingNextCycle.
+const (
+	BillingNextCycleAnnual  BillingNextCycle = "annual"
+	BillingNextCycleMonthly BillingNextCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the BillingNextCycle enum.
+func (e BillingNextCycle) Valid() bool {
+	switch e {
+	case BillingNextCycleAnnual:
+		return true
+	case BillingNextCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingStatus.
 const (
 	BillingStatusActive    BillingStatus = "active"
@@ -846,17 +864,27 @@ type Billing struct {
 	Cycle *BillingCycle `json:"cycle,omitempty"`
 
 	// GraceUntil Past due: when the store closes unpaid.
-	GraceUntil   *time.Time    `json:"grace_until,omitempty"`
-	OpenInvoices []OpenInvoice `json:"open_invoices"`
-	PeriodEnd    *time.Time    `json:"period_end,omitempty"`
-	PlanNameAr   string        `json:"plan_name_ar"`
-	PlanNameEn   string        `json:"plan_name_en"`
-	Status       BillingStatus `json:"status"`
-	TrialEndsAt  *time.Time    `json:"trial_ends_at,omitempty"`
+	GraceUntil *time.Time `json:"grace_until,omitempty"`
+
+	// NextCycle The cycle of the next renewal when it changes.
+	NextCycle *BillingNextCycle `json:"next_cycle,omitempty"`
+
+	// NextPlanNameAr The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation.
+	NextPlanNameAr *string       `json:"next_plan_name_ar,omitempty"`
+	NextPlanNameEn *string       `json:"next_plan_name_en,omitempty"`
+	OpenInvoices   []OpenInvoice `json:"open_invoices"`
+	PeriodEnd      *time.Time    `json:"period_end,omitempty"`
+	PlanNameAr     string        `json:"plan_name_ar"`
+	PlanNameEn     string        `json:"plan_name_en"`
+	Status         BillingStatus `json:"status"`
+	TrialEndsAt    *time.Time    `json:"trial_ends_at,omitempty"`
 }
 
 // BillingCycle defines model for Billing.Cycle.
 type BillingCycle string
+
+// BillingNextCycle The cycle of the next renewal when it changes.
+type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string

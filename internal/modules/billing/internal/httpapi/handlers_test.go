@@ -247,6 +247,11 @@ func TestBillingCrossTenant(t *testing.T) {
 		{OperationID: "payInvoice", Request: req(t, http.MethodPost, path(f.storeB, "/invoices/"+f.invoiceB+"/pay"), tokOwnerA), Leaks: leaks, Unchanged: unchanged},
 		// A's store in the path, B's invoice.
 		{OperationID: "payInvoice", Request: req(t, http.MethodPost, path(f.storeA, "/invoices/"+f.invoiceB+"/pay"), tokOwnerA), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "listBillingPlans", Request: req(t, http.MethodGet, path(f.storeB, "/plans"), tokOwnerA), Leaks: leaks},
+		{OperationID: "choosePlan", Request: reqBody(t, http.MethodPost, path(f.storeB, "/subscription"), tokOwnerA, `{"plan_code":"free"}`), Leaks: leaks, Unchanged: f.bUnchanged},
+		{OperationID: "startTrial", Request: reqBody(t, http.MethodPost, path(f.storeB, "/trial"), tokOwnerA, `{"plan_code":"brand"}`), Leaks: leaks, Unchanged: f.bUnchanged},
+		{OperationID: "cancelRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/cancel"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
+		{OperationID: "resumeRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/resume"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
 	}
 	for _, c := range cases {
 		t.Run(c.OperationID, func(t *testing.T) {
@@ -262,4 +267,96 @@ func mustDate(t *testing.T, v string) time.Time {
 		t.Fatal(err)
 	}
 	return d
+}
+
+func reqBody(t *testing.T, method, path, token, body string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	return r
+}
+
+// bUnchanged: B's subscription is still pro, monthly, renewing.
+func (f fixture) bUnchanged(t testing.TB) {
+	t.Helper()
+	ctx := tenant.WithStore(context.Background(), f.storeB)
+	var code, status string
+	var cancel bool
+	var next *string
+	if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT p.code, s.status, s.cancel_at_period_end, s.next_cycle FROM subscriptions s JOIN plans p ON p.id = s.plan_id`).
+			Scan(&code, &status, &cancel, &next)
+	}); err != nil || code != "pro" || status != "active" || cancel || next != nil {
+		t.Fatalf("B's subscription = %s %s %v %v (%v)", code, status, cancel, next, err)
+	}
+}
+
+// TestChoosingAPlanOverHTTP: the plans in the store's currency, and the
+// choices of a paid period (ADR-0060).
+func TestChoosingAPlanOverHTTP(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	code, body := f.do(t, req(t, http.MethodGet, path(f.storeA, "/plans"), tokOwnerA))
+	plans, _ := body["plans"].([]any)
+	if code != http.StatusOK || body["currency"] != "EGP" || len(plans) < 5 || len(body["features"].([]any)) < 10 {
+		t.Fatalf("plans = %d %v", code, body)
+	}
+	var pro map[string]any
+	for _, p := range plans {
+		if m := p.(map[string]any); m["code"] == "pro" {
+			pro = m
+		}
+	}
+	if pro == nil || pro["current"] != true || pro["monthly_minor"] != float64(59900) || pro["trial_available"] != false || len(pro["grants"].([]any)) == 0 {
+		t.Fatalf("pro = %v", pro)
+	}
+
+	steps := []struct {
+		name, method, rest, body string
+		status                   int
+		check                    func(map[string]any) bool
+	}{
+		{"another plan waits for the renewal", http.MethodPost, "/subscription", `{"plan_code":"brand","cycle":"annual"}`, http.StatusOK,
+			func(b map[string]any) bool { return b["action"] == "schedule" && b["checkout_url"] == nil }},
+		{"the billing shows it", http.MethodGet, "", "", http.StatusOK,
+			func(b map[string]any) bool { return b["next_plan_name_en"] == "Brand" && b["next_cycle"] == "annual" }},
+		{"taken back", http.MethodPost, "/resume", "", http.StatusOK, func(b map[string]any) bool { return b["next_plan_name_en"] == nil }},
+		{"nothing to take back", http.MethodPost, "/resume", "", http.StatusConflict, nil},
+		{"cancelled", http.MethodPost, "/cancel", "", http.StatusOK, func(b map[string]any) bool { return b["cancel_at_period_end"] == true }},
+		{"no trial on a paid plan", http.MethodPost, "/trial", `{"plan_code":"brand"}`, http.StatusConflict, nil},
+		{"an unknown plan", http.MethodPost, "/subscription", `{"plan_code":"gold","cycle":"monthly"}`, http.StatusNotFound, nil},
+		{"no body", http.MethodPost, "/subscription", ``, http.StatusBadRequest, nil},
+		{"no trial body", http.MethodPost, "/trial", ``, http.StatusBadRequest, nil},
+	}
+	for _, st := range steps {
+		r := req(t, st.method, path(f.storeA, st.rest), tokOwnerA)
+		if st.body != "" {
+			r = reqBody(t, st.method, path(f.storeA, st.rest), tokOwnerA, st.body)
+		}
+		code, body = f.do(t, r)
+		if code != st.status || st.check != nil && !st.check(body) {
+			t.Fatalf("%s = %d %v; want %d", st.name, code, body, st.status)
+		}
+	}
+	// B's renewal is billed and unpaid: pay it first.
+	if code, body = f.do(t, reqBody(t, http.MethodPost, path(f.storeB, "/subscription"), tokOwnerB, `{"plan_code":"brand","cycle":"monthly"}`)); code != http.StatusConflict || body["code"] != "settle_first" {
+		t.Fatalf("with a billed renewal = %d %v", code, body)
+	}
+	for _, rest := range []string{"/plans", "/cancel", "/resume"} {
+		method := http.MethodPost
+		if rest == "/plans" {
+			method = http.MethodGet
+		}
+		if code, _ = f.do(t, req(t, method, path(f.storeA, rest), tokManagerA)); code != http.StatusForbidden {
+			t.Errorf("manager %s = %d", rest, code)
+		}
+	}
+	for _, rest := range []string{"/subscription", "/trial"} {
+		if code, _ = f.do(t, reqBody(t, http.MethodPost, path(f.storeA, rest), tokManagerA, `{"plan_code":"brand","cycle":"monthly"}`)); code != http.StatusForbidden {
+			t.Errorf("manager %s = %d", rest, code)
+		}
+	}
 }
