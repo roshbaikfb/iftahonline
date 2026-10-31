@@ -16,6 +16,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
@@ -66,6 +67,9 @@ type Deps struct {
 	// tells keys the code checks. Nil refuses the catalog (the CLI).
 	Plans    billing.Catalog
 	Enforced func(key string) bool
+	// Overrides are entitlements' per-store feature flags (ADR-0057);
+	// nil refuses them (the CLI).
+	Overrides entitlements.Overrides
 }
 
 // Service implements the console.

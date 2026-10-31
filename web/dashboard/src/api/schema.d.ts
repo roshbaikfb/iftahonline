@@ -1639,6 +1639,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/stores/{store_id}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /** What a store's plan grants, its overrides, and the result */
+        get: operations["adminGetStoreEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/entitlements/{feature}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                feature: components["parameters"]["FeatureKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Grant one store a feature instead of its plan's grant
+         * @description Above or below its plan, until `expires_at` (none: until
+         *     cleared). Only features the code enforces; a flag is 0 or 1. It
+         *     applies at once on every instance and on the storefront.
+         *     Recorded in the admin log first.
+         */
+        put: operations["adminSetStoreOverride"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/entitlements/{feature}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                feature: components["parameters"]["FeatureKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give a store its plan's grant of a feature again */
+        post: operations["adminClearStoreOverride"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/stores/{store_id}/reactivate": {
         parameters: {
             query?: never;
@@ -3571,6 +3636,40 @@ export interface components {
             grants: components["schemas"]["AdminPlanGrant"][];
             fees: components["schemas"]["AdminPlanFee"][];
         };
+        AdminOverride: {
+            feature: string;
+            unlimited: boolean;
+            /** Format: int64 */
+            value: number;
+            /** Format: date-time */
+            expires_at?: string;
+            reason: string;
+            /** @description False once expired. */
+            active: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminOverrideInput: {
+            /** @default false */
+            unlimited: boolean;
+            /**
+             * Format: int64
+             * @description Ignored when unlimited. A flag is 0 or 1.
+             */
+            value?: number;
+            /**
+             * Format: date-time
+             * @description In the future; none is until cleared.
+             */
+            expires_at?: string;
+            /** @description Kept in the admin audit log and shown with the override. */
+            reason: string;
+        };
+        AdminStoreEntitlements: {
+            plan: components["schemas"]["AdminPlanGrant"][];
+            overrides: components["schemas"]["AdminOverride"][];
+            effective: components["schemas"]["AdminPlanGrant"][];
+        };
         AdminPlanList: {
             items: components["schemas"]["AdminPlan"][];
         };
@@ -5155,6 +5254,7 @@ export interface components {
         };
     };
     parameters: {
+        FeatureKey: string;
         InvoiceID: components["schemas"]["ULID"];
         StoreID: components["schemas"]["ULID"];
         DomainID: components["schemas"]["ULID"];
@@ -7525,6 +7625,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminImpersonation"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetStoreEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store's grants. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreEntitlements"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetStoreOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                feature: components["parameters"]["FeatureKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminOverrideInput"];
+            };
+        };
+        responses: {
+            /** @description Granted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreEntitlements"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminClearStoreOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                feature: components["parameters"]["FeatureKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Cleared. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreEntitlements"];
                 };
             };
             default: components["responses"]["Problem"];

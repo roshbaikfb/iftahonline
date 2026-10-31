@@ -1952,6 +1952,74 @@ paths:
               schema: { $ref: "#/components/schemas/AdminImpersonation" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/entitlements:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStoreEntitlements
+      summary: What a store's plan grants, its overrides, and the result
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The store's grants.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreEntitlements" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/entitlements/{feature}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/FeatureKey"
+    put:
+      tags: [admin]
+      operationId: adminSetStoreOverride
+      summary: Grant one store a feature instead of its plan's grant
+      description: |
+        Above or below its plan, until `expires_at` (none: until
+        cleared). Only features the code enforces; a flag is 0 or 1. It
+        applies at once on every instance and on the storefront.
+        Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminOverrideInput" }
+      responses:
+        "200":
+          description: Granted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreEntitlements" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/entitlements/{feature}/clear:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/FeatureKey"
+    post:
+      tags: [admin]
+      operationId: adminClearStoreOverride
+      summary: Give a store its plan's grant of a feature again
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: Cleared.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreEntitlements" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/reactivate:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -3731,6 +3799,11 @@ components:
       description: "`__Host-asid=<token>; Path=/; HttpOnly; Secure; SameSite=Strict` (cleared on logout)."
       schema: { type: string }
   parameters:
+    FeatureKey:
+      name: feature
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-z][a-z_]{0,31}$" }
     InvoiceID:
       name: invoice_id
       in: path
@@ -4246,6 +4319,38 @@ components:
         fees:
           type: array
           items: { $ref: "#/components/schemas/AdminPlanFee" }
+    AdminOverride:
+      type: object
+      required: [feature, unlimited, value, reason, active, updated_at]
+      properties:
+        feature: { type: string }
+        unlimited: { type: boolean }
+        value: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time }
+        reason: { type: string }
+        active: { type: boolean, description: False once expired. }
+        updated_at: { type: string, format: date-time }
+    AdminOverrideInput:
+      type: object
+      required: [reason]
+      properties:
+        unlimited: { type: boolean, default: false }
+        value: { type: integer, format: int64, minimum: 0, description: "Ignored when unlimited. A flag is 0 or 1." }
+        expires_at: { type: string, format: date-time, description: In the future; none is until cleared. }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log and shown with the override. }
+    AdminStoreEntitlements:
+      type: object
+      required: [plan, overrides, effective]
+      properties:
+        plan:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlanGrant" }
+        overrides:
+          type: array
+          items: { $ref: "#/components/schemas/AdminOverride" }
+        effective:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlanGrant" }
     AdminPlanList:
       type: object
       required: [items]

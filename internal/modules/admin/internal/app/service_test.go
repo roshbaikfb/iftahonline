@@ -88,8 +88,13 @@ func newFixture(t *testing.T) fixture {
 	imp := &fakeImpersonator{}
 	d.Impersonate, d.DashboardURL = imp.open, "https://app.iftahonline.com/"
 	d.Plans, d.Enforced = billing.NewCatalog(adminPool, ids), entitlements.Enforced
+	ent, err := entitlements.New(entitlements.Deps{Pool: appPool, Source: entitlements.Fixed{entitlements.Coupons: {Value: 0}, entitlements.Products: {Value: 50}}, IDs: ids})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Overrides = ent.Overrides()
 	cli := d
-	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans = nil, nil, nil, nil, nil
+	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides = nil, nil, nil, nil, nil, nil
 	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp}
 }
 
