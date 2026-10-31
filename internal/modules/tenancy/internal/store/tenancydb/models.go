@@ -62,6 +62,37 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 	return string(ns.RiverJobState), nil
 }
 
+type AdBanner struct {
+	ID        ulid.ID
+	Title     string
+	ImageKey  string
+	Width     int32
+	Height    int32
+	LinkUrl   string
+	Placement string
+	Country   pgtype.Text
+	StartsAt  time.Time
+	EndsAt    *time.Time
+	Weight    int32
+	Active    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdClick struct {
+	BannerID ulid.ID
+	Day      pgtype.Date
+	Clicks   int64
+}
+
+type AdSetting struct {
+	ID             int32
+	AdsenseEnabled bool
+	PublisherID    string
+	Units          []byte
+	UpdatedAt      time.Time
+}
+
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt time.Time
