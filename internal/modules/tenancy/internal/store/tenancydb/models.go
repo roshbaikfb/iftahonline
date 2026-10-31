@@ -262,6 +262,16 @@ type Customer struct {
 	UpdatedAt   time.Time
 }
 
+type EntitlementOverride struct {
+	StoreID   ulid.ID
+	Feature   string
+	Value     pgtype.Int8
+	ExpiresAt *time.Time
+	Reason    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Feature struct {
 	Key       string
 	Kind      string
