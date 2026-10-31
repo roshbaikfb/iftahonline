@@ -106,7 +106,19 @@ The `api` and `worker` roles also need object storage and imgproxy
 2. Point `ADMIN_HOST` (default `admin.<PLATFORM_BASE_DOMAIN>`) at the api
    behind the edge.
 3. Restrict that hostname at the edge to the operators' IP ranges.
-4. Create the first admin. The password goes on stdin, and the TOTP
+4. Serve the console's page on the same host. The dashboard's build
+   (`web/dashboard`, `npm run build`) emits `dist/admin.html` next to
+   `dist/index.html`. On `ADMIN_HOST`, route the traffic like this:
+   - `/admin/v1/*` to the api;
+   - `/assets/*` to the build's files;
+   - every other path under `/console` to `dist/admin.html` (the
+     console's own router reads the path).
+
+   Give these responses the same strict CSP as the dashboard's (see
+   `securityHeaders` in `web/dashboard/vite.config.ts`). In development,
+   `vite` serves `/console/*` itself; set `ADMIN_HOST` to its host (for
+   example `localhost:5173`) so the proxied `/admin/v1` answers.
+5. Create the first admin. The password goes on stdin, and the TOTP
    enrolment is printed once:
 
    ```sh
