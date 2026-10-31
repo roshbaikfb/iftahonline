@@ -238,7 +238,7 @@ func (*Gateway) ReadCallback(body []byte) (app.Callback, error) {
 				OrderID     json.Number `json:"order_id"`
 			} `json:"obj"`
 		}
-		if err = json.Unmarshal(body, &w); err != nil || w.Obj.Token == "" || w.Obj.OrderID == "" {
+		if err = json.Unmarshal(body, &w); err != nil || w.Obj.ID == "" || w.Obj.Token == "" || w.Obj.OrderID == "" {
 			return app.Callback{}, app.ErrBadCallback
 		}
 		tok := w.Obj
@@ -265,11 +265,11 @@ func (*Gateway) ReadCallback(body []byte) (app.Callback, error) {
 // cardLabel is what the merchant sees of a saved card: its brand and
 // last four digits.
 func cardLabel(brand, masked string) string {
-	last := masked
+	last := []rune(strings.ToValidUTF8(masked, ""))
 	if len(last) > 4 {
 		last = last[len(last)-4:]
 	}
-	return text.Clip(strings.TrimSpace(brand+" •••• "+last), 60)
+	return text.Clip(strings.ToValidUTF8(strings.TrimSpace(brand+" •••• "+string(last)), ""), 60)
 }
 
 // Paid implements app.CheckoutGateway: Paymob is asked about the
