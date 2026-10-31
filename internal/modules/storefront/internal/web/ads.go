@@ -6,11 +6,13 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/platform/csp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -26,7 +28,7 @@ type Ads interface {
 	Slots(ctx context.Context, country string) (map[ads.Placement]ads.Slot, error)
 	PublisherID(ctx context.Context) (string, error)
 	AdsTxt(ctx context.Context) (string, error)
-	Click(ctx context.Context, id ulid.ID) (string, bool, error)
+	Click(ctx context.Context, id ulid.ID, count bool) (string, bool, error)
 }
 
 // Plan tells free stores (entitlements).
@@ -155,6 +157,28 @@ func (s *Shop) bannerImage(key string) (avif, webp string) {
 	return s.signer.URL(key, 800, "avif"), s.signer.URL(key, 800, "webp")
 }
 
+// Click limits (CLAUDE.md: public endpoints per IP and per store): a
+// shopper's clicks on one banner count once a minute, and an address or
+// a store past its limit still reaches the link, uncounted.
+var (
+	clickPerBanner = ratelimit.Limit{Burst: 1, Period: time.Minute}   //nolint:gochecknoglobals // constant policy
+	clickPerIP     = ratelimit.Limit{Burst: 20, Period: time.Minute}  //nolint:gochecknoglobals // constant policy
+	clickPerStore  = ratelimit.Limit{Burst: 600, Period: time.Minute} //nolint:gochecknoglobals // constant policy
+)
+
+// countClick says whether a click on banner counts; a limiter outage
+// counts nothing (no click inflation), the shopper still goes on.
+func (s *Shop) countClick(r *http.Request, p *pageCtx, banner ulid.ID) bool {
+	ip := s.clientIP(r)
+	ok, _, err := s.limited(r.Context(), limitCheck{"adclick:ip:" + ip + ":" + banner.String(), clickPerBanner},
+		limitCheck{"adclick:ip:" + ip, clickPerIP}, limitCheck{"adclick:store:" + p.store, clickPerStore})
+	if err != nil {
+		s.log.WarnContext(r.Context(), "storefront: ad click limiter unavailable", "err", err)
+		return false
+	}
+	return ok
+}
+
 // adRoute serves a free store's /ads.txt and /ad/{banner}: the click is
 // counted, then the shopper goes to the banner's link. Paid stores get
 // 404 for both.
@@ -191,7 +215,7 @@ func (s *Shop) adRoute(w http.ResponseWriter, r *http.Request, _ tenant.StoreID,
 		http.NotFound(w, r)
 		return true
 	}
-	link, ok, err := s.ads.Click(ctx, banner)
+	link, ok, err := s.ads.Click(ctx, banner, s.countClick(r, p, banner))
 	if err != nil {
 		s.unavailable(w, r, err)
 		return true

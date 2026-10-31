@@ -51,7 +51,7 @@ func (a *fakeAds) AdsTxt(context.Context) (string, error) {
 	return "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n", nil
 }
 
-func (a *fakeAds) Click(_ context.Context, id ulid.ID) (string, bool, error) {
+func (a *fakeAds) Click(_ context.Context, id ulid.ID, count bool) (string, bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, s := range a.slots {
@@ -59,7 +59,9 @@ func (a *fakeAds) Click(_ context.Context, id ulid.ID) (string, bool, error) {
 			if a.clicks == nil {
 				a.clicks = map[ulid.ID]int{}
 			}
-			a.clicks[id]++
+			if count {
+				a.clicks[id]++
+			}
 			return s.Banner.Link, true, nil
 		}
 	}
@@ -250,5 +252,34 @@ func TestAdRoutes(t *testing.T) {
 		if rec = paid.get(t, path); rec.Code != http.StatusNotFound {
 			t.Fatalf("paid %s = %d", path, rec.Code)
 		}
+	}
+}
+
+// TestAdClickLimits: one shopper's clicks on a banner count once a
+// minute; past a limit, or with the limiter down, the shopper still
+// reaches the link, uncounted.
+func TestAdClickLimits(t *testing.T) {
+	t.Parallel()
+	a := mixed()
+	lim := &countLimiter{used: map[string]int{}, allow: map[string]int{"adclick:ip:198.51.100.7:" + houseBanner.ID.String(): 1}}
+	f := newFixture(t, withAds(a, fakePlan{}), func(d *web.Deps) {
+		d.Limiter, d.ClientIP = lim, func(*http.Request) string { return "198.51.100.7" }
+	})
+	for range 3 {
+		if rec := f.get(t, "/ad/"+houseBanner.ID.String()); rec.Code != http.StatusFound || rec.Header().Get("Location") != houseBanner.Link {
+			t.Fatalf("click = %d %s", rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	if a.clicks[houseBanner.ID] != 1 {
+		t.Fatalf("counted %d clicks, want 1", a.clicks[houseBanner.ID])
+	}
+	if lim.used["adclick:ip:198.51.100.7"] != 1 || lim.used["adclick:store:"+f.store.String()] != 1 {
+		t.Fatalf("limits asked = %v", lim.used)
+	}
+	lim.mu.Lock()
+	lim.fail = true
+	lim.mu.Unlock()
+	if rec := f.get(t, "/ad/"+houseBanner.ID.String()); rec.Code != http.StatusFound || a.clicks[houseBanner.ID] != 1 {
+		t.Fatalf("limiter down = %d, clicks %d", rec.Code, a.clicks[houseBanner.ID])
 	}
 }
