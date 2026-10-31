@@ -104,6 +104,29 @@ type Console interface {
 
 var _ Console = (*app.Service)(nil)
 
+// Agency is an agency account and the plan its stores are on (ADR-0059).
+type Agency = app.Agency
+
+// Agencies are set up from the console: many stores on one agency plan,
+// one period and one invoice.
+type Agencies interface {
+	// CreateAgency opens an agency account in currency on the agency plan
+	// planCode.
+	CreateAgency(ctx context.Context, name, currency, planCode string) (Agency, error)
+	// Agencies lists every agency, newest first.
+	Agencies(ctx context.Context) ([]Agency, error)
+	// Agency is one agency and its stores.
+	Agency(ctx context.Context, id ulid.ID) (Agency, []ulid.ID, error)
+	// JoinAgency moves the store in ctx into the agency: from its own
+	// account if that owes nothing, onto the agency's plan and period.
+	JoinAgency(ctx context.Context, agency ulid.ID) error
+	// LeaveAgency takes the store in ctx out of its agency, onto the
+	// free plan.
+	LeaveAgency(ctx context.Context) error
+}
+
+var _ Agencies = (*app.Service)(nil)
+
 // EventSubscriptionChanged is SubscriptionChanged's type. Caches of what
 // a store may do (entitlements, the storefront's pages) follow it.
 const EventSubscriptionChanged = domain.EventSubscriptionChanged
