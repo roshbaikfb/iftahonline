@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -114,6 +114,25 @@ describe('console', () => {
     expect(calls.filter((c) => c.path === '/admin/v1/stores').at(-1)?.search.get('cursor')).toBe('c1');
     expect(waited(12)).toBe('12 ث');
     expect(waited(7200)).toBe('2 س');
+  });
+
+  it('lists the payments to refund, records a refund, and shows nothing once none waits', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('PMB-RF-77').mockReturnValueOnce('دُفعت مرتين');
+    const dup = { id: 'DP1', store_id: store, invoice_number: 'INV-2026-000184', currency: 'EGP', amount_minor: 68286, gateway: 'paymob', reference: '9041', created_at: '2026-10-31T10:00:00Z' };
+    const calls = consoleRoutes({
+      'GET /admin/v1/billing/duplicates': () => ({ status: 200, body: { items: [dup, { ...dup, id: 'DP0', refunded_at: '2026-10-30T10:00:00Z', refund_reference: 'R0' }] } }),
+      'POST /admin/v1/billing/duplicates/DP1/refunded': () => ({ status: 204 }),
+    });
+    renderConsole({ kind: 'signed-in', admin });
+    const section = await screen.findByRole('region', { name: 'دفعات زائدة تحتاج استردادًا (1)' });
+    expect(within(section).getByText('INV-2026-000184')).toBeInTheDocument();
+    expect(within(section).getByText('682.86 ج.م')).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: 'صفحة المتجر' })).toHaveAttribute('href', `/stores/${store}`);
+    await userEvent.setup().click(within(section).getByRole('button', { name: 'تم الاسترداد' }));
+    expect(calls.find((c) => c.path === '/admin/v1/billing/duplicates/DP1/refunded')?.body).toEqual({ reference: 'PMB-RF-77', reason: 'دُفعت مرتين' });
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: /دفعات زائدة/ })).toBeNull();
+    });
   });
 
   it('opens a support session, settles a transfer, sets and clears a flag, and suspends', async () => {

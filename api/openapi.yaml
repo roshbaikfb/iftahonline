@@ -2331,6 +2331,50 @@ paths:
           description: Done.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/billing/duplicates:
+    get:
+      tags: [admin]
+      operationId: adminListDuplicatePayments
+      summary: Payments of invoices already paid, to refund
+      description: |
+        A payment the gateway took for an invoice no longer open (paid on
+        two pages, or while the card on file was charged, or after a
+        transfer was settled) is kept here, never dropped (ADR-0063). The
+        admin refunds it on the gateway, then marks it refunded. Those to
+        refund come first; at most 200.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The duplicates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminDuplicatePaymentList" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/billing/duplicates/{payment_id}/refunded:
+    parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    post:
+      tags: [admin]
+      operationId: adminMarkDuplicateRefunded
+      summary: Record a duplicate payment refunded on the gateway
+      description: Once; recorded first in the admin log, with the refund's reference.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminRefundInput" }
+      responses:
+        "204":
+          description: Recorded.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/features:
     get:
       tags: [admin]
@@ -4750,6 +4794,33 @@ components:
       required: [active, reason]
       properties:
         active: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminDuplicatePayment:
+      type: object
+      required: [id, store_id, invoice_number, currency, amount_minor, gateway, reference, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        store_id: { $ref: "#/components/schemas/ULID" }
+        invoice_number: { type: string }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        amount_minor: { type: integer, format: int64 }
+        gateway: { type: string }
+        reference: { type: string, description: "The gateway's transaction, to refund." }
+        created_at: { type: string, format: date-time }
+        refunded_at: { type: string, format: date-time }
+        refund_reference: { type: string }
+    AdminDuplicatePaymentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminDuplicatePayment" }
+    AdminRefundInput:
+      type: object
+      required: [reference, reason]
+      properties:
+        reference: { type: string, minLength: 1, maxLength: 120, description: "The gateway's refund." }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminSettleInput:
       type: object

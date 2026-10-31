@@ -147,6 +147,27 @@ func (e AdminAgencyInputCurrency) Valid() bool {
 	}
 }
 
+// Defines values for AdminDuplicatePaymentCurrency.
+const (
+	AdminDuplicatePaymentCurrencyAED AdminDuplicatePaymentCurrency = "AED"
+	AdminDuplicatePaymentCurrencyEGP AdminDuplicatePaymentCurrency = "EGP"
+	AdminDuplicatePaymentCurrencySAR AdminDuplicatePaymentCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminDuplicatePaymentCurrency enum.
+func (e AdminDuplicatePaymentCurrency) Valid() bool {
+	switch e {
+	case AdminDuplicatePaymentCurrencyAED:
+		return true
+	case AdminDuplicatePaymentCurrencyEGP:
+		return true
+	case AdminDuplicatePaymentCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminFeatureKind.
 const (
 	AdminFeatureKindCount   AdminFeatureKind = "count"
@@ -795,6 +816,34 @@ type AdminBillingHealth struct {
 	Trialing        int64 `json:"trialing"`
 }
 
+// AdminDuplicatePayment defines model for AdminDuplicatePayment.
+type AdminDuplicatePayment struct {
+	AmountMinor int64                         `json:"amount_minor"`
+	CreatedAt   time.Time                     `json:"created_at"`
+	Currency    AdminDuplicatePaymentCurrency `json:"currency"`
+	Gateway     string                        `json:"gateway"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id            ULID   `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+
+	// Reference The gateway's transaction, to refund.
+	Reference       string     `json:"reference"`
+	RefundReference *string    `json:"refund_reference,omitempty"`
+	RefundedAt      *time.Time `json:"refunded_at,omitempty"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId ULID `json:"store_id"`
+}
+
+// AdminDuplicatePaymentCurrency defines model for AdminDuplicatePayment.Currency.
+type AdminDuplicatePaymentCurrency string
+
+// AdminDuplicatePaymentList defines model for AdminDuplicatePaymentList.
+type AdminDuplicatePaymentList struct {
+	Items []AdminDuplicatePayment `json:"items"`
+}
+
 // AdminFeature defines model for AdminFeature.
 type AdminFeature struct {
 	// Enforced The code checks it; false for a display-only key.
@@ -1003,6 +1052,15 @@ type AdminProfile struct {
 type AdminReason struct {
 	// Reason Kept in the admin audit log.
 	Reason string `json:"reason"`
+}
+
+// AdminRefundInput defines model for AdminRefundInput.
+type AdminRefundInput struct {
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Reference The gateway's refund.
+	Reference string `json:"reference"`
 }
 
 // AdminSettleInput defines model for AdminSettleInput.
@@ -1345,6 +1403,9 @@ type AdminRemoveAgencyStoreJSONRequestBody = AdminReason
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
+// AdminMarkDuplicateRefundedJSONRequestBody defines body for AdminMarkDuplicateRefunded for application/json ContentType.
+type AdminMarkDuplicateRefundedJSONRequestBody = AdminRefundInput
+
 // AdminSaveFeatureJSONRequestBody defines body for AdminSaveFeature for application/json ContentType.
 type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
 
@@ -1413,6 +1474,12 @@ type ServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(w http.ResponseWriter, r *http.Request)
+	// AdminListDuplicatePayments Payments of invoices already paid, to refund
+	// (GET /admin/v1/billing/duplicates)
+	AdminListDuplicatePayments(w http.ResponseWriter, r *http.Request)
+	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
+	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
+	AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request, paymentId ULID)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(w http.ResponseWriter, r *http.Request)
@@ -1746,6 +1813,46 @@ func (siw *ServerInterfaceWrapper) AdminLogout(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminLogout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListDuplicatePayments operation middleware
+func (siw *ServerInterfaceWrapper) AdminListDuplicatePayments(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListDuplicatePayments(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminMarkDuplicateRefunded operation middleware
+func (siw *ServerInterfaceWrapper) AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "payment_id" -------------
+	var paymentId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payment_id", r.PathValue("payment_id"), &paymentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payment_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminMarkDuplicateRefunded(w, r, paymentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2354,6 +2461,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/uploads", wrapper.AdminCreateAdUpload)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/banners", wrapper.AdminCreateAdBanner)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/ads/banners/{banner_id}/active", wrapper.AdminSetAdBannerActive)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
@@ -2870,6 +2979,78 @@ type AdminLogoutdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminLogoutdefaultApplicationProblemPlusJSONResponse) VisitAdminLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListDuplicatePaymentsRequestObject struct {
+}
+
+type AdminListDuplicatePaymentsResponseObject interface {
+	VisitAdminListDuplicatePaymentsResponse(w http.ResponseWriter) error
+}
+
+type AdminListDuplicatePayments200JSONResponse AdminDuplicatePaymentList
+
+func (response AdminListDuplicatePayments200JSONResponse) VisitAdminListDuplicatePaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListDuplicatePaymentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListDuplicatePaymentsdefaultApplicationProblemPlusJSONResponse) VisitAdminListDuplicatePaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminMarkDuplicateRefundedRequestObject struct {
+	PaymentId ULID `json:"payment_id"`
+	Body      *AdminMarkDuplicateRefundedJSONRequestBody
+}
+
+type AdminMarkDuplicateRefundedResponseObject interface {
+	VisitAdminMarkDuplicateRefundedResponse(w http.ResponseWriter) error
+}
+
+type AdminMarkDuplicateRefunded204Response struct {
+}
+
+func (response AdminMarkDuplicateRefunded204Response) VisitAdminMarkDuplicateRefundedResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONResponse) VisitAdminMarkDuplicateRefundedResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -3586,6 +3767,12 @@ type StrictServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(ctx context.Context, request AdminLogoutRequestObject) (AdminLogoutResponseObject, error)
+	// AdminListDuplicatePayments Payments of invoices already paid, to refund
+	// (GET /admin/v1/billing/duplicates)
+	AdminListDuplicatePayments(ctx context.Context, request AdminListDuplicatePaymentsRequestObject) (AdminListDuplicatePaymentsResponseObject, error)
+	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
+	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
+	AdminMarkDuplicateRefunded(ctx context.Context, request AdminMarkDuplicateRefundedRequestObject) (AdminMarkDuplicateRefundedResponseObject, error)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(ctx context.Context, request AdminListFeaturesRequestObject) (AdminListFeaturesResponseObject, error)
@@ -4051,6 +4238,63 @@ func (sh *strictHandler) AdminLogout(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminLogoutResponseObject); ok {
 		if err := validResponse.VisitAdminLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListDuplicatePayments operation middleware
+func (sh *strictHandler) AdminListDuplicatePayments(w http.ResponseWriter, r *http.Request) {
+	var request AdminListDuplicatePaymentsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListDuplicatePayments(ctx, request.(AdminListDuplicatePaymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListDuplicatePayments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListDuplicatePaymentsResponseObject); ok {
+		if err := validResponse.VisitAdminListDuplicatePaymentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminMarkDuplicateRefunded operation middleware
+func (sh *strictHandler) AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request, paymentId ULID) {
+	var request AdminMarkDuplicateRefundedRequestObject
+
+	request.PaymentId = paymentId
+
+	var body AdminMarkDuplicateRefundedJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminMarkDuplicateRefunded(ctx, request.(AdminMarkDuplicateRefundedRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminMarkDuplicateRefunded")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminMarkDuplicateRefundedResponseObject); ok {
+		if err := validResponse.VisitAdminMarkDuplicateRefundedResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

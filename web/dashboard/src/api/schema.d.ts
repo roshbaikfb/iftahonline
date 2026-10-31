@@ -1993,6 +1993,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payments of invoices already paid, to refund
+         * @description A payment the gateway took for an invoice no longer open (paid on
+         *     two pages, or while the card on file was charged, or after a
+         *     transfer was settled) is kept here, never dropped (ADR-0063). The
+         *     admin refunds it on the gateway, then marks it refunded. Those to
+         *     refund come first; at most 200.
+         */
+        get: operations["adminListDuplicatePayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/duplicates/{payment_id}/refunded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a duplicate payment refunded on the gateway
+         * @description Once; recorded first in the admin log, with the refund's reference.
+         */
+        post: operations["adminMarkDuplicateRefunded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/features": {
         parameters: {
             query?: never;
@@ -4066,6 +4112,32 @@ export interface components {
         };
         AdminAdBannerActive: {
             active: boolean;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminDuplicatePayment: {
+            id: components["schemas"]["ULID"];
+            store_id: components["schemas"]["ULID"];
+            invoice_number: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: int64 */
+            amount_minor: number;
+            gateway: string;
+            /** @description The gateway's transaction, to refund. */
+            reference: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            refunded_at?: string;
+            refund_reference?: string;
+        };
+        AdminDuplicatePaymentList: {
+            items: components["schemas"]["AdminDuplicatePayment"][];
+        };
+        AdminRefundInput: {
+            /** @description The gateway's refund. */
+            reference: string;
             /** @description Kept in the admin audit log. */
             reason: string;
         };
@@ -8720,6 +8792,52 @@ export interface operations {
         };
         responses: {
             /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListDuplicatePayments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The duplicates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDuplicatePaymentList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminMarkDuplicateRefunded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRefundInput"];
+            };
+        };
+        responses: {
+            /** @description Recorded. */
             204: {
                 headers: {
                     [name: string]: unknown;

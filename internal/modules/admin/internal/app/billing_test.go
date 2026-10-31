@@ -71,3 +71,48 @@ func TestStoreBillingAndSettle(t *testing.T) {
 		t.Fatalf("cli: %v", err)
 	}
 }
+
+// TestDuplicatePaymentsFromTheConsole: the console lists duplicate
+// payments and records a refund with its reference, the reason first in
+// the admin log (ADR-0063). Billing's own tests cover a real duplicate.
+func TestDuplicatePaymentsFromTheConsole(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, me := f.signedIn(t)
+	if _, err := f.svc.DuplicatePayments(ctx); err != nil {
+		t.Fatal(err)
+	}
+	unknown := f.ids.New()
+	if err := f.svc.MarkRefunded(ctx, unknown, "PMB-1", "x"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("no reason: %v", err)
+	}
+	if err := f.svc.MarkRefunded(ctx, unknown, " ", "refunded on Paymob"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("no reference: %v", err)
+	}
+	if err := f.svc.MarkRefunded(ctx, unknown, "PMB-1", "refunded on Paymob"); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("unknown payment: %v", err)
+	}
+	page, err := f.svc.Audit(ctx, "", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range page.Items {
+		found = found || e.AdminID != nil && *e.AdminID == me.Admin.ID && e.Action == "payment.refunded" && e.TargetID == unknown.String()
+	}
+	if !found {
+		t.Fatal("the refund was not recorded first")
+	}
+	if _, err = f.svc.DuplicatePayments(t.Context()); !errs.Is(err, errs.KindUnauthenticated) {
+		t.Fatalf("not signed in: %v", err)
+	}
+	if err = f.svc.MarkRefunded(t.Context(), unknown, "PMB-1", "refunded"); !errs.Is(err, errs.KindUnauthenticated) {
+		t.Fatalf("not signed in: %v", err)
+	}
+	if _, err = f.cli.DuplicatePayments(ctx); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("cli: %v", err)
+	}
+	if err = f.cli.MarkRefunded(ctx, unknown, "PMB-1", "refunded"); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("cli: %v", err)
+	}
+}
