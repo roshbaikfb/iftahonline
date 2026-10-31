@@ -272,7 +272,7 @@ func FuzzParseCallback(f *testing.F) {
 	g := checkoutGateway(srv)
 	f.Add([]byte(`{"type":"TRANSACTION","obj":{"id":9001,"success":true,"order":{"id":4547,"merchant_order_id":"bc_01"}}}`), "00")
 	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"xxxx-2346","card_subtype":"Visa","order_id":"7"}}`), "") // nocarddata:allow a masked card
-	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"éé","card_subtype":"","order_id":"7"}}`), "")      // nocarddata:allow a masked card
+	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"éé","card_subtype":"","order_id":"7"}}`), "")            // nocarddata:allow a masked card
 	f.Add([]byte(`{"obj":null}`), "ab")
 	f.Fuzz(func(t *testing.T, body []byte, mac string) {
 		cb, err := g.ParseCallback(url.Values{"hmac": {mac}}, body)

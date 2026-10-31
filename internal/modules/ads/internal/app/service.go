@@ -97,23 +97,30 @@ func (s *Service) liveFor(ctx context.Context, country string) (live, error) {
 	}
 	v, err, _ := s.loads.Do(country, func() (any, error) {
 		// Shared by every waiting page: one leaving does not cancel it.
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
+		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
 		defer cancel()
-		settings, err := store.Settings(ctx, s.d.DB)
+		settings, err := store.Settings(lctx, s.d.DB)
 		if err != nil {
 			return live{}, err
 		}
-		banners, err := store.LiveBanners(ctx, s.d.DB, now, country)
+		banners, err := store.LiveBanners(lctx, s.d.DB, now, country)
 		if err != nil {
 			return live{}, err
 		}
-		l := live{settings: settings, banners: banners, until: now.Add(CacheTTL)}
+		got := live{settings: settings, banners: banners, until: now.Add(CacheTTL)}
 		s.mu.Lock()
-		s.hot[country] = l
+		s.hot[country] = got
 		s.mu.Unlock()
-		return l, nil
+		return got, nil
 	})
-	return v.(live), err //nolint:forcetypeassert // the function above returns only live
+	if err != nil {
+		return live{}, err
+	}
+	got, ok := v.(live)
+	if !ok {
+		return live{}, fmt.Errorf("ads: a load returned %T", v)
+	}
+	return got, nil
 }
 
 // Slots are what each placement of a free store in country shows.
