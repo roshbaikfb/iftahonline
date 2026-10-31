@@ -16,6 +16,7 @@ Isolation rules: [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 | `Module.RegisterWorkers` | Registers the module's jobs with the worker |
 | `Module.ListenInvalidations` | Run by each storefront instance to receive cache invalidations |
 | `Module.Directory()` | The cross-tenant store directory on the console's pool: `Search`, `Store`, and `Counts` (stores by state, for the health page, ADR-0058) |
+| `CountCustomDomains(ctx, tx)` | The store's custom domains in its tenant transaction: the usage meter (ADR-0061) |
 
 `CreateStoreTx` runs inside the caller's transaction (ADR-0007). The
 caller does the following:

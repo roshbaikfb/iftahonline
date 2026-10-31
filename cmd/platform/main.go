@@ -319,7 +319,11 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err != nil {
 		return clients{}, err
 	}
-	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.FromBilling(bill.Grants()), IDs: ids, Events: bus})
+	// The usage meters count with the modules' own counts (ADR-0061).
+	ent, err := entitlements.New(entitlements.Deps{Pool: pool, Source: entitlements.FromBilling(bill.Grants()), IDs: ids, Events: bus,
+		Counters: map[entitlements.Feature]entitlements.Counter{
+			entitlements.Products: catalog.CountProducts, entitlements.Staff: identity.CountStaff, entitlements.CustomDomains: tenancy.CountCustomDomains,
+		}})
 	if err != nil {
 		return clients{}, err
 	}
@@ -678,6 +682,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		mkt.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		bill.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		c.entitlements.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
 			c.log.Error("card checkout not mounted", "err", mountErr)
 		}

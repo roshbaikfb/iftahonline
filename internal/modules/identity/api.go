@@ -59,3 +59,8 @@ func StaffEmails(db postgres.Beginner, roles ...authz.Role) func(ctx context.Con
 		return out, err
 	}
 }
+
+// CountStaff counts the store-in-ctx's team seats (members and pending
+// invitations) in its tenant transaction tx: the staff usage meter
+// (ADR-0061), the count the plan's limit admits against.
+func CountStaff(ctx context.Context, tx pgx.Tx) (int64, error) { return store.CountSeats(ctx, tx) }

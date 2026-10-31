@@ -3497,6 +3497,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's usage against what it is granted
+         * @description Permission: billing.manage. Monthly features count the current
+         *     calendar month (UTC); counted ones are what the store holds now.
+         *     `limit` is absent when unlimited.
+         */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay": {
         parameters: {
             query?: never;
@@ -5441,6 +5465,20 @@ export interface components {
              */
             next_cycle?: "monthly" | "annual";
             open_invoices: components["schemas"]["OpenInvoice"][];
+        };
+        UsageMeters: {
+            items: components["schemas"]["UsageMeter"][];
+        };
+        UsageMeter: {
+            /** @enum {string} */
+            feature: "orders_per_month" | "messages" | "products" | "staff" | "custom_domains";
+            /** @enum {string} */
+            kind: "monthly" | "count";
+            /** Format: int64 */
+            used: number;
+            /** Format: int64 */
+            limit?: number;
+            unlimited: boolean;
         };
         BillingPlans: {
             /** @enum {string} */
@@ -10493,6 +10531,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The meters, in the billing page's order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageMeters"];
                 };
             };
             default: components["responses"]["Problem"];
