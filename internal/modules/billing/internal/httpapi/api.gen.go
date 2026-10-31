@@ -19,16 +19,34 @@ import (
 
 // Defines values for BillingCycle.
 const (
-	Annual  BillingCycle = "annual"
-	Monthly BillingCycle = "monthly"
+	BillingCycleAnnual  BillingCycle = "annual"
+	BillingCycleMonthly BillingCycle = "monthly"
 )
 
 // Valid indicates whether the value is a known member of the BillingCycle enum.
 func (e BillingCycle) Valid() bool {
 	switch e {
-	case Annual:
+	case BillingCycleAnnual:
 		return true
-	case Monthly:
+	case BillingCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingNextCycle.
+const (
+	BillingNextCycleAnnual  BillingNextCycle = "annual"
+	BillingNextCycleMonthly BillingNextCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the BillingNextCycle enum.
+func (e BillingNextCycle) Valid() bool {
+	switch e {
+	case BillingNextCycleAnnual:
+		return true
+	case BillingNextCycleMonthly:
 		return true
 	default:
 		return false
@@ -62,6 +80,108 @@ func (e BillingStatus) Valid() bool {
 	}
 }
 
+// Defines values for BillingFeatureKind.
+const (
+	BillingFeatureKindCount   BillingFeatureKind = "count"
+	BillingFeatureKindFlag    BillingFeatureKind = "flag"
+	BillingFeatureKindMonthly BillingFeatureKind = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the BillingFeatureKind enum.
+func (e BillingFeatureKind) Valid() bool {
+	switch e {
+	case BillingFeatureKindCount:
+		return true
+	case BillingFeatureKindFlag:
+		return true
+	case BillingFeatureKindMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingPlanKind.
+const (
+	Free         BillingPlanKind = "free"
+	Pays         BillingPlanKind = "pays"
+	Subscription BillingPlanKind = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the BillingPlanKind enum.
+func (e BillingPlanKind) Valid() bool {
+	switch e {
+	case Free:
+		return true
+	case Pays:
+		return true
+	case Subscription:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingPlansCurrency.
+const (
+	BillingPlansCurrencyAED BillingPlansCurrency = "AED"
+	BillingPlansCurrencyEGP BillingPlansCurrency = "EGP"
+	BillingPlansCurrencySAR BillingPlansCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the BillingPlansCurrency enum.
+func (e BillingPlansCurrency) Valid() bool {
+	switch e {
+	case BillingPlansCurrencyAED:
+		return true
+	case BillingPlansCurrencyEGP:
+		return true
+	case BillingPlansCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChoosePlanRequestCycle.
+const (
+	ChoosePlanRequestCycleAnnual  ChoosePlanRequestCycle = "annual"
+	ChoosePlanRequestCycleMonthly ChoosePlanRequestCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the ChoosePlanRequestCycle enum.
+func (e ChoosePlanRequestCycle) Valid() bool {
+	switch e {
+	case ChoosePlanRequestCycleAnnual:
+		return true
+	case ChoosePlanRequestCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChoosePlanResultAction.
+const (
+	Apply    ChoosePlanResultAction = "apply"
+	Pay      ChoosePlanResultAction = "pay"
+	Schedule ChoosePlanResultAction = "schedule"
+)
+
+// Valid indicates whether the value is a known member of the ChoosePlanResultAction enum.
+func (e ChoosePlanResultAction) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case Pay:
+		return true
+	case Schedule:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageTextKind.
 const (
 	OrderConfirmation MessageTextKind = "order_confirmation"
@@ -79,19 +199,19 @@ func (e MessageTextKind) Valid() bool {
 
 // Defines values for OpenInvoiceCurrency.
 const (
-	AED OpenInvoiceCurrency = "AED"
-	EGP OpenInvoiceCurrency = "EGP"
-	SAR OpenInvoiceCurrency = "SAR"
+	OpenInvoiceCurrencyAED OpenInvoiceCurrency = "AED"
+	OpenInvoiceCurrencyEGP OpenInvoiceCurrency = "EGP"
+	OpenInvoiceCurrencySAR OpenInvoiceCurrency = "SAR"
 )
 
 // Valid indicates whether the value is a known member of the OpenInvoiceCurrency enum.
 func (e OpenInvoiceCurrency) Valid() bool {
 	switch e {
-	case AED:
+	case OpenInvoiceCurrencyAED:
 		return true
-	case EGP:
+	case OpenInvoiceCurrencyEGP:
 		return true
-	case SAR:
+	case OpenInvoiceCurrencySAR:
 		return true
 	default:
 		return false
@@ -133,20 +253,112 @@ type Billing struct {
 	Cycle *BillingCycle `json:"cycle,omitempty"`
 
 	// GraceUntil Past due: when the store closes unpaid.
-	GraceUntil   *time.Time    `json:"grace_until,omitempty"`
-	OpenInvoices []OpenInvoice `json:"open_invoices"`
-	PeriodEnd    *time.Time    `json:"period_end,omitempty"`
-	PlanNameAr   string        `json:"plan_name_ar"`
-	PlanNameEn   string        `json:"plan_name_en"`
-	Status       BillingStatus `json:"status"`
-	TrialEndsAt  *time.Time    `json:"trial_ends_at,omitempty"`
+	GraceUntil *time.Time `json:"grace_until,omitempty"`
+
+	// NextCycle The cycle of the next renewal when it changes.
+	NextCycle *BillingNextCycle `json:"next_cycle,omitempty"`
+
+	// NextPlanNameAr The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation.
+	NextPlanNameAr *string       `json:"next_plan_name_ar,omitempty"`
+	NextPlanNameEn *string       `json:"next_plan_name_en,omitempty"`
+	OpenInvoices   []OpenInvoice `json:"open_invoices"`
+	PeriodEnd      *time.Time    `json:"period_end,omitempty"`
+	PlanNameAr     string        `json:"plan_name_ar"`
+	PlanNameEn     string        `json:"plan_name_en"`
+	Status         BillingStatus `json:"status"`
+	TrialEndsAt    *time.Time    `json:"trial_ends_at,omitempty"`
 }
 
 // BillingCycle defines model for Billing.Cycle.
 type BillingCycle string
 
+// BillingNextCycle The cycle of the next renewal when it changes.
+type BillingNextCycle string
+
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingFeature defines model for BillingFeature.
+type BillingFeature struct {
+	Key    string             `json:"key"`
+	Kind   BillingFeatureKind `json:"kind"`
+	NameAr string             `json:"name_ar"`
+	NameEn string             `json:"name_en"`
+}
+
+// BillingFeatureKind defines model for BillingFeature.Kind.
+type BillingFeatureKind string
+
+// BillingGrant defines model for BillingGrant.
+type BillingGrant struct {
+	Feature   string `json:"feature"`
+	Unlimited bool   `json:"unlimited"`
+	Value     int64  `json:"value"`
+}
+
+// BillingPlan defines model for BillingPlan.
+type BillingPlan struct {
+	AnnualMinor *int64 `json:"annual_minor,omitempty"`
+	Code        string `json:"code"`
+
+	// Current The plan the store is on.
+	Current bool `json:"current"`
+
+	// Fee Pay as you sell's fee on delivered orders.
+	Fee    *BillingPlanFee `json:"fee,omitempty"`
+	Grants []BillingGrant  `json:"grants"`
+	Kind   BillingPlanKind `json:"kind"`
+
+	// MonthlyMinor The monthly price in the store's currency; absent when not sold monthly.
+	MonthlyMinor   *int64 `json:"monthly_minor,omitempty"`
+	NameAr         string `json:"name_ar"`
+	NameEn         string `json:"name_en"`
+	TrialAvailable bool   `json:"trial_available"`
+	TrialDays      int    `json:"trial_days"`
+}
+
+// BillingPlanKind defines model for BillingPlan.Kind.
+type BillingPlanKind string
+
+// BillingPlanFee Pay as you sell's fee on delivered orders.
+type BillingPlanFee struct {
+	MaxMinor *int64 `json:"max_minor,omitempty"`
+	MinMinor int64  `json:"min_minor"`
+
+	// RateBps 250 is 2.5%.
+	RateBps int `json:"rate_bps"`
+}
+
+// BillingPlans defines model for BillingPlans.
+type BillingPlans struct {
+	Currency BillingPlansCurrency `json:"currency"`
+	Features []BillingFeature     `json:"features"`
+	Plans    []BillingPlan        `json:"plans"`
+}
+
+// BillingPlansCurrency defines model for BillingPlans.Currency.
+type BillingPlansCurrency string
+
+// ChoosePlanRequest defines model for ChoosePlanRequest.
+type ChoosePlanRequest struct {
+	// Cycle Required for a paid plan.
+	Cycle    *ChoosePlanRequestCycle `json:"cycle,omitempty"`
+	PlanCode string                  `json:"plan_code"`
+}
+
+// ChoosePlanRequestCycle Required for a paid plan.
+type ChoosePlanRequestCycle string
+
+// ChoosePlanResult defines model for ChoosePlanResult.
+type ChoosePlanResult struct {
+	Action ChoosePlanResultAction `json:"action"`
+
+	// CheckoutUrl With `pay`: Paymob's page for the first period.
+	CheckoutUrl *string `json:"checkout_url,omitempty"`
+}
+
+// ChoosePlanResultAction defines model for ChoosePlanResult.Action.
+type ChoosePlanResultAction string
 
 // FieldError defines model for FieldError.
 type FieldError struct {
@@ -248,14 +460,40 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// StartTrialJSONBody defines parameters for StartTrial.
+type StartTrialJSONBody struct {
+	PlanCode string `json:"plan_code"`
+}
+
+// ChoosePlanJSONRequestBody defines body for ChoosePlan for application/json ContentType.
+type ChoosePlanJSONRequestBody = ChoosePlanRequest
+
+// StartTrialJSONRequestBody defines body for StartTrial for application/json ContentType.
+type StartTrialJSONRequestBody StartTrialJSONBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetBilling The store's plan, card on file and open invoices
 	// (GET /v1/stores/{store_id}/billing)
 	GetBilling(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// CancelRenewal Stop renewing; the free plan after the paid period
+	// (POST /v1/stores/{store_id}/billing/cancel)
+	CancelRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// PayInvoice Pay an open invoice on Paymob's page
 	// (POST /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay)
 	PayInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID)
+	// ListBillingPlans The plans the store may choose, in its currency
+	// (GET /v1/stores/{store_id}/billing/plans)
+	ListBillingPlans(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// ResumeRenewal Keep the current plan, dropping a cancellation or a scheduled change
+	// (POST /v1/stores/{store_id}/billing/resume)
+	ResumeRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// ChoosePlan Choose a plan
+	// (POST /v1/stores/{store_id}/billing/subscription)
+	ChoosePlan(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// StartTrial Start a paid plan's free trial
+	// (POST /v1/stores/{store_id}/billing/trial)
+	StartTrial(w http.ResponseWriter, r *http.Request, storeId StoreID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -293,6 +531,32 @@ func (siw *ServerInterfaceWrapper) GetBilling(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// CancelRenewal operation middleware
+func (siw *ServerInterfaceWrapper) CancelRenewal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRenewal(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PayInvoice operation middleware
 func (siw *ServerInterfaceWrapper) PayInvoice(w http.ResponseWriter, r *http.Request) {
 
@@ -319,6 +583,110 @@ func (siw *ServerInterfaceWrapper) PayInvoice(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PayInvoice(w, r, storeId, invoiceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBillingPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListBillingPlans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBillingPlans(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeRenewal operation middleware
+func (siw *ServerInterfaceWrapper) ResumeRenewal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeRenewal(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChoosePlan operation middleware
+func (siw *ServerInterfaceWrapper) ChoosePlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChoosePlan(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartTrial operation middleware
+func (siw *ServerInterfaceWrapper) StartTrial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartTrial(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -449,6 +817,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/billing", wrapper.GetBilling)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/billing/plans", wrapper.ListBillingPlans)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/subscription", wrapper.ChoosePlan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/trial", wrapper.StartTrial)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/cancel", wrapper.CancelRenewal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/resume", wrapper.ResumeRenewal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay", wrapper.PayInvoice)
 
 	return m
@@ -484,6 +857,45 @@ type GetBillingdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetBillingdefaultApplicationProblemPlusJSONResponse) VisitGetBillingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRenewalRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type CancelRenewalResponseObject interface {
+	VisitCancelRenewalResponse(w http.ResponseWriter) error
+}
+
+type CancelRenewal200JSONResponse Billing
+
+func (response CancelRenewal200JSONResponse) VisitCancelRenewalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRenewaldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelRenewaldefaultApplicationProblemPlusJSONResponse) VisitCancelRenewalResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -537,14 +949,187 @@ func (response PayInvoicedefaultApplicationProblemPlusJSONResponse) VisitPayInvo
 	return err
 }
 
+type ListBillingPlansRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ListBillingPlansResponseObject interface {
+	VisitListBillingPlansResponse(w http.ResponseWriter) error
+}
+
+type ListBillingPlans200JSONResponse BillingPlans
+
+func (response ListBillingPlans200JSONResponse) VisitListBillingPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBillingPlansdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListBillingPlansdefaultApplicationProblemPlusJSONResponse) VisitListBillingPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRenewalRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type ResumeRenewalResponseObject interface {
+	VisitResumeRenewalResponse(w http.ResponseWriter) error
+}
+
+type ResumeRenewal200JSONResponse Billing
+
+func (response ResumeRenewal200JSONResponse) VisitResumeRenewalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRenewaldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResumeRenewaldefaultApplicationProblemPlusJSONResponse) VisitResumeRenewalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChoosePlanRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *ChoosePlanJSONRequestBody
+}
+
+type ChoosePlanResponseObject interface {
+	VisitChoosePlanResponse(w http.ResponseWriter) error
+}
+
+type ChoosePlan200JSONResponse ChoosePlanResult
+
+func (response ChoosePlan200JSONResponse) VisitChoosePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChoosePlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChoosePlandefaultApplicationProblemPlusJSONResponse) VisitChoosePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartTrialRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *StartTrialJSONRequestBody
+}
+
+type StartTrialResponseObject interface {
+	VisitStartTrialResponse(w http.ResponseWriter) error
+}
+
+type StartTrial200JSONResponse Billing
+
+func (response StartTrial200JSONResponse) VisitStartTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartTrialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartTrialdefaultApplicationProblemPlusJSONResponse) VisitStartTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// GetBilling The store's plan, card on file and open invoices
 	// (GET /v1/stores/{store_id}/billing)
 	GetBilling(ctx context.Context, request GetBillingRequestObject) (GetBillingResponseObject, error)
+	// CancelRenewal Stop renewing; the free plan after the paid period
+	// (POST /v1/stores/{store_id}/billing/cancel)
+	CancelRenewal(ctx context.Context, request CancelRenewalRequestObject) (CancelRenewalResponseObject, error)
 	// PayInvoice Pay an open invoice on Paymob's page
 	// (POST /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay)
 	PayInvoice(ctx context.Context, request PayInvoiceRequestObject) (PayInvoiceResponseObject, error)
+	// ListBillingPlans The plans the store may choose, in its currency
+	// (GET /v1/stores/{store_id}/billing/plans)
+	ListBillingPlans(ctx context.Context, request ListBillingPlansRequestObject) (ListBillingPlansResponseObject, error)
+	// ResumeRenewal Keep the current plan, dropping a cancellation or a scheduled change
+	// (POST /v1/stores/{store_id}/billing/resume)
+	ResumeRenewal(ctx context.Context, request ResumeRenewalRequestObject) (ResumeRenewalResponseObject, error)
+	// ChoosePlan Choose a plan
+	// (POST /v1/stores/{store_id}/billing/subscription)
+	ChoosePlan(ctx context.Context, request ChoosePlanRequestObject) (ChoosePlanResponseObject, error)
+	// StartTrial Start a paid plan's free trial
+	// (POST /v1/stores/{store_id}/billing/trial)
+	StartTrial(ctx context.Context, request StartTrialRequestObject) (StartTrialResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -612,6 +1197,32 @@ func (sh *strictHandler) GetBilling(w http.ResponseWriter, r *http.Request, stor
 	}
 }
 
+// CancelRenewal operation middleware
+func (sh *strictHandler) CancelRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request CancelRenewalRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRenewal(ctx, request.(CancelRenewalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRenewal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRenewalResponseObject); ok {
+		if err := validResponse.VisitCancelRenewalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PayInvoice operation middleware
 func (sh *strictHandler) PayInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID) {
 	var request PayInvoiceRequestObject
@@ -632,6 +1243,124 @@ func (sh *strictHandler) PayInvoice(w http.ResponseWriter, r *http.Request, stor
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PayInvoiceResponseObject); ok {
 		if err := validResponse.VisitPayInvoiceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBillingPlans operation middleware
+func (sh *strictHandler) ListBillingPlans(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ListBillingPlansRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBillingPlans(ctx, request.(ListBillingPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBillingPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBillingPlansResponseObject); ok {
+		if err := validResponse.VisitListBillingPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeRenewal operation middleware
+func (sh *strictHandler) ResumeRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ResumeRenewalRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeRenewal(ctx, request.(ResumeRenewalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeRenewal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeRenewalResponseObject); ok {
+		if err := validResponse.VisitResumeRenewalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChoosePlan operation middleware
+func (sh *strictHandler) ChoosePlan(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request ChoosePlanRequestObject
+
+	request.StoreId = storeId
+
+	var body ChoosePlanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChoosePlan(ctx, request.(ChoosePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChoosePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChoosePlanResponseObject); ok {
+		if err := validResponse.VisitChoosePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartTrial operation middleware
+func (sh *strictHandler) StartTrial(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request StartTrialRequestObject
+
+	request.StoreId = storeId
+
+	var body StartTrialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartTrial(ctx, request.(StartTrialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartTrial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartTrialResponseObject); ok {
+		if err := validResponse.VisitStartTrialResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

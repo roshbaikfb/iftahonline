@@ -3377,6 +3377,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/billing/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The plans the store may choose, in its currency
+         * @description Permission: billing.manage. With the features catalog naming what they grant (ADR-0060).
+         */
+        get: operations["listBillingPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose a plan
+         * @description Permission: billing.manage. ADR-0060:
+         *       - from the free plan, a trial or pay as you sell: the free plan
+         *         and pay as you sell apply at once (`apply`); a paid plan is
+         *         paid first on Paymob's page (`pay`, with `checkout_url`) and
+         *         starts when paid;
+         *       - during a paid period: another paid plan or cycle applies at
+         *         the renewal, pay as you sell and the free plan after the
+         *         period (`schedule`). Choosing the current plan and cycle takes
+         *         a scheduled change back.
+         *     409 settle_first with an open renewal or a past-due store;
+         *     409 no_change; 404 for a plan not on sale.
+         */
+        post: operations["choosePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/trial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a paid plan's free trial
+         * @description Permission: billing.manage. Once per store, from the free plan, without a card (409 trial_unavailable otherwise).
+         */
+        post: operations["startTrial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop renewing; the free plan after the paid period
+         * @description Permission: billing.manage.
+         */
+        post: operations["cancelRenewal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep the current plan, dropping a cancellation or a scheduled change
+         * @description Permission: billing.manage. 409 no_change when there is none.
+         */
+        post: operations["resumeRenewal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay": {
         parameters: {
             query?: never;
@@ -5312,7 +5432,80 @@ export interface components {
              * @example MasterCard •••• 2346
              */
             card?: string;
+            /** @description The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation. */
+            next_plan_name_ar?: string;
+            next_plan_name_en?: string;
+            /**
+             * @description The cycle of the next renewal when it changes.
+             * @enum {string}
+             */
+            next_cycle?: "monthly" | "annual";
             open_invoices: components["schemas"]["OpenInvoice"][];
+        };
+        BillingPlans: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            features: components["schemas"]["BillingFeature"][];
+            plans: components["schemas"]["BillingPlan"][];
+        };
+        BillingFeature: {
+            key: string;
+            /** @enum {string} */
+            kind: "flag" | "count" | "monthly";
+            name_ar: string;
+            name_en: string;
+        };
+        BillingPlan: {
+            code: string;
+            /** @enum {string} */
+            kind: "free" | "pays" | "subscription";
+            name_ar: string;
+            name_en: string;
+            trial_days: number;
+            /**
+             * Format: int64
+             * @description The monthly price in the store's currency; absent when not sold monthly.
+             */
+            monthly_minor?: number;
+            /** Format: int64 */
+            annual_minor?: number;
+            fee?: components["schemas"]["BillingPlanFee"];
+            /** @description The plan the store is on. */
+            current: boolean;
+            trial_available: boolean;
+            grants: components["schemas"]["BillingGrant"][];
+        };
+        /** @description Pay as you sell's fee on delivered orders. */
+        BillingPlanFee: {
+            /** @description 250 is 2.5%. */
+            rate_bps: number;
+            /** Format: int64 */
+            min_minor: number;
+            /** Format: int64 */
+            max_minor?: number;
+        };
+        BillingGrant: {
+            feature: string;
+            unlimited: boolean;
+            /** Format: int64 */
+            value: number;
+        };
+        ChoosePlanRequest: {
+            plan_code: string;
+            /**
+             * @description Required for a paid plan.
+             * @enum {string}
+             */
+            cycle?: "monthly" | "annual";
+        };
+        ChoosePlanResult: {
+            /** @enum {string} */
+            action: "apply" | "pay" | "schedule";
+            /**
+             * Format: uri
+             * @description With `pay`: Paymob's page for the first period.
+             */
+            checkout_url?: string;
         };
         OpenInvoice: {
             id: components["schemas"]["ULID"];
@@ -10169,6 +10362,131 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The store's billing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listBillingPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plans on sale. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingPlans"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    choosePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChoosePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description What the choice did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoosePlanResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startTrial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    plan_code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The trial started; the store's billing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    cancelRenewal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled; the store's billing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resumeRenewal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kept; the store's billing. */
             200: {
                 headers: {
                     [name: string]: unknown;

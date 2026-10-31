@@ -3921,6 +3921,111 @@ paths:
               schema: { $ref: "#/components/schemas/Billing" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/plans:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [billing]
+      operationId: listBillingPlans
+      summary: The plans the store may choose, in its currency
+      description: "Permission: billing.manage. With the features catalog naming what they grant (ADR-0060)."
+      responses:
+        "200":
+          description: The plans on sale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingPlans" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/subscription:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: choosePlan
+      summary: Choose a plan
+      description: |
+        Permission: billing.manage. ADR-0060:
+          - from the free plan, a trial or pay as you sell: the free plan
+            and pay as you sell apply at once (`apply`); a paid plan is
+            paid first on Paymob's page (`pay`, with `checkout_url`) and
+            starts when paid;
+          - during a paid period: another paid plan or cycle applies at
+            the renewal, pay as you sell and the free plan after the
+            period (`schedule`). Choosing the current plan and cycle takes
+            a scheduled change back.
+        409 settle_first with an open renewal or a past-due store;
+        409 no_change; 404 for a plan not on sale.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChoosePlanRequest" }
+      responses:
+        "200":
+          description: What the choice did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChoosePlanResult" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/trial:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: startTrial
+      summary: Start a paid plan's free trial
+      description: "Permission: billing.manage. Once per store, from the free plan, without a card (409 trial_unavailable otherwise)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_code]
+              properties:
+                plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+      responses:
+        "200":
+          description: The trial started; the store's billing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/cancel:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: cancelRenewal
+      summary: Stop renewing; the free plan after the paid period
+      description: "Permission: billing.manage."
+      responses:
+        "200":
+          description: Cancelled; the store's billing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/resume:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: resumeRenewal
+      summary: Keep the current plan, dropping a cancellation or a scheduled change
+      description: "Permission: billing.manage. 409 no_change when there is none."
+      responses:
+        "200":
+          description: Kept; the store's billing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -6050,9 +6155,75 @@ components:
         grace_until: { type: string, format: date-time, description: "Past due: when the store closes unpaid." }
         cancel_at_period_end: { type: boolean }
         card: { type: string, example: "MasterCard •••• 2346", description: The card on file; absent without one. }
+        next_plan_name_ar: { type: string, description: "The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation." }
+        next_plan_name_en: { type: string }
+        next_cycle: { type: string, enum: [monthly, annual], description: The cycle of the next renewal when it changes. }
         open_invoices:
           type: array
           items: { $ref: "#/components/schemas/OpenInvoice" }
+    BillingPlans:
+      type: object
+      required: [currency, features, plans]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/BillingFeature" }
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/BillingPlan" }
+    BillingFeature:
+      type: object
+      required: [key, kind, name_ar, name_en]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [flag, count, monthly] }
+        name_ar: { type: string }
+        name_en: { type: string }
+    BillingPlan:
+      type: object
+      required: [code, kind, name_ar, name_en, trial_days, current, trial_available, grants]
+      properties:
+        code: { type: string }
+        kind: { type: string, enum: [free, pays, subscription] }
+        name_ar: { type: string }
+        name_en: { type: string }
+        trial_days: { type: integer }
+        monthly_minor: { type: integer, format: int64, description: The monthly price in the store's currency; absent when not sold monthly. }
+        annual_minor: { type: integer, format: int64 }
+        fee: { $ref: "#/components/schemas/BillingPlanFee" }
+        current: { type: boolean, description: The plan the store is on. }
+        trial_available: { type: boolean }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/BillingGrant" }
+    BillingPlanFee:
+      type: object
+      description: Pay as you sell's fee on delivered orders.
+      required: [rate_bps, min_minor]
+      properties:
+        rate_bps: { type: integer, description: "250 is 2.5%." }
+        min_minor: { type: integer, format: int64 }
+        max_minor: { type: integer, format: int64 }
+    BillingGrant:
+      type: object
+      required: [feature, unlimited, value]
+      properties:
+        feature: { type: string }
+        unlimited: { type: boolean }
+        value: { type: integer, format: int64 }
+    ChoosePlanRequest:
+      type: object
+      required: [plan_code]
+      properties:
+        plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
+        cycle: { type: string, enum: [monthly, annual], description: Required for a paid plan. }
+    ChoosePlanResult:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [apply, pay, schedule] }
+        checkout_url: { type: string, format: uri, description: "With `pay`: Paymob's page for the first period." }
     OpenInvoice:
       type: object
       required: [id, number, period, currency, total_minor, due_at, attempts]
