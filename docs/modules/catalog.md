@@ -15,6 +15,7 @@ read side: [ADR-0015](../adr/0015-domain-events-and-storefront-reads.md).
 
 | Symbol | Purpose |
 |---|---|
+| `CountProducts(ctx, tx)` | The store's products (not deleted) in its tenant transaction: the usage meter (ADR-0061), the count its plan limit admits against |
 | `Catalog.GetSellableVariant(ctx, id)` | A variant of an active, live product with price and stock, or `ErrVariantNotFound` |
 | `Catalog.ReserveStock(ctx, req)` | Holds stock for every line of `req` (all or nothing) until release or TTL; idempotent by `req.Ref` |
 | `Catalog.ReleaseStock(ctx, ref)` | Gives the held stock back; idempotent; unknown ref is `ErrReservationNotFound` |
