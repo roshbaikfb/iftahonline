@@ -20,6 +20,9 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `POST /admin/v1/plans/{code}/retire` | Off sale; never the free plan |
 | `GET /admin/v1/stores/{id}/entitlements` | The store's plan grants, its overrides and the effective grants (ADR-0057) |
 | `PUT /admin/v1/stores/{id}/entitlements/{feature}`, `POST …/{feature}/clear` | Per-store feature flags: a grant instead of the plan's, optionally until a date; only enforced features. Recorded here first (`store.feature_overridden`, `store.feature_override_cleared`) |
+| `GET /admin/v1/health` | Database and Redis checks, and counts: stores by state, subscriptions by status, open and overdue invoices, the job queue (ADR-0058). A failed section is absent and named in `errors`; the page still answers |
+| `GET /admin/v1/stores/{id}/billing` | The store's billing page: plan, status, period, card, open invoices |
+| `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -43,6 +46,10 @@ same-origin.
   are recorded here first (`feature.saved`, `plan.published`,
   `plan.retired`), with the reason.
 - **Per-store flags:** `Deps.Overrides` is `entitlements.Module.Overrides()`.
+- **Billing:** `Deps.Billing` is `billing.Module.Console()`. The API
+  role's billing has the holds and the bus, which settling needs.
+- **Health:** the job counts come from `app.job_health()` (migration
+  00065), granted to `app_admin`. It returns numbers only.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
   `platform/authtoken`, `platform/email` and `platform/clientinfo`. They
   were moved out of identity when the console became their second user.

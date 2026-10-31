@@ -32,6 +32,7 @@ are in place.
 | `Orders`, `Order`, `OrderStatus` | The order reader fees need; `cmd/platform` adapts `orders.Fulfilment` (billing does not import orders) |
 | `SellFeesSubscriber` | `billing.sell_fees`, subscribed to `orders.order.status_changed` in the worker |
 
+| `Module.Console()`, `Console` | The console's view (ADR-0058): `Health` (counts through `app.billing_health()`), `Summary` of the store in ctx, `SettleStoreInvoice` (a confirmed transfer; 404 unless it is an open invoice of the store's account) |
 | `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions, publish, retire |
 | `Feature`, `PlanVersion`, `Price`, `CurrencyFee` | The catalog's DTOs; `Validate()` checks them |
 
