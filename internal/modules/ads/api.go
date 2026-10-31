@@ -48,8 +48,9 @@ type Shop interface {
 	PublisherID(ctx context.Context) (string, error)
 	// AdsTxt is /ads.txt's body ("" with AdSense off).
 	AdsTxt(ctx context.Context) (string, error)
-	// Click counts a click on a banner on show and returns its link.
-	Click(ctx context.Context, id ulid.ID) (link string, ok bool, err error)
+	// Click returns a banner on show's link, and counts the click when
+	// count.
+	Click(ctx context.Context, id ulid.ID, count bool) (link string, ok bool, err error)
 }
 
 // Console is what the super-admin console manages.

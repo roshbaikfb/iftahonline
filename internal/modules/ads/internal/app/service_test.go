@@ -223,16 +223,19 @@ func TestAdsEndToEnd(t *testing.T) {
 
 	// Clicks: counted per day, from the shop's pool.
 	for range 2 {
-		if link, ok, clickErr := shopOnly.Click(ctx, saved.ID); clickErr != nil || !ok || link != banner.Link {
+		if link, ok, clickErr := shopOnly.Click(ctx, saved.ID, true); clickErr != nil || !ok || link != banner.Link {
 			t.Fatalf("click = %q, %v, %v", link, ok, clickErr)
 		}
 	}
 	clk.add(24 * time.Hour)
-	if _, _, err = shopOnly.Click(ctx, saved.ID); err != nil {
+	if _, _, err = shopOnly.Click(ctx, saved.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, clickErr := shopOnly.Click(ctx, deps.IDs.New()); clickErr != nil || ok {
+	if _, ok, clickErr := shopOnly.Click(ctx, deps.IDs.New(), true); clickErr != nil || ok {
 		t.Fatalf("unknown banner click = %v, %v", ok, clickErr)
+	}
+	if link, ok, clickErr := shopOnly.Click(ctx, saved.ID, false); clickErr != nil || !ok || link != banner.Link {
+		t.Fatalf("an uncounted click = %q, %v, %v", link, ok, clickErr)
 	}
 	var days int
 	if err = adminPool.QueryRow(ctx, "SELECT count(*) FROM ad_clicks WHERE banner_id = $1", saved.ID).Scan(&days); err != nil || days != 2 {
@@ -250,7 +253,7 @@ func TestAdsEndToEnd(t *testing.T) {
 	if err = svc.SetActive(ctx, deps.IDs.New(), false); !errs.Is(err, errs.KindNotFound) {
 		t.Fatalf("unknown banner: %v", err)
 	}
-	if _, ok, _ := shopOnly.Click(ctx, saved.ID); ok {
+	if _, ok, _ := shopOnly.Click(ctx, saved.ID, true); ok {
 		t.Fatal("a stopped banner clicked through")
 	}
 	clk.add(app.CacheTTL)

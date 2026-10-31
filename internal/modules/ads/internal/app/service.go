@@ -132,13 +132,14 @@ func (s *Service) AdsTxt(ctx context.Context) (string, error) {
 	return l.settings.AdsTxt(), nil
 }
 
-// Click counts a click on banner id today (UTC) and returns its link;
-// ok is false for a banner not on show.
-func (s *Service) Click(ctx context.Context, id ulid.ID) (string, bool, error) {
+// Click returns banner id's link, and counts the click today (UTC) when
+// count (the storefront's limits let it); ok is false for a banner not
+// on show.
+func (s *Service) Click(ctx context.Context, id ulid.ID, count bool) (string, bool, error) {
 	now := s.d.Now().UTC()
 	link, ok, err := store.LiveLink(ctx, s.d.DB, id, now)
-	if err != nil || !ok {
-		return "", false, err
+	if err != nil || !ok || !count {
+		return link, ok, err
 	}
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	if err = store.CountClick(ctx, s.d.DB, id, day); err != nil {
