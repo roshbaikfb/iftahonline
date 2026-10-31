@@ -62,7 +62,7 @@ func TestDo(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := paymob.New(paymob.Options{BaseURL: srv.URL})
+	c := paymob.New(paymob.Options{BaseURL: srv.URL, Client: srv.Client()})
 	var out struct {
 		ID string `json:"id"`
 	}

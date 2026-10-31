@@ -24,6 +24,7 @@ const Key = "bosta-test-key"
 // Server is the stand-in.
 type Server struct {
 	URL string
+	ts  *httptest.Server
 
 	mu          sync.Mutex
 	seq         int
@@ -46,7 +47,7 @@ func New(t testing.TB) *Server {
 	s := &Server{deliveries: map[string]*delivery{}}
 	ts := httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(ts.Close)
-	s.URL = ts.URL
+	s.URL, s.ts = ts.URL, ts
 	return s
 }
 
@@ -201,3 +202,7 @@ func str(v any) string {
 	}
 	return ""
 }
+
+// Client talks to the stand-in through its own transport: tests sharing
+// http.DefaultTransport break each other's requests when a server closes.
+func (s *Server) Client() *http.Client { return s.ts.Client() }

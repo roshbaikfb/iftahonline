@@ -92,7 +92,7 @@ func setup(t *testing.T) (*twilio.Channel, *api) {
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	p := retry.Policy{MaxAttempts: 2, Initial: time.Millisecond, Max: time.Millisecond}
-	c, err := twilio.New(twilio.Options{BaseURL: srv.URL, AccountSID: accountSID, AuthToken: authToken, From: "MG00000000000000000000000000000001",
+	c, err := twilio.New(twilio.Options{Client: srv.Client(), BaseURL: srv.URL, AccountSID: accountSID, AuthToken: authToken, From: "MG00000000000000000000000000000001",
 		CallbackURL: callback, Retry: &p})
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestSendErrors(t *testing.T) {
 	}
 	srv := httptest.NewServer(&api{state: map[string]string{}})
 	t.Cleanup(srv.Close)
-	bad, err := twilio.New(twilio.Options{BaseURL: srv.URL, AccountSID: accountSID, AuthToken: "wrong", From: "+15005550006", CallbackURL: callback})
+	bad, err := twilio.New(twilio.Options{Client: srv.Client(), BaseURL: srv.URL, AccountSID: accountSID, AuthToken: "wrong", From: "+15005550006", CallbackURL: callback})
 	if err != nil {
 		t.Fatal(err)
 	}
