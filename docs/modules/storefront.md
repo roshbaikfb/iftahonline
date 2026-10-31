@@ -272,6 +272,28 @@ On a store with pixels:
 
 A store without pixels carries none of this, and its CSP is unchanged.
 
+**Ads in free stores** (ADR-0062, `internal/web/ads.go`, `ads.templ`).
+The view asks entitlements whether the store has `ad_free`. If it does
+not, the view reads `ads.Shop.Slots(country)` (a minute in memory, shared
+by the country's free stores) and signs the banners' images.
+
+Pages then ask, with `showAds`, only for the placements they render, at
+most two:
+- home: `home_top`, `grid`;
+- category: `category_top`, plus `grid` past four cards;
+- product: `product_bottom`.
+
+Each slot is an `<aside class="ad">` of its reserved size, tagged «إعلان»:
+- a banner is a `<picture>` linking to `/ad/{id}`;
+- an AdSense unit is an `<ins class="adsbygoogle">`.
+
+Only a page with a unit loads `ads.js`, which lazy-loads AdSense
+non-personalized, and only that page adds AdSense's CSP origins. Free
+stores' footers carry the privacy line. `/ads.txt` and `/ad/{id}` (the
+click is counted, then a 302) answer 404 on paid stores. The cart,
+checkout, orders and previews never show ads. Wired by `ShopDeps.Ads`
+(`ads.Module.Shop()`) and `ShopDeps.Plan` (entitlements).
+
 **Where an order came from** (6e-2b). Pages are cached, so the server
 never sees the URL a shopper landed on. Instead:
 - `app.js` (every store) keeps the landing URL's UTM parameters and ad

@@ -25,6 +25,8 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
 | `GET /admin/v1/agencies`, `POST /admin/v1/agencies`, `GET /admin/v1/agencies/{id}` | Agency accounts (ADR-0059): name, currency and agency plan; the view lists its store IDs. Creation is recorded once it has an ID (`agency.created`) |
 | `POST /admin/v1/agencies/{id}/stores/{store_id}`, `POST …/{store_id}/remove` | A store joins (from no account, or from its own once that owes nothing: 409 `open_invoice`; the currency must match) or leaves onto the free plan. Recorded first (`store.agency_joined`, `store.agency_left`) |
+| `GET /admin/v1/ads`, `PUT /admin/v1/ads/settings` | Ads in free stores (ADR-0062): AdSense's settings and every banner with its last 30 days' clicks. Settings are validated, then recorded first (`ads.settings_saved`) |
+| `POST /admin/v1/ads/uploads`, `POST /admin/v1/ads/banners`, `PUT /admin/v1/ads/banners/{id}/active` | A banner's image upload (2 MiB, JPEG, PNG or WebP), the banner (re-encoded, recorded once saved: `ads.banner_created`), and show or stop (recorded first: `ads.banner_active_set`) |
 | `GET /admin/v1/audit-log` | Every admin action, newest first |
 
 Every route answers **404 unless `Host` is `ADMIN_HOST`** (default
@@ -69,6 +71,8 @@ Every change asks for a reason.
   `Deps.Agencies` is `billing.Module.Agencies()`. The API role's billing
   has the stores, the holds and the bus, which settling and agencies
   need.
+- **Ads:** `Deps.Ads` is `ads.Module.Console()`, built with the admin
+  pool and the media bucket.
 - **Health:** the job counts come from `app.job_health()` (migration
   00065), granted to `app_admin`. It returns numbers only.
 - **Shared platform packages:** `platform/password`, `platform/totp`,
