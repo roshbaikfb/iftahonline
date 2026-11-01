@@ -157,12 +157,26 @@ Zone › Cache Purge only), the worker purges changed pages. The storefront
 may then use a longer `EDGE_CACHE_TTL`, e.g. `10m`. Without them, keep
 `EDGE_CACHE_TTL` at `60s` or less.
 
-## 8. Never in production
+## 8. Customer risk bands (ADR-0065)
+
+- Set `RISK_PHONE_KEY` (base64 of 32 random bytes,
+  `openssl rand -base64 32`) in the secret manager. Use the same value
+  for api, storefront and worker, and **never rotate it**: a new key
+  forgets every phone's delivery history.
+- **Before merchants see bands:** the merchants' terms of service and
+  the shoppers' privacy policy must say that each order's delivery
+  outcome (delivered, returned, refused, unanswered) is shared across
+  stores under a pseudonym of the phone number, to rate orders. That is
+  a legal and product step.
+- A customer's request to be forgotten is handled by support for now:
+  delete their phone key's rows in `risk_orders` as the table's owner.
+
+## 9. Never in production
 
 - `MESSAGING_FAKE_CHANNELS`, `SHIPPING_FAKE_CARRIER` and
   `PAYMENTS_FAKE_GATEWAY` are for development and tests: leave them unset.
 
-## 9. Not verified against live accounts yet
+## 10. Not verified against live accounts yet
 
 These were built from the providers' documentation and pass their
 contract tests against stand-ins. Each needs one real run, with a test
@@ -177,7 +191,7 @@ account, before merchants rely on it:
 | Paymob billing: saved-card checkout, the TOKEN and TRANSACTION callbacks, MOTO renewals | In Paymob's test mode, pay an invoice of a demo store on its page; renew it from the card on file (`BILLING_COLLECTION_ENABLED=true`); pay one invoice on two pages and see the second under the console's duplicate payments (ADR-0063) |
 | Google AdSense in free stores (ADR-0062) | With the publisher's account: (1) `ads.txt` is read from the root domain, so serve `iftahonline.com/ads.txt` with the publisher's line (and, if AdSense asks, a `subdomain=` line per store host) rather than relying on each store host's `/ads.txt`; (2) open a free store's home with the browser's console open and add any origin the CSP blocks to `adSenseSources` (`internal/modules/storefront/internal/web/ads.go`); (3) check the units fill, non-personalized |
 
-## 10. Known gaps
+## 11. Known gaps
 
 - GA4's server events carry our own client ID, not the one in the GA
   cookie, so GA4 may see a buyer's server-side purchase as another user.
