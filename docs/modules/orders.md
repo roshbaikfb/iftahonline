@@ -19,7 +19,9 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `Shop.Track(ctx, code, phone)` | Order tracking: the order a shopper names by its 8-character code and phone (any usual format), read through that phone's recent orders (`orders_store_phone`) and matched by code; anything else is `ErrOrderNotFound`, whichever part was wrong |
 | `Conversions` (`NewConversions`) | `Conversion(ctx, id)`: an order with its lines and signals, for the server-side conversions (ADR-0043); `ok` is false without signals |
 | `Attribution`, `Signals` | Where an order came from: UTM, and what ad providers match a conversion with |
-| `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)) |
+| `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)); `TransitionSystemReasonTx` is the same with an outcome reason (the confirmation's deadline cancels as `unconfirmed`) |
+| `OutcomeReason`, `Reason…` constants | Why an order did not reach its customer, from its latest move ([ADR-0065](../adr/0065-risk-bands-from-delivery-outcomes.md)) |
+| `Outcomes` (`Module.Outcomes`, `NewOutcomes`) | `Get` and `Before(ctx, before, limit)`: the store's orders, newest first, without lines, a page (≤ 100) at a time; what the risk module learns from |
 
 The module uses these other modules, each through its `api.go`:
 
@@ -78,8 +80,8 @@ encodes.
 | `listOrders` (status, from/to, governorate, phone, customer_id, cursor) | orders.read |
 | `getOrder` (lines and timeline) | orders.read |
 | `createOrder` (a phone order; `Idempotency-Key`) | orders.manage |
-| `transitionOrder` (optional `version`) | the move's permission |
-| `bulkTransitionOrders` (≤ 100; one result per order) | the move's permission, per order |
+| `transitionOrder` (optional `version`, optional `reason`) | the move's permission |
+| `bulkTransitionOrders` (≤ 100; one result per order; optional `reason`) | the move's permission, per order |
 | `exportOrders` (CSV) | orders.export |
 | `countOrders` (every status with its count, zeros included; one query on `orders_store_status`) | orders.read |
 | `getOrderStats` (`range` today, 7d or 30d, by the store's time zone; sales are every order but cancelled and returned ones, which are summed apart, totals including shipping and the COD fee; `previous` is the same span one period earlier; `daily` the last 30 days; `oldest_pending_at`). Three queries: one walk of the primary key for both periods, one grouped read for the chart, one step of `orders_store_status` | orders.read |
@@ -114,6 +116,14 @@ Every placed order counts one `orders_per_month` through
   `entitlements.usage.crossed`, and messaging warns the merchant.
 
 ## Rules worth knowing
+
+- **Outcome reasons** (ADR-0065, migration 00072). A move to cancelled,
+  failed_delivery or returned may say why: `refused` or `no_answer`.
+  Any other move with a reason is a validation error on `reason`. The
+  confirmation's deadline cancels with `unconfirmed`, which people
+  cannot send. The order keeps its latest move's reason
+  (`outcome_reason`), so a failed delivery that is delivered on the next
+  attempt loses it. The risk module learns customers' phones from it.
 
 - **Charges.** Every order (storefront or staff) is charged the shipping
   quote for its governorate, city and subtotal. A governorate outside

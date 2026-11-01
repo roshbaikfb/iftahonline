@@ -70,3 +70,4 @@ supersedes it.
 | [0062](0062-ads-in-free-stores.md) | Ads in free stores | Accepted |
 | [0063](0063-duplicate-payments-kept-for-refund.md) | Duplicate payments are kept for a refund | Accepted |
 | [0064](0064-read-pool-for-lagging-reads.md) | A read pool for reads that may lag | Accepted |
+| [0065](0065-risk-bands-from-delivery-outcomes.md) | Risk bands from every store's delivery outcomes | Accepted |
