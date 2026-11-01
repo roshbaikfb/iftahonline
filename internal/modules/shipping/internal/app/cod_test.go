@@ -192,3 +192,23 @@ func TestPullSettlements(t *testing.T) {
 		t.Fatalf("after disconnect: %v %v", again, pullErr)
 	}
 }
+
+// TestCarrierCharges (ADR-0068): what a carrier kept of a settled
+// parcel is its COD less what it paid out; unsettled parcels are not
+// known; another store's orders are never found.
+func TestCarrierCharges(t *testing.T) {
+	t.Parallel()
+	f := newShipFixture(t)
+	p1, p2 := f.deliver(t), f.deliver(t)
+	f.importCSV(t, "tracking_number,amount,settled_at,reference\n"+p1.TrackingNumber+",470,2026-10-20,CO-1\n")
+	got, err := f.svc.CarrierCharges(f.ctxA, []ulid.ID{p1.OrderID, p2.OrderID, ulid.NewGenerator().New()})
+	if err != nil || len(got) != 1 || got[p1.OrderID].Amount() != p1.COD.Amount()-47000 {
+		t.Fatalf("charges = %+v, %v (COD %v)", got, err, p1.COD)
+	}
+	if got, err = f.svc.CarrierCharges(f.ctxB, []ulid.ID{p1.OrderID}); err != nil || len(got) != 0 {
+		t.Fatalf("store B's charges = %+v, %v", got, err)
+	}
+	if _, err = f.svc.CarrierCharges(f.ctxA, make([]ulid.ID, app.MaxChargesOrders+1)); err == nil {
+		t.Fatal("too many orders must fail")
+	}
+}

@@ -134,6 +134,9 @@ func (m *Module) Quoter() Quoter { return m.svc }
 // Tracker is the shipping side of order tracking.
 func (m *Module) Tracker() Tracker { return m.svc }
 
+// Charges is what the profit dashboard reads of carriers' payouts.
+func (m *Module) Charges() Charges { return m.svc }
+
 // RegisterWorkers adds the shipment jobs' workers (worker role).
 func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorkers(w) }
 

@@ -128,3 +128,31 @@ func Held(ctx context.Context, tx Tx, after *domain.Cursor, limit int) ([]domain
 	}
 	return out, nil
 }
+
+// CarrierCharges returns what carriers kept of the parcels of orders
+// that have settlement lines (ADR-0068), by order. An order with two
+// settled parcels (a return, then a new parcel) sums them.
+func CarrierCharges(ctx context.Context, tx Tx, orderIDs []ulid.ID) (map[ulid.ID]money.Money, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := shippingdb.New(tx).CarrierCharges(ctx, shippingdb.CarrierChargesParams{OrderIds: orderIDs, StoreID: store})
+	if err != nil {
+		return nil, fmt.Errorf("shipping store: carrier charges: %w", err)
+	}
+	out := make(map[ulid.ID]money.Money, len(rows))
+	for _, r := range rows {
+		m, err := money.New(r.ChargeMinor, money.Currency(r.Currency))
+		if err != nil {
+			return nil, fmt.Errorf("shipping store: carrier charge: %w", err)
+		}
+		if have, ok := out[r.OrderID]; ok {
+			if m, err = have.Add(m); err != nil {
+				return nil, fmt.Errorf("shipping store: carrier charge: %w", err)
+			}
+		}
+		out[r.OrderID] = m
+	}
+	return out, nil
+}
