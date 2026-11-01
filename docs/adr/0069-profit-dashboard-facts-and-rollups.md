@@ -45,7 +45,10 @@ Constraints:
    - **What a fact holds:**
      - the store-local day;
      - the profit state (open, delivered, returned or failed delivery,
-       cancelled);
+       cancelled); *amended 2026-11-01 (P8 review, the owner's decision):*
+       a failed delivery is open, since the courier tries again, until it
+       is delivered or returned. Facts kept before follow on the order's
+       next move;
      - the governorate and the campaign (`utm_campaign`);
      - revenue (the subtotal less the discount, spread over the lines by
        their totals);

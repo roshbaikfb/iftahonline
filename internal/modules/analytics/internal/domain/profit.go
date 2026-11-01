@@ -19,9 +19,9 @@ type State string
 
 // States.
 const (
-	Open      State = "open"      // not yet delivered or back: counted, not earned
+	Open      State = "open"      // not yet delivered or back (a failed attempt included): counted, not earned
 	Delivered State = "delivered" // the customer took it
-	Returned  State = "returned"  // it came back (or the courier could not deliver)
+	Returned  State = "returned"  // it came back
 	Cancelled State = "cancelled" // cancelled before it shipped: nothing earned, nothing spent
 )
 
@@ -30,7 +30,7 @@ func StateOf(status string) State {
 	switch status {
 	case "delivered":
 		return Delivered
-	case "returned", "failed_delivery":
+	case "returned":
 		return Returned
 	case "cancelled":
 		return Cancelled

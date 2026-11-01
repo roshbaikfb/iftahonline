@@ -62,7 +62,9 @@ func TestStateOf(t *testing.T) {
 	t.Parallel()
 	for status, want := range map[string]domain.State{
 		"pending": domain.Open, "confirmed": domain.Open, "ready_to_ship": domain.Open, "shipped": domain.Open,
-		"delivered": domain.Delivered, "returned": domain.Returned, "failed_delivery": domain.Returned, "cancelled": domain.Cancelled,
+		"delivered": domain.Delivered, "returned": domain.Returned, "cancelled": domain.Cancelled,
+		// The courier tries again: not a return until it comes back (P8 review).
+		"failed_delivery": domain.Open,
 	} {
 		if got := domain.StateOf(status); got != want {
 			t.Errorf("%s = %s, want %s", status, got, want)

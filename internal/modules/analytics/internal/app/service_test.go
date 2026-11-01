@@ -489,3 +489,39 @@ func TestImportAdSpend(t *testing.T) {
 		t.Fatalf("total spend %d, want 6000 (the import once, the manual entry)", total)
 	}
 }
+
+// TestFactDepositAndCoupon: a prepaid delivery bought with a coupon. The
+// coupon is spread over the lines to the last minor unit; the deposit
+// kept (paid, or partly refunded) is what the customer paid upfront, and
+// a fully refunded one is not (P8 review).
+func TestFactDepositAndCoupon(t *testing.T) {
+	t.Parallel()
+	egp := func(v int64) money.Money { m, _ := money.New(v, money.EGP); return m } //nolint:errcheck // valid amounts
+	ids := ulid.NewGenerator()
+	cost := egp(10000)
+	o := orders.Order{ID: ids.New(), Status: orders.StatusDelivered, PaymentMethod: orders.PaymentCOD, CreatedAt: time.Date(2026, 10, 20, 22, 30, 0, 0, time.UTC),
+		Subtotal: egp(30000), Discount: egp(1000), Shipping: egp(5000), CODFee: egp(1500), Total: egp(35500), Deposit: egp(6500),
+		Lines: []orders.Line{
+			{ProductID: ids.New(), Title: "ساعة", Qty: 1, Total: egp(20000), UnitCost: &cost},
+			{ProductID: ids.New(), Title: "سوار", Qty: 2, Total: egp(10000)},
+		}}
+	cairo, err := time.LoadLocation("Africa/Cairo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for status, kept := range map[orders.PaymentStatus]int64{orders.PaymentPaid: 6500, orders.PaymentPartiallyRefunded: 6500, orders.PaymentRefunded: 0} {
+		o.DepositStatus = status
+		f, err := app.Fact(o, cairo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := f.Order
+		if d.DepositPaid != kept || d.OnDelivery != 35500-kept || d.Revenue != 29000 || d.Day != "2026-10-21" {
+			t.Errorf("%s: kept %d, on delivery %d, revenue %d, day %s", status, d.DepositPaid, d.OnDelivery, d.Revenue, d.Day)
+		}
+		// 1000 of coupon: 666 on the watch, the rest (334) on the straps.
+		if d.Lines[0].Revenue != 20000-666 || d.Lines[1].Revenue != 10000-334 || *d.Lines[0].Cost != 10000 || d.Lines[1].Cost != nil {
+			t.Errorf("%s: lines %+v %+v", status, d.Lines[0], d.Lines[1])
+		}
+	}
+}

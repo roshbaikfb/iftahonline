@@ -104,7 +104,9 @@ func fact(o orders.Order, loc *time.Location) (store.Fact, error) {
 	d := domain.Order{ID: o.ID.String(), Day: o.CreatedAt.In(loc).Format(store.DayLayout), State: domain.StateOf(string(o.Status)),
 		Governorate: o.Contact.Governorate, Campaign: text.Clip(o.Attribution.Campaign, 100), Revenue: revenue.Amount(),
 		Shipping: o.Shipping.Amount(), CODFee: o.CODFee.Amount(), OnDelivery: onDelivery.Amount()}
-	if o.DepositStatus == orders.PaymentPaid {
+	// A deposit partly refunded is kept like a paid one (orders'
+	// OnDelivery); a fully refunded one was not paid.
+	if o.DepositStatus == orders.PaymentPaid || o.DepositStatus == orders.PaymentPartiallyRefunded {
 		d.DepositPaid = o.Deposit.Amount()
 	}
 	f := store.Fact{OrderID: o.ID, Currency: string(o.Total.Currency()), RiskBand: o.RiskBand}
