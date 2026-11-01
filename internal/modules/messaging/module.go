@@ -160,6 +160,15 @@ func NewConfirmLinks(d LinksDeps) (ConfirmLinks, error) {
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Jobs: d.Jobs, Log: d.Log, Confirmations: app.Confirmations{Orders: d.Orders, Number: d.Number}}), nil
 }
 
+// NewPayLinks checks prepaid deliveries' links on pool (the api role:
+// it reads the confirmations only).
+func NewPayLinks(pool *pgxpool.Pool) (PayLinks, error) {
+	if pool == nil {
+		return nil, errors.New("messaging: pay links need the pool")
+	}
+	return app.NewService(app.Deps{DB: pool}), nil
+}
+
 // OrderPlacedHandler asks a new cash-on-delivery order's customer to
 // confirm it. Subscribe it as ConfirmOrdersSubscriber to
 // orders.EventOrderPlaced (worker role).
