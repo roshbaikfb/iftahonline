@@ -360,8 +360,8 @@ func TestSettings(t *testing.T) {
 		{"missing rule", tokOwnerA, `{"hold_from":"high"}`, http.StatusUnprocessableEntity},
 		{"no body", tokOwnerA, ``, http.StatusBadRequest},
 	} {
-		if code, _, b := f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tt.token, tt.body)); code != tt.want {
-			t.Errorf("%s = %d, want %d: %s", tt.name, code, tt.want, b)
+		if got, _, b := f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tt.token, tt.body)); got != tt.want {
+			t.Errorf("%s = %d, want %d: %s", tt.name, got, tt.want, b)
 		}
 	}
 	if code, _, _ = f.do(t, req(t, http.MethodGet, settingsPath(f.storeA), tokNoPermA, "")); code != http.StatusForbidden {
