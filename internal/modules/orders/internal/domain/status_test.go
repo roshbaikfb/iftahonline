@@ -159,3 +159,30 @@ func TestParseReason(t *testing.T) {
 		}
 	}
 }
+
+// FuzzParseReason: any input is a known reason allowed on the move, or a
+// validation error on reason; never a panic or an unknown reason.
+func FuzzParseReason(f *testing.F) {
+	for _, s := range []string{"", "refused", "no_answer", "unconfirmed", "REFUSED", "refused\x00", "رفض"} {
+		f.Add(s, "cancelled")
+		f.Add(s, "confirmed")
+	}
+	f.Fuzz(func(t *testing.T, reason, to string) {
+		r, err := domain.ParseReason(reason, domain.Status(to))
+		if err != nil {
+			if !errs.Is(err, errs.KindValidation) || r != domain.ReasonNone {
+				t.Fatalf("%q to %q: %q, %v", reason, to, r, err)
+			}
+			return
+		}
+		switch r {
+		case domain.ReasonNone:
+		case domain.ReasonRefused, domain.ReasonNoAnswer:
+			if !domain.TakesReason(domain.Status(to)) {
+				t.Fatalf("%q accepted on a move to %q", reason, to)
+			}
+		default:
+			t.Fatalf("%q parsed as %q", reason, r)
+		}
+	})
+}
