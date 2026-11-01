@@ -26,6 +26,7 @@ func base() map[string]string {
 		"REDIS_URL":            "redis://localhost:6379/0",
 		"SECRETBOX_KEYS":       "1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
 		"OTP_PEPPER":           "ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
+		"RISK_PHONE_KEY":       "cnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnI=",
 		"S3_ENDPOINT":          "http://localhost:18333",
 		"S3_BUCKET":            "iftah-media",
 		"S3_ACCESS_KEY":        "local-dev-access",
@@ -299,6 +300,8 @@ func TestSecretsAndMail(t *testing.T) {
 		"bad keyring":             {"SECRETBOX_KEYS", "1:short"},
 		"missing pepper":          {"OTP_PEPPER", "<unset>"},
 		"short pepper":            {"OTP_PEPPER", "c2hvcnQ="},
+		"missing risk key":        {"RISK_PHONE_KEY", "<unset>"},
+		"short risk key":          {"RISK_PHONE_KEY", "c2hvcnQ="},
 		"bad smtp addr":           {"SMTP_ADDR", "no-port"},
 		"prod smtp needs a user":  {"APP_ENV", "production", "SMTP_ADDR", "smtp.example.com:587"},
 		"no fake carrier in prod": {"APP_ENV", "production", "SHIPPING_FAKE_CARRIER", "true"},
@@ -318,9 +321,13 @@ func TestSecretsAndMail(t *testing.T) {
 			t.Errorf("%s: error leaks a secret: %v", name, err)
 		}
 	}
-	// The storefront needs neither.
-	if _, err := config.Load(config.RoleStorefront, env(with("SECRETBOX_KEYS", "<unset>", "OTP_PEPPER", "<unset>"))); err != nil {
+	// The storefront needs neither, but it scores phones (ADR-0065).
+	sf, err := config.Load(config.RoleStorefront, env(with("SECRETBOX_KEYS", "<unset>", "OTP_PEPPER", "<unset>")))
+	if err != nil || len(sf.Secrets.RiskPhoneKey) < 32 {
 		t.Fatalf("storefront: %v", err)
+	}
+	if _, err = config.Load(config.RoleStorefront, env(with("RISK_PHONE_KEY", "<unset>"))); err == nil {
+		t.Fatal("the storefront needs RISK_PHONE_KEY")
 	}
 	// Secrets never reach the startup log line.
 	c, _ := config.Load(config.RoleAPI, env(with("SMTP_ADDR", "smtp.example.com:587", "SMTP_PASSWORD", "hunter2-smtp")))

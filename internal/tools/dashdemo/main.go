@@ -75,6 +75,7 @@ func run(addr, bin string) error {
 		// Public development-only values (see .env.example), not secrets.
 		"SECRETBOX_KEYS=1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
 		"OTP_PEPPER=ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
+		"RISK_PHONE_KEY=cnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnI=",
 		"S3_ENDPOINT=http://127.0.0.1:1", "S3_BUCKET=iftah-media", "S3_ACCESS_KEY=local-dev-access", "S3_SECRET_KEY=local-dev-secret-not-for-prod",
 		"IMGPROXY_URL=http://127.0.0.1:1", "MEILI_URL=http://127.0.0.1:1", "MEILI_API_KEY=local-dev-master-key-0123456789",
 		"IMGPROXY_KEY=6465762d6f6e6c792d696d6770726f78792d6b65792d6e6f742d736563726574",
