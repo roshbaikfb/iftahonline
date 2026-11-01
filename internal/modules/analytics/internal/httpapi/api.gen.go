@@ -818,7 +818,12 @@ type ListAdSpendResponseObject interface {
 }
 
 type ListAdSpend200JSONResponse struct {
+	// Count How many entries the range has (items lists at most 500).
+	Count *int      `json:"count,omitempty"`
 	Items []AdSpend `json:"items"`
+
+	// TotalMinor The sum of every entry of the range, in the store's currency.
+	TotalMinor *int64 `json:"total_minor,omitempty"`
 }
 
 func (response ListAdSpend200JSONResponse) VisitListAdSpendResponse(w http.ResponseWriter) error {

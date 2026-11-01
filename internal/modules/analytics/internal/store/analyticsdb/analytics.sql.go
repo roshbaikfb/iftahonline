@@ -12,6 +12,30 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const adSpendTotals = `-- name: AdSpendTotals :one
+SELECT count(*)::int AS entries, coalesce(sum(amount_minor), 0)::bigint AS amount_minor
+FROM ad_spend WHERE store_id = $1 AND day >= $2 AND day < $3
+`
+
+type AdSpendTotalsParams struct {
+	StoreID ulid.ID
+	FromDay time.Time
+	ToDay   time.Time
+}
+
+type AdSpendTotalsRow struct {
+	Entries     int32
+	AmountMinor int64
+}
+
+// Every entry of the range, beyond the list's 500.
+func (q *Queries) AdSpendTotals(ctx context.Context, arg AdSpendTotalsParams) (AdSpendTotalsRow, error) {
+	row := q.db.QueryRow(ctx, adSpendTotals, arg.StoreID, arg.FromDay, arg.ToDay)
+	var i AdSpendTotalsRow
+	err := row.Scan(&i.Entries, &i.AmountMinor)
+	return i, err
+}
+
 const dayAdSpend = `-- name: DayAdSpend :many
 SELECT campaign, sum(amount_minor)::bigint AS amount_minor
 FROM ad_spend WHERE store_id = $1 AND day = $2

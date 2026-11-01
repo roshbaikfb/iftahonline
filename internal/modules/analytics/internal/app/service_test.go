@@ -3,6 +3,7 @@ package app_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -478,15 +479,15 @@ func TestImportAdSpend(t *testing.T) {
 		}
 	}
 	got, err := f.svc.AdSpend(a, day("2026-10-01"), day("2026-11-01"))
-	if err != nil || len(got) != 2 {
+	if err != nil || len(got.Items) != 2 || got.Count != 2 {
 		t.Fatalf("spend = %+v, %v", got, err)
 	}
 	var total int64
-	for _, s := range got {
+	for _, s := range got.Items {
 		total += s.Amount
 	}
-	if total != 6000 {
-		t.Fatalf("total spend %d, want 6000 (the import once, the manual entry)", total)
+	if total != 6000 || got.TotalMinor != 6000 {
+		t.Fatalf("total spend %d (reported %d), want 6000 (the import once, the manual entry)", total, got.TotalMinor)
 	}
 }
 
@@ -523,5 +524,26 @@ func TestFactDepositAndCoupon(t *testing.T) {
 		if d.Lines[0].Revenue != 20000-666 || d.Lines[1].Revenue != 10000-334 || *d.Lines[0].Cost != 10000 || d.Lines[1].Cost != nil {
 			t.Errorf("%s: lines %+v %+v", status, d.Lines[0], d.Lines[1])
 		}
+	}
+}
+
+// TestAdSpendPastTheList (P8 review): a range with more entries than the
+// list's 500 still reports how many and their whole sum.
+func TestAdSpendPastTheList(t *testing.T) {
+	t.Parallel()
+	f := newDefault(t)
+	a := f.store(t)
+	f.now = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	const n = 501
+	lines := make([]app.AdSpendLine, n)
+	for i := range lines {
+		lines[i] = app.AdSpendLine{Day: day("2026-10-20"), Campaign: fmt.Sprintf("c%03d", i), AmountMinor: 100}
+	}
+	if _, err := f.svc.ImportAdSpend(a, adSource{lines: lines}, day("2026-10-01"), day("2026-11-01")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.svc.AdSpend(a, day("2026-10-01"), day("2026-11-01"))
+	if err != nil || len(got.Items) != 500 || got.Count != n || got.TotalMinor != n*100 {
+		t.Fatalf("listed %d, count %d, total %d, %v", len(got.Items), got.Count, got.TotalMinor, err)
 	}
 }

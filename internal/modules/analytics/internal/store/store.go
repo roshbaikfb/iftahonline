@@ -377,6 +377,19 @@ func ListAdSpend(ctx context.Context, tx Tx, from, to time.Time) ([]AdSpend, err
 	return out, nil
 }
 
+// AdSpendTotals counts and sums every entry of [from, to).
+func AdSpendTotals(ctx context.Context, tx Tx, from, to time.Time) (count int, amountMinor int64, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	r, err := analyticsdb.New(tx).AdSpendTotals(ctx, analyticsdb.AdSpendTotalsParams{StoreID: store, FromDay: from, ToDay: to})
+	if err != nil {
+		return 0, 0, fmt.Errorf("analytics store: ad spend totals: %w", err)
+	}
+	return int(r.Entries), r.AmountMinor, nil
+}
+
 // Totals sums the store's figures over [from, to) (read pool).
 func Totals(ctx context.Context, tx Tx, from, to time.Time) (domain.Figures, error) {
 	store, err := current(ctx)

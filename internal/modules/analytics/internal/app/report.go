@@ -166,14 +166,25 @@ func (s *Service) DeleteAdSpend(ctx context.Context, id ulid.ID) error {
 	return err
 }
 
+// AdSpendList is the store's entries of a range, newest first (at most
+// 500), with how many there are and their sum, listed or not.
+type AdSpendList struct {
+	Items      []store.AdSpend
+	Count      int
+	TotalMinor int64
+}
+
 // AdSpend lists the store's entries of [from, to), newest first.
-func (s *Service) AdSpend(ctx context.Context, from, to time.Time) ([]store.AdSpend, error) {
+func (s *Service) AdSpend(ctx context.Context, from, to time.Time) (AdSpendList, error) {
 	if err := checkRange(from, to); err != nil {
-		return nil, err
+		return AdSpendList{}, err
 	}
-	var out []store.AdSpend
+	var out AdSpendList
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
-		out, err = store.ListAdSpend(ctx, tx, from, to)
+		if out.Items, err = store.ListAdSpend(ctx, tx, from, to); err != nil {
+			return err
+		}
+		out.Count, out.TotalMinor, err = store.AdSpendTotals(ctx, tx, from, to)
 		return err
 	})
 	return out, err

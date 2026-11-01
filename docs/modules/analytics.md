@@ -46,7 +46,7 @@ Deps:
 |---|---|
 | `getProfit` (`from`, `to` inclusive, ≤ 366 days; `by`) | finance.read + plan `profit` |
 | `getProfitSettings` / `updateProfitSettings` | finance.read / finance.manage |
-| `listAdSpend` / `createAdSpend` / `deleteAdSpend` | finance.read / finance.manage |
+| `listAdSpend` / `createAdSpend` / `deleteAdSpend` | finance.read / finance.manage; the list stops at 500, its `count` and `total_minor` cover every entry of the range |
 
 ## Dashboard (8f, the approved mockup)
 

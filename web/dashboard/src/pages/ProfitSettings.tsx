@@ -25,6 +25,8 @@ export function ProfitSettings() {
   const path = { store_id: storeId };
   const [est, setEst] = useState({ delivery: '', ret: '', fee: '' });
   const [list, setList] = useState<AdSpend[]>([]);
+  // Every entry of the range, listed or not (the list stops at 500).
+  const [all, setAll] = useState<{ count: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,10 @@ export function ProfitSettings() {
     void api
       .GET('/v1/stores/{store_id}/analytics/ad-spend', { params: { path: { store_id: storeId }, query: { from: range.from, to: range.to } } })
       .then(({ data }) => {
-        if (live && data) setList(data.items);
+        if (live && data) {
+          setList(data.items);
+          setAll(data.count === undefined || data.total_minor === undefined ? null : { count: data.count, total: data.total_minor });
+        }
       });
     return () => {
       live = false;
@@ -130,7 +135,8 @@ export function ProfitSettings() {
   }
 
   const currency = list[0]?.currency ?? 'EGP';
-  const total = list.reduce((n, s) => n + s.amount_minor, 0);
+  const total = all?.total ?? list.reduce((n, s) => n + s.amount_minor, 0);
+  const hidden = all ? all.count - list.length : 0;
   return (
     <Layout storeId={storeId}>
       <div className="profit">
@@ -263,6 +269,11 @@ export function ProfitSettings() {
                   </tbody>
                 </table>
               </div>
+            )}
+            {hidden > 0 && (
+              <p className="muted" role="note">
+                تظهر أحدث {list.length} سطرًا فقط، و{hidden} غيرها محسوبة في الإجمالي.
+              </p>
             )}
             <p className="profit-total">
               <span>الإجمالي هذا الشهر</span>
