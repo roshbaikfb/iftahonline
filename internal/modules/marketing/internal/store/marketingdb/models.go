@@ -93,6 +93,19 @@ type AdSetting struct {
 	UpdatedAt      time.Time
 }
 
+type AdSpend struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Day         pgtype.Date
+	Platform    string
+	Campaign    string
+	Currency    string
+	AmountMinor int64
+	Source      string
+	Note        string
+	CreatedAt   time.Time
+}
+
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt time.Time
@@ -114,6 +127,45 @@ type AdminSession struct {
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
+}
+
+type AnalyticsBackfill struct {
+	StoreID  ulid.ID
+	QueuedAt time.Time
+}
+
+type AnalyticsDirty struct {
+	StoreID ulid.ID
+	Day     pgtype.Date
+}
+
+type AnalyticsLine struct {
+	StoreID      ulid.ID
+	OrderID      ulid.ID
+	Line         int32
+	ProductID    ulid.ID
+	Title        string
+	Qty          int32
+	RevenueMinor int64
+	CostMinor    *int64
+}
+
+type AnalyticsOrder struct {
+	StoreID            ulid.ID
+	OrderID            ulid.ID
+	Day                pgtype.Date
+	State              string
+	Governorate        string
+	Campaign           string
+	Currency           string
+	RevenueMinor       int64
+	ShippingMinor      int64
+	CodFeeMinor        int64
+	OnDeliveryMinor    int64
+	DepositPaidMinor   int64
+	CarrierChargeMinor *int64
+	RiskBand           *string
+	UpdatedAt          time.Time
 }
 
 type AppMonthlyPartitioned struct {
@@ -673,6 +725,36 @@ type ProductSale struct {
 	ProductID ulid.ID
 	Day       pgtype.Date
 	Units     int32
+}
+
+type ProfitDaily struct {
+	StoreID           ulid.ID
+	Dim               string
+	Day               pgtype.Date
+	Key               string
+	Label             string
+	Currency          string
+	Orders            int32
+	Delivered         int32
+	Returned          int32
+	Cancelled         int32
+	Open              int32
+	CostMissing       int32
+	RevenueMinor      int64
+	DeliveryPaidMinor int64
+	ProductCostMinor  int64
+	ShippingCostMinor int64
+	CodFeesMinor      int64
+	ReturnCostMinor   int64
+	AdSpendMinor      int64
+}
+
+type ProfitSetting struct {
+	StoreID           ulid.ID
+	DeliveryCostMinor *int64
+	ReturnCostMinor   *int64
+	CodFeeBp          int32
+	UpdatedAt         time.Time
 }
 
 type RiskBackfill struct {
