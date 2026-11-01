@@ -670,6 +670,21 @@ type ProductSale struct {
 	Units     int32
 }
 
+type RiskBackfill struct {
+	StoreID  ulid.ID
+	QueuedAt pgtype.Timestamptz
+}
+
+type RiskOrder struct {
+	StoreID   ulid.ID
+	OrderID   ulid.ID
+	PhoneKey  []byte
+	PlacedAt  pgtype.Timestamptz
+	Outcome   pgtype.Text
+	OutcomeAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState

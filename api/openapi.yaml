@@ -168,6 +168,15 @@ tags:
       zones, draft policies) is applied in the background. Stores made
       before the wizard have no wizard (`completed`). Permission:
       store.read to read, store.update to change.
+  - name: risk
+    description: |
+      How likely an order's customer is to take it (ADR-0065). Every
+      store's delivered, returned, refused and unanswered orders teach
+      the platform about a phone number, most recent first; merchants see
+      only a band (new, low, medium, high) and their own store's history
+      of the number, never another store's orders or counts. A band is
+      asked for by the store's own orders, never by a number. Permission:
+      orders.read.
 paths:
   /livez:
     get:
@@ -2881,6 +2890,47 @@ paths:
               schema: { $ref: "#/components/schemas/OrderDetail" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/{order_id}/risk:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/OrderID"
+    get:
+      tags: [risk]
+      operationId: getOrderRisk
+      summary: The order's customer's band and their history in this store
+      description: "Permission: orders.read. Another store's order is 404 order_not_found."
+      responses:
+        "200":
+          description: The band and the store's own history of the phone.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderRisk" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/risk/bands:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [risk]
+      operationId: listRiskBands
+      summary: The bands of a page of the store's orders
+      description: |
+        Permission: orders.read. Up to 100 order IDs (a page of the order
+        list). An order not scored yet (placed seconds ago) or not the
+        store's is left out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RiskBandsInput" }
+      responses:
+        "200":
+          description: The bands, in no particular order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RiskBands" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/orders/{order_id}/transitions:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -5498,6 +5548,51 @@ components:
           description: >-
             Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as
             staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
+    RiskBand:
+      type: string
+      enum: [new, low, medium, high]
+      description: >-
+        new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not,
+        in more than one store (ADR-0065).
+    RiskHistory:
+      type: object
+      required: [orders, delivered, returned, refused, no_answer, unconfirmed]
+      description: The phone's orders in this store only.
+      properties:
+        orders: { type: integer, description: Every order, with an outcome or still open. }
+        delivered: { type: integer }
+        returned: { type: integer }
+        refused: { type: integer }
+        no_answer: { type: integer }
+        unconfirmed: { type: integer, description: Cancelled because the confirmation message went unanswered. }
+        last_outcome_at: { type: string, format: date-time, description: The latest outcome; absent without one. }
+    OrderRisk:
+      type: object
+      required: [band, history]
+      properties:
+        band: { $ref: "#/components/schemas/RiskBand" }
+        history: { $ref: "#/components/schemas/RiskHistory" }
+    RiskBandsInput:
+      type: object
+      required: [order_ids]
+      properties:
+        order_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ULID" }
+    RiskBands:
+      type: object
+      required: [bands]
+      properties:
+        bands:
+          type: array
+          items:
+            type: object
+            required: [order_id, band]
+            properties:
+              order_id: { $ref: "#/components/schemas/ULID" }
+              band: { $ref: "#/components/schemas/RiskBand" }
     OrderLine:
       type: object
       required: [variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor]

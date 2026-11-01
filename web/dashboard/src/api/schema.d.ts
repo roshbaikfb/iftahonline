@@ -2488,6 +2488,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/orders/{order_id}/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The order's customer's band and their history in this store
+         * @description Permission: orders.read. Another store's order is 404 order_not_found.
+         */
+        get: operations["getOrderRisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/risk/bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The bands of a page of the store's orders
+         * @description Permission: orders.read. Up to 100 order IDs (a page of the order
+         *     list). An order not scored yet (placed seconds ago) or not the
+         *     store's is left out.
+         */
+        post: operations["listRiskBands"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/orders/{order_id}/transitions": {
         parameters: {
             query?: never;
@@ -4810,6 +4857,45 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             status_changed_at: string;
+            /**
+             * @description Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
+             * @enum {string}
+             */
+            outcome_reason?: "refused" | "no_answer" | "unconfirmed";
+        };
+        /**
+         * @description new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
+         * @enum {string}
+         */
+        RiskBand: "new" | "low" | "medium" | "high";
+        /** @description The phone's orders in this store only. */
+        RiskHistory: {
+            /** @description Every order */
+            orders: number;
+            delivered: number;
+            returned: number;
+            refused: number;
+            no_answer: number;
+            /** @description Cancelled because the confirmation message went unanswered. */
+            unconfirmed: number;
+            /**
+             * Format: date-time
+             * @description The latest outcome; absent without one.
+             */
+            last_outcome_at?: string;
+        };
+        OrderRisk: {
+            band: components["schemas"]["RiskBand"];
+            history: components["schemas"]["RiskHistory"];
+        };
+        RiskBandsInput: {
+            order_ids: components["schemas"]["ULID"][];
+        };
+        RiskBands: {
+            bands: {
+                order_id: components["schemas"]["ULID"];
+                band: components["schemas"]["RiskBand"];
+            }[];
         };
         OrderLine: {
             variant_id: components["schemas"]["ULID"];
@@ -4916,14 +5002,21 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             /** @default  */
             note: string;
+            reason?: components["schemas"]["OutcomeReasonInput"];
             /** @description The version you read; omit to move whatever the version. */
             version?: number;
         };
+        /**
+         * @description Why the order did not reach its customer (ADR-0065). Only a move to cancelled, failed_delivery or returned takes one (otherwise 422 on reason). It teaches the risk score; omit it when neither applies.
+         * @enum {string}
+         */
+        OutcomeReasonInput: "refused" | "no_answer";
         BulkTransitionInput: {
             order_ids: components["schemas"]["ULID"][];
             status: components["schemas"]["OrderStatus"];
             /** @default  */
             note: string;
+            reason?: components["schemas"]["OutcomeReasonInput"];
         };
         BulkTransitionResult: {
             results: components["schemas"]["BulkResult"][];
@@ -9396,6 +9489,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrderRisk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The band and the store's own history of the phone. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderRisk"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRiskBands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiskBandsInput"];
+            };
+        };
+        responses: {
+            /** @description The bands, in no particular order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskBands"];
                 };
             };
             default: components["responses"]["Problem"];
