@@ -28,7 +28,7 @@ type shopOrders struct {
 
 var _ web.Orders = shopOrders{}
 
-func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (string, error) {
+func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (web.Placed, error) {
 	in := orders.NewOrder{IdempotencyKey: req.Key, Source: orders.SourceStorefront, PaymentMethod: method(req.Card), Name: req.Name,
 		Phone: req.Phone, Governorate: req.Governorate, City: req.City, Address: req.Address, Notes: req.Notes, CouponCode: req.Coupon}
 	v := req.Visit
@@ -39,20 +39,21 @@ func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (strin
 	}
 	p, err := o.shop.PlaceOrder(ctx, in)
 	if err == nil {
-		return p.Order.ID.String(), nil
+		_, due := p.Order.OnlineDue()
+		return web.Placed{Ref: p.Order.ID.String(), PayOnline: due}, nil
 	}
 	var e *errs.Error
 	switch {
 	case errors.Is(err, customers.ErrCustomerBlocked), errors.Is(err, orders.ErrIdempotencyKeyReused):
-		return "", web.ErrOrderRefused
+		return web.Placed{}, web.ErrOrderRefused
 	case errors.Is(err, catalog.ErrInsufficientStock):
-		return "", web.ErrOrderOutOfStock
+		return web.Placed{}, web.ErrOrderOutOfStock
 	case errors.Is(err, catalog.ErrVariantNotSellable):
-		return "", web.ErrOrderUnavailable
+		return web.Placed{}, web.ErrOrderUnavailable
 	case errors.As(err, &e) && e.Kind == errs.KindValidation:
-		return "", invalidOrder(e)
+		return web.Placed{}, invalidOrder(e)
 	}
-	return "", err
+	return web.Placed{}, err
 }
 
 // invalidOrder names the form fields of a validation error.
@@ -175,8 +176,11 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 	}
 	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Card: ord.PaymentMethod == orders.PaymentCard, PaymentStatus: string(ord.PaymentStatus),
 		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee,
-		Discount: ord.Discount, CouponCode: ord.CouponCode, Total: ord.Total,
+		Discount: ord.Discount, CouponCode: ord.CouponCode, Total: ord.Total, Deposit: ord.Deposit, DepositStatus: string(ord.DepositStatus),
 		Governorate: ord.Contact.Governorate, City: ord.Contact.City}
+	if s.OnDelivery, err = ord.OnDelivery(); err != nil {
+		return web.OrderSummary{}, err
+	}
 	if f := strings.Fields(ord.Contact.Name); len(f) > 0 {
 		s.FirstName = f[0]
 	}

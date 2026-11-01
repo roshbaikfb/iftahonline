@@ -51,12 +51,31 @@ type OrderSummary struct {
 	Discount      money.Money // the coupon's; zero without one
 	CouponCode    string
 	Total         money.Money
+	// Deposit is a cash order's prepaid delivery (ADR-0067), zero
+	// without one; DepositStatus is its payment ("" without one).
+	Deposit       money.Money
+	DepositStatus string
+	// OnDelivery is what the courier collects.
+	OnDelivery money.Money
 	// What the thank-you page says to the shopper: the first name only and
 	// where it goes, never the street (the page's link may be shared).
 	FirstName   string
 	Governorate string // ISO 3166-2
 	City        string
 	Days        *DeliveryDays // how long delivery takes, when the store says
+}
+
+// Placed is a placed order as checkout needs it.
+type Placed struct {
+	Ref string
+	// PayOnline: the shopper goes on to the gateway's page.
+	PayOnline bool
+}
+
+// PaysOnline reports whether the shopper still has money to pay online:
+// a card order's total, or a cash order's prepaid delivery.
+func (o OrderSummary) PaysOnline() bool {
+	return (o.Card && o.PaymentStatus == PaymentAwaiting) || o.DepositStatus == PaymentAwaiting
 }
 
 // OrderLine is one line of an OrderSummary.
@@ -75,9 +94,11 @@ type Orders interface {
 	// ErrOrderNotFound when there is none.
 	OrderSummary(ctx context.Context, ref string) (OrderSummary, error)
 	// PlaceOrder places an order and returns its reference (that of the
-	// earlier order for a repeated submit). Errors: *OrderInvalidError,
-	// ErrOrderRefused, ErrOrderOutOfStock, ErrOrderUnavailable.
-	PlaceOrder(ctx context.Context, req OrderRequest) (string, error)
+	// earlier order for a repeated submit), and whether the shopper now
+	// pays online: a card order, or a prepaid delivery (ADR-0067).
+	// Errors: *OrderInvalidError, ErrOrderRefused, ErrOrderOutOfStock,
+	// ErrOrderUnavailable.
+	PlaceOrder(ctx context.Context, req OrderRequest) (Placed, error)
 	// Quote prices an order before it is placed: shipping and COD fee to
 	// an address. Errors: *OrderInvalidError, ErrOrderUnavailable.
 	Quote(ctx context.Context, req QuoteRequest) (QuoteView, error)
@@ -473,7 +494,7 @@ func (s *Shop) thankYou(w http.ResponseWriter, r *http.Request, p *pageCtx, ref 
 	}
 	p.title, p.noindex = p.l.T(MsgThankYou)+" | "+p.v.name, true
 	payURL := ""
-	if o.Card && o.PaymentStatus == PaymentAwaiting && !o.Cancelled && s.payments != nil {
+	if o.PaysOnline() && !o.Cancelled && s.payments != nil {
 		// Not paid yet: the webhook may be seconds away, so the page looks
 		// again by itself; or the shopper pays (again) now.
 		payURL = s.payments.PayURL(p.store, o.Ref, p.base+p.localize(p.l, "/thank-you/"+o.Ref))

@@ -86,7 +86,7 @@ func (s *Shop) thanksView(ctx context.Context, p *pageCtx, o OrderSummary, payUR
 		}
 		v.place += a.Name(string(p.l))
 	}
-	if s.confirms != nil && !o.Card && !o.Cancelled {
+	if s.confirms != nil && !o.Card && o.DepositStatus == "" && !o.Cancelled {
 		// A failure only leaves the page without the link: the paid
 		// message goes out anyway.
 		if link, err := s.confirms.WhatsAppLink(ctx, o.Ref, string(p.l)); err == nil && link != "" {
