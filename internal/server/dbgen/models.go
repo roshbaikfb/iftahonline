@@ -431,6 +431,8 @@ type Order struct {
 	UtmContent      pgtype.Text
 	UtmTerm         pgtype.Text
 	OutcomeReason   pgtype.Text
+	RiskAction      pgtype.Text
+	RiskBand        pgtype.Text
 }
 
 type OrderConfirmation struct {

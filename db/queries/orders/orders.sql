@@ -5,11 +5,12 @@
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
                     currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
                     updated_at, status_changed_at, payment_method, payment_status,
-                    utm_source, utm_medium, utm_campaign, utm_content, utm_term)
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, risk_action, risk_band)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
         @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @discount_minor, sqlc.narg(coupon_code), @total_minor, @item_count,
         @lines_hash, @created_at, @created_at, @payment_method, @payment_status,
-        sqlc.narg(utm_source), sqlc.narg(utm_medium), sqlc.narg(utm_campaign), sqlc.narg(utm_content), sqlc.narg(utm_term));
+        sqlc.narg(utm_source), sqlc.narg(utm_medium), sqlc.narg(utm_campaign), sqlc.narg(utm_content), sqlc.narg(utm_term),
+        sqlc.narg(risk_action), sqlc.narg(risk_band));
 
 -- name: InsertOrderSignals :exec
 -- In the order's transaction (ADR-0043); kept one month.
@@ -41,6 +42,14 @@ UPDATE orders
 SET status = @to_status, version = version + 1, updated_at = @at, status_changed_at = @at,
     outcome_reason = sqlc.narg(outcome_reason)
 WHERE store_id = @store_id AND created_at = @created_at AND id = @id
+RETURNING *;
+
+-- name: ReleaseOrderHold :one
+-- Lifts the risk rules' hold of a pending order (ADR-0066); no row when
+-- it is not held.
+UPDATE orders
+SET risk_action = 'released', version = version + 1, updated_at = @at
+WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND risk_action = 'hold' AND status = 'pending'
 RETURNING *;
 
 -- name: ListOrderItems :many

@@ -49,6 +49,7 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		CodFeeMinor: o.CODFee.Amount(), DiscountMinor: discountMinor(o), CouponCode: couponCode(o), PaymentMethod: string(o.PaymentMethod), PaymentStatus: string(o.PaymentStatus), TotalMinor: o.Total.Amount(), ItemCount: int32(o.ItemCount), LinesHash: linesHash[:], //nolint:gosec // bounded by MaxLines*MaxQty
 		UtmSource: orNil(o.Attribution.Source), UtmMedium: orNil(o.Attribution.Medium), UtmCampaign: orNil(o.Attribution.Campaign),
 		UtmContent: orNil(o.Attribution.Content), UtmTerm: orNil(o.Attribution.Term),
+		RiskAction: orNil(string(o.RiskAction)), RiskBand: orNil(o.RiskBand),
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -129,6 +130,24 @@ func SetStatus(ctx context.Context, tx Tx, id ulid.ID, to domain.Status, reason 
 		return domain.Order{}, fmt.Errorf("orders store: set status: %w", err)
 	}
 	return toOrder(row)
+}
+
+// ReleaseHold lifts the risk hold of a pending order; found is false when
+// it is not held.
+func ReleaseHold(ctx context.Context, tx Tx, id ulid.ID, at time.Time) (o domain.Order, found bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Order{}, false, err
+	}
+	row, err := ordersdb.New(tx).ReleaseOrderHold(ctx, ordersdb.ReleaseOrderHoldParams{At: at, StoreID: store, CreatedAt: domain.CreatedAtOf(id), ID: id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Order{}, false, nil
+	}
+	if err != nil {
+		return domain.Order{}, false, fmt.Errorf("orders store: release hold: %w", err)
+	}
+	o, err = toOrder(row)
+	return o, err == nil, err
 }
 
 // Lines returns an order's lines, priced in cur (the order's currency).
@@ -443,6 +462,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 		PaymentMethod: domain.PaymentMethod(r.PaymentMethod), PaymentStatus: domain.PaymentStatus(r.PaymentStatus),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 		OutcomeReason: domain.OutcomeReason(deref(r.OutcomeReason)),
+		RiskAction:    domain.RiskAction(deref(r.RiskAction)), RiskBand: deref(r.RiskBand),
 	}, nil
 }
 

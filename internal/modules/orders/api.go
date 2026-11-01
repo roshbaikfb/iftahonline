@@ -49,6 +49,13 @@ type (
 	// OutcomeReason is why an order did not reach its customer, from its
 	// latest move (ADR-0065).
 	OutcomeReason = domain.OutcomeReason
+	// RiskAction is what the store's risk rules did to an order when it
+	// was placed (ADR-0066).
+	RiskAction = domain.RiskAction
+	// Risk is the rules' verdict on a new storefront order.
+	Risk = domain.Risk
+	// RiskCheck gives that verdict; cmd/platform adapts the risk module.
+	RiskCheck = app.RiskCheck
 	// Placement is PlaceOrder's outcome: the order, and whether it was a
 	// replay (same Idempotency-Key) or a duplicate (same phone and lines
 	// within the window).
@@ -92,6 +99,14 @@ const (
 	ReasonRefused     = domain.ReasonRefused
 	ReasonNoAnswer    = domain.ReasonNoAnswer
 	ReasonUnconfirmed = domain.ReasonUnconfirmed
+)
+
+// Risk actions.
+const (
+	RiskNone     = domain.RiskNone
+	RiskHold     = domain.RiskHold
+	RiskVerify   = domain.RiskVerify
+	RiskReleased = domain.RiskReleased
 )
 
 // Payment methods and statuses.
@@ -206,6 +221,12 @@ var (
 	ErrInvalidTransition    = domain.ErrInvalidTransition
 	ErrIdempotencyKeyReused = app.ErrIdempotencyKeyReused
 	ErrVersionConflict      = app.ErrVersionConflict
+	// ErrOrderHeld: the risk rules hold the order; it cannot be confirmed
+	// until released. ErrNeedsCall: the customer's own confirmation of an
+	// order the rules want verified by phone.
+	ErrOrderHeld = domain.ErrOrderHeld
+	ErrNeedsCall = domain.ErrNeedsCall
+	ErrNotHeld   = domain.ErrNotHeld
 )
 
 // Conversions is what the server-side conversions read (ADR-0043): an

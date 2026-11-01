@@ -21,6 +21,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/ordertest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
@@ -338,6 +339,8 @@ func TestCrossTenant(t *testing.T) {
 		// A's store in the path, B's order.
 		{OperationID: "getOrder", Request: req(t, http.MethodGet, path(a, "/"+oid), owner, ""), Leaks: leaks},
 		{OperationID: "transitionOrder", Request: req(t, http.MethodPost, path(a, "/"+oid+"/transitions"), owner, move), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "releaseOrder", Request: req(t, http.MethodPost, path(b, "/"+oid+"/release"), owner, ""), Leaks: leaks, Unchanged: unchanged},
+		{OperationID: "releaseOrder", Request: req(t, http.MethodPost, path(a, "/"+oid+"/release"), owner, ""), Leaks: leaks, Unchanged: unchanged},
 	}
 	for _, c := range cases {
 		t.Run(c.OperationID+" "+c.Request.URL.Path, func(t *testing.T) {
@@ -452,5 +455,56 @@ func TestOrderAttribution(t *testing.T) {
 	if code, body, _ = f.do(t, req(t, http.MethodGet, path(a, "/"+plain.Order.ID.String()), owner, "")); code != http.StatusOK ||
 		body["order"].(map[string]any)["attribution"] != nil {
 		t.Fatalf("an order without a campaign: %d %v", code, body["order"])
+	}
+}
+
+// holdAll is a RiskCheck that holds every order (ADR-0066).
+type holdAll struct{}
+
+func (holdAll) Check(context.Context, phone.E164) (domain.Risk, error) {
+	return domain.Risk{Band: "high", Action: domain.RiskHold}, nil
+}
+
+// TestReleaseOrder: a held order shows its hold, cannot be confirmed, and
+// is released once by someone with orders.manage.
+func TestReleaseOrder(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.env.Risk = holdAll{}
+	svc := f.env.Service(f.env.Pool)
+	resp := problem.NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux := http.NewServeMux()
+	httpapi.Mount(mux, svc, f.env.Policy, testkit.FakeStoreScope(resp, f.env.Members), resp)
+	f.h = mux
+	shopper := tenant.WithStore(t.Context(), f.storeA)
+	p, err := svc.PlaceOrder(shopper, domain.NewOrder{Source: domain.SourceStorefront, Name: "منى", Phone: "01012345678",
+		Governorate: "EG-C", City: "مدينة نصر", Address: "1 شارع", Lines: []domain.LineInput{{VariantID: f.variantA, Qty: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := p.Order.ID.String()
+	owner := f.tok[authz.RoleOwner]
+	code, got, _ := f.do(t, req(t, http.MethodGet, path(f.storeA, "/"+id), owner, ""))
+	if o := got["order"].(map[string]any); code != http.StatusOK || o["risk_action"] != "hold" || o["risk_band"] != "high" {
+		t.Fatalf("getOrder = %d %v", code, got)
+	}
+	if code, got, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/"+id+"/transitions"), owner, `{"status":"confirmed"}`)); code != http.StatusConflict ||
+		got["code"] != "order_held" {
+		t.Fatalf("confirming a held order = %d %v", code, got)
+	}
+	if code, _, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/"+id+"/release"), f.tok[authz.RoleShipping], "")); code != http.StatusForbidden {
+		t.Fatalf("release by shipping = %d", code)
+	}
+	if code, _, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/nope/release"), owner, "")); code != http.StatusNotFound {
+		t.Fatalf("release of a malformed id = %d", code)
+	}
+	if code, got, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/"+id+"/release"), owner, "")); code != http.StatusOK || got["risk_action"] != "released" {
+		t.Fatalf("releaseOrder = %d %v", code, got)
+	}
+	if code, got, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/"+id+"/release"), owner, "")); code != http.StatusConflict || got["code"] != "order_not_held" {
+		t.Fatalf("releasing twice = %d %v", code, got)
+	}
+	if code, _, _ = f.do(t, req(t, http.MethodPost, path(f.storeA, "/"+id+"/transitions"), owner, `{"status":"confirmed"}`)); code != http.StatusOK {
+		t.Fatalf("confirming after the release = %d", code)
 	}
 }

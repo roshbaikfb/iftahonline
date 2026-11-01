@@ -217,6 +217,19 @@ func (h *Handlers) TransitionOrder(ctx context.Context, req TransitionOrderReque
 	return TransitionOrder200JSONResponse(toOrder(o)), nil
 }
 
+// ReleaseOrder implements StrictServerInterface.
+func (h *Handlers) ReleaseOrder(ctx context.Context, req ReleaseOrderRequestObject) (ReleaseOrderResponseObject, error) {
+	id, err := orderID(req.OrderId)
+	if err != nil {
+		return nil, err
+	}
+	o, err := h.svc.ReleaseHold(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return ReleaseOrder200JSONResponse(toOrder(o)), nil
+}
+
 // BulkTransitionOrders implements StrictServerInterface.
 func (h *Handlers) BulkTransitionOrders(ctx context.Context, req BulkTransitionOrdersRequestObject) (BulkTransitionOrdersResponseObject, error) {
 	if req.Body == nil {
@@ -343,8 +356,18 @@ func toOrder(o domain.Order) Order {
 		r := OrderOutcomeReason(o.OutcomeReason)
 		reason = &r
 	}
+	var action *OrderRiskAction
+	if o.RiskAction != domain.RiskNone {
+		a := OrderRiskAction(o.RiskAction)
+		action = &a
+	}
+	var band *RiskBand
+	if o.RiskBand != "" {
+		b := RiskBand(o.RiskBand)
+		band = &b
+	}
 	return Order{
-		OutcomeReason: reason,
+		OutcomeReason: reason, RiskAction: action, RiskBand: band,
 		DiscountMinor: &discount, CouponCode: code, Attribution: toAttribution(o.Attribution),
 		Id: o.ID.String(), Code: o.Code(), Status: OrderStatus(o.Status), Version: o.Version, Source: OrderSource(o.Source),
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,

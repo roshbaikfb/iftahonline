@@ -46,6 +46,9 @@ type Deps struct {
 	// Plan counts the month's orders against the store's plan (ADR-0045);
 	// nil counts nothing (tests).
 	Plan entitlements.Entitlements
+	// Risk applies the store's risk rules to storefront orders
+	// (ADR-0066); nil applies none.
+	Risk RiskCheck
 }
 
 // Module is the wired orders module.
@@ -60,7 +63,8 @@ func New(d Deps) (*Module, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth, Plan: d.Plan})}, nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth, Plan: d.Plan,
+		Risk: d.Risk})}, nil
 }
 
 // Fulfilment is the API courier integrations use.
@@ -88,6 +92,7 @@ type ShopDeps struct {
 	Coupons   Coupons // nil: every code is not_found
 	Stores    StoreSource
 	Plan      entitlements.Entitlements // counts the month's orders; nil counts nothing (tests)
+	Risk      RiskCheck                 // the store's risk rules (ADR-0066); nil applies none
 }
 
 // NewShop builds the shopper's side for the storefront role. Merchant
@@ -161,7 +166,8 @@ func withoutPermissions(d ShopDeps) (*app.Service, error) {
 		return nil, errors.New("orders: missing dependency")
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
-		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}, Plan: d.Plan}), nil
+		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}, Plan: d.Plan,
+		Risk: d.Risk}), nil
 }
 
 // denyAll refuses every permission.

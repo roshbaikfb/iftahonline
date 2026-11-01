@@ -2931,6 +2931,27 @@ paths:
               schema: { $ref: "#/components/schemas/RiskBands" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/orders/{order_id}/release:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/OrderID"
+    post:
+      tags: [orders]
+      operationId: releaseOrder
+      summary: Lift the risk rules' hold of a pending order
+      description: |
+        Permission: orders.manage. The merchant reviewed an order the
+        store's risk rules held (ADR-0066); it may now be confirmed. An
+        order that is not held, or no longer pending, is 409
+        order_not_held.
+      responses:
+        "200":
+          description: The order, released.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/orders/{order_id}/transitions:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -5548,6 +5569,14 @@ components:
           description: >-
             Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as
             staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
+        risk_action:
+          type: string
+          enum: [hold, verify, released]
+          description: >-
+            What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it
+            cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them),
+            released (a hold lifted). Absent when the rules did nothing.
+        risk_band: { $ref: "#/components/schemas/RiskBand" }
     RiskBand:
       type: string
       enum: [new, low, medium, high]
