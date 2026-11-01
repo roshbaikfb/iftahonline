@@ -20,11 +20,14 @@ const maxToken = 64
 
 // LinkView is what the SMS link's page shows: the order (its code, its
 // total, the customer's first name) and where its confirmation stands.
+// AwaitingCall: the customer said yes, but the order waits for the
+// store's call (the risk rules, ADR-0070), so it is not confirmed yet.
 type LinkView struct {
-	OrderCode string
-	Total     money.Money
-	FirstName string
-	Status    domain.ConfirmationStatus
+	OrderCode    string
+	Total        money.Money
+	FirstName    string
+	Status       domain.ConfirmationStatus
+	AwaitingCall bool
 }
 
 // byToken finds the confirmation of the store in ctx an SMS link's
@@ -49,7 +52,14 @@ func (s *Service) linkView(ctx context.Context, tx pgx.Tx, c domain.Confirmation
 		return LinkView{}, err
 	}
 	first, _, _ := strings.Cut(strings.TrimSpace(o.Contact.Name), " ")
-	return LinkView{OrderCode: o.Code(), Total: o.Total, FirstName: first, Status: c.Status}, nil
+	return LinkView{OrderCode: o.Code(), Total: o.Total, FirstName: first, Status: c.Status,
+		AwaitingCall: awaitingCall(c.Status, o)}, nil
+}
+
+// awaitingCall reports whether a yes left the order pending: the store
+// calls before it is confirmed, and the customer must not be told it is.
+func awaitingCall(settled domain.ConfirmationStatus, o orders.Order) bool {
+	return settled == domain.Confirmed && o.Status == orders.StatusPending
 }
 
 // LinkConfirmation is the SMS link's page: the order its token names,

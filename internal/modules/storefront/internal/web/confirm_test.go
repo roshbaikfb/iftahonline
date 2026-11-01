@@ -127,6 +127,12 @@ func TestConfirmPageRefusals(t *testing.T) {
 	if len(c.answers) != 0 {
 		t.Fatalf("refused requests answered: %v", c.answers)
 	}
+	// A yes the store verifies by phone is not called confirmed (ADR-0070).
+	c.state = web.ConfirmAwaitingCall
+	if body := f.get(t, "/o/"+confirmToken).Body.String(); !strings.Contains(body, "وصلنا ردك، وسيتصل بك المتجر لتأكيد الطلب.") ||
+		strings.Contains(body, "تم تأكيد طلبك") || strings.Contains(body, `value="confirm"`) {
+		t.Fatalf("awaiting the call: %s", body)
+	}
 	c.state = web.ConfirmClosed
 	if body := f.get(t, "/o/"+confirmToken).Body.String(); !strings.Contains(body, "لم يعد ينتظر ردك") || strings.Contains(body, `value="confirm"`) {
 		t.Fatalf("closed: %s", body)

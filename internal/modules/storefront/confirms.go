@@ -51,6 +51,9 @@ func toConfirmView(v messaging.LinkView, err error) (web.ConfirmView, error) {
 		out.State = web.ConfirmWaiting
 	case messaging.ConfirmationConfirmed:
 		out.State = web.ConfirmDone
+		if v.AwaitingCall {
+			out.State = web.ConfirmAwaitingCall
+		}
 	case messaging.ConfirmationCancelled:
 		out.State = web.ConfirmCancelled
 	}

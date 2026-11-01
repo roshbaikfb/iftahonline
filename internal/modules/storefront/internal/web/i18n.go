@@ -248,6 +248,7 @@ const (
 	MsgConfirmYes
 	MsgConfirmNo
 	MsgConfirmDone
+	MsgConfirmAwaitingCall
 	MsgConfirmCancelledByYou
 	MsgConfirmClosed
 	MsgConfirmWATitle
@@ -476,6 +477,7 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgConfirmYes:            {"نعم، أؤكد الطلب", "Yes, confirm the order"},
 	MsgConfirmNo:             {"إلغاء الطلب", "Cancel the order"},
 	MsgConfirmDone:           {"تم تأكيد طلبك، شكراً لك. سنخبرك عند شحنه.", "Your order is confirmed, thank you. We will let you know when it ships."},
+	MsgConfirmAwaitingCall:   {"وصلنا ردك، وسيتصل بك المتجر لتأكيد الطلب.", "We have your answer. The store will call you to confirm the order."},
 	MsgConfirmCancelledByYou: {"تم إلغاء طلبك.", "Your order is cancelled."},
 	MsgConfirmClosed:         {"هذا الطلب لم يعد ينتظر ردك. للاستفسار تواصل مع المتجر.", "This order no longer needs your answer. Contact the store with any question."},
 	MsgConfirmWATitle:        {"أكّد طلبك الآن على واتساب", "Confirm your order on WhatsApp now"},

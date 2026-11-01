@@ -29,10 +29,11 @@ var ErrConfirmationNotFound = errors.New("storefront: no such confirmation")
 
 // Confirmation states as the page shows them.
 const (
-	ConfirmWaiting   = "waiting"   // the customer may answer
-	ConfirmDone      = "confirmed" // the customer confirmed
-	ConfirmCancelled = "cancelled" // the customer cancelled
-	ConfirmClosed    = "closed"    // settled otherwise (deadline, merchant)
+	ConfirmWaiting      = "waiting"       // the customer may answer
+	ConfirmDone         = "confirmed"     // the customer confirmed
+	ConfirmAwaitingCall = "awaiting_call" // confirmed, the store calls first (ADR-0070)
+	ConfirmCancelled    = "cancelled"     // the customer cancelled
+	ConfirmClosed       = "closed"        // settled otherwise (deadline, merchant)
 )
 
 // ConfirmView is the order the link names, and where it stands.
