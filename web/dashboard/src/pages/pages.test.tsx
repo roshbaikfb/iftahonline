@@ -126,7 +126,7 @@ describe('Orders', () => {
     expect(bar).toHaveTextContent('طلب واحد محدد');
     await user.click(within(bar).getByRole('button', { name: 'تأكيد' }));
     expect(await screen.findByText('تم تأكيد 1 طلب')).toBeInTheDocument();
-    const bulk = calls.find((c) => c.method === 'POST');
+    const bulk = calls.find((c) => c.method === 'POST' && c.path.endsWith('/orders/transitions'));
     expect(bulk?.body).toEqual({ order_ids: [pending1.id], status: 'confirmed', note: '' });
     // the counts are read again after the change
     await waitFor(() => {
@@ -215,5 +215,83 @@ describe('OrderDetail', () => {
     expect(ship.nextElementSibling).toHaveTextContent('60');
     expect(screen.getByText('رسوم الدفع عند الاستلام').nextElementSibling).toHaveTextContent('15');
     expect(screen.getByText('الإجمالي').nextElementSibling).toHaveTextContent('375');
+  });
+});
+
+describe('customer risk (ADR-0065)', () => {
+  it('shows the band and the store\'s own history, and asks why an order is cancelled', async () => {
+    const o = order('01M5ORDER0000000000000000R', 'pending', { version: 2 });
+    let current = o;
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET /v1/stores/${store}/orders/${o.id}`]: () => ({ status: 200, body: { order: current, lines: [], events: [] } }),
+      [`GET /v1/stores/${store}/orders/${o.id}/risk`]: () => ({
+        status: 200,
+        body: { band: 'high', history: { orders: 3, delivered: 1, returned: 0, refused: 2, no_answer: 0, unconfirmed: 0, last_outcome_at: '2026-10-20T10:00:00Z' } },
+      }),
+      [`POST /v1/stores/${store}/orders/${o.id}/transitions`]: () => {
+        current = { ...o, status: 'cancelled', version: 3, outcome_reason: 'refused' };
+        return { status: 200, body: current };
+      },
+    });
+    renderAt(`/stores/${store}/orders/${o.id}`);
+    const user = userEvent.setup();
+    const card = await screen.findByRole('region', { name: 'تقييم العميل' });
+    expect(within(card).getByText('مخاطرة عالية')).toHaveClass('status', 'risk-high');
+    expect(card).toHaveTextContent('طلباته في متجرك: 3');
+    expect(card).toHaveTextContent('رفض 2');
+    expect(card).not.toHaveTextContent('مرتجع');
+    // cancelling asks why, and the answer travels with the move
+    await user.click(screen.getByRole('button', { name: 'إلغاء' }));
+    const pick = screen.getByRole('group', { name: /لماذا/ });
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+    await user.click(within(pick).getByRole('button', { name: 'العميل رفض الطلب' }));
+    await waitFor(() => {
+      expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ status: 'cancelled', note: '', version: 2, reason: 'refused' });
+    });
+    expect(screen.queryByRole('group', { name: /لماذا/ })).toBeNull();
+  });
+
+  it('cancels without a reason, or not at all', async () => {
+    const o = order('01M5ORDER0000000000000000S', 'pending');
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET /v1/stores/${store}/orders/${o.id}`]: () => ({ status: 200, body: { order: o, lines: [], events: [] } }),
+      [`POST /v1/stores/${store}/orders/${o.id}/transitions`]: () => ({ status: 200, body: { ...o, status: 'cancelled' } }),
+    });
+    renderAt(`/stores/${store}/orders/${o.id}`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'إلغاء' }));
+    await user.click(screen.getByRole('button', { name: 'تراجع' }));
+    expect(screen.queryByRole('group', { name: /لماذا/ })).toBeNull();
+    // no risk card when the band cannot be read
+    expect(screen.queryByRole('region', { name: 'تقييم العميل' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'إلغاء' }));
+    await user.click(screen.getByRole('button', { name: 'سبب آخر' }));
+    await waitFor(() => {
+      expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ status: 'cancelled', note: '', version: 1 });
+    });
+  });
+
+  it('marks medium and high customers in the list, with one request per page', async () => {
+    const a = order('01M5ORDER0000000000000000T', 'pending');
+    const b = order('01M5ORDER0000000000000000U', 'pending', { name: 'سارة' });
+    const c = order('01M5ORDER0000000000000000V', 'delivered', { name: 'هالة' });
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET /v1/stores/${store}/orders`]: () => ({ status: 200, body: { items: [a, b, c] } }),
+      [`POST /v1/stores/${store}/risk/bands`]: () => ({
+        status: 200,
+        body: { bands: [{ order_id: a.id, band: 'high' }, { order_id: b.id, band: 'low' }, { order_id: c.id, band: 'medium' }] },
+      }),
+    });
+    renderAt(`/stores/${store}/orders`);
+    const table = await screen.findByRole('table');
+    expect(await within(table).findByText('مخاطرة عالية')).toBeInTheDocument();
+    expect(within(table).getByText('مخاطرة متوسطة')).toBeInTheDocument();
+    expect(within(table).queryByText('موثوق')).toBeNull();
+    const asks = calls.filter((x) => x.path.endsWith('/risk/bands'));
+    expect(asks).toHaveLength(1);
+    expect(asks[0]?.body).toEqual({ order_ids: [a.id, b.id, c.id] });
   });
 });

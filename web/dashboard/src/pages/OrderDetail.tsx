@@ -3,12 +3,14 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { CustomerRiskCard } from '../components/CustomerRiskCard';
 import { OrderConfirmationCard } from '../components/OrderConfirmationCard';
 import { OrderPayments } from '../components/OrderPayments';
 import { OrderShipping } from '../components/OrderShipping';
 import { canReadMessages, channelLabel, type CustomerMessage, type OrderConfirmation } from '../lib/messages';
 import { dateTime, money, nextSteps, statusLabel, stepLabel, type OrderStatus } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
+import { reasonLabel, takesReason, type OutcomeReason } from '../lib/risk';
 import { useRole } from '../lib/settings';
 
 type Detail = components['schemas']['OrderDetail'];
@@ -48,6 +50,8 @@ export function OrderDetail() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // asking is a move that waits for its reason (ADR-0065).
+  const [asking, setAsking] = useState<OrderStatus | null>(null);
   const [places, setPlaces] = useState<Map<string, string>>(new Map());
   const [confirm, setConfirm] = useState<{ confirmation?: OrderConfirmation; messages: CustomerMessage[] }>({ messages: [] });
   const readMessages = canReadMessages(useRole(storeId));
@@ -88,13 +92,14 @@ export function OrderDetail() {
     };
   }, [storeId]);
 
-  async function move(to: OrderStatus) {
+  async function move(to: OrderStatus, reason?: OutcomeReason) {
     if (!detail) return;
+    setAsking(null);
     setBusy(true);
     setError('');
     const { error: err } = await api.POST('/v1/stores/{store_id}/orders/{order_id}/transitions', {
       params: { path: { store_id: storeId, order_id: orderId } },
-      body: { status: to, note: '', version: detail.order.version },
+      body: { status: to, note: '', version: detail.order.version, ...(reason ? { reason } : {}) },
     });
     const r = await fetchOrder(storeId, orderId);
     if (r.detail) setDetail(r.detail);
@@ -134,13 +139,38 @@ export function OrderDetail() {
                   type="button"
                   disabled={busy}
                   className={s === 'cancelled' ? 'danger' : s === 'confirmed' ? 'success' : ''}
-                  onClick={() => void move(s)}
+                  onClick={() => {
+                    if (takesReason.has(s)) setAsking(s);
+                    else void move(s);
+                  }}
                 >
                   {s === 'confirmed' ? 'تأكيد الطلب' : stepLabel[s]}
                 </button>
               ))}
             </div>
           </div>
+          {asking && (
+            <div className="card reason-pick" role="group" aria-labelledby="h-reason">
+              <p id="h-reason">لماذا {stepLabel[asking]}؟</p>
+              {(Object.keys(reasonLabel) as OutcomeReason[]).map((r) => (
+                <button key={r} type="button" disabled={busy} onClick={() => void move(asking, r)}>
+                  {reasonLabel[r]}
+                </button>
+              ))}
+              <button type="button" disabled={busy} onClick={() => void move(asking)}>
+                سبب آخر
+              </button>
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setAsking(null);
+                }}
+              >
+                تراجع
+              </button>
+            </div>
+          )}
           {o.status === 'pending' && confirm.confirmation?.status === 'pending' && (
             <p className="notice" role="note">
               أرسلنا للعميل رسالة تأكيد على {channelLabel(confirm.messages.find((m) => m.kind === 'order_confirmation')?.channel ?? 'whatsapp')}. يتحوّل الطلب وحده حين يرد، ويمكنك
@@ -245,6 +275,7 @@ export function OrderDetail() {
                 </p>
                 <Link to={`/stores/${storeId}/orders?phone=${encodeURIComponent(o.phone)}`}>طلبات هذا العميل</Link>
               </section>
+              <CustomerRiskCard storeId={storeId} orderId={orderId} status={o.status} />
               {o.attribution && Object.values(o.attribution).some(Boolean) && (
                 <section className="card od-source" aria-labelledby="h-src">
                   <h2 id="h-src">مصدر الطلب</h2>

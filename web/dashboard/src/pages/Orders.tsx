@@ -1,4 +1,4 @@
-import { useEffect, useState, type SubmitEvent } from 'react';
+import { useEffect, useRef, useState, type SubmitEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 
 import { api } from '../api/client';
@@ -17,6 +17,7 @@ import {
   type OrderStatus,
 } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
+import { bandLabel, type RiskBand } from '../lib/risk';
 import { field } from '../session';
 
 // The filters live in the URL, so a filtered list can be shared or
@@ -78,6 +79,8 @@ export function Orders() {
   const [reloads, setReloads] = useState(0);
   const [counts, setCounts] = useState<OrderCounts | null>(null);
   const [places, setPlaces] = useState<Map<string, string>>(new Map());
+  const [bands, setBands] = useState<Map<string, RiskBand>>(new Map());
+  const asked = useRef<Set<string>>(new Set());
   const paramsKey = params.toString();
 
   useEffect(() => {
@@ -105,6 +108,25 @@ export function Orders() {
       live = false;
     };
   }, [storeId, reloads]);
+
+  // The customers' bands (ADR-0065), one request per page of orders. An
+  // order scored a moment from now shows none.
+  useEffect(() => {
+    const ask = items.map((o) => o.id).filter((id) => !asked.current.has(id)).slice(0, 100);
+    if (ask.length === 0) return;
+    for (const id of ask) asked.current.add(id);
+    let live = true;
+    void api
+      .POST('/v1/stores/{store_id}/risk/bands', { params: { path: { store_id: storeId } }, body: { order_ids: ask } })
+      .then(({ data }) => {
+        if (!live || !data) return;
+        setBands((prev) => new Map([...prev, ...data.bands.map((b) => [b.order_id, b.band] as const)]));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [storeId, items]);
 
   // Governorates by name, from the store's shipping areas; the code stays
   // when they cannot be read.
@@ -310,6 +332,7 @@ export function Orders() {
                     </td>
                     <td>
                       {o.name}
+                      <RiskPill band={bands.get(o.id)} />
                       <small className="sub" dir="ltr">
                         {o.phone}
                       </small>
@@ -344,4 +367,12 @@ export function Orders() {
       </section>
     </Layout>
   );
+}
+
+// RiskPill marks the customers worth a call before shipping: medium and
+// high bands only, so the list is not noisy.
+function RiskPill({ band }: { band: RiskBand | undefined }) {
+  if (band !== 'medium' && band !== 'high') return null;
+  const pill = bandLabel[band];
+  return <span className={`status ${pill.cls}`}>{pill.label}</span>;
 }
