@@ -65,7 +65,12 @@ The `api` and `worker` roles need two secrets:
   the new key first.
 - **`OTP_PEPPER`**: base64 of 32 or more random bytes.
 
-Generate each with `openssl rand -base64 32`, and keep both in the secret
+The `api`, `storefront` and `worker` roles also need **`RISK_PHONE_KEY`**
+(base64 of 32 or more random bytes), the same value in all three. It keys
+the HMAC that stands for a phone number in risk scores (ADR-0065).
+**Never rotate it**: a new key forgets every phone's delivery history.
+
+Generate each with `openssl rand -base64 32`, and keep them in the secret
 manager.
 
 ## Media (S3 and imgproxy)

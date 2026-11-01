@@ -94,6 +94,7 @@ func roleEnv(addr string) []string {
 		// Public development-only values (see .env.example), not secrets.
 		"SECRETBOX_KEYS=1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=",
 		"OTP_PEPPER=ZGV2LW9ubHktb3RwLXBlcHBlci1ub3QtYS1zZWNyZXQ=",
+		"RISK_PHONE_KEY=cnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnI=",
 		"S3_ENDPOINT=http://127.0.0.1:1", "S3_BUCKET=iftah-media",
 		"S3_ACCESS_KEY=local-dev-access", "S3_SECRET_KEY=local-dev-secret-not-for-prod",
 		"IMGPROXY_URL=http://127.0.0.1:1",

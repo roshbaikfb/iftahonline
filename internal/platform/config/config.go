@@ -240,6 +240,11 @@ type Secrets struct {
 	Keyring *secretbox.Keyring
 	// OTPPepper keys the HMAC of one-time codes (OTP_PEPPER, base64, >= 32 bytes).
 	OTPPepper []byte
+	// RiskPhoneKey keys the HMAC that stands for a phone number across
+	// stores in the risk module (RISK_PHONE_KEY, base64, >= 32 bytes;
+	// api, storefront and worker; ADR-0065). It is never rotated: a new
+	// key forgets every phone's history.
+	RiskPhoneKey []byte
 }
 
 // Mail configures outgoing email. Empty SMTPAddr logs a masked notice
@@ -402,6 +407,13 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			r.errorf("SECRETBOX_KEYS: %v", err)
 		} else {
 			c.Secrets.Keyring = kr
+		}
+	}
+	if role == RoleAPI || role == RoleWorker || role == RoleStorefront {
+		if key, err := base64.StdEncoding.DecodeString(r.secret("RISK_PHONE_KEY")); err != nil || len(key) < 32 {
+			r.errorf("RISK_PHONE_KEY: must be base64 of at least 32 random bytes")
+		} else {
+			c.Secrets.RiskPhoneKey = key
 		}
 	}
 	if role == RoleAPI || role == RoleWorker {
