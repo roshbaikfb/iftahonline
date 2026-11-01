@@ -127,3 +127,40 @@ func CountsAsSale(s Status) bool {
 	}
 	return false
 }
+
+// OutcomeReason is why an order did not reach its customer (ADR-0065):
+// what the risk module learns a phone's behaviour from. It belongs to the
+// order's latest move, so a later move clears it.
+type OutcomeReason string
+
+// Outcome reasons.
+const (
+	ReasonNone        OutcomeReason = ""
+	ReasonRefused     OutcomeReason = "refused"     // the customer refused the parcel or the order
+	ReasonNoAnswer    OutcomeReason = "no_answer"   // the customer did not answer the courier or the store
+	ReasonUnconfirmed OutcomeReason = "unconfirmed" // the customer did not answer the confirmation message (system only)
+)
+
+// ParseReason validates a person's reason for a move to status to: only
+// a cancellation, a failed delivery or a return takes one, and only
+// refused or no_answer (unconfirmed is the confirmation's own).
+func ParseReason(s string, to Status) (OutcomeReason, error) {
+	r := OutcomeReason(s)
+	switch r {
+	case ReasonNone:
+		return r, nil
+	case ReasonRefused, ReasonNoAnswer:
+		if TakesReason(to) {
+			return r, nil
+		}
+		return "", errs.Validation(errs.FieldError{Field: "reason", Code: "not_allowed",
+			Message: "only a cancellation, a failed delivery or a return takes a reason"})
+	case ReasonUnconfirmed:
+	}
+	return "", errs.Validation(errs.FieldError{Field: "reason", Code: "invalid", Message: fmt.Sprintf("unknown reason %q", s)})
+}
+
+// TakesReason reports whether a move to s may carry an outcome reason.
+func TakesReason(s Status) bool {
+	return s == StatusCancelled || s == StatusFailedDelivery || s == StatusReturned
+}

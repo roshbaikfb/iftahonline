@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -105,6 +106,28 @@ func (s *Service) List(ctx context.Context, q domain.Query) (Page, error) {
 	return p, nil
 }
 
+// Before returns up to limit (at most domain.MaxListLimit) of the
+// store's orders with IDs below before, newest first and without lines,
+// in one query: the risk module reads a store's past through it
+// (ADR-0065). A zero before starts from the newest order.
+func (s *Service) Before(ctx context.Context, before ulid.ID, limit int) ([]domain.Order, error) {
+	if limit < 1 || limit > domain.MaxListLimit {
+		return nil, fmt.Errorf("orders: limit %d out of range", limit)
+	}
+	f := domain.Filter{From: time.Unix(0, 0).UTC(), To: time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), Before: before, Limit: limit}
+	if before.IsZero() {
+		f.Before = domain.MaxID
+	} else {
+		f.To = domain.CreatedAtOf(before).Add(time.Millisecond)
+	}
+	var out []domain.Order
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.List(ctx, tx, f)
+		return txErr
+	})
+	return out, err
+}
+
 // Counts returns every status with its number of orders (0 when none),
 // for the dashboard's tabs and badge, in one query.
 func (s *Service) Counts(ctx context.Context) (map[domain.Status]int, error) {
@@ -184,7 +207,7 @@ type BulkResult struct {
 // BulkTransition moves each order to status to, each in its own
 // transaction: one order that cannot move does not hold back the others
 // (bulk confirm). Results come in the order of ids.
-func (s *Service) BulkTransition(ctx context.Context, ids []ulid.ID, to domain.Status, note string) ([]BulkResult, error) {
+func (s *Service) BulkTransition(ctx context.Context, ids []ulid.ID, to domain.Status, note, reason string) ([]BulkResult, error) {
 	if len(ids) == 0 || len(ids) > MaxBulk {
 		return nil, errs.Validation(errs.FieldError{Field: "order_ids", Code: "count", Message: "send 1 to 100 orders"})
 	}
@@ -198,12 +221,15 @@ func (s *Service) BulkTransition(ctx context.Context, ids []ulid.ID, to domain.S
 	if _, err := cleanNote(note); err != nil {
 		return nil, err
 	}
+	if _, err := domain.ParseReason(reason, to); err != nil {
+		return nil, err
+	}
 	out := make([]BulkResult, len(ids))
 	for i, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		o, err := s.Transition(ctx, id, to, note, 0)
+		o, err := s.TransitionWithReason(ctx, id, to, note, reason, 0)
 		out[i] = BulkResult{ID: id, Order: o, Err: err}
 	}
 	return out, nil

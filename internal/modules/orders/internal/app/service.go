@@ -569,13 +569,24 @@ func (s *Service) SetPaymentStatusTx(ctx context.Context, tx pgx.Tx, id ulid.ID,
 // and the caller holds that step's permission. version, when not zero,
 // must be the order's current version (optimistic concurrency).
 func (s *Service) Transition(ctx context.Context, id ulid.ID, to domain.Status, note string, version int) (domain.Order, error) {
+	return s.TransitionWithReason(ctx, id, to, note, "", version)
+}
+
+// TransitionWithReason is Transition with why the order did not reach its
+// customer (ADR-0065): refused or no_answer, only on a move to cancelled,
+// failed_delivery or returned.
+func (s *Service) TransitionWithReason(ctx context.Context, id ulid.ID, to domain.Status, note, reason string, version int) (domain.Order, error) {
 	note, err := cleanNote(note)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	r, err := domain.ParseReason(reason, to)
 	if err != nil {
 		return domain.Order{}, err
 	}
 	var o domain.Order
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
-		o, _, txErr = s.transitionTx(ctx, tx, id, to, note, version, "")
+		o, _, txErr = s.transitionTx(ctx, tx, id, move{to: to, note: note, reason: r, version: version})
 		return txErr
 	})
 	return o, notFound(err)
@@ -590,25 +601,52 @@ var actorRE = regexp.MustCompile(`^[a-z]+:[a-z0-9_]{1,32}$`)
 // Moving an order to the status it has is a no-op (moved is false), so
 // a repeated tracking update changes nothing.
 func (s *Service) TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, actor, note string) (moved bool, err error) {
+	return s.TransitionSystemReasonTx(ctx, tx, id, to, actor, note, domain.ReasonNone)
+}
+
+// TransitionSystemReasonTx is TransitionSystemTx with an outcome reason
+// (ADR-0065), e.g. unconfirmed for a confirmation left unanswered. Only a
+// move to cancelled, failed_delivery or returned takes one.
+func (s *Service) TransitionSystemReasonTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, actor, note string,
+	reason domain.OutcomeReason) (moved bool, err error) {
 	if !actorRE.MatchString(actor) {
 		return false, fmt.Errorf("orders: invalid system actor %q", actor)
+	}
+	if reason != domain.ReasonNone && !domain.TakesReason(to) {
+		return false, fmt.Errorf("orders: reason %q on a move to %s", reason, to)
+	}
+	switch reason {
+	case domain.ReasonNone, domain.ReasonRefused, domain.ReasonNoAnswer, domain.ReasonUnconfirmed:
+	default:
+		return false, fmt.Errorf("orders: unknown reason %q", reason)
 	}
 	if note, err = cleanNote(note); err != nil {
 		return false, err
 	}
-	_, moved, err = s.transitionTx(ctx, tx, id, to, note, 0, actor)
+	_, moved, err = s.transitionTx(ctx, tx, id, move{to: to, note: note, reason: reason, actor: actor})
 	return moved, notFound(err)
 }
 
-// transitionTx makes one move. A person's move (actor empty) needs the
-// step's permission; a system's skips it and treats the current status
-// as already reached.
-func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to domain.Status, note string, version int, actor string) (domain.Order, bool, error) {
+// move is one transition as asked: by a person (actor empty), or by a
+// system on actor's behalf.
+type move struct {
+	to      domain.Status
+	note    string
+	reason  domain.OutcomeReason
+	version int
+	actor   string
+}
+
+// transitionTx makes one move. A person's move needs the step's
+// permission; a system's skips it and treats the current status as
+// already reached.
+func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, m move) (domain.Order, bool, error) {
+	to, note, actor := m.to, m.note, m.actor
 	o, err := store.Get(ctx, tx, id, true)
 	if err != nil {
 		return domain.Order{}, false, err
 	}
-	if version != 0 && version != o.Version {
+	if m.version != 0 && m.version != o.Version {
 		return domain.Order{}, false, ErrVersionConflict
 	}
 	if actor != "" && o.Status == to {
@@ -636,7 +674,7 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to do
 	if err != nil {
 		return domain.Order{}, false, err
 	}
-	moved, err := store.SetStatus(ctx, tx, o.ID, to, s.now().UTC().Truncate(time.Microsecond))
+	moved, err := store.SetStatus(ctx, tx, o.ID, to, m.reason, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
 		return domain.Order{}, false, err
 	}

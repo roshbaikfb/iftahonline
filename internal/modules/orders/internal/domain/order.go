@@ -334,6 +334,9 @@ type Order struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
+	// OutcomeReason is why it did not reach the customer, from its latest
+	// move (ADR-0065); ReasonNone otherwise.
+	OutcomeReason OutcomeReason
 }
 
 // Code is the short reference shown to merchants and shoppers: the

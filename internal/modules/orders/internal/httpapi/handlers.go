@@ -210,7 +210,7 @@ func (h *Handlers) TransitionOrder(ctx context.Context, req TransitionOrderReque
 	if err != nil {
 		return nil, err
 	}
-	o, err := h.svc.Transition(ctx, id, to, deref(req.Body.Note), deref(req.Body.Version))
+	o, err := h.svc.TransitionWithReason(ctx, id, to, deref(req.Body.Note), string(deref(req.Body.Reason)), deref(req.Body.Version))
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (h *Handlers) BulkTransitionOrders(ctx context.Context, req BulkTransitionO
 			return nil, errs.Validation(errs.FieldError{Field: fmt.Sprintf("order_ids[%d]", i), Code: "invalid", Message: "invalid order id"})
 		}
 	}
-	res, err := h.svc.BulkTransition(ctx, ids, to, deref(req.Body.Note))
+	res, err := h.svc.BulkTransition(ctx, ids, to, deref(req.Body.Note), string(deref(req.Body.Reason)))
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +338,13 @@ func toOrder(o domain.Order) Order {
 	if o.Discount.Currency() != "" {
 		discount = o.Discount.Amount()
 	}
+	var reason *OrderOutcomeReason
+	if o.OutcomeReason != domain.ReasonNone {
+		r := OrderOutcomeReason(o.OutcomeReason)
+		reason = &r
+	}
 	return Order{
+		OutcomeReason: reason,
 		DiscountMinor: &discount, CouponCode: code, Attribution: toAttribution(o.Attribution),
 		Id: o.ID.String(), Code: o.Code(), Status: OrderStatus(o.Status), Version: o.Version, Source: OrderSource(o.Source),
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,

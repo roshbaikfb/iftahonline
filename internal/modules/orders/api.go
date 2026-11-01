@@ -46,6 +46,9 @@ type (
 	Signals = domain.Signals
 	// Source is where an order was placed.
 	Source = domain.Source
+	// OutcomeReason is why an order did not reach its customer, from its
+	// latest move (ADR-0065).
+	OutcomeReason = domain.OutcomeReason
 	// Placement is PlaceOrder's outcome: the order, and whether it was a
 	// replay (same Idempotency-Key) or a duplicate (same phone and lines
 	// within the window).
@@ -81,6 +84,14 @@ const (
 	EventOrderPlaced         = domain.EventOrderPlaced
 	EventOrderStatusChanged  = domain.EventOrderStatusChanged
 	EventOrderPaymentChanged = domain.EventOrderPaymentChanged
+)
+
+// Outcome reasons.
+const (
+	ReasonNone        = domain.ReasonNone
+	ReasonRefused     = domain.ReasonRefused
+	ReasonNoAnswer    = domain.ReasonNoAnswer
+	ReasonUnconfirmed = domain.ReasonUnconfirmed
 )
 
 // Payment methods and statuses.
@@ -154,6 +165,10 @@ type Fulfilment interface {
 	// Moving to the current status is a no-op (moved false); a forbidden
 	// move is a *TransitionError.
 	TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to Status, actor, note string) (moved bool, err error)
+	// TransitionSystemReasonTx is TransitionSystemTx with why the order
+	// did not reach its customer (ADR-0065), e.g. ReasonUnconfirmed. Only
+	// a move to cancelled, failed_delivery or returned takes one.
+	TransitionSystemReasonTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to Status, actor, note string, reason OutcomeReason) (moved bool, err error)
 }
 
 var _ Fulfilment = (*app.Service)(nil)
@@ -171,6 +186,19 @@ type Payments interface {
 }
 
 var _ Payments = (*app.Service)(nil)
+
+// Outcomes is what the risk module reads (ADR-0065): an order, and the
+// store's past orders a page at a time, to learn how its customers'
+// phones behave. Every method acts on the store in ctx.
+type Outcomes interface {
+	// Get returns an order with its lines, or ErrOrderNotFound.
+	Get(ctx context.Context, id ulid.ID) (Order, error)
+	// Before returns up to limit (1–100) orders with IDs below before,
+	// newest first, without lines; a zero before starts at the newest.
+	Before(ctx context.Context, before ulid.ID, limit int) ([]Order, error)
+}
+
+var _ Outcomes = (*app.Service)(nil)
 
 // Errors. Match with errors.Is.
 var (

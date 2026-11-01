@@ -193,7 +193,7 @@ func TestBulkTransition(t *testing.T) {
 		t.Fatal(err)
 	}
 	ask := append(slices.Clone(ids), ulid.NewGenerator().New(), foreign.Order.ID)
-	res, err := f.svc.BulkTransition(f.ctxA, ask, domain.StatusConfirmed, "تم التأكيد هاتفيًا")
+	res, err := f.svc.BulkTransition(f.ctxA, ask, domain.StatusConfirmed, "تم التأكيد هاتفيًا", "")
 	if err != nil || len(res) != 5 {
 		t.Fatalf("bulk: %v %v", res, err)
 	}
@@ -210,7 +210,7 @@ func TestBulkTransition(t *testing.T) {
 		t.Fatalf("store B's order moved: %s", o.Status)
 	}
 	for _, bad := range [][]ulid.ID{nil, make([]ulid.ID, app.MaxBulk+1), {ids[0], ids[0]}} {
-		if _, err = f.svc.BulkTransition(f.ctxA, bad, domain.StatusConfirmed, ""); !errs.Is(err, errs.KindValidation) {
+		if _, err = f.svc.BulkTransition(f.ctxA, bad, domain.StatusConfirmed, "", ""); !errs.Is(err, errs.KindValidation) {
 			t.Fatalf("bad bulk of %d: %v", len(bad), err)
 		}
 	}

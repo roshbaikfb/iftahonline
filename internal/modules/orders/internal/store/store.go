@@ -112,13 +112,18 @@ func Get(ctx context.Context, tx Tx, id ulid.ID, forUpdate bool) (domain.Order, 
 }
 
 // SetStatus moves an order (locked by Get) to status to.
-func SetStatus(ctx context.Context, tx Tx, id ulid.ID, to domain.Status, at time.Time) (domain.Order, error) {
+func SetStatus(ctx context.Context, tx Tx, id ulid.ID, to domain.Status, reason domain.OutcomeReason, at time.Time) (domain.Order, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return domain.Order{}, err
 	}
+	var r *string
+	if reason != domain.ReasonNone {
+		s := string(reason)
+		r = &s
+	}
 	row, err := ordersdb.New(tx).SetOrderStatus(ctx, ordersdb.SetOrderStatusParams{
-		ToStatus: string(to), At: at, StoreID: store, CreatedAt: domain.CreatedAtOf(id), ID: id,
+		ToStatus: string(to), At: at, OutcomeReason: r, StoreID: store, CreatedAt: domain.CreatedAtOf(id), ID: id,
 	})
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: set status: %w", err)
@@ -437,6 +442,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 			Content: deref(r.UtmContent), Term: deref(r.UtmTerm)},
 		PaymentMethod: domain.PaymentMethod(r.PaymentMethod), PaymentStatus: domain.PaymentStatus(r.PaymentStatus),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
+		OutcomeReason: domain.OutcomeReason(deref(r.OutcomeReason)),
 	}, nil
 }
 

@@ -5492,6 +5492,12 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         status_changed_at: { type: string, format: date-time }
+        outcome_reason:
+          type: string
+          enum: [refused, no_answer, unconfirmed]
+          description: >-
+            Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as
+            staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
     OrderLine:
       type: object
       required: [variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor]
@@ -5604,7 +5610,14 @@ components:
       properties:
         status: { $ref: "#/components/schemas/OrderStatus" }
         note: { type: string, maxLength: 500, default: "" }
+        reason: { $ref: "#/components/schemas/OutcomeReasonInput" }
         version: { type: integer, minimum: 1, description: The version you read; omit to move whatever the version. }
+    OutcomeReasonInput:
+      type: string
+      enum: [refused, no_answer]
+      description: >-
+        Why the order did not reach its customer (ADR-0065). Only a move to cancelled, failed_delivery or returned
+        takes one (otherwise 422 on reason). It teaches the risk score; omit it when neither applies.
     BulkTransitionInput:
       type: object
       required: [order_ids, status]
@@ -5616,6 +5629,7 @@ components:
           items: { $ref: "#/components/schemas/ULID" }
         status: { $ref: "#/components/schemas/OrderStatus" }
         note: { type: string, maxLength: 500, default: "" }
+        reason: { $ref: "#/components/schemas/OutcomeReasonInput" }
     BulkTransitionResult:
       type: object
       required: [results]
