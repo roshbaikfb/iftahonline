@@ -29,6 +29,11 @@ section 2 is done).
    - two quick-reply buttons, in this order: «تأكيد الطلب» then «إلغاء
      الطلب» (English: "Confirm order" then "Cancel order").
 
+   Also create `order_delivery_prepay_v1` (ADR-0070): the link that pays
+   a prepaid delivery. Utility, Arabic and English, five body variables
+   (`{{4}}` the amount, `{{5}}` the link), no buttons. Until it is
+   approved, that link goes by SMS only.
+
    The exact texts are in [modules/messaging.md](modules/messaging.md).
 4. **A permanent token.** Create a system user with access to the app and
    the WhatsApp account, and give it a permanent token
@@ -170,6 +175,10 @@ may then use a longer `EDGE_CACHE_TTL`, e.g. `10m`. Without them, keep
   a legal and product step.
 - A customer's request to be forgotten is handled by support for now:
   delete their phone key's rows in `risk_orders` as the table's owner.
+- **Prepaid delivery** sends its link to the customer's phone by the
+  `order_delivery_prepay_v1` template (§1) or SMS (§2). With neither, a
+  store that turns it on gets orders cancelled unpaid after six hours:
+  leave `prepay_from` off until one works (ADR-0070).
 
 ## 9. Profit dashboard (ADR-0064, ADR-0069)
 

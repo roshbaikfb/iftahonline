@@ -1,6 +1,6 @@
 # ADR-0066: Risk rules: hold or verify risky customers' orders
 
-- Status: Accepted
+- Status: Accepted; amended by ADR-0070 (what the customer is told)
 - Date: 2026-11-01
 
 ## Context

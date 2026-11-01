@@ -31,7 +31,14 @@ payment status, move it), the webhooks inbox (worker), the envelope
   shipping and COD fee its shopper prepays, is paid like a card order's
   total. `orders.Order.OnlineDue()` names what is due. The payment moves
   `deposit_status`, confirms the order, and is refundable. An unpaid one
-  is cancelled after the hour, as card orders are.
+  is cancelled after six hours (`DepositExpireAfter`).
+- **Only from the phone's link** (ADR-0070). `/v1/pay` pays a deposit
+  only with `t`, the token of the SMS link sent to the customer's phone
+  (`Deps.DepositLinks`, wired to `messaging.NewPayLinks` in the api
+  role; `payments.DepositURL` builds the URL). Without it a prepaid
+  delivery redirects to `return` as any cash order does.
+  `StartCheckout` pays card orders only; `StartDepositCheckout` pays
+  deposits.
 
 - **Connections.**
   - One active gateway per store.
