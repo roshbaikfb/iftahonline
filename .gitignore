@@ -5,6 +5,7 @@
 /coverage.html
 *.test
 *.prof
+/cmd/platform/platform
 
 # env / secrets
 .env
