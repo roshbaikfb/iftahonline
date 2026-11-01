@@ -14,12 +14,10 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
-	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
-	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Deps are the module's explicit dependencies (CLAUDE.md rule 4).
@@ -88,19 +86,12 @@ func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorke
 // PeriodicJobs are the module's scheduled jobs: the daily purge.
 func (*Module) PeriodicJobs() []*river.PeriodicJob { return []*river.PeriodicJob{app.PurgePeriodic()} }
 
-// orderEvent is what risk reads of orders.EventOrderPlaced and
-// orders.EventOrderStatusChanged: which order.
-type orderEvent struct {
-	event.Meta
-	OrderID ulid.ID `json:"order_id"`
-}
-
 // LearnHandler learns from an order whenever it is placed or moves.
 // Subscribe it as LearnSubscriber to orders.EventOrderPlaced and
 // orders.EventOrderStatusChanged (worker role). An order gone meanwhile
 // teaches nothing.
 func (m *Module) LearnHandler() eventbus.Handler {
-	return eventbus.Typed(func(ctx context.Context, ev orderEvent) error {
+	return eventbus.Typed(func(ctx context.Context, ev orders.OrderRef) error {
 		if err := m.svc.Learn(ctx, ev.OrderID); err != nil && !errors.Is(err, app.ErrOrderNotFound) {
 			return err
 		}

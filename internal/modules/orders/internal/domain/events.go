@@ -14,6 +14,14 @@ const (
 	EventOrderPaymentChanged = "orders.order.payment_changed"
 )
 
+// OrderRef is what every orders event carries: which order. A
+// subscriber that only needs to know which order changed decodes any of
+// them into it.
+type OrderRef struct {
+	event.Meta
+	OrderID ulid.ID `json:"order_id"`
+}
+
 // OrderPlaced is published when an order is placed.
 type OrderPlaced struct {
 	event.Meta
