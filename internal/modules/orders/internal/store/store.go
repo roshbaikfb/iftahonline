@@ -50,6 +50,7 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		UtmSource: orNil(o.Attribution.Source), UtmMedium: orNil(o.Attribution.Medium), UtmCampaign: orNil(o.Attribution.Campaign),
 		UtmContent: orNil(o.Attribution.Content), UtmTerm: orNil(o.Attribution.Term),
 		RiskAction: orNil(string(o.RiskAction)), RiskBand: orNil(o.RiskBand),
+		DepositMinor: o.Deposit.Amount(), DepositStatus: orNil(string(o.DepositStatus)),
 	}); err != nil {
 		return fmt.Errorf("orders store: insert order: %w", err)
 	}
@@ -345,6 +346,24 @@ func PurgeKeys(ctx context.Context, tx Tx, before time.Time) error {
 	return nil
 }
 
+// SetDepositStatus records the gateway's word on a cash order's deposit.
+func SetDepositStatus(ctx context.Context, tx Tx, id ulid.ID, st domain.PaymentStatus) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	s := string(st)
+	n, err := ordersdb.New(tx).SetDepositStatus(ctx, ordersdb.SetDepositStatusParams{StoreID: store, CreatedAt: domain.CreatedAtOf(id), ID: id,
+		DepositStatus: &s})
+	if err != nil {
+		return fmt.Errorf("orders store: set deposit status: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 // SetPaymentStatus records a card order's payment status; domain.ErrNotFound
 // when there is no such card order.
 func SetPaymentStatus(ctx context.Context, tx Tx, id ulid.ID, st domain.PaymentStatus) error {
@@ -448,6 +467,10 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 	if err != nil {
 		return domain.Order{}, fmt.Errorf("orders store: %w", err)
 	}
+	deposit, err := money.New(r.DepositMinor, cur)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("orders store: %w", err)
+	}
 	code := deref(r.CouponCode)
 	p, err := phone.ParseE164(r.Phone)
 	if err != nil {
@@ -463,6 +486,7 @@ func toOrder(r ordersdb.Order) (domain.Order, error) {
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, StatusChangedAt: r.StatusChangedAt,
 		OutcomeReason: domain.OutcomeReason(deref(r.OutcomeReason)),
 		RiskAction:    domain.RiskAction(deref(r.RiskAction)), RiskBand: deref(r.RiskBand),
+		Deposit: deposit, DepositStatus: domain.PaymentStatus(deref(r.DepositStatus)),
 	}, nil
 }
 

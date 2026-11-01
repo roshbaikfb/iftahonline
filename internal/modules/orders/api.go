@@ -56,6 +56,9 @@ type (
 	Risk = domain.Risk
 	// RiskCheck gives that verdict; cmd/platform adapts the risk module.
 	RiskCheck = app.RiskCheck
+	// CardCheck says whether a delivery can be prepaid by card
+	// (payments.CardCheck fits it, ADR-0067).
+	CardCheck = app.CardCheck
 	// Placement is PlaceOrder's outcome: the order, and whether it was a
 	// replay (same Idempotency-Key) or a duplicate (same phone and lines
 	// within the window).
@@ -107,6 +110,7 @@ const (
 	RiskHold     = domain.RiskHold
 	RiskVerify   = domain.RiskVerify
 	RiskReleased = domain.RiskReleased
+	RiskPrepay   = domain.RiskPrepay
 )
 
 // Payment methods and statuses.

@@ -435,6 +435,8 @@ type Order struct {
 	OutcomeReason   *string
 	RiskAction      *string
 	RiskBand        *string
+	DepositMinor    int64
+	DepositStatus   *string
 }
 
 type OrderConfirmation struct {
@@ -692,6 +694,7 @@ type RiskSetting struct {
 	HoldFrom   string
 	VerifyFrom string
 	UpdatedAt  time.Time
+	PrepayFrom string
 }
 
 type RiverJob struct {

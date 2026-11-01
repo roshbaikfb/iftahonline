@@ -30,10 +30,11 @@ type OrderStatusChanged struct {
 }
 
 // OrderPaymentChanged is published when a card order's payment status
-// changes.
+// changes, or a cash order's deposit status (Deposit, ADR-0067).
 type OrderPaymentChanged struct {
 	event.Meta
 	OrderID ulid.ID       `json:"order_id"`
 	From    PaymentStatus `json:"from"`
 	To      PaymentStatus `json:"to"`
+	Deposit bool          `json:"deposit,omitempty"`
 }

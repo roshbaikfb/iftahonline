@@ -433,6 +433,8 @@ type Order struct {
 	OutcomeReason   pgtype.Text
 	RiskAction      pgtype.Text
 	RiskBand        pgtype.Text
+	DepositMinor    int64
+	DepositStatus   pgtype.Text
 }
 
 type OrderConfirmation struct {
@@ -690,6 +692,7 @@ type RiskSetting struct {
 	HoldFrom   string
 	VerifyFrom string
 	UpdatedAt  pgtype.Timestamptz
+	PrepayFrom string
 }
 
 type RiverJob struct {
