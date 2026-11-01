@@ -61,6 +61,10 @@ type Config struct {
 	// AdminDB is the super-admin console's pool (app_admin). Empty URL:
 	// the console is disabled.
 	AdminDB DB
+	// ReadDB is the api's pool for reads that may lag (analytics,
+	// ADR-0064): DATABASE_READ_URL, a replica as app_user. Unset, it is
+	// DATABASE_URL, read through a pool of its own.
+	ReadDB  DB
 	Media   Media
 	Search  Search
 	Edge    Edge
@@ -366,6 +370,15 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			URL: r.url("ADMIN_DATABASE_URL", false, "postgres", "postgresql"), MaxConns: 4, MinConns: 0,
 			MaxConnLifetime: c.DB.MaxConnLifetime, StatementTimeout: c.DB.StatementTimeout,
 		}
+		c.ReadDB = DB{
+			URL:              r.url("DATABASE_READ_URL", false, "postgres", "postgresql"),
+			MaxConns:         int32(r.int64("DB_READ_MAX_CONNS", 10, 1, 1000)), //nolint:gosec // bounded above.
+			MaxConnLifetime:  c.DB.MaxConnLifetime,
+			StatementTimeout: r.duration("DB_READ_STATEMENT_TIMEOUT", 15*time.Second),
+		}
+		if c.ReadDB.URL == "" {
+			c.ReadDB.URL = c.DB.URL
+		}
 	}
 
 	if role != RoleMigrate && role != RoleAdmin {
@@ -500,6 +513,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("base_domain", c.Tenancy.BaseDomain),
 		slog.Bool("smtp", c.Mail.SMTPAddr != ""),
 		slog.Bool("admin_console", c.AdminDB.URL != ""),
+		slog.Bool("read_replica", c.ReadDB.URL != "" && c.ReadDB.URL != c.DB.URL),
 		slog.String("s3_endpoint", redactURL(c.Media.S3Endpoint)),
 		slog.String("s3_bucket", c.Media.S3Bucket),
 		slog.String("imgproxy", redactURL(c.Media.ImgproxyURL)),
