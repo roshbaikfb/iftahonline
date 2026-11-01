@@ -3664,6 +3664,11 @@ paths:
         taking cards, it redirects straight to `return`. A `return` that
         is not an http(s) URL on one of the store's hosts is 404, as are
         unknown stores and orders. Rate-limited per client IP.
+
+        A cash order's prepaid delivery (ADR-0067) is paid here only with
+        `t`, the token of the link sent to the customer's phone
+        (ADR-0070); without it, such an order redirects to `return` as a
+        cash order does.
       security: []
       parameters:
         - $ref: "#/components/parameters/StoreID"
@@ -3673,6 +3678,11 @@ paths:
           required: true
           description: Where the shopper ends up (the store's thank-you page).
           schema: { type: string, maxLength: 2000 }
+        - name: t
+          in: query
+          required: false
+          description: The customer's link token, for a prepaid delivery.
+          schema: { type: string, maxLength: 64 }
       responses:
         "303":
           description: To the gateway's page, or back to `return`.

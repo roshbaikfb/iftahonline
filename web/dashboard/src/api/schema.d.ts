@@ -3239,6 +3239,11 @@ export interface paths {
          *     taking cards, it redirects straight to `return`. A `return` that
          *     is not an http(s) URL on one of the store's hosts is 404, as are
          *     unknown stores and orders. Rate-limited per client IP.
+         *
+         *     A cash order's prepaid delivery (ADR-0067) is paid here only with
+         *     `t`, the token of the link sent to the customer's phone
+         *     (ADR-0070); without it, such an order redirects to `return` as a
+         *     cash order does.
          */
         get: operations["startCardPayment"];
         put?: never;
@@ -10758,6 +10763,8 @@ export interface operations {
             query: {
                 /** @description Where the shopper ends up (the store's thank-you page). */
                 return: string;
+                /** @description The customer's link token, for a prepaid delivery. */
+                t?: string;
             };
             header?: never;
             path: {

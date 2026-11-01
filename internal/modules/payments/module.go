@@ -59,7 +59,10 @@ type Deps struct {
 	Hosts    HostOwner
 	Limiter  *ratelimit.Limiter
 	ClientIP ClientIPFunc
-	Log      *slog.Logger
+	// DepositLinks checks the links that pay a prepaid delivery
+	// (ADR-0070); nil pays none.
+	DepositLinks DepositLinkCheck
+	Log          *slog.Logger
 }
 
 // gateways builds the adapters c offers, and the fake one, whose hosted
@@ -145,7 +148,7 @@ func (m *Module) MountCheckout(mux *http.ServeMux, resp *problem.Responder) erro
 	if m.d.Hosts == nil || m.d.ClientIP == nil {
 		return errors.New("payments: checkout needs Hosts and ClientIP")
 	}
-	payapi.Mount(mux, payapi.Deps{Service: m.svc, Hosts: m.d.Hosts, Limiter: m.d.Limiter, ClientIP: m.d.ClientIP, Problems: resp, Log: m.d.Log})
+	payapi.Mount(mux, payapi.Deps{Service: m.svc, Links: m.d.DepositLinks, Hosts: m.d.Hosts, Limiter: m.d.Limiter, ClientIP: m.d.ClientIP, Problems: resp, Log: m.d.Log})
 	if m.fake != nil {
 		payapi.MountFakeGateway(mux, m.fake)
 	}

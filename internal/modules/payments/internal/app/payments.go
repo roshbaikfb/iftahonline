@@ -31,6 +31,10 @@ const (
 	// ExpireAfter is how long a card order waits for its payment before
 	// it is cancelled and its stock released (decided with the plan).
 	ExpireAfter = 60 * time.Minute
+	// DepositExpireAfter is ExpireAfter for a cash order's prepaid
+	// delivery: its link goes to the customer's phone, who may open it
+	// later than a shopper still at checkout (ADR-0070).
+	DepositExpireAfter = 6 * time.Hour
 	// ReuseCheckoutFor is how long a pending payment's page is offered
 	// again to a shopper who comes back, instead of a new payment.
 	ReuseCheckoutFor = 30 * time.Minute
@@ -59,11 +63,32 @@ type Checkout struct {
 	URL       string
 }
 
+// expiresAt is when an order stops waiting for its online payment.
+func expiresAt(o orders.Order) time.Time {
+	if o.PaymentMethod == orders.PaymentCOD {
+		return o.CreatedAt.Add(DepositExpireAfter)
+	}
+	return o.CreatedAt.Add(ExpireAfter)
+}
+
 // StartCheckout sends a card order's shopper to the gateway: a pending
 // payment (and its expiry job) is written first, then the gateway creates
 // the hosted page, bounded by createTimeout while the shopper waits. A
-// shopper coming back within ReuseCheckoutFor gets the same page.
+// shopper coming back within ReuseCheckoutFor gets the same page. A
+// cash order's prepaid delivery is ErrNotPayable here: only its link
+// pays it (StartDepositCheckout).
 func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectURL string) (Checkout, error) {
+	return s.startCheckout(ctx, orderID, redirectURL, orders.PaymentCard)
+}
+
+// StartDepositCheckout is StartCheckout for a cash order's prepaid
+// delivery, from the link sent to the customer's phone (ADR-0070); the
+// caller checked the link.
+func (s *Service) StartDepositCheckout(ctx context.Context, orderID ulid.ID, redirectURL string) (Checkout, error) {
+	return s.startCheckout(ctx, orderID, redirectURL, orders.PaymentCOD)
+}
+
+func (s *Service) startCheckout(ctx context.Context, orderID ulid.ID, redirectURL string, method orders.PaymentMethod) (Checkout, error) {
 	storeID, err := tenant.FromContext(ctx)
 	if err != nil {
 		return Checkout{}, err
@@ -78,7 +103,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	// What is due online: a card order's total, or a cash order's
 	// prepaid delivery (ADR-0067).
 	due, ok := o.OnlineDue()
-	if !ok || o.Status != orders.StatusPending {
+	if !ok || o.Status != orders.StatusPending || o.PaymentMethod != method {
 		return Checkout{}, ErrNotPayable
 	}
 	// A plan without card payments (a lapsed trial, a downgrade) sends no
@@ -123,7 +148,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	}
 
 	p := domain.Payment{ID: s.ids.New(), OrderID: orderID, ConnectionID: conn.ID, Gateway: conn.Gateway, Amount: due}
-	expireAt := o.CreatedAt.Add(ExpireAfter)
+	expireAt := expiresAt(o)
 	if earliest := s.now().Add(time.Minute); expireAt.Before(earliest) {
 		expireAt = earliest
 	}
