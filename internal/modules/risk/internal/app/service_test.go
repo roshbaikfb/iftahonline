@@ -36,7 +36,7 @@ type fixture struct {
 	now    time.Time
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	pool, err := pgxpool.New(t.Context(), infra.AppURL)
 	if err != nil {
@@ -46,7 +46,7 @@ func newFixture(t *testing.T) *fixture {
 	return newFixtureOn(t, pool)
 }
 
-func newFixtureOn(t *testing.T, db *pgxpool.Pool) *fixture {
+func newFixtureOn(t testing.TB, db *pgxpool.Pool) *fixture {
 	t.Helper()
 	keyer, err := domain.NewKeyer([]byte(strings.Repeat("k", 32)))
 	if err != nil {
@@ -59,19 +59,19 @@ func newFixtureOn(t *testing.T, db *pgxpool.Pool) *fixture {
 	return f
 }
 
-func (f *fixture) store(t *testing.T) context.Context {
+func (f *fixture) store(t testing.TB) context.Context {
 	t.Helper()
 	ctx, _ := risktest.Store(t, f.pool, f.ids)
 	return ctx
 }
 
-func (f *fixture) uniquePhone(t *testing.T) phone.E164 { t.Helper(); return risktest.Phone(t, f.ids) }
+func (f *fixture) uniquePhone(t testing.TB) phone.E164 { t.Helper(); return risktest.Phone(t, f.ids) }
 
 func (f *fixture) order(ctx context.Context, p phone.E164, daysAgo int, st orders.Status, reason orders.OutcomeReason) orders.Order {
 	return f.orders.Order(ctx, p, daysAgo, st, reason)
 }
 
-func (f *fixture) learn(ctx context.Context, t *testing.T, o orders.Order) {
+func (f *fixture) learn(ctx context.Context, t testing.TB, o orders.Order) {
 	t.Helper()
 	if err := f.svc.Learn(ctx, o.ID); err != nil {
 		t.Fatal(err)
