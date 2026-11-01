@@ -547,3 +547,24 @@ func TestAdSpendPastTheList(t *testing.T) {
 		t.Fatalf("listed %d, count %d, total %d, %v", len(got.Items), got.Count, got.TotalMinor, err)
 	}
 }
+
+// TestRollupQueries (P8 review): computing a month of dirty days costs as
+// many queries as computing one.
+func TestRollupQueries(t *testing.T) {
+	t.Parallel()
+	counting, qc := testkit.CountingPool(t, infra.AppURL)
+	_, read := pools(t)
+	f := newFixture(t, counting, read)
+	count := func(days int) int64 {
+		a := f.store(t)
+		for i := range days {
+			f.order(a, t, time.Date(2026, 10, 1+i, 10, 0, 0, 0, time.UTC), orders.StatusDelivered, "eid", "EG-C")
+		}
+		qc.Reset()
+		f.rollup(a, t)
+		return qc.Count()
+	}
+	if one, month := count(1), count(25); one != month {
+		t.Fatalf("queries: %d for one day, %d for 25", one, month)
+	}
+}

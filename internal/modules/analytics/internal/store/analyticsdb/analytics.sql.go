@@ -36,32 +36,33 @@ func (q *Queries) AdSpendTotals(ctx context.Context, arg AdSpendTotalsParams) (A
 	return i, err
 }
 
-const dayAdSpend = `-- name: DayAdSpend :many
-SELECT campaign, sum(amount_minor)::bigint AS amount_minor
-FROM ad_spend WHERE store_id = $1 AND day = $2
-GROUP BY campaign
+const daysAdSpend = `-- name: DaysAdSpend :many
+SELECT day, campaign, sum(amount_minor)::bigint AS amount_minor
+FROM ad_spend WHERE store_id = $1 AND day = ANY($2::date[])
+GROUP BY day, campaign
 `
 
-type DayAdSpendParams struct {
+type DaysAdSpendParams struct {
 	StoreID ulid.ID
-	Day     time.Time
+	Days    []time.Time
 }
 
-type DayAdSpendRow struct {
+type DaysAdSpendRow struct {
+	Day         time.Time
 	Campaign    string
 	AmountMinor int64
 }
 
-func (q *Queries) DayAdSpend(ctx context.Context, arg DayAdSpendParams) ([]DayAdSpendRow, error) {
-	rows, err := q.db.Query(ctx, dayAdSpend, arg.StoreID, arg.Day)
+func (q *Queries) DaysAdSpend(ctx context.Context, arg DaysAdSpendParams) ([]DaysAdSpendRow, error) {
+	rows, err := q.db.Query(ctx, daysAdSpend, arg.StoreID, arg.Days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DayAdSpendRow{}
+	items := []DaysAdSpendRow{}
 	for rows.Next() {
-		var i DayAdSpendRow
-		if err := rows.Scan(&i.Campaign, &i.AmountMinor); err != nil {
+		var i DaysAdSpendRow
+		if err := rows.Scan(&i.Day, &i.Campaign, &i.AmountMinor); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -72,20 +73,20 @@ func (q *Queries) DayAdSpend(ctx context.Context, arg DayAdSpendParams) ([]DayAd
 	return items, nil
 }
 
-const dayLines = `-- name: DayLines :many
+const daysLines = `-- name: DaysLines :many
 SELECT l.order_id, l.product_id, l.title, l.qty, l.revenue_minor, l.cost_minor
 FROM analytics_lines l
 JOIN analytics_orders o ON o.store_id = l.store_id AND o.order_id = l.order_id
-WHERE o.store_id = $1 AND o.day = $2
+WHERE o.store_id = $1 AND o.day = ANY($2::date[])
 ORDER BY l.order_id, l.line
 `
 
-type DayLinesParams struct {
+type DaysLinesParams struct {
 	StoreID ulid.ID
-	Day     time.Time
+	Days    []time.Time
 }
 
-type DayLinesRow struct {
+type DaysLinesRow struct {
 	OrderID      ulid.ID
 	ProductID    ulid.ID
 	Title        string
@@ -94,15 +95,15 @@ type DayLinesRow struct {
 	CostMinor    *int64
 }
 
-func (q *Queries) DayLines(ctx context.Context, arg DayLinesParams) ([]DayLinesRow, error) {
-	rows, err := q.db.Query(ctx, dayLines, arg.StoreID, arg.Day)
+func (q *Queries) DaysLines(ctx context.Context, arg DaysLinesParams) ([]DaysLinesRow, error) {
+	rows, err := q.db.Query(ctx, daysLines, arg.StoreID, arg.Days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DayLinesRow{}
+	items := []DaysLinesRow{}
 	for rows.Next() {
-		var i DayLinesRow
+		var i DaysLinesRow
 		if err := rows.Scan(
 			&i.OrderID,
 			&i.ProductID,
@@ -121,19 +122,21 @@ func (q *Queries) DayLines(ctx context.Context, arg DayLinesParams) ([]DayLinesR
 	return items, nil
 }
 
-const dayOrders = `-- name: DayOrders :many
-SELECT order_id, state, governorate, campaign, currency, revenue_minor, shipping_minor, cod_fee_minor, on_delivery_minor,
+const daysOrders = `-- name: DaysOrders :many
+
+SELECT day, order_id, state, governorate, campaign, currency, revenue_minor, shipping_minor, cod_fee_minor, on_delivery_minor,
        deposit_paid_minor, carrier_charge_minor
-FROM analytics_orders WHERE store_id = $1 AND day = $2
-ORDER BY order_id
+FROM analytics_orders WHERE store_id = $1 AND day = ANY($2::date[])
+ORDER BY day, order_id
 `
 
-type DayOrdersParams struct {
+type DaysOrdersParams struct {
 	StoreID ulid.ID
-	Day     time.Time
+	Days    []time.Time
 }
 
-type DayOrdersRow struct {
+type DaysOrdersRow struct {
+	Day                time.Time
 	OrderID            ulid.ID
 	State              string
 	Governorate        string
@@ -147,16 +150,19 @@ type DayOrdersRow struct {
 	CarrierChargeMinor *int64
 }
 
-func (q *Queries) DayOrders(ctx context.Context, arg DayOrdersParams) ([]DayOrdersRow, error) {
-	rows, err := q.db.Query(ctx, dayOrders, arg.StoreID, arg.Day)
+// The rollup reads and writes a batch of days in a constant number of
+// statements, however many days (P8 review).
+func (q *Queries) DaysOrders(ctx context.Context, arg DaysOrdersParams) ([]DaysOrdersRow, error) {
+	rows, err := q.db.Query(ctx, daysOrders, arg.StoreID, arg.Days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DayOrdersRow{}
+	items := []DaysOrdersRow{}
 	for rows.Next() {
-		var i DayOrdersRow
+		var i DaysOrdersRow
 		if err := rows.Scan(
+			&i.Day,
 			&i.OrderID,
 			&i.State,
 			&i.Governorate,
@@ -195,17 +201,17 @@ func (q *Queries) DeleteAdSpend(ctx context.Context, arg DeleteAdSpendParams) (t
 	return day, err
 }
 
-const deleteDay = `-- name: DeleteDay :exec
-DELETE FROM profit_daily WHERE store_id = $1 AND day = $2
+const deleteDays = `-- name: DeleteDays :exec
+DELETE FROM profit_daily WHERE store_id = $1 AND day = ANY($2::date[])
 `
 
-type DeleteDayParams struct {
+type DeleteDaysParams struct {
 	StoreID ulid.ID
-	Day     time.Time
+	Days    []time.Time
 }
 
-func (q *Queries) DeleteDay(ctx context.Context, arg DeleteDayParams) error {
-	_, err := q.db.Exec(ctx, deleteDay, arg.StoreID, arg.Day)
+func (q *Queries) DeleteDays(ctx context.Context, arg DeleteDaysParams) error {
+	_, err := q.db.Exec(ctx, deleteDays, arg.StoreID, arg.Days)
 	return err
 }
 
@@ -320,7 +326,7 @@ const insertDayRows = `-- name: InsertDayRows :exec
 INSERT INTO profit_daily (store_id, dim, day, key, label, currency, orders, delivered, returned, cancelled, open, cost_missing,
                           revenue_minor, delivery_paid_minor, product_cost_minor, shipping_cost_minor, cod_fees_minor,
                           return_cost_minor, ad_spend_minor)
-SELECT $1, ($2::text[])[n], $3, ($4::text[])[n], ($5::text[])[n], $6,
+SELECT $1, ($2::text[])[n], ($3::date[])[n], ($4::text[])[n], ($5::text[])[n], $6,
        ($7::int[])[n], ($8::int[])[n], ($9::int[])[n], ($10::int[])[n], ($11::int[])[n],
        ($12::int[])[n], ($13::bigint[])[n], ($14::bigint[])[n], ($15::bigint[])[n],
        ($16::bigint[])[n], ($17::bigint[])[n], ($18::bigint[])[n], ($19::bigint[])[n]
@@ -330,7 +336,7 @@ FROM generate_subscripts($2::text[], 1) AS n
 type InsertDayRowsParams struct {
 	StoreID       ulid.ID
 	Dims          []string
-	Day           time.Time
+	RowDays       []time.Time
 	Keys          []string
 	Labels        []string
 	Currency      string
@@ -353,7 +359,7 @@ func (q *Queries) InsertDayRows(ctx context.Context, arg InsertDayRowsParams) er
 	_, err := q.db.Exec(ctx, insertDayRows,
 		arg.StoreID,
 		arg.Dims,
-		arg.Day,
+		arg.RowDays,
 		arg.Keys,
 		arg.Labels,
 		arg.Currency,

@@ -240,20 +240,17 @@ func (s *Service) Rollup(ctx context.Context) (int, error) {
 			if tErr != nil {
 				return tErr
 			}
-			for _, day := range days {
-				os, ads, dErr := store.Day(ctx, tx, day)
-				if dErr != nil {
-					return dErr
-				}
-				var rows []domain.Row
-				if len(os) > 0 || len(ads) > 0 {
-					rows = domain.DayRows(os, settings, ads)
-				}
-				if dErr = store.SaveDay(ctx, tx, day, info.Currency, rows); dErr != nil {
-					return dErr
+			facts, tErr := store.DaysFacts(ctx, tx, days)
+			if tErr != nil {
+				return tErr
+			}
+			rows := make(map[string][]domain.Row, len(facts))
+			for day, f := range facts {
+				if len(f.Orders) > 0 || len(f.Ads) > 0 {
+					rows[day] = domain.DayRows(f.Orders, settings, f.Ads)
 				}
 			}
-			return nil
+			return store.SaveDays(ctx, tx, days, info.Currency, rows)
 		})
 		if err != nil || len(days) == 0 {
 			return total, err
