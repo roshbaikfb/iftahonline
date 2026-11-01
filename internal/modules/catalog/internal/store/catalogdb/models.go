@@ -433,6 +433,8 @@ type Order struct {
 	UtmContent      *string
 	UtmTerm         *string
 	OutcomeReason   *string
+	RiskAction      *string
+	RiskBand        *string
 }
 
 type OrderConfirmation struct {

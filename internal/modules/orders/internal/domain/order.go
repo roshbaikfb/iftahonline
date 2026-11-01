@@ -337,6 +337,10 @@ type Order struct {
 	// OutcomeReason is why it did not reach the customer, from its latest
 	// move (ADR-0065); ReasonNone otherwise.
 	OutcomeReason OutcomeReason
+	// RiskAction and RiskBand are what the store's risk rules did to it
+	// when it was placed, and the customer's band then (ADR-0066).
+	RiskAction RiskAction
+	RiskBand   string
 }
 
 // Code is the short reference shown to merchants and shoppers: the

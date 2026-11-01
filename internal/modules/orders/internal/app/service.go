@@ -140,6 +140,13 @@ type StoreInfo struct {
 	Location *time.Location // the store's time zone, for exports
 }
 
+// RiskCheck gives a new storefront order the store's risk rules' verdict
+// on its customer's phone (ADR-0066); cmd/platform adapts the risk
+// module to it.
+type RiskCheck interface {
+	Check(ctx context.Context, p phone.E164) (domain.Risk, error)
+}
+
 // StoreSource returns the StoreInfo of the store in ctx; cmd/platform
 // adapts the tenancy module to it.
 type StoreSource func(ctx context.Context) (StoreInfo, error)
@@ -157,6 +164,7 @@ type Service struct {
 	stores    StoreSource
 	auth      authz.Authorizer
 	plan      entitlements.Entitlements
+	risk      RiskCheck
 	now       func() time.Time
 }
 
@@ -179,6 +187,9 @@ type Deps struct {
 	// Plan counts the month's orders against the store's plan, never
 	// refusing one (ADR-0045); nil counts nothing (tests).
 	Plan entitlements.Entitlements
+	// Risk applies the store's risk rules to storefront orders
+	// (ADR-0066); nil applies none.
+	Risk RiskCheck
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -193,7 +204,7 @@ func NewService(d Deps) *Service {
 		d.Plan = entitlements.Unrestricted()
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
-		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, now: time.Now}
+		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, risk: d.Risk, now: time.Now}
 }
 
 // SetClock replaces the clock (tests of the duplicate window).
@@ -254,6 +265,15 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 	o, coupon, err := s.price(ctx, d, info.Currency)
 	if err != nil {
 		return Placement{}, err
+	}
+	// The rules look at shoppers' cash orders: staff placing an order
+	// have spoken to the customer, and a card order is paid upfront.
+	if d.Source == domain.SourceStorefront && o.PaymentMethod == domain.PaymentCOD && s.risk != nil {
+		r, rErr := s.risk.Check(ctx, d.Contact.Phone)
+		if rErr != nil {
+			return Placement{}, rErr
+		}
+		o.RiskAction, o.RiskBand = r.Action, r.Band
 	}
 
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.placeTx(ctx, tx, d, &o, coupon) })
@@ -627,6 +647,38 @@ func (s *Service) TransitionSystemReasonTx(ctx context.Context, tx pgx.Tx, id ul
 	return moved, notFound(err)
 }
 
+// ReleaseHold lifts the risk rules' hold of a pending order (ADR-0066),
+// with orders.manage: the merchant reviewed it and may now confirm it.
+// An order not held is ErrNotHeld.
+func (s *Service) ReleaseHold(ctx context.Context, id ulid.ID) (domain.Order, error) {
+	if err := s.auth.Authorize(ctx, authz.PermOrdersManage); err != nil {
+		return domain.Order{}, err
+	}
+	var o domain.Order
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := store.Get(ctx, tx, id, true); err != nil {
+			return err
+		}
+		released, found, err := store.ReleaseHold(ctx, tx, id, s.now().UTC().Truncate(time.Microsecond))
+		if err != nil {
+			return err
+		}
+		if !found {
+			return domain.ErrNotHeld
+		}
+		o = released
+		e := domain.Event{ID: s.ids.New(), From: domain.StatusPending, To: domain.StatusPending, Note: "released from the risk hold", At: o.UpdatedAt}
+		if p, ok := authz.PrincipalFrom(ctx); ok {
+			e.ActorUserID = &p.UserID
+		}
+		if err = store.InsertEvent(ctx, tx, o.ID, e); err != nil {
+			return err
+		}
+		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "order.released", TargetType: "order", TargetID: o.ID.String()})
+	})
+	return o, notFound(err)
+}
+
 // move is one transition as asked: by a person (actor empty), or by a
 // system on actor's behalf.
 type move struct {
@@ -655,6 +707,14 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, m mov
 	step, err := domain.Transition(o.Status, to)
 	if err != nil {
 		return domain.Order{}, false, err
+	}
+	if to == domain.StatusConfirmed {
+		switch {
+		case o.RiskAction == domain.RiskHold:
+			return domain.Order{}, false, domain.ErrOrderHeld
+		case o.RiskAction == domain.RiskVerify && strings.HasPrefix(actor, "customer:"):
+			return domain.Order{}, false, domain.ErrNeedsCall
+		}
 	}
 	if actor == "" {
 		if err = s.auth.Authorize(ctx, step.Permission); err != nil {

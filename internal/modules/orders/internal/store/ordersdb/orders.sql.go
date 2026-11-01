@@ -65,7 +65,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason, risk_action, risk_band FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
 `
 
 type GetOrderParams struct {
@@ -110,12 +110,14 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.UtmContent,
 		&i.UtmTerm,
 		&i.OutcomeReason,
+		&i.RiskAction,
+		&i.RiskBand,
 	)
 	return i, err
 }
 
 const getOrderForUpdate = `-- name: GetOrderForUpdate :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason, risk_action, risk_band FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
 `
 
 type GetOrderForUpdateParams struct {
@@ -162,6 +164,8 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 		&i.UtmContent,
 		&i.UtmTerm,
 		&i.OutcomeReason,
+		&i.RiskAction,
+		&i.RiskBand,
 	)
 	return i, err
 }
@@ -229,11 +233,12 @@ const insertOrder = `-- name: InsertOrder :exec
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
                     currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
                     updated_at, status_changed_at, payment_method, payment_status,
-                    utm_source, utm_medium, utm_campaign, utm_content, utm_term)
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, risk_action, risk_band)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16, $17, $18, $19,
         $20, $3, $3, $21, $22,
-        $23, $24, $25, $26, $27)
+        $23, $24, $25, $26, $27,
+        $28, $29)
 `
 
 type InsertOrderParams struct {
@@ -264,6 +269,8 @@ type InsertOrderParams struct {
 	UtmCampaign   *string
 	UtmContent    *string
 	UtmTerm       *string
+	RiskAction    *string
+	RiskBand      *string
 }
 
 // Every lookup of one order names its partition key: created_at is the
@@ -297,6 +304,8 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.UtmCampaign,
 		arg.UtmContent,
 		arg.UtmTerm,
+		arg.RiskAction,
+		arg.RiskBand,
 	)
 	return err
 }
@@ -581,12 +590,75 @@ func (q *Queries) PurgeIdempotencyKeys(ctx context.Context, arg PurgeIdempotency
 	return err
 }
 
+const releaseOrderHold = `-- name: ReleaseOrderHold :one
+UPDATE orders
+SET risk_action = 'released', version = version + 1, updated_at = $1
+WHERE store_id = $2 AND created_at = $3 AND id = $4 AND risk_action = 'hold' AND status = 'pending'
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason, risk_action, risk_band
+`
+
+type ReleaseOrderHoldParams struct {
+	At        time.Time
+	StoreID   ulid.ID
+	CreatedAt time.Time
+	ID        ulid.ID
+}
+
+// Lifts the risk rules' hold of a pending order (ADR-0066); no row when
+// it is not held.
+func (q *Queries) ReleaseOrderHold(ctx context.Context, arg ReleaseOrderHoldParams) (Order, error) {
+	row := q.db.QueryRow(ctx, releaseOrderHold,
+		arg.At,
+		arg.StoreID,
+		arg.CreatedAt,
+		arg.ID,
+	)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.CreatedAt,
+		&i.Status,
+		&i.Version,
+		&i.Source,
+		&i.CustomerID,
+		&i.Name,
+		&i.Phone,
+		&i.Governorate,
+		&i.City,
+		&i.Address,
+		&i.Notes,
+		&i.Currency,
+		&i.SubtotalMinor,
+		&i.ShippingMinor,
+		&i.TotalMinor,
+		&i.ItemCount,
+		&i.LinesHash,
+		&i.UpdatedAt,
+		&i.StatusChangedAt,
+		&i.CodFeeMinor,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
+		&i.DiscountMinor,
+		&i.CouponCode,
+		&i.UtmSource,
+		&i.UtmMedium,
+		&i.UtmCampaign,
+		&i.UtmContent,
+		&i.UtmTerm,
+		&i.OutcomeReason,
+		&i.RiskAction,
+		&i.RiskBand,
+	)
+	return i, err
+}
+
 const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders
 SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2,
     outcome_reason = $3
 WHERE store_id = $4 AND created_at = $5 AND id = $6
-RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason, risk_action, risk_band
 `
 
 type SetOrderStatusParams struct {
@@ -641,6 +713,8 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.UtmContent,
 		&i.UtmTerm,
 		&i.OutcomeReason,
+		&i.RiskAction,
+		&i.RiskBand,
 	)
 	return i, err
 }

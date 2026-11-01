@@ -100,6 +100,27 @@ func (e OrderPaymentStatus) Valid() bool {
 	}
 }
 
+// Defines values for OrderRiskAction.
+const (
+	Hold     OrderRiskAction = "hold"
+	Released OrderRiskAction = "released"
+	Verify   OrderRiskAction = "verify"
+)
+
+// Valid indicates whether the value is a known member of the OrderRiskAction enum.
+func (e OrderRiskAction) Valid() bool {
+	switch e {
+	case Hold:
+		return true
+	case Released:
+		return true
+	case Verify:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderSource.
 const (
 	Merchant   OrderSource = "merchant"
@@ -187,6 +208,30 @@ func (e OutcomeReasonInput) Valid() bool {
 	case OutcomeReasonInputNoAnswer:
 		return true
 	case OutcomeReasonInputRefused:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RiskBand.
+const (
+	High   RiskBand = "high"
+	Low    RiskBand = "low"
+	Medium RiskBand = "medium"
+	New    RiskBand = "new"
+)
+
+// Valid indicates whether the value is a known member of the RiskBand enum.
+func (e RiskBand) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	case New:
 		return true
 	default:
 		return false
@@ -330,6 +375,12 @@ type Order struct {
 	// Phone Example: +201012345678
 	Phone string `json:"phone"`
 
+	// RiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+	RiskAction *OrderRiskAction `json:"risk_action,omitempty"`
+
+	// RiskBand new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
+	RiskBand *RiskBand `json:"risk_band,omitempty"`
+
 	// ShippingMinor The delivery rate quoted when the order was placed (ADR-0025).
 	ShippingMinor   int64       `json:"shipping_minor"`
 	Source          OrderSource `json:"source"`
@@ -351,6 +402,9 @@ type OrderPaymentMethod string
 
 // OrderPaymentStatus COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
 type OrderPaymentStatus string
+
+// OrderRiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+type OrderRiskAction string
 
 // OrderSource defines model for Order.Source.
 type OrderSource string
@@ -516,6 +570,9 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// RiskBand new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
+type RiskBand string
+
 // TransitionInput defines model for TransitionInput.
 type TransitionInput struct {
 	Note *string `json:"note,omitempty"`
@@ -650,6 +707,9 @@ type ServerInterface interface {
 	// GetOrder Get an order with its lines and timeline
 	// (GET /v1/stores/{store_id}/orders/{order_id})
 	GetOrder(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId OrderID)
+	// ReleaseOrder Lift the risk rules' hold of a pending order
+	// (POST /v1/stores/{store_id}/orders/{order_id}/release)
+	ReleaseOrder(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId OrderID)
 	// TransitionOrder Move an order to another status
 	// (POST /v1/stores/{store_id}/orders/{order_id}/transitions)
 	TransitionOrder(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId OrderID)
@@ -1057,6 +1117,41 @@ func (siw *ServerInterfaceWrapper) GetOrder(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ReleaseOrder operation middleware
+func (siw *ServerInterfaceWrapper) ReleaseOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "order_id" -------------
+	var orderId OrderID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_id", r.PathValue("order_id"), &orderId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReleaseOrder(w, r, storeId, orderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TransitionOrder operation middleware
 func (siw *ServerInterfaceWrapper) TransitionOrder(w http.ResponseWriter, r *http.Request) {
 
@@ -1219,6 +1314,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders/transitions", wrapper.BulkTransitionOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/export", wrapper.ExportOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}", wrapper.GetOrder)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}/release", wrapper.ReleaseOrder)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}/transitions", wrapper.TransitionOrder)
 
 	return m
@@ -1544,6 +1640,46 @@ func (response GetOrderdefaultApplicationProblemPlusJSONResponse) VisitGetOrderR
 	return err
 }
 
+type ReleaseOrderRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	OrderId OrderID `json:"order_id"`
+}
+
+type ReleaseOrderResponseObject interface {
+	VisitReleaseOrderResponse(w http.ResponseWriter) error
+}
+
+type ReleaseOrder200JSONResponse Order
+
+func (response ReleaseOrder200JSONResponse) VisitReleaseOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReleaseOrderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReleaseOrderdefaultApplicationProblemPlusJSONResponse) VisitReleaseOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type TransitionOrderRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	OrderId OrderID `json:"order_id"`
@@ -1608,6 +1744,9 @@ type StrictServerInterface interface {
 	// GetOrder Get an order with its lines and timeline
 	// (GET /v1/stores/{store_id}/orders/{order_id})
 	GetOrder(ctx context.Context, request GetOrderRequestObject) (GetOrderResponseObject, error)
+	// ReleaseOrder Lift the risk rules' hold of a pending order
+	// (POST /v1/stores/{store_id}/orders/{order_id}/release)
+	ReleaseOrder(ctx context.Context, request ReleaseOrderRequestObject) (ReleaseOrderResponseObject, error)
 	// TransitionOrder Move an order to another status
 	// (POST /v1/stores/{store_id}/orders/{order_id}/transitions)
 	TransitionOrder(ctx context.Context, request TransitionOrderRequestObject) (TransitionOrderResponseObject, error)
@@ -1846,6 +1985,33 @@ func (sh *strictHandler) GetOrder(w http.ResponseWriter, r *http.Request, storeI
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOrderResponseObject); ok {
 		if err := validResponse.VisitGetOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReleaseOrder operation middleware
+func (sh *strictHandler) ReleaseOrder(w http.ResponseWriter, r *http.Request, storeId StoreID, orderId OrderID) {
+	var request ReleaseOrderRequestObject
+
+	request.StoreId = storeId
+	request.OrderId = orderId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReleaseOrder(ctx, request.(ReleaseOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReleaseOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReleaseOrderResponseObject); ok {
+		if err := validResponse.VisitReleaseOrderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

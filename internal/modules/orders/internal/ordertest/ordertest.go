@@ -151,6 +151,9 @@ type Env struct {
 	// Plan counts orders for services built after it is set; nil counts
 	// nothing.
 	Plan entitlements.Entitlements
+	// Risk applies risk rules for services built after it is set; nil
+	// applies none.
+	Risk app.RiskCheck
 	Svc  *app.Service
 	// Members are the bearer tokens of FakeStoreScope; NewStore adds an
 	// owner per store ("owner-<store id>").
@@ -217,7 +220,7 @@ func New(t testing.TB, appURL string) *Env {
 // Env's modules and fakes.
 func (e *Env) Service(db postgres.Beginner) *app.Service {
 	return app.NewService(app.Deps{DB: db, IDs: e.IDs, Audit: e.Audit, Events: e.Events, Catalog: e.Catalog,
-		Customers: e.Customers, Shipping: e.Shipping, Coupons: e.Coupons, Auth: e.Policy, Stores: Stores, Plan: e.Plan})
+		Customers: e.Customers, Shipping: e.Shipping, Coupons: e.Coupons, Auth: e.Policy, Stores: Stores, Plan: e.Plan, Risk: e.Risk})
 }
 
 // NewStore creates a store (EGP, Cairo) and returns its context, with no
