@@ -3,6 +3,7 @@ package app_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -34,8 +35,9 @@ func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 type fakeOrders struct {
 	mu    sync.Mutex
 	m     map[tenant.StoreID][]orders.Order
-	gets  int // Get calls
-	pages int // BeforeWithLines calls
+	gets  int   // Get calls
+	pages int   // BeforeWithLines calls
+	err   error // every read fails with it, when set
 }
 
 func (f *fakeOrders) put(ctx context.Context, o orders.Order) {
@@ -62,6 +64,9 @@ func (f *fakeOrders) Get(ctx context.Context, id ulid.ID) (orders.Order, error) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.gets++
+	if f.err != nil {
+		return orders.Order{}, f.err
+	}
 	for _, o := range f.m[s] {
 		if o.ID == id {
 			return o, nil
@@ -90,19 +95,27 @@ func (f *fakeOrders) Before(ctx context.Context, before ulid.ID, limit int) ([]o
 func (f *fakeOrders) BeforeWithLines(ctx context.Context, before ulid.ID, limit int) ([]orders.Order, error) {
 	f.mu.Lock()
 	f.pages++
+	err := f.err
 	f.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 	return f.Before(ctx, before, limit)
 }
 
 // fakeCharges is shipping.Charges with set answers.
 type fakeCharges struct {
-	mu sync.Mutex
-	m  map[ulid.ID]money.Money
+	mu  sync.Mutex
+	m   map[ulid.ID]money.Money
+	err error // every call fails with it, when set
 }
 
 func (f *fakeCharges) CarrierCharges(_ context.Context, ids []ulid.ID) (map[ulid.ID]money.Money, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
 	out := map[ulid.ID]money.Money{}
 	for _, id := range ids {
 		if c, ok := f.m[id]; ok {
@@ -566,5 +579,44 @@ func TestRollupQueries(t *testing.T) {
 	}
 	if one, month := count(1), count(25); one != month {
 		t.Fatalf("queries: %d for one day, %d for 25", one, month)
+	}
+}
+
+// TestErrorsSurface (P8 review): a failing orders read or carrier inquiry
+// fails the job (River retries it) and writes nothing half done; an order
+// gone teaches nothing.
+func TestErrorsSurface(t *testing.T) {
+	t.Parallel()
+	f := newDefault(t)
+	a := f.store(t)
+	o := f.order(a, t, time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC), orders.StatusDelivered, "", "EG-C")
+	down := errors.New("orders down")
+	f.orders.mu.Lock()
+	f.orders.err = down
+	f.orders.mu.Unlock()
+	if _, err := f.svc.Backfill(a); !errors.Is(err, down) {
+		t.Fatalf("backfill with orders down: %v", err)
+	}
+	if err := f.svc.Learn(a, o.ID); !errors.Is(err, down) {
+		t.Fatalf("learn with orders down: %v", err)
+	}
+	f.orders.mu.Lock()
+	f.orders.err = nil
+	f.orders.mu.Unlock()
+	if err := f.svc.Learn(a, f.ids.New()); err != nil {
+		t.Fatalf("an order gone: %v", err)
+	}
+
+	f.now = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	f.charges.mu.Lock()
+	f.charges.err = errors.New("shipping down")
+	f.charges.mu.Unlock()
+	if _, err := f.svc.Sweep(a); err == nil || !strings.Contains(err.Error(), "shipping down") {
+		t.Fatalf("sweep with shipping down: %v", err)
+	}
+	f.rollup(a, t)
+	r, err := f.svc.Profit(a, day("2026-10-20"), day("2026-10-21"), domain.ByProduct)
+	if err != nil || r.Totals.Delivered != 1 || r.Totals.ShippingCost != 5000 {
+		t.Fatalf("the estimate stands after a failed sweep: %+v, %v", r.Totals, err)
 	}
 }
