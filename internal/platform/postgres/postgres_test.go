@@ -209,6 +209,78 @@ func TestTxRollback(t *testing.T) {
 	}
 }
 
+// TestReadPool proves ADR-0064's read pool: tenant reads work under RLS,
+// and no write gets through, whether its sessions or only its transactions
+// are read-only.
+func TestReadPool(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	owner := pool(t, infra.OwnerURL, 2)
+	if _, err := owner.Exec(ctx, `
+		CREATE TABLE read_probe (store_id uuid NOT NULL, note text NOT NULL);
+		CREATE INDEX ON read_probe (store_id);
+		ALTER TABLE read_probe ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE read_probe FORCE ROW LEVEL SECURITY;
+		CREATE POLICY tenant_isolation ON read_probe
+		  USING (store_id = app.current_store_id())
+		  WITH CHECK (store_id = app.current_store_id());`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = owner.Exec(context.Background(), "DROP TABLE read_probe") })
+
+	gen := ulid.NewGenerator()
+	storeA, storeB := tenant.StoreID{ID: gen.New()}, tenant.StoreID{ID: gen.New()}
+	ctxA, ctxB := tenant.WithStore(ctx, storeA), tenant.WithStore(ctx, storeB)
+	primary := pool(t, infra.AppURL, 2)
+	for _, w := range []struct {
+		ctx   context.Context
+		store tenant.StoreID
+	}{{ctxA, storeA}, {ctxB, storeB}} {
+		if err := postgres.InTenantTx(w.ctx, primary, func(tx pgx.Tx) error {
+			_, err := tx.Exec(w.ctx, "INSERT INTO read_probe (store_id, note) VALUES ($1, 'x')", w.store.ID)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	read, err := postgres.NewReadPool(ctx, config.DB{
+		URL: infra.AppURL, MaxConns: 1, MaxConnLifetime: time.Minute, StatementTimeout: 5 * time.Second,
+	}, "test-read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(read.Close)
+	if err := read.Ping(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := postgres.InTenantTx(ctxA, read, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctxA, "SELECT count(*) FROM read_probe").Scan(&n)
+	}); err != nil || n != 1 {
+		t.Fatalf("store A reads %d rows, %v; want its own 1", n, err)
+	}
+
+	wrapped := postgres.ReadOnly(pool(t, infra.AppURL, 1))
+	for name, db := range map[string]*postgres.ReadPool{"read pool": read, "wrapped pool": wrapped} {
+		err := postgres.InTenantTx(ctxA, db, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctxA, "INSERT INTO read_probe (store_id, note) VALUES ($1, 'w')", storeA.ID)
+			return err
+		})
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "25006" {
+			t.Fatalf("%s: write err = %v, want read_only_sql_transaction (25006)", name, err)
+		}
+	}
+	// The read pool's sessions are read-only too, not only its transactions.
+	var mode string
+	if err := postgres.InTx(ctx, read, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SHOW default_transaction_read_only").Scan(&mode)
+	}); err != nil || mode != "on" {
+		t.Fatalf("session read-only = %q, %v", mode, err)
+	}
+}
+
 func TestNewPoolBadURL(t *testing.T) {
 	t.Parallel()
 	_, err := postgres.NewPool(t.Context(), config.DB{URL: "postgres://u:hunter2@host:notaport/db", MaxConns: 1}, "x")

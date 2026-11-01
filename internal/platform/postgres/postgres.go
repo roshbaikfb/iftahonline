@@ -19,6 +19,18 @@ import (
 // is fast and does not fail when the database is briefly unavailable;
 // /readyz reports the database state instead.
 func NewPool(ctx context.Context, c config.DB, appName string) (*pgxpool.Pool, error) {
+	pc, err := poolConfig(c, appName)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, pc)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: new pool: %w", err)
+	}
+	return pool, nil
+}
+
+func poolConfig(c config.DB, appName string) (*pgxpool.Config, error) {
 	pc, err := pgxpool.ParseConfig(c.URL)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: parse url: %w", err) // pgx redacts the password
@@ -33,13 +45,44 @@ func NewPool(ctx context.Context, c config.DB, appName string) (*pgxpool.Pool, e
 	pc.ConnConfig.RuntimeParams["application_name"] = appName
 	pc.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(c.StatementTimeout.Milliseconds(), 10)
 	pc.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] = "60000"
+	return pc, nil
+}
 
+// ReadPool is a pool for reads that may lag the primary: a replica's, or
+// the primary's own when there is none (ADR-0064). It is a type of its own
+// so that code which must read from it (analytics) cannot be handed the
+// primary pool, and every transaction it begins is read-only.
+type ReadPool struct{ pool *pgxpool.Pool }
+
+// NewReadPool returns a lazily connecting read pool sized from config. Its
+// sessions default to read-only too, so not even a plain query writes.
+func NewReadPool(ctx context.Context, c config.DB, appName string) (*ReadPool, error) {
+	pc, err := poolConfig(c, appName)
+	if err != nil {
+		return nil, err
+	}
+	pc.ConnConfig.RuntimeParams["default_transaction_read_only"] = "on"
 	pool, err := pgxpool.NewWithConfig(ctx, pc)
 	if err != nil {
-		return nil, fmt.Errorf("postgres: new pool: %w", err)
+		return nil, fmt.Errorf("postgres: new read pool: %w", err)
 	}
-	return pool, nil
+	return &ReadPool{pool: pool}, nil
 }
+
+// ReadOnly wraps a pool as a ReadPool (tests trace their own pools). Its
+// transactions are read-only whatever the pool's sessions allow.
+func ReadOnly(pool *pgxpool.Pool) *ReadPool { return &ReadPool{pool: pool} }
+
+// Begin starts a read-only transaction.
+func (r *ReadPool) Begin(ctx context.Context) (pgx.Tx, error) {
+	return r.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+}
+
+// Ping checks that a connection can be had.
+func (r *ReadPool) Ping(ctx context.Context) error { return r.pool.Ping(ctx) }
+
+// Close closes the pool's connections.
+func (r *ReadPool) Close() { r.pool.Close() }
 
 // Beginner is satisfied by *pgxpool.Pool and pgx.Tx (for nesting).
 type Beginner interface {

@@ -355,6 +355,33 @@ func TestAdminConfig(t *testing.T) {
 	}
 }
 
+func TestReadDBConfig(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load(config.RoleAPI, env(base()))
+	if err != nil || c.ReadDB.URL != c.DB.URL || c.ReadDB.MaxConns != 10 || c.ReadDB.StatementTimeout != 15*time.Second {
+		t.Fatalf("without a replica the api reads the primary: %+v, %v", c.ReadDB, err)
+	}
+	c, err = config.Load(config.RoleAPI, env(with(
+		"DATABASE_READ_URL", "postgres://app_user:pw@replica:5432/iftah", "DB_READ_MAX_CONNS", "30", "DB_READ_STATEMENT_TIMEOUT", "30s")))
+	if err != nil || !strings.Contains(c.ReadDB.URL, "replica") || c.ReadDB.MaxConns != 30 || c.ReadDB.StatementTimeout != 30*time.Second {
+		t.Fatalf("read db = %+v, %v", c.ReadDB, err)
+	}
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("x", "config", c)
+	if !strings.Contains(buf.String(), `"read_replica":true`) || strings.Contains(buf.String(), "replica:5432") {
+		t.Fatalf("log line = %s", buf.String())
+	}
+	if _, err = config.Load(config.RoleAPI, env(with("DATABASE_READ_URL", "mysql://u:p@h/db"))); err == nil ||
+		!strings.Contains(err.Error(), "DATABASE_READ_URL") {
+		t.Fatalf("bad scheme: %v", err)
+	}
+	// Only the api reads analytics.
+	w, err := config.Load(config.RoleWorker, env(base()))
+	if err != nil || w.ReadDB.URL != "" {
+		t.Fatalf("worker read db = %+v, %v", w.ReadDB, err)
+	}
+}
+
 func TestOverrides(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleAPI, env(with(
