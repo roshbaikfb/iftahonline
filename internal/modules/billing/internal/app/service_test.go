@@ -126,8 +126,11 @@ func TestGrants(t *testing.T) {
 				t.Errorf("%s: %s = %+v, want %+v", tt.name, feature, got, want)
 			}
 		}
-		if len(g) != 11 {
-			t.Errorf("%s: %d grants, want the 11 seeded features", tt.name, len(g))
+		if len(g) != 12 {
+			t.Errorf("%s: %d grants, want the 12 seeded features", tt.name, len(g))
+		}
+		if want := tt.cardPayments.Value; g["profit"].Value != want { // the profit dashboard (ADR-0069): paid plans only
+			t.Errorf("%s: profit = %+v, want %d", tt.name, g["profit"], want)
 		}
 		// The risk rules (ADR-0066) follow the plan: paid plans only.
 		if want := tt.cardPayments.Value; g["risk_rules"].Value != want {

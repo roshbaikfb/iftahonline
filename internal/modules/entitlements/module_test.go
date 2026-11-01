@@ -134,7 +134,8 @@ func TestDisplayOnlyFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := g["loyalty_points"]; ok || len(g) != 11 || g[entitlements.AdFree].Value != 1 || g[entitlements.RiskRules].Value != 1 {
+	if _, ok := g["loyalty_points"]; ok || len(g) != 12 || g[entitlements.AdFree].Value != 1 || g[entitlements.RiskRules].Value != 1 ||
+		g[entitlements.Profit].Value != 1 {
 		t.Errorf("grants = %+v", g)
 	}
 }

@@ -93,6 +93,19 @@ type AdSetting struct {
 	UpdatedAt      pgtype.Timestamptz
 }
 
+type AdSpend struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Day         time.Time
+	Platform    string
+	Campaign    string
+	Currency    string
+	AmountMinor int64
+	Source      string
+	Note        string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt pgtype.Timestamptz
@@ -114,6 +127,45 @@ type AdminSession struct {
 	LastSeenAt pgtype.Timestamptz
 	ExpiresAt  pgtype.Timestamptz
 	RevokedAt  pgtype.Timestamptz
+}
+
+type AnalyticsBackfill struct {
+	StoreID  ulid.ID
+	QueuedAt pgtype.Timestamptz
+}
+
+type AnalyticsDirty struct {
+	StoreID ulid.ID
+	Day     time.Time
+}
+
+type AnalyticsLine struct {
+	StoreID      ulid.ID
+	OrderID      ulid.ID
+	Line         int32
+	ProductID    ulid.ID
+	Title        string
+	Qty          int32
+	RevenueMinor int64
+	CostMinor    pgtype.Int8
+}
+
+type AnalyticsOrder struct {
+	StoreID            ulid.ID
+	OrderID            ulid.ID
+	Day                time.Time
+	State              string
+	Governorate        string
+	Campaign           string
+	Currency           string
+	RevenueMinor       int64
+	ShippingMinor      int64
+	CodFeeMinor        int64
+	OnDeliveryMinor    int64
+	DepositPaidMinor   int64
+	CarrierChargeMinor pgtype.Int8
+	RiskBand           pgtype.Text
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type AppMonthlyPartitioned struct {
@@ -673,6 +725,36 @@ type ProductSale struct {
 	ProductID ulid.ID
 	Day       time.Time
 	Units     int32
+}
+
+type ProfitDaily struct {
+	StoreID           ulid.ID
+	Dim               string
+	Day               time.Time
+	Key               string
+	Label             string
+	Currency          string
+	Orders            int32
+	Delivered         int32
+	Returned          int32
+	Cancelled         int32
+	Open              int32
+	CostMissing       int32
+	RevenueMinor      int64
+	DeliveryPaidMinor int64
+	ProductCostMinor  int64
+	ShippingCostMinor int64
+	CodFeesMinor      int64
+	ReturnCostMinor   int64
+	AdSpendMinor      int64
+}
+
+type ProfitSetting struct {
+	StoreID           ulid.ID
+	DeliveryCostMinor pgtype.Int8
+	ReturnCostMinor   pgtype.Int8
+	CodFeeBp          int32
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type RiskBackfill struct {
