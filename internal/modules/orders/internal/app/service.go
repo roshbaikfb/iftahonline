@@ -470,7 +470,7 @@ func (s *Service) priceLines(ctx context.Context, in []domain.LineInput, cur mon
 			return nil, money.Money{}, 0, err
 		}
 		lines[i] = domain.Line{VariantID: v.VariantID, ProductID: v.ProductID, Title: v.ProductTitle,
-			VariantTitle: strings.Join(v.OptionValues, " / "), SKU: v.SKU, Qty: l.Qty, UnitPrice: v.Price, Total: total}
+			VariantTitle: strings.Join(v.OptionValues, " / "), SKU: v.SKU, Qty: l.Qty, UnitPrice: v.Price, Total: total, UnitCost: v.Cost}
 		items += l.Qty
 	}
 	if len(unavailable) > 0 {

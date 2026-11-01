@@ -412,6 +412,9 @@ type Line struct {
 	Qty          int
 	UnitPrice    money.Money
 	Total        money.Money
+	// UnitCost is what the variant cost the merchant when the order was
+	// placed (ADR-0068); nil when it was not known.
+	UnitCost *money.Money
 }
 
 // Event is one entry of an order's timeline.

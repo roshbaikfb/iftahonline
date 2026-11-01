@@ -354,10 +354,10 @@ func (q *Queries) InsertOrderEvent(ctx context.Context, arg InsertOrderEventPara
 
 const insertOrderItems = `-- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,
-                         qty, unit_price_minor, total_minor)
+                         qty, unit_price_minor, total_minor, unit_cost_minor)
 SELECT $1, $2, $3, n, ($4::uuid[])[n], ($5::uuid[])[n],
        ($6::text[])[n], ($7::text[])[n], ($8::text[])[n], ($9::int[])[n],
-       ($10::bigint[])[n], ($11::bigint[])[n]
+       ($10::bigint[])[n], ($11::bigint[])[n], nullif(($12::bigint[])[n], -1)
 FROM generate_subscripts($4::uuid[], 1) AS n
 `
 
@@ -373,6 +373,7 @@ type InsertOrderItemsParams struct {
 	Qtys           []int32
 	UnitPrices     []int64
 	Totals         []int64
+	UnitCosts      []int64
 }
 
 func (q *Queries) InsertOrderItems(ctx context.Context, arg InsertOrderItemsParams) error {
@@ -388,6 +389,7 @@ func (q *Queries) InsertOrderItems(ctx context.Context, arg InsertOrderItemsPara
 		arg.Qtys,
 		arg.UnitPrices,
 		arg.Totals,
+		arg.UnitCosts,
 	)
 	return err
 }
@@ -430,9 +432,9 @@ func (q *Queries) InsertOrderSignals(ctx context.Context, arg InsertOrderSignals
 }
 
 const listItemsOfOrders = `-- name: ListItemsOfOrders :many
-SELECT i.store_id, i.order_created_at, i.order_id, i.line, i.variant_id, i.product_id, i.title, i.variant_title, i.sku, i.qty, i.unit_price_minor, i.total_minor FROM generate_subscripts($1::uuid[], 1) AS n
+SELECT i.store_id, i.order_created_at, i.order_id, i.line, i.variant_id, i.product_id, i.title, i.variant_title, i.sku, i.qty, i.unit_price_minor, i.total_minor, i.unit_cost_minor FROM generate_subscripts($1::uuid[], 1) AS n
 CROSS JOIN LATERAL (
-  SELECT store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor FROM order_items x
+  SELECT store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor, unit_cost_minor FROM order_items x
   WHERE x.store_id = $2 AND x.order_created_at = ($3::timestamptz[])[n]
     AND x.order_id = ($1::uuid[])[n]
   ORDER BY x.line LIMIT 50) AS i
@@ -469,6 +471,7 @@ func (q *Queries) ListItemsOfOrders(ctx context.Context, arg ListItemsOfOrdersPa
 			&i.Qty,
 			&i.UnitPriceMinor,
 			&i.TotalMinor,
+			&i.UnitCostMinor,
 		); err != nil {
 			return nil, err
 		}
@@ -524,7 +527,7 @@ func (q *Queries) ListOrderEvents(ctx context.Context, arg ListOrderEventsParams
 }
 
 const listOrderItems = `-- name: ListOrderItems :many
-SELECT store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor FROM order_items
+SELECT store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku, qty, unit_price_minor, total_minor, unit_cost_minor FROM order_items
 WHERE store_id = $1 AND order_created_at = $2 AND order_id = $3
 ORDER BY line
 `
@@ -557,6 +560,7 @@ func (q *Queries) ListOrderItems(ctx context.Context, arg ListOrderItemsParams) 
 			&i.Qty,
 			&i.UnitPriceMinor,
 			&i.TotalMinor,
+			&i.UnitCostMinor,
 		); err != nil {
 			return nil, err
 		}

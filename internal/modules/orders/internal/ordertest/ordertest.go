@@ -258,7 +258,18 @@ func As(ctx context.Context, t testing.TB, role authz.Role) context.Context {
 // catalog's API and returns the variant's ID.
 func (e *Env) Product(t testing.TB, store tenant.StoreID, title string, priceMinor, onHand int) ulid.ID {
 	t.Helper()
-	body := fmt.Sprintf(`{"title":%q,"status":"active","variants":[{"price_minor":%d,"on_hand":%d}]}`, title, priceMinor, onHand)
+	return e.productBody(t, store, fmt.Sprintf(`{"title":%q,"status":"active","variants":[{"price_minor":%d,"on_hand":%d}]}`, title, priceMinor, onHand))
+}
+
+// ProductWithCost is Product with the merchant's cost (ADR-0068).
+func (e *Env) ProductWithCost(t testing.TB, store tenant.StoreID, title string, priceMinor, costMinor, onHand int) ulid.ID {
+	t.Helper()
+	return e.productBody(t, store, fmt.Sprintf(`{"title":%q,"status":"active","variants":[{"price_minor":%d,"cost_minor":%d,"on_hand":%d}]}`,
+		title, priceMinor, costMinor, onHand))
+}
+
+func (e *Env) productBody(t testing.TB, store tenant.StoreID, body string) ulid.ID {
+	t.Helper()
 	var p struct {
 		Variants []struct {
 			ID string `json:"id"`

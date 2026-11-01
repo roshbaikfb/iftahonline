@@ -64,6 +64,11 @@ func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) erro
 		p.Qtys = append(p.Qtys, int32(l.Qty)) //nolint:gosec // bounded by domain.MaxQty
 		p.UnitPrices = append(p.UnitPrices, l.UnitPrice.Amount())
 		p.Totals = append(p.Totals, l.Total.Amount())
+		cost := int64(-1) // not known
+		if l.UnitCost != nil {
+			cost = l.UnitCost.Amount()
+		}
+		p.UnitCosts = append(p.UnitCosts, cost)
 	}
 	if err = q.InsertOrderItems(ctx, p); err != nil {
 		return fmt.Errorf("orders store: insert items: %w", err)
@@ -503,6 +508,13 @@ func toLines(rows []ordersdb.OrderItem, cur money.Currency) ([]domain.Line, erro
 		}
 		out[i] = domain.Line{VariantID: r.VariantID, ProductID: r.ProductID, Title: r.Title, VariantTitle: r.VariantTitle,
 			SKU: r.Sku, Qty: int(r.Qty), UnitPrice: unit, Total: total}
+		if r.UnitCostMinor != nil {
+			c, err := money.New(*r.UnitCostMinor, cur)
+			if err != nil {
+				return nil, fmt.Errorf("orders store: %w", err)
+			}
+			out[i].UnitCost = &c
+		}
 	}
 	return out, nil
 }
