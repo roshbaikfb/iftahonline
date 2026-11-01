@@ -142,19 +142,31 @@ func countOf(kinds []string, kind string) int {
 	return n
 }
 
-// TestForOrderLearnsLateOrders: an order whose event has not arrived yet
-// is learnt when its risk is asked for.
-func TestForOrderLearnsLateOrders(t *testing.T) {
+// TestForOrderReadsLateOrders (P8 review M6): an order whose event has
+// not arrived yet is scored by its phone from what is known, and asking
+// writes nothing; its event then teaches it.
+func TestForOrderReadsLateOrders(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	a := f.store(t)
-	o := f.order(a, f.uniquePhone(t), 1, orders.StatusDelivered, orders.ReasonNone)
-	if bands, err := f.svc.Bands(a, []ulid.ID{o.ID}); err != nil || len(bands) != 0 {
-		t.Fatalf("not learnt yet: %v, %v", bands, err)
+	p := f.uniquePhone(t)
+	before := f.order(a, p, 1, orders.StatusDelivered, orders.ReasonNone)
+	if err := f.svc.Learn(a, before.ID); err != nil {
+		t.Fatal(err)
 	}
+	o := f.order(a, p, 2, orders.StatusDelivered, orders.ReasonNone)
 	r, err := f.svc.ForOrder(a, o.ID)
-	if err != nil || r.Band != domain.BandLow || r.History.Outcomes[domain.Delivered] != 1 {
-		t.Fatalf("learnt on read: %+v, %v", r, err)
+	if err != nil || r.Band != domain.BandLow || r.History.Orders != 1 || r.History.Outcomes[domain.Delivered] != 1 {
+		t.Fatalf("scored before it is learnt: %+v, %v", r, err)
+	}
+	if bands, bErr := f.svc.Bands(a, []ulid.ID{o.ID}); bErr != nil || len(bands) != 0 {
+		t.Fatalf("asking learnt it: %v, %v", bands, bErr)
+	}
+	if err = f.svc.Learn(a, o.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r, err = f.svc.ForOrder(a, o.ID); err != nil || r.History.Orders != 2 || r.History.Outcomes[domain.Delivered] != 2 {
+		t.Fatalf("after its event: %+v, %v", r, err)
 	}
 	if _, err = f.svc.ForOrder(a, f.ids.New()); !errors.Is(err, app.ErrOrderNotFound) {
 		t.Fatalf("unknown order: %v", err)

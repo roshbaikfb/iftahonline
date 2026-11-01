@@ -22,7 +22,10 @@ func TestPlans(t *testing.T) {
 	f := newFixtureOn(t, pool)
 	a := f.store(t)
 	o := f.order(a, f.uniquePhone(t), 1, orders.StatusDelivered, orders.ReasonNone)
-	if _, err := f.svc.ForOrder(a, o.ID); err != nil { // learns, then reads
+	if err := f.svc.Learn(a, o.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ForOrder(a, o.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.Bands(a, []ulid.ID{o.ID}); err != nil {
