@@ -29,7 +29,9 @@ func TestPlans(t *testing.T) {
 	}{
 		{rq, "dim = 'total' AND day >= $2 AND day < $3\nORDER BY day"},
 		{rq, "dim = $2 AND day >= $3"},
-		{pq, "FROM analytics_orders WHERE store_id = $1 AND day = $2"},
+		{pq, "FROM analytics_orders WHERE store_id = $1 AND day = ANY($2::date[])"},
+		{pq, "WHERE o.store_id = $1 AND o.day = ANY($2::date[])"},
+		{pq, "FROM ad_spend WHERE store_id = $1 AND day = ANY($2::date[])"},
 	} {
 		testkit.AssertIndexCond(t, testkit.GenericPlan(a, t, primary, q.capture.Last(t, q.sql)), "store_id")
 	}

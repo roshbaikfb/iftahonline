@@ -145,79 +145,94 @@ func TakeDirty(ctx context.Context, tx Tx, n int) ([]time.Time, error) {
 	return days, nil
 }
 
-// Day reads one day's orders with their lines, and its ad spend by
-// campaign: three queries.
-func Day(ctx context.Context, tx Tx, day time.Time) ([]domain.Order, map[string]int64, error) {
+// DayFacts is what one day's figures are computed from: its orders, and
+// its ad spend by campaign.
+type DayFacts struct {
+	Orders []domain.Order
+	Ads    map[string]int64
+}
+
+// DaysFacts reads the facts of days, in three queries however many:
+// every day asked is in the result, empty when it has nothing.
+func DaysFacts(ctx context.Context, tx Tx, days []time.Time) (map[string]DayFacts, error) {
 	store, err := current(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	out := make(map[string]DayFacts, len(days))
+	for _, d := range days {
+		out[d.Format(DayLayout)] = DayFacts{Ads: map[string]int64{}}
 	}
 	q := analyticsdb.New(tx)
-	rows, err := q.DayOrders(ctx, analyticsdb.DayOrdersParams{StoreID: store, Day: day})
+	rows, err := q.DaysOrders(ctx, analyticsdb.DaysOrdersParams{StoreID: store, Days: days})
 	if err != nil {
-		return nil, nil, fmt.Errorf("analytics store: day orders: %w", err)
+		return nil, fmt.Errorf("analytics store: days' orders: %w", err)
 	}
-	lines, err := q.DayLines(ctx, analyticsdb.DayLinesParams{StoreID: store, Day: day})
+	lines, err := q.DaysLines(ctx, analyticsdb.DaysLinesParams{StoreID: store, Days: days})
 	if err != nil {
-		return nil, nil, fmt.Errorf("analytics store: day lines: %w", err)
+		return nil, fmt.Errorf("analytics store: days' lines: %w", err)
 	}
 	byOrder := map[ulid.ID][]domain.Line{}
 	for _, l := range lines {
 		byOrder[l.OrderID] = append(byOrder[l.OrderID], domain.Line{ProductID: l.ProductID.String(), Title: l.Title, Qty: int(l.Qty),
 			Revenue: l.RevenueMinor, Cost: l.CostMinor})
 	}
-	out := make([]domain.Order, len(rows))
-	for i, r := range rows {
-		out[i] = domain.Order{ID: r.OrderID.String(), Day: day.Format(DayLayout), State: domain.State(r.State), Governorate: r.Governorate,
+	for _, r := range rows {
+		day := r.Day.Format(DayLayout)
+		f := out[day]
+		f.Orders = append(f.Orders, domain.Order{ID: r.OrderID.String(), Day: day, State: domain.State(r.State), Governorate: r.Governorate,
 			Campaign: r.Campaign, Revenue: r.RevenueMinor, Shipping: r.ShippingMinor, CODFee: r.CodFeeMinor, OnDelivery: r.OnDeliveryMinor,
-			DepositPaid: r.DepositPaidMinor, CarrierCharge: r.CarrierChargeMinor, Lines: byOrder[r.OrderID]}
+			DepositPaid: r.DepositPaidMinor, CarrierCharge: r.CarrierChargeMinor, Lines: byOrder[r.OrderID]})
+		out[day] = f
 	}
-	spend, err := q.DayAdSpend(ctx, analyticsdb.DayAdSpendParams{StoreID: store, Day: day})
+	spend, err := q.DaysAdSpend(ctx, analyticsdb.DaysAdSpendParams{StoreID: store, Days: days})
 	if err != nil {
-		return nil, nil, fmt.Errorf("analytics store: day ad spend: %w", err)
+		return nil, fmt.Errorf("analytics store: days' ad spend: %w", err)
 	}
-	ads := make(map[string]int64, len(spend))
-	for _, s := range spend {
-		ads[s.Campaign] = s.AmountMinor
+	for _, sp := range spend {
+		out[sp.Day.Format(DayLayout)].Ads[sp.Campaign] = sp.AmountMinor
 	}
-	return out, ads, nil
+	return out, nil
 }
 
-// SaveDay replaces one day's figures with rows, in one statement after
-// the delete.
-func SaveDay(ctx context.Context, tx Tx, day time.Time, currency string, rows []domain.Row) error {
+// SaveDays replaces the figures of days with rows (by day; a day without
+// rows is emptied), in two statements however many days.
+func SaveDays(ctx context.Context, tx Tx, days []time.Time, currency string, rows map[string][]domain.Row) error {
 	store, err := current(ctx)
 	if err != nil {
 		return err
 	}
 	q := analyticsdb.New(tx)
-	if err = q.DeleteDay(ctx, analyticsdb.DeleteDayParams{StoreID: store, Day: day}); err != nil {
-		return fmt.Errorf("analytics store: delete day: %w", err)
+	if err = q.DeleteDays(ctx, analyticsdb.DeleteDaysParams{StoreID: store, Days: days}); err != nil {
+		return fmt.Errorf("analytics store: delete days: %w", err)
 	}
-	if len(rows) == 0 {
+	p := analyticsdb.InsertDayRowsParams{StoreID: store, Currency: currency}
+	for _, d := range days {
+		for _, r := range rows[d.Format(DayLayout)] {
+			p.RowDays = append(p.RowDays, d)
+			p.Dims = append(p.Dims, string(r.Dim))
+			p.Keys = append(p.Keys, r.Key)
+			p.Labels = append(p.Labels, r.Label)
+			p.Orders = append(p.Orders, int32(r.Orders))                //nolint:gosec // a day's orders
+			p.Delivered = append(p.Delivered, int32(r.Delivered))       //nolint:gosec // a day's orders
+			p.Returned = append(p.Returned, int32(r.Returned))          //nolint:gosec // a day's orders
+			p.Cancelled = append(p.Cancelled, int32(r.Cancelled))       //nolint:gosec // a day's orders
+			p.Open = append(p.Open, int32(r.Open))                      //nolint:gosec // a day's orders
+			p.CostMissing = append(p.CostMissing, int32(r.CostMissing)) //nolint:gosec // a day's orders
+			p.Revenues = append(p.Revenues, r.Revenue)
+			p.DeliveryPaid = append(p.DeliveryPaid, r.DeliveryPaid)
+			p.ProductCosts = append(p.ProductCosts, r.ProductCost)
+			p.ShippingCosts = append(p.ShippingCosts, r.ShippingCost)
+			p.CodFees = append(p.CodFees, r.CODFees)
+			p.ReturnCosts = append(p.ReturnCosts, r.ReturnCost)
+			p.AdSpend = append(p.AdSpend, r.AdSpend)
+		}
+	}
+	if len(p.Dims) == 0 {
 		return nil
 	}
-	p := analyticsdb.InsertDayRowsParams{StoreID: store, Day: day, Currency: currency}
-	for _, r := range rows {
-		p.Dims = append(p.Dims, string(r.Dim))
-		p.Keys = append(p.Keys, r.Key)
-		p.Labels = append(p.Labels, r.Label)
-		p.Orders = append(p.Orders, int32(r.Orders))                //nolint:gosec // a day's orders
-		p.Delivered = append(p.Delivered, int32(r.Delivered))       //nolint:gosec // a day's orders
-		p.Returned = append(p.Returned, int32(r.Returned))          //nolint:gosec // a day's orders
-		p.Cancelled = append(p.Cancelled, int32(r.Cancelled))       //nolint:gosec // a day's orders
-		p.Open = append(p.Open, int32(r.Open))                      //nolint:gosec // a day's orders
-		p.CostMissing = append(p.CostMissing, int32(r.CostMissing)) //nolint:gosec // a day's orders
-		p.Revenues = append(p.Revenues, r.Revenue)
-		p.DeliveryPaid = append(p.DeliveryPaid, r.DeliveryPaid)
-		p.ProductCosts = append(p.ProductCosts, r.ProductCost)
-		p.ShippingCosts = append(p.ShippingCosts, r.ShippingCost)
-		p.CodFees = append(p.CodFees, r.CODFees)
-		p.ReturnCosts = append(p.ReturnCosts, r.ReturnCost)
-		p.AdSpend = append(p.AdSpend, r.AdSpend)
-	}
 	if err = q.InsertDayRows(ctx, p); err != nil {
-		return fmt.Errorf("analytics store: insert day: %w", err)
+		return fmt.Errorf("analytics store: insert days: %w", err)
 	}
 	return nil
 }

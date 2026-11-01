@@ -46,32 +46,35 @@ WHERE d.store_id = @store_id AND d.day IN (
   SELECT x.day FROM analytics_dirty AS x WHERE x.store_id = @store_id ORDER BY x.day LIMIT @max_days)
 RETURNING d.day;
 
--- name: DayOrders :many
-SELECT order_id, state, governorate, campaign, currency, revenue_minor, shipping_minor, cod_fee_minor, on_delivery_minor,
-       deposit_paid_minor, carrier_charge_minor
-FROM analytics_orders WHERE store_id = @store_id AND day = @day
-ORDER BY order_id;
+-- The rollup reads and writes a batch of days in a constant number of
+-- statements, however many days (P8 review).
 
--- name: DayLines :many
+-- name: DaysOrders :many
+SELECT day, order_id, state, governorate, campaign, currency, revenue_minor, shipping_minor, cod_fee_minor, on_delivery_minor,
+       deposit_paid_minor, carrier_charge_minor
+FROM analytics_orders WHERE store_id = @store_id AND day = ANY(@days::date[])
+ORDER BY day, order_id;
+
+-- name: DaysLines :many
 SELECT l.order_id, l.product_id, l.title, l.qty, l.revenue_minor, l.cost_minor
 FROM analytics_lines l
 JOIN analytics_orders o ON o.store_id = l.store_id AND o.order_id = l.order_id
-WHERE o.store_id = @store_id AND o.day = @day
+WHERE o.store_id = @store_id AND o.day = ANY(@days::date[])
 ORDER BY l.order_id, l.line;
 
--- name: DayAdSpend :many
-SELECT campaign, sum(amount_minor)::bigint AS amount_minor
-FROM ad_spend WHERE store_id = @store_id AND day = @day
-GROUP BY campaign;
+-- name: DaysAdSpend :many
+SELECT day, campaign, sum(amount_minor)::bigint AS amount_minor
+FROM ad_spend WHERE store_id = @store_id AND day = ANY(@days::date[])
+GROUP BY day, campaign;
 
--- name: DeleteDay :exec
-DELETE FROM profit_daily WHERE store_id = @store_id AND day = @day;
+-- name: DeleteDays :exec
+DELETE FROM profit_daily WHERE store_id = @store_id AND day = ANY(@days::date[]);
 
 -- name: InsertDayRows :exec
 INSERT INTO profit_daily (store_id, dim, day, key, label, currency, orders, delivered, returned, cancelled, open, cost_missing,
                           revenue_minor, delivery_paid_minor, product_cost_minor, shipping_cost_minor, cod_fees_minor,
                           return_cost_minor, ad_spend_minor)
-SELECT @store_id, (@dims::text[])[n], @day, (@keys::text[])[n], (@labels::text[])[n], @currency,
+SELECT @store_id, (@dims::text[])[n], (@row_days::date[])[n], (@keys::text[])[n], (@labels::text[])[n], @currency,
        (@orders::int[])[n], (@delivered::int[])[n], (@returned::int[])[n], (@cancelled::int[])[n], (@open::int[])[n],
        (@cost_missing::int[])[n], (@revenues::bigint[])[n], (@delivery_paid::bigint[])[n], (@product_costs::bigint[])[n],
        (@shipping_costs::bigint[])[n], (@cod_fees::bigint[])[n], (@return_costs::bigint[])[n], (@ad_spend::bigint[])[n]
