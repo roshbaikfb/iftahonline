@@ -59,6 +59,13 @@ the change. Payloads carry IDs; subscribers read current state.
 
 ## Tables
 
+- **`variants.cost_minor`** (migration 00078) is the merchant's cost,
+  null when not known; 0 is a real cost (ADR-0068).
+  - **Omitted keeps it.** An update that sends no cost keeps the one
+    known, so imports never erase it.
+  - **Who sees it.** `SellableVariant.Cost` gives it to orders; shoppers
+    never see it.
+
 All tenant-owned, with `store_id`, RLS and composite foreign keys to their
 parent (`db/migrations/00015_catalog.sql`).
 
@@ -127,6 +134,10 @@ written to the upload key and processed like a merchant's upload.
 `deleteSampleProducts` deletes them as `deleteProduct` deletes one.
 
 ## Imports
+
+- **Costs** (ADR-0068). A `cost` column (also `cost_price`, `التكلفة` or
+  `سعر التكلفة`) sets each variant's cost. An empty cell keeps the one
+  known.
 
 CSV columns (header names are case-insensitive; Arabic aliases such
 as الاسم، السعر، الكمية، التصنيف are accepted):

@@ -118,6 +118,10 @@ Every placed order counts one `orders_per_month` through
 
 ## Rules worth knowing
 
+- **Line costs** (ADR-0068). Each line keeps its variant's cost when it
+  was placed (`Line.UnitCost`, `order_items.unit_cost_minor`; nil when not
+  known). It is not in the order API.
+
 - **Prepaid delivery** (ADR-0067, migration 00076).
   - **When.** A `prepay` verdict, in a store that takes cards
     (`CardCheck`), sets `deposit_minor` (shipping + COD fee) and
