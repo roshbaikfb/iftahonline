@@ -236,7 +236,7 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 	case riskNone:
 	}
 
-	ref, err := s.orders.PlaceOrder(ctx, req)
+	placed, err := s.orders.PlaceOrder(ctx, req)
 	var invalid *OrderInvalidError
 	switch {
 	case errors.As(err, &invalid):
@@ -285,8 +285,8 @@ func (s *Shop) submitOrder(w http.ResponseWriter, r *http.Request, store tenant.
 		s.setUnitsCookie(w, 0)
 	}
 	w.Header().Set("Cache-Control", noStore)
-	thanks := p.localize(p.l, "/thank-you/"+ref)
-	if req.Card {
+	thanks := p.localize(p.l, "/thank-you/"+placed.Ref)
+	if placed.PayOnline {
 		// The thank-you page sends the shopper on to pay (ADR-0030): a
 		// redirect from here would put the API host and the gateway under
 		// this form's form-action.

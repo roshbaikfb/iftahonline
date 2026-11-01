@@ -105,6 +105,18 @@ templ thankYouPage(p *pageCtx, v thanksView) {
 							<a class="btn" href={ templ.URL(v.payURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a>
 						}
 				}
+			} else if v.o.DepositStatus != "" {
+				switch {
+					case v.o.Cancelled && v.o.DepositStatus == PaymentAwaiting:
+						<p class="alert" role="alert">{ p.l.T(MsgPaymentExpired) }</p>
+					case v.o.DepositStatus != PaymentAwaiting:
+						<span class="paid-chip">{ p.l.T(MsgDepositPaid) } · { p.l.Price(v.o.Deposit) }</span>
+					default:
+						<p class="alert" role="status">{ fmt.Sprintf(p.l.T(MsgDepositPending), p.l.Price(v.o.Deposit), p.l.Price(v.o.OnDelivery)) }</p>
+						if v.payURL != "" {
+							<a class="btn" href={ templ.URL(v.payURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a>
+						}
+				}
 			}
 		</div>
 		if v.confirmWA != "" {
@@ -121,12 +133,14 @@ templ thankYouPage(p *pageCtx, v thanksView) {
 			<section class="card-box">
 				<h2>{ p.l.T(MsgWhatsNext) }</h2>
 				<ol class="steps">
-					<li class={ templ.KV("done", v.o.Card && v.o.PaymentStatus != PaymentAwaiting) }>
+					<li class={ templ.KV("done", (v.o.Card && v.o.PaymentStatus != PaymentAwaiting) || (v.o.DepositStatus != "" && v.o.DepositStatus != PaymentAwaiting)) }>
 						<span class="n">1</span>
 						<div>
 							<strong>{ p.l.T(MsgStepConfirm) }</strong>
 							if v.o.Card {
 								<small>{ p.l.T(MsgStepConfirmCard) }</small>
+							} else if v.o.DepositStatus != "" {
+								<small>{ p.l.T(MsgStepConfirmDeposit) }</small>
 							} else {
 								<small>{ p.l.T(MsgStepConfirmCOD) }</small>
 							}

@@ -205,3 +205,50 @@ func TestCardFirst(t *testing.T) {
 		t.Fatal("card offered without a gateway")
 	}
 }
+
+// TestPrepaidDelivery (ADR-0067): a cash order whose delivery the store's
+// rules want prepaid goes on to pay, and the thank-you page says what is
+// paid now and what on delivery.
+func TestPrepaidDelivery(t *testing.T) {
+	t.Parallel()
+	f := newCheckoutFixture(t, withCards(fakePayments{on: true}))
+	f.orders.log.mu.Lock()
+	f.orders.log.prepay = true
+	f.orders.log.mu.Unlock()
+	cookies, form := checkoutCart(t, f)
+	form.Set("pay_method", "cod")
+	rec := f.post(t, "/checkout", form, cookies, nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/thank-you/IFT-1001?pay=1" {
+		t.Fatalf("prepaid COD order: %d %v", rec.Code, rec.Header())
+	}
+	if reqs := f.orders.placed(); len(reqs) != 1 || reqs[0].Card {
+		t.Fatalf("placed %+v, want a COD order", reqs)
+	}
+
+	set := func(s web.OrderSummary) {
+		s.Ref, s.Code, s.Subtotal, s.Shipping, s.CODFee, s.Total = "IFT-1001", "IFT-1001", egp(30000), egp(5000), egp(1500), egp(36500)
+		s.Deposit, s.OnDelivery, s.PaymentStatus = egp(6500), egp(36500), "unpaid"
+		if s.DepositStatus == "paid" {
+			s.OnDelivery = egp(30000)
+		}
+		f.orders.log.mu.Lock()
+		f.orders.log.summary = &s
+		f.orders.log.mu.Unlock()
+	}
+	set(web.OrderSummary{DepositStatus: web.PaymentAwaiting})
+	body := f.get(t, "/thank-you/IFT-1001?pay=1").Body.String()
+	wantContains(t, body, `<meta http-equiv="refresh" content="1;url=https://app.test/v1/pay/`, "ادفع الآن",
+		"ادفع مصاريف التوصيل مقدمًا بالبطاقة: 65 ج.م", "وتدفع الباقي (365 ج.م) عند الاستلام", "يتأكد تلقائيًا بعد دفع التوصيل")
+
+	set(web.OrderSummary{DepositStatus: "paid"})
+	body = f.get(t, "/thank-you/IFT-1001?pay=1").Body.String()
+	wantContains(t, body, `<span class="paid-chip">دُفعت مصاريف التوصيل مقدمًا · 65 ج.م</span>`)
+	if strings.Contains(body, "http-equiv") || strings.Contains(body, "ادفع الآن") {
+		t.Fatal("a paid delivery still sends the shopper to pay")
+	}
+
+	set(web.OrderSummary{DepositStatus: web.PaymentAwaiting, Cancelled: true})
+	if body = f.get(t, "/thank-you/IFT-1001").Body.String(); !strings.Contains(body, "انتهت مهلة الدفع") || strings.Contains(body, "ادفع الآن") {
+		t.Fatal("a cancelled prepaid order offers to pay")
+	}
+}
