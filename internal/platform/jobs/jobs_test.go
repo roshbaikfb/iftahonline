@@ -256,3 +256,11 @@ func TestWorkerRestoresTenant(t *testing.T) {
 		t.Fatalf("river_job rows = %d, want 1 (the rejected insert must leave nothing)", n)
 	}
 }
+
+func TestUnique(t *testing.T) {
+	t.Parallel()
+	a, b := jobs.Unique(), jobs.Unique()
+	if a == b || !a.UniqueOpts.ByArgs || !a.ScheduledAt.IsZero() {
+		t.Fatalf("Unique = %+v (shared %v)", a, a == b)
+	}
+}

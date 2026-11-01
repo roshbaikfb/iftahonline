@@ -32,6 +32,10 @@ var (
 	ErrTenantMismatch = errors.New("jobs: job store_id differs from the tenant in context")
 )
 
+// Unique is the insert options of a job enqueued at most once for the
+// same args while one is pending (a fan-out that may run twice).
+func Unique() *river.InsertOpts { return &river.InsertOpts{UniqueOpts: river.UniqueOpts{ByArgs: true}} }
+
 // TenantArgs scopes a job to one store. Embed it in the job's args and set
 // it from tenant.FromContext.
 type TenantArgs struct {

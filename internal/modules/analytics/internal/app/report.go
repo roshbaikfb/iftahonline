@@ -276,8 +276,6 @@ func Periodic() []*river.PeriodicJob {
 	}
 }
 
-func unique() *river.InsertOpts { return &river.InsertOpts{UniqueOpts: river.UniqueOpts{ByArgs: true}} }
-
 // fanOut queues mk's job for each store list returns, as that store.
 func (s *Service) fanOut(ctx context.Context, list func(context.Context, store.Tx) ([]ulid.ID, error), mk func(jobs.TenantArgs) river.JobArgs) error {
 	return postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
@@ -287,7 +285,7 @@ func (s *Service) fanOut(ctx context.Context, list func(context.Context, store.T
 		}
 		for _, id := range ids {
 			sid := tenant.StoreID{ID: id}
-			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, mk(jobs.TenantArgs{StoreID: sid}), unique()); err != nil {
+			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, mk(jobs.TenantArgs{StoreID: sid}), jobs.Unique()); err != nil {
 				return fmt.Errorf("analytics: enqueue: %w", err)
 			}
 		}
