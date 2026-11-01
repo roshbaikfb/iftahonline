@@ -851,3 +851,24 @@ func TestProductListTools(t *testing.T) {
 		t.Fatalf("deleted product = %d", code)
 	}
 }
+
+// TestVariantCostAPI (ADR-0068): the merchant's cost goes in and comes
+// back with the variant; a bad one is a field error.
+func TestVariantCostAPI(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.storeA
+	body := strings.Replace(teeBody, `"price_minor":15000,`, `"price_minor":15000,"cost_minor":6000,`, 1)
+	code, p := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, body))
+	if code != http.StatusCreated {
+		t.Fatalf("createProduct = %d %v", code, p)
+	}
+	vs := p["variants"].([]any)
+	if v0, v1 := vs[0].(map[string]any), vs[1].(map[string]any); v0["cost_minor"] != float64(6000) || v1["cost_minor"] != nil {
+		t.Fatalf("variants = %v / %v", v0, v1)
+	}
+	bad := strings.Replace(teeBody, `"price_minor":15000,`, `"price_minor":15000,"cost_minor":-5,`, 1)
+	if code, e := f.do(t, req(t, http.MethodPost, storePath(a, "/products"), tokOwnerA, bad)); code != http.StatusUnprocessableEntity {
+		t.Fatalf("a negative cost = %d %v", code, e)
+	}
+}

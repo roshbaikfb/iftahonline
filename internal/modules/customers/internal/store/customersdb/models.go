@@ -488,6 +488,7 @@ type OrderItem struct {
 	Qty            int32
 	UnitPriceMinor int64
 	TotalMinor     int64
+	UnitCostMinor  *int64
 }
 
 type OrderSalesCounted struct {
@@ -1089,6 +1090,7 @@ type Variant struct {
 	UpdatedAt      time.Time
 	DeletedAt      *time.Time
 	Hidden         bool
+	CostMinor      *int64
 }
 
 type WebhookBody struct {

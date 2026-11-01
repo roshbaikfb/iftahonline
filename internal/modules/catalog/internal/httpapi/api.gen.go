@@ -757,8 +757,11 @@ type ULID = string
 
 // Variant defines model for Variant.
 type Variant struct {
-	CompareAtMinor *int64          `json:"compare_at_minor,omitempty"`
-	Currency       VariantCurrency `json:"currency"`
+	CompareAtMinor *int64 `json:"compare_at_minor,omitempty"`
+
+	// CostMinor The merchant's cost (ADR-0068); absent when not known.
+	CostMinor *int64          `json:"cost_minor,omitempty"`
+	Currency  VariantCurrency `json:"currency"`
 
 	// Hidden Off sale and not shown to shoppers; absent means false.
 	Hidden *bool `json:"hidden,omitempty"`
@@ -779,6 +782,9 @@ type VariantCurrency string
 type VariantInput struct {
 	// CompareAtMinor Must exceed price_minor.
 	CompareAtMinor *int64 `json:"compare_at_minor,omitempty"`
+
+	// CostMinor What the variant costs the merchant, for the profit dashboard (ADR-0068). Omitted keeps the cost known (none for a new variant); shoppers never see it.
+	CostMinor *int64 `json:"cost_minor,omitempty"`
 
 	// Hidden Off sale and not shown to shoppers; the variant and its stock are kept.
 	Hidden *bool `json:"hidden,omitempty"`

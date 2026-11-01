@@ -131,6 +131,7 @@ type variantBatch struct {
 	options    [][]byte
 	prices     []int64
 	compareAts []int64
+	costs      []int64 // -1: none sent
 	positions  []int32
 	hidden     []bool
 }
@@ -138,7 +139,7 @@ type variantBatch struct {
 func toBatch(vs []NewVariant) (variantBatch, error) {
 	b := variantBatch{
 		ids: make([]ulid.ID, len(vs)), skus: make([]string, len(vs)), options: make([][]byte, len(vs)),
-		prices: make([]int64, len(vs)), compareAts: make([]int64, len(vs)), positions: make([]int32, len(vs)),
+		prices: make([]int64, len(vs)), compareAts: make([]int64, len(vs)), costs: make([]int64, len(vs)), positions: make([]int32, len(vs)),
 		hidden: make([]bool, len(vs)),
 	}
 	for i, v := range vs {
@@ -150,6 +151,10 @@ func toBatch(vs []NewVariant) (variantBatch, error) {
 		b.positions[i] = int32(v.Position) //nolint:gosec // bounded by domain.MaxVariants
 		if v.In.CompareAtMinor != nil {
 			b.compareAts[i] = *v.In.CompareAtMinor // 0 means none: a compare-at price is always > price >= 0
+		}
+		b.costs[i] = -1 // none sent: none for a new variant, the known one kept on an update
+		if v.In.CostMinor != nil {
+			b.costs[i] = *v.In.CostMinor
 		}
 	}
 	return b, nil
@@ -171,7 +176,7 @@ func InsertVariants(ctx context.Context, tx Tx, productID ulid.ID, cur money.Cur
 	q := catalogdb.New(tx)
 	err = q.InsertVariants(ctx, catalogdb.InsertVariantsParams{
 		Ids: b.ids, StoreID: store, ProductID: productID, Skus: b.skus, OptionValues: b.options,
-		Prices: b.prices, CompareAts: b.compareAts, Currency: string(cur), Positions: b.positions, Hidden: b.hidden,
+		Prices: b.prices, CompareAts: b.compareAts, Currency: string(cur), Positions: b.positions, Hidden: b.hidden, Costs: b.costs,
 	})
 	if err != nil {
 		return productErr(err, "insert variants")
@@ -204,7 +209,7 @@ func UpdateVariants(ctx context.Context, tx Tx, productID ulid.ID, vs []NewVaria
 	}
 	n, err := catalogdb.New(tx).UpdateVariants(ctx, catalogdb.UpdateVariantsParams{
 		Ids: b.ids, StoreID: store, ProductID: productID, Skus: b.skus, OptionValues: b.options,
-		Prices: b.prices, CompareAts: b.compareAts, Positions: b.positions, Hidden: b.hidden,
+		Prices: b.prices, CompareAts: b.compareAts, Positions: b.positions, Hidden: b.hidden, Costs: b.costs,
 	})
 	if err != nil {
 		return 0, productErr(err, "update variants")
@@ -378,9 +383,13 @@ func toVariant(v catalogdb.ListVariantsByProductsRow) (domain.Variant, error) {
 	if err != nil {
 		return domain.Variant{}, err
 	}
+	cost, err := costOf(v.Currency, v.CostMinor)
+	if err != nil {
+		return domain.Variant{}, err
+	}
 	return domain.Variant{
 		ID: v.ID, ProductID: v.ProductID, SKU: deref(v.Sku), OptionValues: v.OptionValues,
-		Price: price, CompareAt: compareAt, Position: int(v.Position), Hidden: v.Hidden,
+		Price: price, CompareAt: compareAt, Cost: cost, Position: int(v.Position), Hidden: v.Hidden,
 		Stock: domain.Stock{Tracked: v.Tracked, OnHand: int(v.OnHand), Reserved: int(v.Reserved)},
 	}, nil
 }
@@ -398,6 +407,18 @@ func prices(cur string, price int64, compareAt *int64) (money.Money, *money.Mone
 		return money.Money{}, nil, fmt.Errorf("catalog store: compare-at price: %w", err)
 	}
 	return p, &c, nil
+}
+
+// costOf is a variant's cost, nil when not known.
+func costOf(cur string, minor *int64) (*money.Money, error) {
+	if minor == nil {
+		return nil, nil //nolint:nilnil // no cost is not an error
+	}
+	c, err := money.New(*minor, money.Currency(cur))
+	if err != nil {
+		return nil, fmt.Errorf("catalog store: cost: %w", err)
+	}
+	return &c, nil
 }
 
 func deref(s *string) string {

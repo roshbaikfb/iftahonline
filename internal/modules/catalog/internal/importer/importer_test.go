@@ -349,3 +349,25 @@ func TestDashboardTemplate(t *testing.T) {
 		t.Fatalf("tee = %d variants, %d options", len(tee.Variants), len(tee.Options))
 	}
 }
+
+// TestCSVCost (ADR-0068): a cost column, in English or Arabic, sets each
+// variant's cost; an empty cell keeps the one known; a bad one is the
+// line's error.
+func TestCSVCost(t *testing.T) {
+	t.Parallel()
+	for _, header := range []string{"cost", "سعر التكلفة"} {
+		src, err := NewCSV([]byte("handle,title,option1_name,option1_value,price,"+header+"\n"+
+			"tee,Tee,Size,S,150,٤٢\ntee,,,M,150,\nmug,Mug,,,50,abc\n"), money.EGP)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recs := all(t, src)
+		v := recs[0].Product.Variants
+		if v[0].CostMinor == nil || *v[0].CostMinor != 4200 || v[1].CostMinor != nil {
+			t.Fatalf("%s: costs %+v %+v", header, v[0].CostMinor, v[1].CostMinor)
+		}
+		if !strings.Contains(recs[1].Err, "cost") {
+			t.Fatalf("%s: bad cost = %+v", header, recs[1])
+		}
+	}
+}
