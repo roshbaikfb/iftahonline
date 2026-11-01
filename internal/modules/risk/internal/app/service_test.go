@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -16,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/risktest"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -265,5 +267,41 @@ func TestPurge(t *testing.T) {
 	r, err := f.svc.ForOrder(a, recent.ID)
 	if err != nil || r.History.Orders != 1 || r.History.Outcomes[domain.Returned] != 0 {
 		t.Fatalf("after the purge: %+v, %v", r, err)
+	}
+}
+
+// TestSignalsNeedAStore (P8 review): the platform-wide read answers only
+// inside a store's transaction, never to a connection that set none.
+func TestSignalsNeedAStore(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a, c := f.store(t), f.store(t)
+	p := f.uniquePhone(t)
+	f.learn(a, t, f.order(a, p, 1, orders.StatusReturned, orders.ReasonRefused))
+	keyer, err := domain.NewKeyer([]byte(strings.Repeat("k", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := keyer.Key(p)
+	count := func(ctx context.Context, inStore bool) int {
+		var n int
+		run := func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT count(*) FROM app.risk_signals(ARRAY[$1::bytea])`, key).Scan(&n)
+		}
+		if inStore {
+			err = postgres.InTenantTx(ctx, f.pool, run)
+		} else {
+			err = postgres.InTx(ctx, f.pool, run)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := count(c, true); n != 1 {
+		t.Fatalf("in another store: %d signals, want 1", n)
+	}
+	if n := count(t.Context(), false); n != 0 {
+		t.Fatalf("without a store: %d signals, want none", n)
 	}
 }

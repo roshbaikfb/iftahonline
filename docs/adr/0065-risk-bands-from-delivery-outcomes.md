@@ -94,6 +94,11 @@ Constraints:
      returns a store ID, an order ID, or a count of open orders.
    - It reads `risk_orders_phone_outcome` (phone_key, outcome_at DESC,
      partial). The plan is tested.
+   - *Amended 2026-11-01 (P8 review, migration 00080):* it answers only
+     inside a store's transaction (`app.store_id` set). It still takes
+     any phone's key, because the order path scores a new customer's
+     phone before the order exists. A key is an HMAC under
+     `RISK_PHONE_KEY`, so a caller without that key cannot make one up.
 5. **The score** (`domain.Assess`) is deterministic: integer arithmetic,
    independent of input order, from the time given.
    - **Recency.** Each outcome weighs 2^(−age/90 days), in millionths,
