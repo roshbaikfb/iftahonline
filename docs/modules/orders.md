@@ -118,6 +118,15 @@ Every placed order counts one `orders_per_month` through
 
 ## Rules worth knowing
 
+- **Prepaid delivery** (ADR-0067, migration 00076).
+  - **When.** A `prepay` verdict, in a store that takes cards
+    (`CardCheck`), sets `deposit_minor` (shipping + COD fee) and
+    `deposit_status = awaiting`. Otherwise the order is held.
+  - **Paying.** `OnlineDue()` is what the shopper pays online: a card
+    order's total, or the deposit. `SetPaymentStatusTx` moves the
+    deposit for such orders.
+  - **Collecting.** `OnDelivery()` is what the courier collects: the
+    total, less a paid deposit.
 - **Risk rules** (ADR-0066, migration 00074).
   - **Which orders.** A storefront cash order asks `RiskCheck` (the risk
     module's rules) before it is placed. It keeps the verdict

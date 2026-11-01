@@ -165,6 +165,8 @@ approved templates, so only the SMS text is the store's.
 8. **Risk rules** (ADR-0066).
    - **Held order.** It gets no confirmation, so it has no deadline
      either.
+   - **Prepaid order** (ADR-0067). It gets no confirmation either: paying
+     the delivery confirms it.
    - **Verified order.** It is confirmed by message even where
      `confirm_cod` is off.
    - **A "yes" to a verified order.** Orders refuses the customer's move

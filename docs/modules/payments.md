@@ -27,6 +27,12 @@ payment status, move it), the webhooks inbox (worker), the envelope
 
 ## Rules
 
+- **Prepaid deliveries** (ADR-0067). A cash order's deposit, the
+  shipping and COD fee its shopper prepays, is paid like a card order's
+  total. `orders.Order.OnlineDue()` names what is due. The payment moves
+  `deposit_status`, confirms the order, and is refundable. An unpaid one
+  is cancelled after the hour, as card orders are.
+
 - **Connections.**
   - One active gateway per store.
   - The keys are checked with the gateway, then envelope-sealed, and
