@@ -103,7 +103,7 @@ func (s *Service) WatchOrder(ctx context.Context, orderID ulid.ID) error {
 	if err != nil {
 		return err
 	}
-	if o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting {
+	if _, due := o.OnlineDue(); !due { // a card order's total, or a prepaid delivery (ADR-0067)
 		return nil
 	}
 	at := o.CreatedAt.Add(ExpireAfter)
@@ -148,7 +148,7 @@ func (s *Service) cancelUnpaid(ctx context.Context, orderID ulid.ID) error {
 		if err != nil {
 			return err
 		}
-		if o.Status != orders.StatusPending || o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting {
+		if _, due := o.OnlineDue(); o.Status != orders.StatusPending || !due {
 			return nil
 		}
 		ps, err := store.LockOrderPayments(ctx, tx, orderID)

@@ -148,7 +148,7 @@ func newPlatform(t *testing.T) platform {
 		t.Fatal(err)
 	}
 	ord, err := orders.New(orders.Deps{Pool: one, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
-		Shipping: ship.Quoter(), Auth: pol,
+		Shipping: prepaidQuotes{ship.Quoter()}, Auth: pol, Risk: riskyPhone{}, Cards: payments.NewCardCheck(pool, nil),
 		Stores: func(context.Context) (orders.StoreInfo, error) {
 			return orders.StoreInfo{Currency: money.EGP, Country: geo.EG, Location: time.UTC}, nil
 		}})
@@ -447,5 +447,105 @@ func TestCardOrderExpiryIsScheduledWithTheOrder(t *testing.T) {
 	})
 	if d := at.Sub(placed.Order.CreatedAt); d < 59*time.Minute || d > 61*time.Minute {
 		t.Fatalf("expiry scheduled %s after the order, want an hour", d)
+	}
+}
+
+// riskyPhone is the risk rules of a store that asks one phone,
+// riskyNumber, to prepay its deliveries (ADR-0067).
+type riskyPhone struct{}
+
+const riskyNumber = "+201099999999"
+
+func (riskyPhone) Check(_ context.Context, p phone.E164) (orders.Risk, error) {
+	if p.Unmasked() == riskyNumber {
+		return orders.Risk{Band: "high", Action: orders.RiskPrepay}, nil
+	}
+	return orders.Risk{Band: "new"}, nil
+}
+
+// prepaidQuotes charges the risky phone's address a delivery to prepay:
+// 50 shipping and a 15 COD fee; every other quote is the store's.
+type prepaidQuotes struct{ shipping.Quoter }
+
+func (q prepaidQuotes) Quote(ctx context.Context, req shipping.QuoteRequest) (shipping.Quote, error) {
+	if req.City != "حي الأمل" {
+		return q.Quoter.Quote(ctx, req)
+	}
+	ship, err := money.New(5000, req.Subtotal.Currency())
+	if err != nil {
+		return shipping.Quote{}, err
+	}
+	cod, err := money.New(1500, req.Subtotal.Currency())
+	return shipping.Quote{Deliverable: true, Shipping: ship, CODFee: cod}, err
+}
+
+// TestPrepaidDeliveryThroughTheAPIHost (ADR-0067): a cash order whose
+// delivery the rules want prepaid pays the shipping and COD fee on the
+// gateway's page; the payment confirms the order and leaves the courier
+// the rest to collect.
+func TestPrepaidDeliveryThroughTheAPIHost(t *testing.T) {
+	p := newPlatform(t)
+	prod := p.call(t, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
+	variant, err := ulid.Parse(prod["variants"].([]any)[0].(map[string]any)["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.call(t, http.MethodPost, "/payments/gateways", `{"gateway":"fakepay","api_key":"`+apiKey+`","webhook_secret":"`+hookSecret+`"}`, http.StatusCreated)
+	placed, err := p.shop.PlaceOrder(p.ctx, orders.NewOrder{Source: orders.SourceStorefront, PaymentMethod: orders.PaymentCOD,
+		Name: "منى أحمد", Phone: riskyNumber, Governorate: "EG-C", City: "حي الأمل", Address: "12 شارع عباس العقاد",
+		Lines: []orders.LineInput{{VariantID: variant, Qty: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if placed.Order.Deposit.Amount() != 6500 || placed.Order.Total.Amount() != 51500 {
+		t.Fatalf("placed: deposit %v, total %v", placed.Order.Deposit, placed.Order.Total)
+	}
+	// Unpaid within the hour, it is cancelled like a card order.
+	eventually(t, "the deposit's expiry to be scheduled", func() bool {
+		var n int
+		qErr := p.pool.QueryRow(t.Context(), `SELECT count(*) FROM river_job WHERE kind = 'payments.expire_order' AND args->>'order_id' = $1`,
+			placed.Order.ID.String()).Scan(&n)
+		return qErr == nil && n == 1
+	})
+	thanks := "https://" + shopHost + "/thank-you/" + placed.Order.ID.String()
+	follow := func(method, target, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		rq := httptest.NewRequestWithContext(t.Context(), method, strings.TrimPrefix(target, "https://app.example.com"), strings.NewReader(body))
+		if body != "" {
+			rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		rec := httptest.NewRecorder()
+		p.public.ServeHTTP(rec, rq)
+		return rec
+	}
+	rec := follow(http.MethodGet, payments.StartURL("https://app.example.com", p.store, placed.Order.ID, thanks), "")
+	page := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("start = %d %q", rec.Code, page)
+	}
+	// The gateway charges the delivery only.
+	if rec = follow(http.MethodGet, page, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "65.00 EGP") {
+		t.Fatalf("gateway page = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = follow(http.MethodPost, page, "answer=pay")
+	i := strings.Index(rec.Body.String(), `content="0;url=`)
+	if rec.Code != http.StatusOK || i < 0 {
+		t.Fatalf("pay = %d %s", rec.Code, rec.Body.String())
+	}
+	back := rec.Body.String()[i+len(`content="0;url=`):]
+	back = strings.ReplaceAll(back[:strings.Index(back, `"`)], "&amp;", "&")
+	if rec = follow(http.MethodGet, back, ""); rec.Code != http.StatusSeeOther {
+		t.Fatalf("return = %d", rec.Code)
+	}
+	o := p.call(t, http.MethodGet, "/orders/"+placed.Order.ID.String(), "", http.StatusOK)["order"].(map[string]any)
+	if o["deposit_status"] != "paid" || o["payment_status"] != "unpaid" || o["status"] != "confirmed" || o["deposit_minor"] != float64(6500) {
+		t.Fatalf("order after the deposit: %v", o)
+	}
+	got, err := p.shop.Get(p.ctx, placed.Order.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rest, rErr := got.OnDelivery(); rErr != nil || rest.Amount() != 45000 {
+		t.Fatalf("on delivery = %v, %v; want the items only", rest, rErr)
 	}
 }

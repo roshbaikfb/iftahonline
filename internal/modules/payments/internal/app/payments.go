@@ -75,7 +75,10 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	if err != nil {
 		return Checkout{}, err
 	}
-	if o.PaymentMethod != orders.PaymentCard || o.PaymentStatus != orders.PaymentAwaiting || o.Status != orders.StatusPending {
+	// What is due online: a card order's total, or a cash order's
+	// prepaid delivery (ADR-0067).
+	due, ok := o.OnlineDue()
+	if !ok || o.Status != orders.StatusPending {
 		return Checkout{}, ErrNotPayable
 	}
 	// A plan without card payments (a lapsed trial, a downgrade) sends no
@@ -119,7 +122,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 		return Checkout{}, err
 	}
 
-	p := domain.Payment{ID: s.ids.New(), OrderID: orderID, ConnectionID: conn.ID, Gateway: conn.Gateway, Amount: o.Total}
+	p := domain.Payment{ID: s.ids.New(), OrderID: orderID, ConnectionID: conn.ID, Gateway: conn.Gateway, Amount: due}
 	expireAt := o.CreatedAt.Add(ExpireAfter)
 	if earliest := s.now().Add(time.Minute); expireAt.Before(earliest) {
 		expireAt = earliest
@@ -138,7 +141,7 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 	cctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 	c, err := g.CreatePayment(cctx, creds, gateway.PaymentRequest{
-		Reference: p.ID.String(), Amount: p.Amount, Description: "Order " + o.Code(),
+		Reference: p.ID.String(), Amount: p.Amount, Description: paymentDescription(o),
 		Customer:        gateway.Customer{FirstName: first, LastName: last, Phone: o.Contact.Phone.Unmasked()},
 		NotificationURL: s.WebhookURL(storeID, conn.Connection), RedirectURL: redirectURL,
 	})
@@ -152,6 +155,14 @@ func (s *Service) StartCheckout(ctx context.Context, orderID ulid.ID, redirectUR
 		return Checkout{}, err
 	}
 	return Checkout{PaymentID: p.ID, URL: c.URL}, nil
+}
+
+// paymentDescription is what the gateway's page says is paid.
+func paymentDescription(o orders.Order) string {
+	if o.PaymentMethod == orders.PaymentCOD {
+		return "Delivery of order " + o.Code()
+	}
+	return "Order " + o.Code()
 }
 
 func (s *Service) fail(ctx context.Context, id ulid.ID, why string) error {
