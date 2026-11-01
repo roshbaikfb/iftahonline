@@ -356,7 +356,7 @@ func productInput(b ProductInput) (domain.ProductInput, error) {
 		}
 	}
 	for i, v := range b.Variants {
-		dv := domain.VariantInput{SKU: deref(v.Sku), PriceMinor: v.PriceMinor, CompareAtMinor: v.CompareAtMinor, Tracked: v.Tracked}
+		dv := domain.VariantInput{SKU: deref(v.Sku), PriceMinor: v.PriceMinor, CompareAtMinor: v.CompareAtMinor, CostMinor: v.CostMinor, Tracked: v.Tracked}
 		if v.Hidden != nil {
 			dv.Hidden = *v.Hidden
 		}
@@ -431,6 +431,10 @@ func (h *Handlers) toProduct(p domain.Product) Product {
 		if v.CompareAt != nil {
 			c := v.CompareAt.Amount()
 			out.Variants[i].CompareAtMinor = &c
+		}
+		if v.Cost != nil {
+			c := v.Cost.Amount()
+			out.Variants[i].CostMinor = &c
 		}
 	}
 	for i, id := range p.CategoryIDs {

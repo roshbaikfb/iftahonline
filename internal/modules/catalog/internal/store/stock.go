@@ -175,7 +175,7 @@ func GetSellableVariant(ctx context.Context, tx Tx, variantID ulid.ID) (domain.S
 	}
 	return toSellable(catalogdb.ListSellableVariantsRow{ID: r.ID, ProductID: r.ProductID, ProductTitle: r.ProductTitle, ProductSlug: r.ProductSlug,
 		Sku: r.Sku, OptionValues: r.OptionValues, PriceMinor: r.PriceMinor, CompareAtMinor: r.CompareAtMinor, Currency: r.Currency,
-		Tracked: r.Tracked, OnHand: r.OnHand, Reserved: r.Reserved}) // one variant needs no picture
+		Tracked: r.Tracked, OnHand: r.OnHand, Reserved: r.Reserved, CostMinor: r.CostMinor}) // one variant needs no picture
 
 }
 
@@ -206,9 +206,13 @@ func toSellable(r catalogdb.ListSellableVariantsRow) (domain.SellableVariant, er
 	if err != nil {
 		return domain.SellableVariant{}, err
 	}
+	cost, err := costOf(r.Currency, r.CostMinor)
+	if err != nil {
+		return domain.SellableVariant{}, err
+	}
 	return domain.SellableVariant{
 		VariantID: r.ID, ProductID: r.ProductID, ProductTitle: r.ProductTitle, ProductSlug: r.ProductSlug,
-		SKU: deref(r.Sku), OptionValues: r.OptionValues, Price: price, CompareAt: compareAt,
+		SKU: deref(r.Sku), OptionValues: r.OptionValues, Price: price, CompareAt: compareAt, Cost: cost,
 		Stock:    domain.Stock{Tracked: r.Tracked, OnHand: int(r.OnHand), Reserved: int(r.Reserved)},
 		ImageKey: deref(r.ImageKey),
 	}, nil

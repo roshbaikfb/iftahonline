@@ -126,7 +126,10 @@ type Variant struct {
 	OptionValues []string
 	Price        money.Money
 	CompareAt    *money.Money
-	Position     int
+	// Cost is what the variant costs the merchant (ADR-0068); nil is not
+	// known. Shoppers never see it.
+	Cost     *money.Money
+	Position int
 	// Hidden takes the variant off sale and out of the shop; it and its
 	// stock are kept (ADR-0035).
 	Hidden bool
@@ -175,6 +178,9 @@ type VariantInput struct {
 	OptionValues   []string
 	PriceMinor     int64
 	CompareAtMinor *int64
+	// CostMinor is the merchant's cost (ADR-0068); nil keeps the one
+	// known (none for a new variant), so imports never erase it.
+	CostMinor *int64
 	// Tracked and OnHand set the initial stock of a new variant; existing
 	// variants change stock only through the inventory endpoint.
 	Tracked *bool
@@ -356,6 +362,9 @@ func normalizeVariants(in []VariantInput, opts []Option, optionsOK bool) ([]Vari
 		}
 		if v.CompareAtMinor != nil && (*v.CompareAtMinor <= v.PriceMinor || *v.CompareAtMinor > MaxPriceMinor) {
 			add("compare_at_minor", "range", "compare-at price must be greater than the price")
+		}
+		if v.CostMinor != nil && (*v.CostMinor < 0 || *v.CostMinor > MaxPriceMinor) {
+			add("cost_minor", "range", "cost must be between 0 and 1000000000000 minor units")
 		}
 		if v.OnHand < 0 || v.OnHand > MaxOnHand {
 			add("on_hand", "range", fmt.Sprintf("on_hand must be between 0 and %d", MaxOnHand))

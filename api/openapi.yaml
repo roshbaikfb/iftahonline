@@ -5275,6 +5275,13 @@ components:
           items: { type: string, maxLength: 50 }
         price_minor: { type: integer, format: int64, minimum: 0, example: 15000 }
         compare_at_minor: { type: integer, format: int64, minimum: 1, description: Must exceed price_minor. }
+        cost_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            What the variant costs the merchant, for the profit dashboard (ADR-0068). Omitted keeps the cost known
+            (none for a new variant); shoppers never see it.
         tracked: { type: boolean, default: true, description: New variants only. }
         on_hand: { type: integer, minimum: 0, maximum: 1000000, default: 0, description: New variants only. }
         hidden:
@@ -5482,6 +5489,7 @@ components:
           items: { type: string }
         price_minor: { type: integer, format: int64 }
         compare_at_minor: { type: integer, format: int64 }
+        cost_minor: { type: integer, format: int64, description: "The merchant's cost (ADR-0068); absent when not known." }
         currency: { type: string, enum: [EGP, SAR, AED] }
         position: { type: integer }
         hidden: { type: boolean, description: Off sale and not shown to shoppers; absent means false. }

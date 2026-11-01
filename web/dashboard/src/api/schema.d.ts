@@ -4582,6 +4582,11 @@ export interface components {
              */
             compare_at_minor?: number;
             /**
+             * Format: int64
+             * @description What the variant costs the merchant, for the profit dashboard (ADR-0068). Omitted keeps the cost known (none for a new variant); shoppers never see it.
+             */
+            cost_minor?: number;
+            /**
              * @description New variants only.
              * @default true
              */
@@ -4767,6 +4772,11 @@ export interface components {
             price_minor: number;
             /** Format: int64 */
             compare_at_minor?: number;
+            /**
+             * Format: int64
+             * @description The merchant's cost (ADR-0068); absent when not known.
+             */
+            cost_minor?: number;
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED";
             position: number;

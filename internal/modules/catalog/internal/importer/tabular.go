@@ -59,6 +59,7 @@ func columnAliases() map[string]string {
 		"sku": "sku", "رمز المنتج": "sku",
 		"price": "price", "السعر": "price",
 		"compare_at_price": "compare_at_price", "السعر قبل الخصم": "compare_at_price",
+		"cost": "cost", "cost_price": "cost", "التكلفة": "cost", "سعر التكلفة": "cost",
 		"stock": "stock", "quantity": "stock", "الكمية": "stock", "المخزون": "stock",
 		"tracked": "tracked", "track_stock": "tracked",
 	}
@@ -249,6 +250,14 @@ func (t *Tabular) variant(r row, opts []domain.Option) (domain.VariantInput, err
 		}
 		amount := c.Amount()
 		v.CompareAtMinor = &amount
+	}
+	if s := strings.TrimSpace(t.cell(r, "cost")); s != "" { // the merchant's cost (ADR-0068)
+		c, err := money.Parse(s, t.cur)
+		if err != nil {
+			return v, fmt.Errorf("line %d: cost: not an amount in %s", r.line, t.cur)
+		}
+		amount := c.Amount()
+		v.CostMinor = &amount
 	}
 	if s := strings.TrimSpace(t.cell(r, "stock")); s != "" {
 		n, err := strconv.Atoi(asciiDigits(s))

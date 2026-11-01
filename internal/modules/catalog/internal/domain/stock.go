@@ -84,6 +84,7 @@ type SellableVariant struct {
 	OptionValues []string
 	Price        money.Money
 	CompareAt    *money.Money
+	Cost         *money.Money // the merchant's cost, for the order line (ADR-0068); nil is not known
 	Stock        Stock
 	ImageKey     string // the product's first ready picture (its master's object key); "" without one
 }
