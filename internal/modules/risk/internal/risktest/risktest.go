@@ -101,7 +101,7 @@ func (f *Orders) BeforeWithLines(ctx context.Context, before ulid.ID, limit int)
 }
 
 // Store creates a store and returns a context in it.
-func Store(t *testing.T, db postgres.Beginner, ids *ulid.Generator) (context.Context, tenant.StoreID) {
+func Store(t testing.TB, db postgres.Beginner, ids *ulid.Generator) (context.Context, tenant.StoreID) {
 	t.Helper()
 	id := tenant.StoreID{ID: ids.New()}
 	ctx := tenant.WithStore(t.Context(), id)
@@ -116,7 +116,7 @@ func Store(t *testing.T, db postgres.Beginner, ids *ulid.Generator) (context.Con
 }
 
 // Phone returns an Egyptian mobile number no other test uses.
-func Phone(t *testing.T, ids *ulid.Generator) phone.E164 {
+func Phone(t testing.TB, ids *ulid.Generator) phone.E164 {
 	t.Helper()
 	digits := strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {

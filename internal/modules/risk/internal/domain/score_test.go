@@ -162,3 +162,18 @@ func TestBandAtLeast(t *testing.T) {
 		t.Error("an unknown band is below every band")
 	}
 }
+
+// BenchmarkAssess scores a phone with the most outcomes risk_signals
+// returns (200), across stores: the score's share of the order path.
+func BenchmarkAssess(b *testing.B) {
+	now := time.Now()
+	signals := make([]domain.Signal, 200)
+	outcomes := []domain.Outcome{domain.Delivered, domain.Returned, domain.Refused, domain.NoAnswer}
+	for i := range signals {
+		signals[i] = domain.Signal{Outcome: outcomes[i%len(outcomes)], At: now.Add(-time.Duration(i) * 72 * time.Hour), Store: i % 7}
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = domain.Assess(signals, now)
+	}
+}

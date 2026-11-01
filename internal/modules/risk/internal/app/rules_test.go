@@ -92,3 +92,25 @@ func TestCheck(t *testing.T) {
 		t.Fatal("Check needs a tenant")
 	}
 }
+
+// BenchmarkCheck is the risk check on the storefront's order path
+// (CLAUDE.md: benchmark the storefront path): a phone with outcomes in
+// two other stores, in a store with rules, on real PostgreSQL. Its time
+// per check must stay far under orders.RiskTimeout (300 ms).
+func BenchmarkCheck(b *testing.B) {
+	f := newFixture(b)
+	a, other, c := f.store(b), f.store(b), f.store(b)
+	risky := f.uniquePhone(b)
+	for i, st := range []context.Context{a, other} {
+		f.learn(st, b, f.order(st, risky, 2+i, orders.StatusReturned, orders.ReasonRefused))
+	}
+	if _, err := f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandHigh, VerifyFrom: domain.BandMedium}); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if v, err := f.svc.Check(c, risky); err != nil || v.Action != domain.Hold {
+			b.Fatalf("%+v, %v", v, err)
+		}
+	}
+}

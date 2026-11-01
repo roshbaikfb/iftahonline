@@ -59,3 +59,14 @@ func TestRulesValidate(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkDecide(b *testing.B) {
+	r := domain.Rules{HoldFrom: domain.BandHigh, VerifyFrom: domain.BandMedium, PrepayFrom: domain.Off}
+	bands := []domain.Band{domain.BandNew, domain.BandLow, domain.BandMedium, domain.BandHigh}
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		_ = r.Decide(bands[i%len(bands)])
+		i++
+	}
+}
