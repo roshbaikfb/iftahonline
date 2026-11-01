@@ -54,6 +54,13 @@ jobs:
           cd web/dashboard && npx playwright install --with-deps chromium
 
       - name: make ci
+        env:
+          # The packages of one go test run share testcontainers' reaper,
+          # which exits a few seconds after its last client: a package
+          # connecting then waits a minute and fails (seen on #135). The
+          # runner is thrown away after the job and testinfra terminates
+          # its own containers, so CI needs no reaper; local runs keep it.
+          TESTCONTAINERS_RYUK_DISABLED: "true"
         run: make ci
 
       - name: Upload reports
