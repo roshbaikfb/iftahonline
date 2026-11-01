@@ -4917,10 +4917,20 @@ export interface components {
              */
             outcome_reason?: "refused" | "no_answer" | "unconfirmed";
             /**
-             * @description What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+             * @description What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing, or asked the shopper to prepay the delivery (then deposit_minor is set, ADR-0067).
              * @enum {string}
              */
             risk_action?: "hold" | "verify" | "released";
+            /**
+             * Format: int64
+             * @description A cash order's prepaid delivery (shipping and COD fee), paid by card (ADR-0067); 0 without one. The courier collects total − deposit once it is paid.
+             */
+            deposit_minor?: number;
+            /**
+             * @description The prepaid delivery's payment, as the gateway says; absent without a deposit.
+             * @enum {string}
+             */
+            deposit_status?: "awaiting" | "paid" | "partially_refunded" | "refunded";
             risk_band?: components["schemas"]["RiskBand"];
         };
         /**
@@ -4956,11 +4966,14 @@ export interface components {
         RiskSettingsInput: {
             hold_from: components["schemas"]["RiskRule"];
             verify_from: components["schemas"]["RiskRule"];
+            /** @description The band from which the shopper prepays the delivery by card (ADR-0067); omitted is off. */
+            prepay_from?: components["schemas"]["RiskRule"];
         };
-        /** @description hold_from: such an order waits for the merchant's review, without a confirmation message, until released. verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first. New customers are never held or verified (ADR-0066). */
+        /** @description hold_from: such an order waits for the merchant's review, without a confirmation message, until released. prepay_from: its shopper pays the shipping and COD fee by card before the order goes on; a store that cannot take cards holds it instead (ADR-0067). verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first, then a prepaid delivery, then a call. New customers are never touched (ADR-0066). */
         RiskSettings: {
             hold_from: components["schemas"]["RiskRule"];
             verify_from: components["schemas"]["RiskRule"];
+            prepay_from: components["schemas"]["RiskRule"];
             /** @description Whether the store's plan includes the rules (risk_rules). */
             available: boolean;
         };
