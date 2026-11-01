@@ -18,6 +18,8 @@ import (
 type (
 	// Order is a placed order.
 	Order = domain.Order
+	// Line is one line of an order.
+	Line = domain.Line
 	// Status is an order's state.
 	Status = domain.Status
 	// TransitionError is a move the state machine forbids; it matches

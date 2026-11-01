@@ -178,6 +178,16 @@ tags:
       asked for by the store's own orders, never by a number. Reading
       needs orders.read. The store's rules (hold or verify risky
       customers' orders, ADR-0066) need orders.manage to change.
+  - name: analytics
+    description: |
+      The net profit dashboard (ADR-0069): what delivered orders earned
+      after product costs, delivery, COD fees, returns and ad spend, by
+      product, campaign or governorate. Figures are computed by
+      scheduled jobs (minutes behind the orders) and read from the read
+      pool (ADR-0064). Delivery costs are the store's estimates until a
+      carrier's payout gives the real charge (ADR-0068). The dashboard is
+      the plan's profit feature. Reading needs finance.read; settings
+      and ad spend, finance.manage.
 paths:
   /livez:
     get:
@@ -2889,6 +2899,121 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OrderDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/analytics/profit:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [analytics]
+      operationId: getProfit
+      summary: The profit dashboard over a range of days
+      description: |
+        Permission: finance.read; the plan's profit feature (403 plan_limit).
+        `from` and `to` are the store's days, both included, at most 366.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - name: by
+          in: query
+          schema: { type: string, enum: [product, campaign, governorate], default: product }
+      responses:
+        "200":
+          description: The figures.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfitReport" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/analytics/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [analytics]
+      operationId: getProfitSettings
+      summary: The store's delivery cost estimates
+      description: "Permission: finance.read."
+      responses:
+        "200":
+          description: The estimates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfitSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [analytics]
+      operationId: updateProfitSettings
+      summary: Replace the store's delivery cost estimates
+      description: "Permission: finance.manage. Every day's figures are computed again with them."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfitSettings" }
+      responses:
+        "200":
+          description: The estimates saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfitSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/analytics/ad-spend:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [analytics]
+      operationId: listAdSpend
+      summary: The store's ad spend over a range of days
+      description: "Permission: finance.read. Days both included, at most 366; newest first, at most 500."
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: The entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdSpend" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [analytics]
+      operationId: createAdSpend
+      summary: Record a day's ad spend
+      description: "Permission: finance.manage. A day of the last two years, not in the future."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdSpendInput" }
+      responses:
+        "201":
+          description: The entry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdSpend" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/analytics/ad-spend/{ad_spend_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - { name: ad_spend_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    delete:
+      tags: [analytics]
+      operationId: deleteAdSpend
+      summary: Delete an ad spend entry
+      description: "Permission: finance.manage."
+      responses:
+        "204":
+          description: Deleted.
         default:
           $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/orders/{order_id}/risk:
@@ -5634,6 +5759,81 @@ components:
           enum: [awaiting, paid, partially_refunded, refunded]
           description: The prepaid delivery's payment, as the gateway says; absent without a deposit.
         risk_band: { $ref: "#/components/schemas/RiskBand" }
+    ProfitFigures:
+      type: object
+      required: [orders, delivered, returned, cancelled, open, cost_missing, revenue_minor, delivery_paid_minor, product_cost_minor,
+                 shipping_cost_minor, cod_fees_minor, return_cost_minor, ad_spend_minor, profit_minor]
+      properties:
+        orders: { type: integer }
+        delivered: { type: integer }
+        returned: { type: integer, description: Returned, or failed delivery. }
+        cancelled: { type: integer }
+        open: { type: integer, description: Not delivered or back yet; they earn nothing yet. }
+        cost_missing: { type: integer, description: Delivered orders with a line of unknown cost (their profit is too high). }
+        revenue_minor: { type: integer, format: int64, description: "Delivered orders' items (after discounts), plus prepaid deliveries kept on returns." }
+        delivery_paid_minor: { type: integer, format: int64, description: What delivered orders' customers paid for delivery and the COD fee. }
+        product_cost_minor: { type: integer, format: int64 }
+        shipping_cost_minor: { type: integer, format: int64, description: "Delivering: the carrier's real charge, or the estimate." }
+        cod_fees_minor: { type: integer, format: int64, description: "The carrier's fee on cash collected (estimates only)." }
+        return_cost_minor: { type: integer, format: int64 }
+        ad_spend_minor: { type: integer, format: int64 }
+        profit_minor: { type: integer, format: int64 }
+    ProfitRow:
+      type: object
+      required: [key, label, figures]
+      properties:
+        key: { type: string, description: "A product ID, a campaign (\"\" for none) or a governorate code." }
+        label: { type: string, description: "A product's title; empty otherwise." }
+        figures: { $ref: "#/components/schemas/ProfitFigures" }
+    ProfitDay:
+      type: object
+      required: [day, orders, profit_minor, revenue_minor]
+      properties:
+        day: { type: string, format: date }
+        orders: { type: integer }
+        revenue_minor: { type: integer, format: int64, description: Revenue plus what customers paid for delivery. }
+        profit_minor: { type: integer, format: int64 }
+    ProfitReport:
+      type: object
+      required: [currency, from, to, by, totals, days, rows]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        by: { type: string, enum: [product, campaign, governorate] }
+        totals: { $ref: "#/components/schemas/ProfitFigures" }
+        days: { type: array, items: { $ref: "#/components/schemas/ProfitDay" } }
+        rows: { type: array, items: { $ref: "#/components/schemas/ProfitRow" }, description: "Most profitable first; at most 200." }
+    ProfitSettings:
+      type: object
+      required: [cod_fee_bp]
+      description: Absent costs are estimated as the delivery rate the customer was charged.
+      properties:
+        delivery_cost_minor: { type: integer, format: int64, minimum: 0, description: What delivering a parcel costs the store. }
+        return_cost_minor: { type: integer, format: int64, minimum: 0, description: What bringing a parcel back costs. }
+        cod_fee_bp: { type: integer, minimum: 0, maximum: 10000, description: "The carrier's fee on cash collected, in basis points (100 = 1%)." }
+    AdSpendInput:
+      type: object
+      required: [day, platform, amount_minor]
+      properties:
+        day: { type: string, format: date }
+        platform: { type: string, enum: [meta, tiktok, google, snap, other] }
+        campaign: { type: string, maxLength: 100, default: "", description: "The campaign's UTM name, to match its orders; empty for none." }
+        amount_minor: { type: integer, format: int64, minimum: 0 }
+        note: { type: string, maxLength: 200, default: "" }
+    AdSpend:
+      type: object
+      required: [id, day, platform, campaign, currency, amount_minor, source, note, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        day: { type: string, format: date }
+        platform: { type: string, enum: [meta, tiktok, google, snap, other] }
+        campaign: { type: string }
+        currency: { type: string }
+        amount_minor: { type: integer, format: int64 }
+        source: { type: string, enum: [manual, import] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
     RiskBand:
       type: string
       enum: [new, low, medium, high]

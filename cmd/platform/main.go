@@ -40,6 +40,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
+	"github.com/roshbaikfb/iftahonline/internal/modules/analytics"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
@@ -184,7 +185,10 @@ type clients struct {
 	pool      *pgxpool.Pool
 	rdb       *redis.Client
 	adminPool *pgxpool.Pool // api role with ADMIN_DATABASE_URL only
-	events    *eventbus.Bus // one per process; subscriptions are made in newClients
+	// readPool is the api's pool for the dashboard's lagging reads
+	// (ADR-0064): DATABASE_READ_URL, or the primary through its own pool.
+	readPool *postgres.ReadPool
+	events   *eventbus.Bus // one per process; subscriptions are made in newClients
 	// plan answers what each store's plan allows (ADR-0045); one per
 	// process, so its cache is shared by every module.
 	plan entitlements.Entitlements
@@ -213,6 +217,9 @@ type clients struct {
 	// learnRisk handles orders.order.placed and status_changed for risk
 	// (what each order teaches about its phone); the worker sets it.
 	learnRisk *lateHandler
+	// learnAnalytics handles orders' placed, status and payment events
+	// for the profit dashboard (ADR-0069); the worker sets it.
+	learnAnalytics *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -329,6 +336,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 			return clients{}, err
 		}
 	}
+	// Every order's facts for the profit dashboard (ADR-0069).
+	facts := &lateHandler{}
+	for _, typ := range []string{orders.EventOrderPlaced, orders.EventOrderStatusChanged, orders.EventOrderPaymentChanged} {
+		if err = bus.Subscribe(typ, analytics.LearnSubscriber, facts.Handle); err != nil {
+			return clients{}, err
+		}
+	}
 	bill, err := billing.New(billing.Deps{Pool: pool})
 	if err != nil {
 		return clients{}, err
@@ -343,7 +357,7 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), entitlements: ent, watchOrders: watch, countSales: sales,
 		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits, sellFees: fees,
-		learnRisk: learn}, nil
+		learnRisk: learn, learnAnalytics: facts}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
@@ -668,6 +682,11 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	anl, err := analytics.New(analytics.Deps{Pool: c.pool, Read: c.readPool, Stores: analyticsStores(ten), Plan: c.plan,
+		Audit: identity.NewAuditRecorder(c.ids), IDs: c.ids})
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range msg.PlatformProviders() {
 		if err = hooks.RegisterPlatform(p); err != nil {
 			return nil, err
@@ -725,6 +744,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		mkt.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		rsk.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		anl.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		bill.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		c.entitlements.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
@@ -867,6 +887,14 @@ func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build ser
 	c, err := newClients(cfg, log, d.ids, pool, rdb)
 	if err != nil {
 		return err
+	}
+	if cfg.ReadDB.URL != "" {
+		readPool, poolErr := postgres.NewReadPool(ctx, cfg.ReadDB, "iftahonline-"+build.Role+"-read")
+		if poolErr != nil {
+			return poolErr
+		}
+		defer readPool.Close()
+		c.readPool = readPool
 	}
 	if cfg.AdminDB.URL != "" {
 		adminPool, poolErr := postgres.NewPool(ctx, cfg.AdminDB, "iftahonline-admin")
@@ -1048,12 +1076,25 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.learnRisk.Set(rsk.LearnHandler())
+	anlJobs, err := server.NewRiverInserter(pool, log)
+	if err != nil {
+		return err
+	}
+	anl, err := analytics.New(analytics.Deps{Pool: pool, Orders: riskOrders, Charges: ship.Charges(), Stores: analyticsStores(ten),
+		Jobs: anlJobs, Plan: c.plan, IDs: c.ids})
+	if err != nil {
+		return err
+	}
+	if err = anl.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	c.learnAnalytics.Set(anl.LearnHandler())
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
 		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
 	}); err != nil {
 		return err
 	}
-	periodic := slices.Concat(cat.PeriodicJobs(), bill.PeriodicJobs(), rsk.PeriodicJobs())
+	periodic := slices.Concat(cat.PeriodicJobs(), bill.PeriodicJobs(), rsk.PeriodicJobs(), anl.PeriodicJobs())
 	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), periodic...)
 	if err != nil {
 		return err

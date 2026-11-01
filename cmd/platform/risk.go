@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/analytics"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk"
+	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 )
 
@@ -37,4 +41,21 @@ func (r riskRules) Check(ctx context.Context, p phone.E164) (orders.Risk, error)
 	case risk.NoAction:
 	}
 	return out, nil
+}
+
+// analyticsStores adapts tenancy to what the profit dashboard needs: the
+// store's currency and time zone (ADR-0069).
+func analyticsStores(ten *tenancy.Module) analytics.StoreSource {
+	stores := ten.Service()
+	return func(ctx context.Context) (analytics.StoreInfo, error) {
+		st, err := stores.GetStore(ctx)
+		if err != nil {
+			return analytics.StoreInfo{}, err
+		}
+		loc, err := time.LoadLocation(st.Timezone)
+		if err != nil {
+			return analytics.StoreInfo{}, fmt.Errorf("analytics: store time zone %q: %w", st.Timezone, err)
+		}
+		return analytics.StoreInfo{Currency: string(st.Currency), Location: loc}, nil
+	}
 }

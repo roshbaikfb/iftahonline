@@ -2488,6 +2488,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/analytics/profit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The profit dashboard over a range of days
+         * @description Permission: finance.read; the plan's profit feature (403 plan_limit).
+         *     `from` and `to` are the store's days, both included, at most 366.
+         */
+        get: operations["getProfit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/analytics/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's delivery cost estimates
+         * @description Permission: finance.read.
+         */
+        get: operations["getProfitSettings"];
+        /**
+         * Replace the store's delivery cost estimates
+         * @description Permission: finance.manage. Every day's figures are computed again with them.
+         */
+        put: operations["updateProfitSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/analytics/ad-spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's ad spend over a range of days
+         * @description Permission: finance.read. Days both included, at most 366; newest first, at most 500.
+         */
+        get: operations["listAdSpend"];
+        put?: never;
+        /**
+         * Record a day's ad spend
+         * @description Permission: finance.manage. A day of the last two years, not in the future.
+         */
+        post: operations["createAdSpend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/analytics/ad-spend/{ad_spend_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                ad_spend_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an ad spend entry
+         * @description Permission: finance.manage.
+         */
+        delete: operations["deleteAdSpend"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/orders/{order_id}/risk": {
         parameters: {
             query?: never;
@@ -4942,6 +5040,124 @@ export interface components {
              */
             deposit_status?: "awaiting" | "paid" | "partially_refunded" | "refunded";
             risk_band?: components["schemas"]["RiskBand"];
+        };
+        ProfitFigures: {
+            orders: number;
+            delivered: number;
+            /** @description Returned */
+            returned: number;
+            cancelled: number;
+            /** @description Not delivered or back yet; they earn nothing yet. */
+            open: number;
+            /** @description Delivered orders with a line of unknown cost (their profit is too high). */
+            cost_missing: number;
+            /**
+             * Format: int64
+             * @description Delivered orders' items (after discounts), plus prepaid deliveries kept on returns.
+             */
+            revenue_minor: number;
+            /**
+             * Format: int64
+             * @description What delivered orders' customers paid for delivery and the COD fee.
+             */
+            delivery_paid_minor: number;
+            /** Format: int64 */
+            product_cost_minor: number;
+            /**
+             * Format: int64
+             * @description Delivering: the carrier's real charge, or the estimate.
+             */
+            shipping_cost_minor: number;
+            /**
+             * Format: int64
+             * @description The carrier's fee on cash collected (estimates only).
+             */
+            cod_fees_minor: number;
+            /** Format: int64 */
+            return_cost_minor: number;
+            /** Format: int64 */
+            ad_spend_minor: number;
+            /** Format: int64 */
+            profit_minor: number;
+        };
+        ProfitRow: {
+            /** @description A product ID, a campaign ("" for none) or a governorate code. */
+            key: string;
+            /** @description A product's title; empty otherwise. */
+            label: string;
+            figures: components["schemas"]["ProfitFigures"];
+        };
+        ProfitDay: {
+            /** Format: date */
+            day: string;
+            orders: number;
+            /**
+             * Format: int64
+             * @description Revenue plus what customers paid for delivery.
+             */
+            revenue_minor: number;
+            /** Format: int64 */
+            profit_minor: number;
+        };
+        ProfitReport: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @enum {string} */
+            by: "product" | "campaign" | "governorate";
+            totals: components["schemas"]["ProfitFigures"];
+            days: components["schemas"]["ProfitDay"][];
+            /** @description Most profitable first; at most 200. */
+            rows: components["schemas"]["ProfitRow"][];
+        };
+        /** @description Absent costs are estimated as the delivery rate the customer was charged. */
+        ProfitSettings: {
+            /**
+             * Format: int64
+             * @description What delivering a parcel costs the store.
+             */
+            delivery_cost_minor?: number;
+            /**
+             * Format: int64
+             * @description What bringing a parcel back costs.
+             */
+            return_cost_minor?: number;
+            /** @description The carrier's fee on cash collected, in basis points (100 = 1%). */
+            cod_fee_bp: number;
+        };
+        AdSpendInput: {
+            /** Format: date */
+            day: string;
+            /** @enum {string} */
+            platform: "meta" | "tiktok" | "google" | "snap" | "other";
+            /**
+             * @description The campaign's UTM name, to match its orders; empty for none.
+             * @default
+             */
+            campaign: string;
+            /** Format: int64 */
+            amount_minor: number;
+            /** @default  */
+            note: string;
+        };
+        AdSpend: {
+            id: components["schemas"]["ULID"];
+            /** Format: date */
+            day: string;
+            /** @enum {string} */
+            platform: "meta" | "tiktok" | "google" | "snap" | "other";
+            campaign: string;
+            currency: string;
+            /** Format: int64 */
+            amount_minor: number;
+            /** @enum {string} */
+            source: "manual" | "import";
+            note: string;
+            /** Format: date-time */
+            created_at: string;
         };
         /**
          * @description new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
@@ -9591,6 +9807,160 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OrderDetail"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProfit: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "product" | "campaign" | "governorate";
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitReport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProfitSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The estimates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProfitSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfitSettings"];
+            };
+        };
+        responses: {
+            /** @description The estimates saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAdSpend: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdSpend"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAdSpend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdSpendInput"];
+            };
+        };
+        responses: {
+            /** @description The entry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdSpend"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteAdSpend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                ad_spend_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
