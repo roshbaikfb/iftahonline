@@ -231,6 +231,38 @@ func TestCheckout(t *testing.T) {
 	if _, err = f.svc.StartCheckout(f.ctxB, f.orders.Add(t, orders.PaymentCard, 0), ""); !errors.Is(err, app.ErrCardUnavailable) {
 		t.Errorf("a store without a gateway: %v", err)
 	}
+	if _, err = f.svc.StartDepositCheckout(f.ctxA, order, ""); !errors.Is(err, app.ErrNotPayable) {
+		t.Errorf("a card order through a deposit link: %v", err)
+	}
+}
+
+// TestDepositCheckout (ADR-0070): a prepaid delivery is paid from its
+// link only (StartDepositCheckout), for the deposit, and waits six hours.
+func TestDepositCheckout(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	order := f.orders.AddDeposit(t)
+	if _, err := f.svc.StartCheckout(f.ctxA, order, ""); !errors.Is(err, app.ErrNotPayable) {
+		t.Fatalf("a prepaid delivery through the card route: %v", err)
+	}
+	c, err := f.svc.StartDepositCheckout(f.ctxA, order, "https://shop.example.com/o/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := f.svc.Payment(f.ctxA, c.PaymentID)
+	if err != nil || p.Amount.Amount() != 6500 {
+		t.Fatalf("payment %+v %v", p, err)
+	}
+	if wait := f.jobs.Opts[0].ScheduledAt.Sub(f.orders.Order(order).CreatedAt); wait < app.DepositExpireAfter-time.Second || wait > app.DepositExpireAfter+time.Second {
+		t.Fatalf("expires after %v, want %v", wait, app.DepositExpireAfter)
+	}
+	if err = f.svc.WatchOrder(f.ctxA, order); err != nil {
+		t.Fatal(err)
+	}
+	last := f.jobs.Opts[len(f.jobs.Opts)-1].ScheduledAt.Sub(f.orders.Order(order).CreatedAt)
+	if last < app.DepositExpireAfter-time.Second || last > app.DepositExpireAfter+time.Second {
+		t.Fatalf("the order's expiry after %v, want %v", last, app.DepositExpireAfter)
+	}
 }
 
 // downGateway cannot create payments.

@@ -132,6 +132,9 @@ type VariantID = ULID
 type StartCardPaymentParams struct {
 	// Return Where the shopper ends up (the store's thank-you page).
 	Return string `form:"return" json:"return"`
+
+	// T The customer's link token, for a prepaid delivery.
+	T *string `form:"t,omitempty" json:"t,omitempty"`
 }
 
 // ServerInterface represents all server handlers.
@@ -189,6 +192,19 @@ func (siw *ServerInterfaceWrapper) StartCardPayment(w http.ResponseWriter, r *ht
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "return"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "return", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "t" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "t", r.URL.Query(), &params.T, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "t"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "t", Err: err})
 		}
 		return
 	}

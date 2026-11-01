@@ -75,7 +75,7 @@ type Checkout interface {
 	CardEnabled(ctx context.Context) (bool, error)
 	// StartCheckout returns the gateway's hosted page for a card order
 	// awaiting payment (reusing a recent one); redirectURL is where the
-	// shopper comes back.
+	// shopper comes back. A prepaid delivery is ErrNotPayable here.
 	StartCheckout(ctx context.Context, orderID ulid.ID, redirectURL string) (CheckoutPage, error)
 	// Refresh asks the gateway about a payment now (the shopper is back)
 	// and returns it.
@@ -108,6 +108,16 @@ func NewCardCheck(pool *pgxpool.Pool, plan entitlements.Entitlements) CardCheck 
 func StartURL(apiOrigin string, store tenant.StoreID, orderID ulid.ID, back string) string {
 	return strings.TrimRight(apiOrigin, "/") + "/v1/pay/" + store.String() + "/" + orderID.String() + "?return=" + url.QueryEscape(back)
 }
+
+// DepositURL is StartURL for a cash order's prepaid delivery, from the
+// link sent to the customer's phone: token is that link's (ADR-0070).
+func DepositURL(apiOrigin string, store tenant.StoreID, orderID ulid.ID, back, token string) string {
+	return StartURL(apiOrigin, store, orderID, back) + "&t=" + url.QueryEscape(token)
+}
+
+// DepositLinkCheck reports whether a token is the link sent to the phone
+// of an order's customer, in the store in ctx (messaging's).
+type DepositLinkCheck = payapi.LinkCheck
 
 // HostOwner reports which store a host belongs to (tenancy's resolver).
 type HostOwner = payapi.HostOwner

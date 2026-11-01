@@ -82,7 +82,7 @@ func (s *Service) ExpirePayment(ctx context.Context, id ulid.ID) error {
 }
 
 // ExpireOrderArgs ends a card order's wait for its payment, ExpireAfter
-// after it was placed, whether or not its shopper ever reached the
+// (a prepaid delivery's, DepositExpireAfter) after it was placed, whether or not its shopper ever reached the
 // gateway. Scheduled by WatchOrder when the order is placed.
 type ExpireOrderArgs struct {
 	jobs.TenantArgs
@@ -106,7 +106,7 @@ func (s *Service) WatchOrder(ctx context.Context, orderID ulid.ID) error {
 	if _, due := o.OnlineDue(); !due { // a card order's total, or a prepaid delivery (ADR-0067)
 		return nil
 	}
-	at := o.CreatedAt.Add(ExpireAfter)
+	at := expiresAt(o)
 	if earliest := s.now().Add(time.Minute); at.Before(earliest) {
 		at = earliest
 	}

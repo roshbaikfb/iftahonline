@@ -54,6 +54,21 @@ func (o *Orders) Add(t testing.TB, method orders.PaymentMethod, age time.Duratio
 	return id
 }
 
+// AddDeposit places a pending 520 EGP cash order whose 65 EGP delivery
+// awaits its prepayment (ADR-0067).
+func (o *Orders) AddDeposit(t testing.TB) ulid.ID {
+	t.Helper()
+	deposit, err := money.New(6500, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := o.Add(t, orders.PaymentCOD, 0)
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.orders[id].RiskAction, o.orders[id].Deposit, o.orders[id].DepositStatus = orders.RiskPrepay, deposit, orders.PaymentAwaiting
+	return id
+}
+
 // Get implements the port.
 func (o *Orders) Get(_ context.Context, id ulid.ID) (orders.Order, error) {
 	o.mu.Lock()

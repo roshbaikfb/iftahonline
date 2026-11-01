@@ -163,6 +163,7 @@ func newPlatform(t *testing.T) platform {
 	pay, err := payments.New(payments.Deps{Pool: one, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true},
 		Sealer: sealer, PublicURL: "https://app.example.com", Orders: ord.Payments(), Jobs: ins, Inbox: hooks.Inbox(),
 		Limiter: checkoutLimiter, ClientIP: func(context.Context) (netip.Addr, bool) { return netip.MustParseAddr("198.51.100.22"), true },
+		DepositLinks: func(_ context.Context, _ ulid.ID, token string) (bool, error) { return token == phoneLink, nil },
 		Hosts: func(_ context.Context, host string) (tenant.StoreID, error) {
 			if host == shopHost {
 				return store, nil
@@ -479,10 +480,15 @@ func (q prepaidQuotes) Quote(ctx context.Context, req shipping.QuoteRequest) (sh
 	return shipping.Quote{Deliverable: true, Shipping: ship, CODFee: cod}, err
 }
 
-// TestPrepaidDeliveryThroughTheAPIHost (ADR-0067): a cash order whose
-// delivery the rules want prepaid pays the shipping and COD fee on the
-// gateway's page; the payment confirms the order and leaves the courier
-// the rest to collect.
+// phoneLink is the token of the link the customer's phone got (the
+// platform fixture's DepositLinks takes only it).
+const phoneLink = "aaaabbbbccccddddeeeeff"
+
+// TestPrepaidDeliveryThroughTheAPIHost (ADR-0067, ADR-0070): a cash order
+// whose delivery the rules want prepaid pays the shipping and COD fee on
+// the gateway's page, from the link sent to the customer's phone only;
+// the payment confirms the order and leaves the courier the rest to
+// collect.
 func TestPrepaidDeliveryThroughTheAPIHost(t *testing.T) {
 	p := newPlatform(t)
 	prod := p.call(t, http.MethodPost, "/products", `{"title":"ساعة","slug":"watch","status":"active","variants":[{"price_minor":45000,"on_hand":5}]}`, http.StatusCreated)
@@ -500,7 +506,7 @@ func TestPrepaidDeliveryThroughTheAPIHost(t *testing.T) {
 	if placed.Order.Deposit.Amount() != 6500 || placed.Order.Total.Amount() != 51500 {
 		t.Fatalf("placed: deposit %v, total %v", placed.Order.Deposit, placed.Order.Total)
 	}
-	// Unpaid within the hour, it is cancelled like a card order.
+	// Unpaid within six hours, it is cancelled like a card order.
 	eventually(t, "the deposit's expiry to be scheduled", func() bool {
 		var n int
 		qErr := p.pool.QueryRow(t.Context(), `SELECT count(*) FROM river_job WHERE kind = 'payments.expire_order' AND args->>'order_id' = $1`,
@@ -518,7 +524,15 @@ func TestPrepaidDeliveryThroughTheAPIHost(t *testing.T) {
 		p.public.ServeHTTP(rec, rq)
 		return rec
 	}
-	rec := follow(http.MethodGet, payments.StartURL("https://app.example.com", p.store, placed.Order.ID, thanks), "")
+	// Without the phone's link, or with another, the order is not payable
+	// here: the route answers as for any cash order.
+	for _, start := range []string{payments.StartURL("https://app.example.com", p.store, placed.Order.ID, thanks),
+		payments.DepositURL("https://app.example.com", p.store, placed.Order.ID, thanks, "nope")} {
+		if rec := follow(http.MethodGet, start, ""); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != thanks {
+			t.Fatalf("%s = %d %q, want back to the store", start, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	rec := follow(http.MethodGet, payments.DepositURL("https://app.example.com", p.store, placed.Order.ID, thanks, phoneLink), "")
 	page := rec.Header().Get("Location")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("start = %d %q", rec.Code, page)

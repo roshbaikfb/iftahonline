@@ -46,9 +46,14 @@ type HostOwner func(ctx context.Context, host string) (tenant.StoreID, error)
 // ClientIPFunc is the server's real-IP lookup.
 type ClientIPFunc func(ctx context.Context) (netip.Addr, bool)
 
+// LinkCheck reports whether token is the link sent to the phone of the
+// order's customer, in the store in ctx (messaging's SMS link, ADR-0070).
+type LinkCheck func(ctx context.Context, orderID ulid.ID, token string) (bool, error)
+
 // Handlers implements ServerInterface.
 type Handlers struct {
 	svc      *app.Service
+	links    LinkCheck
 	hosts    HostOwner
 	limiter  *ratelimit.Limiter
 	clientIP ClientIPFunc
@@ -60,7 +65,9 @@ var _ ServerInterface = (*Handlers)(nil)
 
 // Deps are the handlers' dependencies.
 type Deps struct {
-	Service  *app.Service
+	Service *app.Service
+	// Links checks a prepaid delivery's link; nil pays none.
+	Links    LinkCheck
 	Hosts    HostOwner
 	Limiter  *ratelimit.Limiter
 	ClientIP ClientIPFunc
@@ -70,7 +77,7 @@ type Deps struct {
 
 // Mount registers the checkout routes on mux (public: no session).
 func Mount(mux *http.ServeMux, d Deps) {
-	h := &Handlers{svc: d.Service, hosts: d.Hosts, limiter: d.Limiter, clientIP: d.ClientIP, resp: d.Problems, log: d.Log}
+	h := &Handlers{svc: d.Service, links: d.Links, hosts: d.Hosts, limiter: d.Limiter, clientIP: d.ClientIP, resp: d.Problems, log: d.Log}
 	HandlerWithOptions(h, StdHTTPServerOptions{
 		BaseRouter: mux,
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -97,7 +104,11 @@ func (h *Handlers) StartCardPayment(w http.ResponseWriter, r *http.Request, stor
 			return
 		}
 	}
-	c, err := h.svc.StartCheckout(ctx, order, h.svc.ReturnURL(store, order, back))
+	start := h.svc.StartCheckout
+	if h.viaLink(ctx, order, params.T) {
+		start = h.svc.StartDepositCheckout
+	}
+	c, err := start(ctx, order, h.svc.ReturnURL(store, order, back))
 	switch {
 	case err == nil:
 		redirect(w, c.URL)
@@ -107,6 +118,21 @@ func (h *Handlers) StartCardPayment(w http.ResponseWriter, r *http.Request, stor
 		h.log.WarnContext(ctx, "payments: checkout not started", "err", err)
 		redirect(w, back) // the thank-you page offers to try again
 	}
+}
+
+// viaLink reports whether token is the order's link to its customer's
+// phone. Without one, a prepaid delivery is not payable here, so the
+// route says nothing about which orders have one (ADR-0070).
+func (h *Handlers) viaLink(ctx context.Context, order ulid.ID, token *string) bool {
+	if token == nil || *token == "" || h.links == nil {
+		return false
+	}
+	ok, err := h.links(ctx, order, *token)
+	if err != nil {
+		h.log.WarnContext(ctx, "payments: link check failed", "err", err) // the shopper goes back; the link may be opened again
+		return false
+	}
+	return ok
 }
 
 // FinishCardPayment implements ServerInterface.
