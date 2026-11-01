@@ -140,6 +140,9 @@ Every placed order counts one `orders_per_month` through
   - **Which orders.** A storefront cash order asks `RiskCheck` (the risk
     module's rules) before it is placed. It keeps the verdict
     (`risk_action`, `risk_band`).
+  - **Failing open.** A check that errs or takes longer than
+    `RiskTimeout` (300 ms) places the order with no action, logged; a
+    card check that errs holds a prepaid delivery instead.
   - **Hold.** A `hold` cannot be confirmed (`409 order_held`) until
     `releaseOrder` (orders.manage, audited `order.released`) sets it to
     `released`.

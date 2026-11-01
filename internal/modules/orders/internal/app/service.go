@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -165,6 +166,7 @@ type Service struct {
 	audit     audit.Recorder
 	events    eventbus.Publisher
 	catalog   Catalog
+	log       *slog.Logger
 	customers Customers
 	shipping  Shipping
 	coupons   Coupons
@@ -201,6 +203,8 @@ type Deps struct {
 	// Cards says whether a delivery can be prepaid by card (ADR-0067);
 	// nil cannot, so a prepay verdict holds the order instead.
 	Cards CardCheck
+	// Log records a risk check that failed open; nil discards.
+	Log *slog.Logger
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -214,7 +218,10 @@ func NewService(d Deps) *Service {
 	if d.Plan == nil {
 		d.Plan = entitlements.Unrestricted()
 	}
-	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
+	if d.Log == nil {
+		d.Log = slog.New(slog.DiscardHandler)
+	}
+	return &Service{log: d.Log, db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
 		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, risk: d.Risk, cards: d.Cards, now: time.Now}
 }
 
@@ -280,14 +287,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 	// The rules look at shoppers' cash orders: staff placing an order
 	// have spoken to the customer, and a card order is paid upfront.
 	if d.Source == domain.SourceStorefront && o.PaymentMethod == domain.PaymentCOD && s.risk != nil {
-		r, rErr := s.risk.Check(ctx, d.Contact.Phone)
-		if rErr != nil {
-			return Placement{}, rErr
-		}
+		r := s.checkRisk(ctx, d.Contact.Phone)
 		o.RiskAction, o.RiskBand = r.Action, r.Band
 		if r.Action == domain.RiskPrepay {
-			if rErr = s.prepay(ctx, &o); rErr != nil {
-				return Placement{}, rErr
+			if err = s.prepay(ctx, &o); err != nil {
+				return Placement{}, err
 			}
 		}
 	}
@@ -689,7 +693,9 @@ func (s *Service) prepay(ctx context.Context, o *domain.Order) error {
 	cards := false
 	if s.cards != nil && !deposit.IsZero() {
 		if cards, err = s.cards.CardEnabled(ctx); err != nil {
-			return err
+			// Not knowing is not taking cards: held, the order still placed.
+			s.log.WarnContext(ctx, "orders: card check failed, prepaid delivery held instead", "err", err)
+			cards = false
 		}
 	}
 	if !cards {
@@ -698,6 +704,25 @@ func (s *Service) prepay(ctx context.Context, o *domain.Order) error {
 	}
 	o.Deposit, o.DepositStatus = deposit, domain.PaymentAwaiting
 	return nil
+}
+
+// RiskTimeout bounds the risk check on the storefront's order path.
+const RiskTimeout = 300 * time.Millisecond
+
+// checkRisk asks the store's risk rules about a new order's phone. They
+// fail open (P8 review): a check that errs or takes longer than
+// RiskTimeout places the order with no action, logged, because losing a
+// real order costs the merchant more than one unchecked order, which
+// still waits for the merchant to confirm it.
+func (s *Service) checkRisk(ctx context.Context, p phone.E164) domain.Risk {
+	ctx, cancel := context.WithTimeout(ctx, RiskTimeout)
+	defer cancel()
+	r, err := s.risk.Check(ctx, p)
+	if err != nil {
+		s.log.WarnContext(ctx, "orders: risk check failed, order placed without the rules", "err", err)
+		return domain.Risk{}
+	}
+	return r
 }
 
 // ReleaseHold lifts the risk rules' hold of a pending order (ADR-0066),

@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,6 +53,8 @@ type Deps struct {
 	// Cards says whether a delivery can be prepaid (ADR-0067); nil
 	// cannot.
 	Cards CardCheck
+	// Log records a risk check that failed open; nil discards.
+	Log *slog.Logger
 }
 
 // Module is the wired orders module.
@@ -67,7 +70,7 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth, Plan: d.Plan,
-		Risk: d.Risk, Cards: d.Cards})}, nil
+		Risk: d.Risk, Cards: d.Cards, Log: d.Log})}, nil
 }
 
 // Fulfilment is the API courier integrations use.
@@ -97,6 +100,7 @@ type ShopDeps struct {
 	Plan      entitlements.Entitlements // counts the month's orders; nil counts nothing (tests)
 	Risk      RiskCheck                 // the store's risk rules (ADR-0066); nil applies none
 	Cards     CardCheck                 // whether a delivery can be prepaid (ADR-0067); nil cannot
+	Log       *slog.Logger              // a risk check that failed open; nil discards
 }
 
 // NewShop builds the shopper's side for the storefront role. Merchant
@@ -171,7 +175,7 @@ func withoutPermissions(d ShopDeps) (*app.Service, error) {
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}, Plan: d.Plan,
-		Risk: d.Risk, Cards: d.Cards}), nil
+		Risk: d.Risk, Cards: d.Cards, Log: d.Log}), nil
 }
 
 // denyAll refuses every permission.

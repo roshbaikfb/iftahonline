@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -44,7 +45,7 @@ func TestRiskRules(t *testing.T) {
 	rules := &riskRules{verdict: domain.Risk{Band: "high", Action: domain.RiskHold}}
 	f.env.Risk = rules
 	svc := f.env.Service(f.pool)
-	v := f.product(t, f.storeA, "ساعة", 120000, 20)
+	v := f.product(t, f.storeA, "ساعة", 120000, 30)
 	place := func(qty int, mod func(*domain.NewOrder)) domain.Order {
 		t.Helper()
 		in := newOrder("", domain.LineInput{VariantID: v, Qty: qty})
@@ -117,11 +118,36 @@ func TestRiskRules(t *testing.T) {
 		t.Fatalf("checked %d more; staff %q, card %q", rules.calls-before, staff.RiskAction, card.RiskAction)
 	}
 
-	// A rule that cannot be read refuses the order rather than skip it.
+	// Rules that cannot be read, or answer too late, fail open (P8 review,
+	// approved by the owner): the order is placed without them, for the
+	// merchant to confirm as any other.
 	rules.err = errors.New("boom")
-	if _, err = svc.PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: v, Qty: 5})); err == nil {
-		t.Fatal("a failed check must fail the order")
+	p, err := svc.PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: v, Qty: 5}))
+	if err != nil || p.Order.RiskAction != domain.RiskNone || p.Order.RiskBand != "" {
+		t.Fatalf("a failed check: %+v, %v", p.Order, err)
 	}
+	slow := slowRules{}
+	f.env.Risk = slow
+	start := time.Now()
+	p, err = f.env.Service(f.pool).PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: v, Qty: 6}))
+	if err != nil || p.Order.RiskAction != domain.RiskNone || time.Since(start) > app.RiskTimeout+5*time.Second {
+		t.Fatalf("a slow check: %+v, %v after %v", p.Order, err, time.Since(start))
+	}
+}
+
+// slowRules answers only when its context ends, as a stuck query does.
+type slowRules struct{}
+
+func (slowRules) Check(ctx context.Context, _ phone.E164) (domain.Risk, error) {
+	<-ctx.Done()
+	return domain.Risk{Band: "high", Action: domain.RiskHold}, ctx.Err()
+}
+
+// cardsDown cannot tell whether the store takes cards.
+type cardsDown struct{}
+
+func (cardsDown) CardEnabled(context.Context) (bool, error) {
+	return false, errors.New("payments down")
 }
 
 // freeDelivery quotes every address free, without a COD fee.
@@ -204,6 +230,11 @@ func TestPrepaidDelivery(t *testing.T) {
 	f.env.Cards = cardsOn(false)
 	if h := place(f.env.Service(f.pool), 2, "EG-ALX"); h.RiskAction != domain.RiskHold || !h.Deposit.IsZero() || h.DepositStatus != "" {
 		t.Fatalf("without cards: %+v", h)
+	}
+	// Cards that cannot be checked: held, the order still placed.
+	f.env.Cards = cardsDown{}
+	if h := place(f.env.Service(f.pool), 4, "EG-ALX"); h.RiskAction != domain.RiskHold || !h.Deposit.IsZero() {
+		t.Fatalf("card check down: %+v", h)
 	}
 	// Nothing to prepay (free delivery): held too.
 	f.env.Cards, f.env.Shipping = cardsOn(true), freeDelivery{}
