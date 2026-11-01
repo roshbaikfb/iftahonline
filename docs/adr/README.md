@@ -74,3 +74,4 @@ supersedes it.
 | [0066](0066-risk-rules-hold-and-verify.md) | Risk rules: hold or verify risky customers' orders | Accepted |
 | [0067](0067-prepaid-delivery-for-risky-customers.md) | Prepaid delivery for risky customers | Accepted |
 | [0068](0068-product-costs-and-carrier-charges.md) | Product costs and carrier charges, for profit | Accepted |
+| [0069](0069-profit-dashboard-facts-and-rollups.md) | The profit dashboard: its own facts, daily rollups, the read pool | Accepted |
