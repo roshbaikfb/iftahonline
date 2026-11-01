@@ -181,23 +181,16 @@ func (s *Service) Backfill(ctx context.Context) (int, error) {
 	var before ulid.ID
 	n := 0
 	for {
-		page, err := s.orders.Before(ctx, before, backfillPage)
+		// A page of orders with their lines: two queries, not one an order.
+		page, err := s.orders.BeforeWithLines(ctx, before, backfillPage)
 		if err != nil {
 			return n, fmt.Errorf("analytics: backfill: %w", err)
 		}
 		if len(page) == 0 {
 			return n, nil
 		}
-		// A page lists orders without lines: each is read whole.
 		facts := make([]store.Fact, 0, len(page))
-		for _, p := range page {
-			o, gErr := s.orders.Get(ctx, p.ID)
-			if errors.Is(gErr, orders.ErrOrderNotFound) {
-				continue
-			}
-			if gErr != nil {
-				return n, gErr
-			}
+		for _, o := range page {
 			f, fErr := fact(o, info.Location)
 			if fErr != nil {
 				return n, fErr

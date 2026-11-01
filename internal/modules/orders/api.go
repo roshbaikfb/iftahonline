@@ -217,6 +217,9 @@ type Outcomes interface {
 	// Before returns up to limit (1–100) orders with IDs below before,
 	// newest first, without lines; a zero before starts at the newest.
 	Before(ctx context.Context, before ulid.ID, limit int) ([]Order, error)
+	// BeforeWithLines is Before with each order's lines, in two queries
+	// however long the page.
+	BeforeWithLines(ctx context.Context, before ulid.ID, limit int) ([]Order, error)
 }
 
 var _ Outcomes = (*app.Service)(nil)

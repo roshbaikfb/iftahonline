@@ -31,6 +31,9 @@ func (noOrders) Get(context.Context, ulid.ID) (orders.Order, error) {
 func (noOrders) Before(context.Context, ulid.ID, int) ([]orders.Order, error) {
 	return nil, nil
 }
+func (noOrders) BeforeWithLines(context.Context, ulid.ID, int) ([]orders.Order, error) {
+	return nil, nil
+}
 
 func TestModule(t *testing.T) {
 	t.Parallel()
