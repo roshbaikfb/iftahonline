@@ -73,22 +73,28 @@ func (s *Service) Rules(ctx context.Context) (RulesView, error) {
 	return v, err
 }
 
-// SaveRules replaces the store's rules; the prepaid delivery, which came
-// later (ADR-0067), is off when left empty. Turning one on needs the
-// plan's risk_rules (403 plan_limit); turning them off never does.
+// SaveRules replaces the store's rules. The prepaid delivery, which came
+// later (ADR-0067), keeps its current value when left empty, so a client
+// that does not know it cannot turn it off (P8 review). Turning one on
+// needs the plan's risk_rules (403 plan_limit); turning them off never
+// does.
 func (s *Service) SaveRules(ctx context.Context, r domain.Rules) (RulesView, error) {
-	if r.PrepayFrom == "" {
-		r.PrepayFrom = domain.Off
-	}
-	if err := r.Validate(); err != nil {
-		return RulesView{}, err
-	}
-	if r.Active() {
-		if err := s.plan.Require(ctx, entitlements.RiskRules); err != nil {
-			return RulesView{}, err
-		}
-	}
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		if r.PrepayFrom == "" {
+			cur, err := store.Rules(ctx, tx)
+			if err != nil {
+				return err
+			}
+			r.PrepayFrom = cur.PrepayFrom
+		}
+		if err := r.Validate(); err != nil {
+			return err
+		}
+		if r.Active() {
+			if err := s.plan.Require(ctx, entitlements.RiskRules); err != nil {
+				return err
+			}
+		}
 		if err := store.SaveRules(ctx, tx, r); err != nil {
 			return err
 		}

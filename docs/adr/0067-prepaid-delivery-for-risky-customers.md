@@ -30,7 +30,9 @@ Constraints:
 1. **A third rule, `prepay_from`** (migration 00077, off by default).
    - The rules apply in this order: hold, then prepay, then verify.
    - In `updateRiskSettings` the field is optional; when omitted, it is
-     off. `getRiskSettings` always returns it.
+     off. `getRiskSettings` always returns it. *Amended 2026-11-01 (P8
+     review, the owner's decision):* omitted keeps the current value, so a
+     client that does not know the field cannot turn it off.
 2. **The deposit** (migration 00076, expand only):
    - **Columns.** `orders.deposit_minor` is the shipping plus the COD fee.
      `orders.deposit_status` is `awaiting`, `paid`,

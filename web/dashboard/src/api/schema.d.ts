@@ -5197,7 +5197,7 @@ export interface components {
         RiskSettingsInput: {
             hold_from: components["schemas"]["RiskRule"];
             verify_from: components["schemas"]["RiskRule"];
-            /** @description The band from which the shopper prepays the delivery by card (ADR-0067); omitted is off. */
+            /** @description The band from which the shopper prepays the delivery by card (ADR-0067); omitted keeps the current value (off for a store that never set it). */
             prepay_from?: components["schemas"]["RiskRule"];
         };
         /** @description hold_from: such an order waits for the merchant's review, without a confirmation message, until released. prepay_from: its shopper pays the shipping and COD fee by card before the order goes on; a store that cannot take cards holds it instead (ADR-0067). verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first, then a prepaid delivery, then a call. New customers are never touched (ADR-0066). */

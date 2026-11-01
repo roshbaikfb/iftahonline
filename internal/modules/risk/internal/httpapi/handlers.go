@@ -131,7 +131,7 @@ func (h *Handlers) UpdateRiskSettings(ctx context.Context, req UpdateRiskSetting
 	if req.Body == nil {
 		return nil, errBodyRequired
 	}
-	prepay := domain.Off
+	var prepay domain.Band // omitted: the service keeps the current one
 	if req.Body.PrepayFrom != nil {
 		prepay = domain.Band(*req.Body.PrepayFrom)
 	}

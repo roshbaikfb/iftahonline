@@ -193,7 +193,7 @@ type RiskSettingsInput struct {
 	// HoldFrom The band from which a rule applies to a new storefront cash order, or off.
 	HoldFrom RiskRule `json:"hold_from"`
 
-	// PrepayFrom The band from which the shopper prepays the delivery by card (ADR-0067); omitted is off.
+	// PrepayFrom The band from which the shopper prepays the delivery by card (ADR-0067); omitted keeps the current value (off for a store that never set it).
 	PrepayFrom *RiskRule `json:"prepay_from,omitempty"`
 
 	// VerifyFrom The band from which a rule applies to a new storefront cash order, or off.
