@@ -2548,7 +2548,7 @@ export interface paths {
         };
         /**
          * The store's ad spend over a range of days
-         * @description Permission: finance.read. Days both included, at most 366; newest first, at most 500.
+         * @description Permission: finance.read. Days both included, at most 366; newest first, at most 500. `count` and `total_minor` cover every entry of the range, listed or not.
          */
         get: operations["listAdSpend"];
         put?: never;
@@ -9915,6 +9915,13 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["AdSpend"][];
+                        /** @description How many entries the range has (items lists at most 500). */
+                        count?: number;
+                        /**
+                         * Format: int64
+                         * @description The sum of every entry of the range, in the store's currency.
+                         */
+                        total_minor?: number;
                     };
                 };
             };

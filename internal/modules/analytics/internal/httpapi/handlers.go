@@ -135,8 +135,8 @@ func (h *Handlers) ListAdSpend(ctx context.Context, req ListAdSpendRequestObject
 	if err != nil {
 		return nil, err
 	}
-	out := ListAdSpend200JSONResponse{Items: make([]AdSpend, len(list))}
-	for i, a := range list {
+	out := ListAdSpend200JSONResponse{Items: make([]AdSpend, len(list.Items)), Count: &list.Count, TotalMinor: &list.TotalMinor}
+	for i, a := range list.Items {
 		out.Items[i] = adSpendOut(a)
 	}
 	return out, nil

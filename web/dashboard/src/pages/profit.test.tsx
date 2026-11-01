@@ -131,6 +131,20 @@ describe('Profit', () => {
 });
 
 describe('ProfitSettings', () => {
+  it('totals every entry of the month, past the 500 listed (P8 review)', async () => {
+    const items = [
+      { id: 'S1', day: '2026-10-20', platform: 'meta', campaign: 'eid-sale', currency: 'EGP', amount_minor: 120000, source: 'import', note: '', created_at: '' },
+    ];
+    mockAPI({
+      ...shell,
+      [`GET ${base}/analytics/settings`]: () => ({ status: 200, body: { cod_fee_bp: 0 } }),
+      [`GET ${base}/analytics/ad-spend`]: () => ({ status: 200, body: { items, count: 3, total_minor: 300000 } }),
+    });
+    renderAt(`/stores/${store}/profit/settings`);
+    expect(await screen.findByRole('note')).toHaveTextContent('تظهر أحدث 1 سطرًا فقط، و2 غيرها محسوبة في الإجمالي.');
+    expect(screen.getByText('الإجمالي هذا الشهر').nextElementSibling).toHaveTextContent('3,000');
+  });
+
   it('saves the estimates and adds and deletes ad spend', async () => {
     let items = [
       { id: 'S1', day: '2026-10-20', platform: 'meta', campaign: 'eid-sale', currency: 'EGP', amount_minor: 120000, source: 'manual', note: '', created_at: '' },

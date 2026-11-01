@@ -118,6 +118,11 @@ SELECT * FROM ad_spend WHERE store_id = @store_id AND day >= @from_day AND day <
 ORDER BY day DESC, id DESC
 LIMIT 500;
 
+-- name: AdSpendTotals :one
+-- Every entry of the range, beyond the list's 500.
+SELECT count(*)::int AS entries, coalesce(sum(amount_minor), 0)::bigint AS amount_minor
+FROM ad_spend WHERE store_id = @store_id AND day >= @from_day AND day < @to_day;
+
 -- name: ProfitTotals :one
 -- The dashboard's totals over [from, to), read on the read pool.
 SELECT coalesce(sum(orders), 0)::int AS orders, coalesce(sum(delivered), 0)::int AS delivered,

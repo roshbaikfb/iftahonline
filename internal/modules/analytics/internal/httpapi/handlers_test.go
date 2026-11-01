@@ -215,7 +215,7 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("createAdSpend = %d %v", code, sp)
 	}
 	code, list, _ := f.do(t, req(t, http.MethodGet, path(a, "/ad-spend?from="+yesterday()+"&to="+yesterday()), tokOwnerA, ""))
-	if code != http.StatusOK || len(list["items"].([]any)) != 1 {
+	if code != http.StatusOK || len(list["items"].([]any)) != 1 || list["count"] != float64(1) || list["total_minor"] != sp["amount_minor"] {
 		t.Fatalf("listAdSpend = %d %v", code, list)
 	}
 	if _, err := f.svc.Rollup(tenant.WithStore(t.Context(), a)); err != nil {
@@ -296,7 +296,7 @@ func TestCrossTenant(t *testing.T) {
 	leaks := []string{f.spendB, "secret-b", "77700"}
 	unchanged := func(t testing.TB) {
 		list, err := f.svc.AdSpend(f.ctxB, time.Now().AddDate(0, 0, -3), time.Now().AddDate(0, 0, 1))
-		if err != nil || len(list) != 1 || list[0].Amount != 77700 {
+		if err != nil || len(list.Items) != 1 || list.Items[0].Amount != 77700 {
 			t.Fatalf("store B's spend changed: %+v, %v", list, err)
 		}
 		s, err := f.svc.Settings(f.ctxB)
