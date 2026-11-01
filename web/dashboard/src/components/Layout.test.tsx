@@ -57,7 +57,8 @@ describe('Layout', () => {
     renderAt(`/stores/${a}/orders/01M5ORDER000000000000000001`, session([a]));
     const nav = screen.getByRole('navigation', { name: 'القائمة الرئيسية' });
     const titles = [...nav.querySelectorAll('.group-title')].map((el) => el.textContent);
-    expect(titles).toEqual(['المبيعات', 'التسويق', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
+    expect(titles).toEqual(['المبيعات', 'التقارير', 'التسويق', 'المنتجات', 'الشحن', 'المتجر', 'الإعدادات']);
+    expect(within(nav).getByRole('link', { name: 'الربح الصافي' })).toHaveAttribute('href', `/stores/${a}/profit`);
     expect(within(nav).getByRole('link', { name: 'رسائل العملاء' })).toHaveAttribute('href', `/stores/${a}/messages`);
     expect(within(nav).getByRole('link', { name: 'الكوبونات' })).toHaveAttribute('href', `/stores/${a}/coupons`);
     expect(within(nav).getByRole('link', { name: 'بكسلات الإعلانات' })).toHaveAttribute('href', `/stores/${a}/pixels`);

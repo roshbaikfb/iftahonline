@@ -5150,3 +5150,219 @@ td .status.risk-high {
   margin: 0;
   flex: 1 1 20rem;
 }
+
+/* The net profit dashboard (P8 8f, the approved mockup). */
+.profit {
+  display: grid;
+  gap: 1.25rem;
+}
+.profit h1 {
+  margin: 0;
+}
+.profit .notice.warn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #7c2d12;
+}
+.profit .notice.warn a {
+  color: #7c2d12;
+  font-weight: 700;
+}
+.profit-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.profit-dates label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.profit-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+  gap: 0.875rem;
+}
+.profit-kpis .kpi strong {
+  font-size: 1.875rem;
+  line-height: 1.2;
+}
+.profit-kpis .kpi.main {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+.profit-kpis .kpi.main span,
+.profit-kpis .kpi.main small {
+  color: #cbd5e1;
+}
+.profit-kpis .kpi.main strong {
+  color: #fff;
+}
+.profit .loss {
+  color: var(--red);
+}
+.profit .gain {
+  color: var(--green);
+}
+.profit .strong {
+  font-weight: 700;
+}
+.profit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+.profit-row > * {
+  flex: 1 1 26rem;
+  min-width: 0;
+}
+.profit-flow dl {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+}
+.profit-flow dl > div {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr) 7rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+.profit-flow dt {
+  color: #334155;
+}
+.profit-flow dd {
+  margin: 0;
+}
+.profit-flow dd.num {
+  text-align: end;
+}
+.profit-flow .track {
+  height: 0.75rem;
+  background: #f1f5f9;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+.profit-flow .track span {
+  display: block;
+  height: 100%;
+  border-radius: 0.375rem;
+  background: var(--navy);
+}
+.profit-flow .out .track span {
+  background: #f97316;
+}
+.profit-flow .out dd.num {
+  color: var(--red);
+}
+.profit-flow .net dt,
+.profit-flow .net dd.num {
+  font-weight: 700;
+}
+.profit-flow .net dd.num {
+  color: var(--green);
+}
+.profit-flow .net .track span {
+  background: var(--green);
+}
+.pbars {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  height: 13.75rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--field);
+}
+.pbars li {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--h);
+  border-radius: 0.1875rem 0.1875rem 0 0;
+  background: var(--navy);
+}
+.pbars li.loss {
+  background: #f97316;
+}
+.profit-by .table-wrap {
+  overflow-x: auto;
+}
+.profit-by table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.profit-by th,
+.profit-by td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+  text-align: start;
+}
+.profit-by thead th {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom-color: var(--line);
+}
+.profit-by tbody th {
+  font-weight: 500;
+}
+.profit .warn-text {
+  display: block;
+  color: #9a3412;
+  font-weight: 400;
+}
+.profit-locked {
+  max-width: 30rem;
+  margin: 2rem auto;
+  text-align: center;
+  justify-items: center;
+}
+.profit-est label,
+.ad-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #334155;
+}
+.profit-est button {
+  justify-self: start;
+}
+.ad-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.625rem;
+  align-items: end;
+}
+.profit-ads table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.profit-ads th,
+.profit-ads td {
+  padding: 0.6875rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: start;
+  white-space: nowrap;
+}
+.profit-total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+}
+@media (max-width: 40rem) {
+  .profit-flow dl > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .profit-flow .track {
+    display: none;
+  }
+}

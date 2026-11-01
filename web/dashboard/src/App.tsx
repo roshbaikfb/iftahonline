@@ -7,6 +7,8 @@ import { Billing } from './pages/Billing';
 import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
 import { COD } from './pages/COD';
+import { Profit } from './pages/Profit';
+import { ProfitSettings } from './pages/ProfitSettings';
 import { Design } from './pages/Design';
 import { CouponEditor } from './pages/CouponEditor';
 import { Coupons } from './pages/Coupons';
@@ -112,6 +114,8 @@ function Gate() {
           <Route path="/stores/:storeId/shipping" element={<Shipping />} />
           <Route path="/stores/:storeId/carriers" element={<Carriers />} />
           <Route path="/stores/:storeId/cod" element={<COD />} />
+          <Route path="/stores/:storeId/profit" element={<Profit />} />
+          <Route path="/stores/:storeId/profit/settings" element={<ProfitSettings />} />
           <Route path="/stores/:storeId/payments" element={<Payments />} />
           <Route path="/stores/:storeId/messages" element={<Messages />} />
           <Route path="/stores/:storeId/coupons" element={<Coupons />} />
