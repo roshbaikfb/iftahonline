@@ -9,6 +9,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -89,6 +90,20 @@ type Tracker interface {
 }
 
 var _ Tracker = (*app.Service)(nil)
+
+// Charges tells the profit dashboard what carriers kept of the store's
+// orders' parcels, from their payouts (ADR-0068): a delivered parcel's
+// COD less what was settled, or a returned one's fees. Orders without
+// settled parcels are missing (their cost is estimated). At most
+// MaxChargesOrders orders per call.
+type Charges interface {
+	CarrierCharges(ctx context.Context, orderIDs []ulid.ID) (map[ulid.ID]money.Money, error)
+}
+
+var _ Charges = (*app.Service)(nil)
+
+// MaxChargesOrders bounds one Charges call.
+const MaxChargesOrders = app.MaxChargesOrders
 
 // Shipment statuses a Parcel can be in.
 const (

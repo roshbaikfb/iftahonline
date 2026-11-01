@@ -99,6 +99,51 @@ func (q *Queries) CODSummary(ctx context.Context, arg CODSummaryParams) ([]CODSu
 	return items, nil
 }
 
+const carrierCharges = `-- name: CarrierCharges :many
+SELECT s.order_id, s.currency,
+       ((CASE WHEN s.status = 'delivered' THEN s.cod_minor ELSE 0 END) - sum(c.amount_minor))::bigint AS charge_minor
+FROM unnest($1::uuid[]) AS ids(id)
+JOIN shipments s ON s.store_id = $2 AND s.order_id = ids.id AND s.status IN ('delivered', 'returned')
+JOIN cod_settlements c ON c.store_id = s.store_id AND c.shipment_id = s.id
+GROUP BY s.id, s.order_id, s.currency, s.status, s.cod_minor
+`
+
+type CarrierChargesParams struct {
+	OrderIds []ulid.ID
+	StoreID  ulid.ID
+}
+
+type CarrierChargesRow struct {
+	OrderID     ulid.ID
+	Currency    string
+	ChargeMinor int64
+}
+
+// What carriers kept of some orders' parcels, from their payouts
+// (ADR-0068): a delivered parcel's COD less what was settled for it, or
+// a returned one's negative settlements (return fees). Only parcels with
+// settlement lines are listed; one walk of shipments_store_order per
+// order.
+func (q *Queries) CarrierCharges(ctx context.Context, arg CarrierChargesParams) ([]CarrierChargesRow, error) {
+	rows, err := q.db.Query(ctx, carrierCharges, arg.OrderIds, arg.StoreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CarrierChargesRow{}
+	for rows.Next() {
+		var i CarrierChargesRow
+		if err := rows.Scan(&i.OrderID, &i.Currency, &i.ChargeMinor); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteCityRates = `-- name: DeleteCityRates :exec
 DELETE FROM shipping_city_rates WHERE store_id = $1 AND zone_id = $2
 `

@@ -213,3 +213,21 @@ func (s *Service) Held(ctx context.Context, after *domain.Cursor, limit int) (He
 	}
 	return p, nil
 }
+
+// MaxChargesOrders bounds one CarrierCharges call.
+const MaxChargesOrders = 500
+
+// CarrierCharges is what carriers kept of some of the store's orders'
+// parcels, from their payouts (ADR-0068): orders without settled parcels
+// are missing. At most MaxChargesOrders orders, one query.
+func (s *Service) CarrierCharges(ctx context.Context, orderIDs []ulid.ID) (map[ulid.ID]money.Money, error) {
+	if len(orderIDs) > MaxChargesOrders {
+		return nil, fmt.Errorf("shipping: %d orders, at most %d", len(orderIDs), MaxChargesOrders)
+	}
+	var out map[ulid.ID]money.Money
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
+		out, err = store.CarrierCharges(ctx, tx, orderIDs)
+		return err
+	})
+	return out, err
+}

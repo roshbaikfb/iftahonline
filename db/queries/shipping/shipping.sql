@@ -206,3 +206,16 @@ WHERE s.store_id = @store_id AND s.status = 'delivered' AND s.cod_minor > coales
   AND (s.status_at, s.id) > (@after_at::timestamptz, @after_id::uuid)
 ORDER BY s.status_at, s.id
 LIMIT @lim;
+
+-- name: CarrierCharges :many
+-- What carriers kept of some orders' parcels, from their payouts
+-- (ADR-0068): a delivered parcel's COD less what was settled for it, or
+-- a returned one's negative settlements (return fees). Only parcels with
+-- settlement lines are listed; one walk of shipments_store_order per
+-- order.
+SELECT s.order_id, s.currency,
+       ((CASE WHEN s.status = 'delivered' THEN s.cod_minor ELSE 0 END) - sum(c.amount_minor))::bigint AS charge_minor
+FROM unnest(@order_ids::uuid[]) AS ids(id)
+JOIN shipments s ON s.store_id = @store_id AND s.order_id = ids.id AND s.status IN ('delivered', 'returned')
+JOIN cod_settlements c ON c.store_id = s.store_id AND c.shipment_id = s.id
+GROUP BY s.id, s.order_id, s.currency, s.status, s.cod_minor;
