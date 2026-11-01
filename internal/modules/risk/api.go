@@ -34,6 +34,7 @@ const (
 	NoAction = domain.NoAction
 	Hold     = domain.Hold
 	Verify   = domain.Verify
+	Prepay   = domain.Prepay
 )
 
 // Verdict is the rules' answer for a new order: the band and the action.

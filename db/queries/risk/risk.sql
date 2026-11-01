@@ -51,8 +51,9 @@ SELECT app.risk_purge(@max_rows::int)::int AS purged;
 
 -- name: RiskSettings :many
 -- The store's rules: no row is both off.
-SELECT hold_from, verify_from FROM risk_settings WHERE store_id = @store_id;
+SELECT hold_from, verify_from, prepay_from FROM risk_settings WHERE store_id = @store_id;
 
 -- name: SaveRiskSettings :exec
-INSERT INTO risk_settings (store_id, hold_from, verify_from) VALUES (@store_id, @hold_from, @verify_from)
-ON CONFLICT (store_id) DO UPDATE SET hold_from = excluded.hold_from, verify_from = excluded.verify_from, updated_at = now();
+INSERT INTO risk_settings (store_id, hold_from, verify_from, prepay_from) VALUES (@store_id, @hold_from, @verify_from, @prepay_from)
+ON CONFLICT (store_id) DO UPDATE
+SET hold_from = excluded.hold_from, verify_from = excluded.verify_from, prepay_from = excluded.prepay_from, updated_at = now();

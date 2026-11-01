@@ -22,7 +22,7 @@ func TestRiskRulesAdapter(t *testing.T) {
 	for _, tt := range []struct {
 		in   risk.Action
 		want orders.RiskAction
-	}{{risk.NoAction, orders.RiskNone}, {risk.Hold, orders.RiskHold}, {risk.Verify, orders.RiskVerify}} {
+	}{{risk.NoAction, orders.RiskNone}, {risk.Hold, orders.RiskHold}, {risk.Verify, orders.RiskVerify}, {risk.Prepay, orders.RiskPrepay}} {
 		got, err := riskRules{verdictOf{v: risk.Verdict{Band: risk.BandHigh, Action: tt.in}}}.Check(t.Context(), phone.E164{})
 		if err != nil || got.Action != tt.want || got.Band != "high" {
 			t.Errorf("%q: %+v, %v", tt.in, got, err)

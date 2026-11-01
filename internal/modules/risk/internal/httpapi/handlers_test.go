@@ -342,13 +342,17 @@ func TestSettings(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	code, got, _ := f.do(t, req(t, http.MethodGet, settingsPath(f.storeA), tokShippingA, ""))
-	if code != http.StatusOK || got["hold_from"] != "off" || got["verify_from"] != "off" || got["available"] != true {
+	if code != http.StatusOK || got["hold_from"] != "off" || got["verify_from"] != "off" || got["prepay_from"] != "off" || got["available"] != true {
 		t.Fatalf("getRiskSettings = %d %v", code, got)
 	}
-	body := `{"hold_from":"high","verify_from":"medium"}`
+	body := `{"hold_from":"high","verify_from":"medium"}` // without prepay_from: off
 	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, body)); code != http.StatusOK ||
-		got["hold_from"] != "high" || got["verify_from"] != "medium" {
+		got["hold_from"] != "high" || got["verify_from"] != "medium" || got["prepay_from"] != "off" {
 		t.Fatalf("updateRiskSettings = %d %v", code, got)
+	}
+	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, `{"hold_from":"off","verify_from":"medium","prepay_from":"high"}`)); code != http.StatusOK ||
+		got["prepay_from"] != "high" {
+		t.Fatalf("updateRiskSettings with prepay = %d %v", code, got)
 	}
 	for _, tt := range []struct {
 		name, token, body string
@@ -357,6 +361,7 @@ func TestSettings(t *testing.T) {
 		{"shipping cannot change them", tokShippingA, body, http.StatusForbidden},
 		{"no auth", "", body, http.StatusUnauthorized},
 		{"from low", tokOwnerA, `{"hold_from":"low","verify_from":"off"}`, http.StatusUnprocessableEntity},
+		{"prepay from new", tokOwnerA, `{"hold_from":"off","verify_from":"off","prepay_from":"new"}`, http.StatusUnprocessableEntity},
 		{"missing rule", tokOwnerA, `{"hold_from":"high"}`, http.StatusUnprocessableEntity},
 		{"no body", tokOwnerA, ``, http.StatusBadRequest},
 	} {

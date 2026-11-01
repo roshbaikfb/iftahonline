@@ -73,9 +73,13 @@ func (s *Service) Rules(ctx context.Context) (RulesView, error) {
 	return v, err
 }
 
-// SaveRules replaces the store's rules. Turning one on needs the plan's
-// risk_rules (403 plan_limit); turning them off never does.
+// SaveRules replaces the store's rules; the prepaid delivery, which came
+// later (ADR-0067), is off when left empty. Turning one on needs the
+// plan's risk_rules (403 plan_limit); turning them off never does.
 func (s *Service) SaveRules(ctx context.Context, r domain.Rules) (RulesView, error) {
+	if r.PrepayFrom == "" {
+		r.PrepayFrom = domain.Off
+	}
 	if err := r.Validate(); err != nil {
 		return RulesView{}, err
 	}
@@ -89,7 +93,7 @@ func (s *Service) SaveRules(ctx context.Context, r domain.Rules) (RulesView, err
 			return err
 		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "risk.rules_updated", TargetType: "store_risk_rules",
-			Metadata: map[string]any{"hold_from": string(r.HoldFrom), "verify_from": string(r.VerifyFrom)}})
+			Metadata: map[string]any{"hold_from": string(r.HoldFrom), "verify_from": string(r.VerifyFrom), "prepay_from": string(r.PrepayFrom)}})
 	})
 	if err != nil {
 		return RulesView{}, err

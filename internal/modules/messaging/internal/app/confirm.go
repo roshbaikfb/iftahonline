@@ -76,8 +76,10 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 		return err
 	}
 	// A held order waits for the merchant's review, without a message
-	// (ADR-0066).
-	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending || o.RiskAction == orders.RiskHold {
+	// (ADR-0066); a prepaid delivery confirms the order itself when it is
+	// paid, and an unpaid one is cancelled within the hour (ADR-0067).
+	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending || o.RiskAction == orders.RiskHold ||
+		o.RiskAction == orders.RiskPrepay {
 		return nil
 	}
 	info, err := s.conf.Stores(ctx)

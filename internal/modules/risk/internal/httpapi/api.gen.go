@@ -173,13 +173,16 @@ type RiskHistory struct {
 // RiskRule The band from which a rule applies to a new storefront cash order, or off.
 type RiskRule string
 
-// RiskSettings hold_from: such an order waits for the merchant's review, without a confirmation message, until released. verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first. New customers are never held or verified (ADR-0066).
+// RiskSettings hold_from: such an order waits for the merchant's review, without a confirmation message, until released. prepay_from: its shopper pays the shipping and COD fee by card before the order goes on; a store that cannot take cards holds it instead (ADR-0067). verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first, then a prepaid delivery, then a call. New customers are never touched (ADR-0066).
 type RiskSettings struct {
 	// Available Whether the store's plan includes the rules (risk_rules).
 	Available bool `json:"available"`
 
 	// HoldFrom The band from which a rule applies to a new storefront cash order, or off.
 	HoldFrom RiskRule `json:"hold_from"`
+
+	// PrepayFrom The band from which a rule applies to a new storefront cash order, or off.
+	PrepayFrom RiskRule `json:"prepay_from"`
 
 	// VerifyFrom The band from which a rule applies to a new storefront cash order, or off.
 	VerifyFrom RiskRule `json:"verify_from"`
@@ -189,6 +192,9 @@ type RiskSettings struct {
 type RiskSettingsInput struct {
 	// HoldFrom The band from which a rule applies to a new storefront cash order, or off.
 	HoldFrom RiskRule `json:"hold_from"`
+
+	// PrepayFrom The band from which the shopper prepays the delivery by card (ADR-0067); omitted is off.
+	PrepayFrom *RiskRule `json:"prepay_from,omitempty"`
 
 	// VerifyFrom The band from which a rule applies to a new storefront cash order, or off.
 	VerifyFrom RiskRule `json:"verify_from"`

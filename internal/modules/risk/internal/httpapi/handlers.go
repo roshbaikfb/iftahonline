@@ -131,7 +131,11 @@ func (h *Handlers) UpdateRiskSettings(ctx context.Context, req UpdateRiskSetting
 	if req.Body == nil {
 		return nil, errBodyRequired
 	}
-	v, err := h.svc.SaveRules(ctx, domain.Rules{HoldFrom: domain.Band(req.Body.HoldFrom), VerifyFrom: domain.Band(req.Body.VerifyFrom)})
+	prepay := domain.Off
+	if req.Body.PrepayFrom != nil {
+		prepay = domain.Band(*req.Body.PrepayFrom)
+	}
+	v, err := h.svc.SaveRules(ctx, domain.Rules{HoldFrom: domain.Band(req.Body.HoldFrom), VerifyFrom: domain.Band(req.Body.VerifyFrom), PrepayFrom: prepay})
 	if err != nil {
 		return nil, err
 	}
@@ -139,5 +143,6 @@ func (h *Handlers) UpdateRiskSettings(ctx context.Context, req UpdateRiskSetting
 }
 
 func toSettings(v app.RulesView) RiskSettings {
-	return RiskSettings{HoldFrom: RiskRule(v.Rules.HoldFrom), VerifyFrom: RiskRule(v.Rules.VerifyFrom), Available: v.Available}
+	return RiskSettings{HoldFrom: RiskRule(v.Rules.HoldFrom), VerifyFrom: RiskRule(v.Rules.VerifyFrom), PrepayFrom: RiskRule(v.Rules.PrepayFrom),
+		Available: v.Available}
 }
