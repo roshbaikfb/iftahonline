@@ -187,44 +187,51 @@ type OrderRisk struct {
 	History domain.History
 }
 
-// ForOrder scores the customer of one of the store's orders, learning the
-// order first if it was not learnt yet. Another store's order is
+// ForOrder scores the customer of one of the store's orders. It writes
+// nothing (the order page's GET): an order its event has not taught yet
+// is scored by its phone from what is already known, without its own
+// outcome, until the event comes. Another store's order is
 // ErrOrderNotFound.
 func (s *Service) ForOrder(ctx context.Context, id ulid.ID) (OrderRisk, error) {
-	r, found, err := s.forOrder(ctx, id)
-	if err != nil || found {
+	var r OrderRisk
+	learnt := false
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		keys, err := store.Keys(ctx, tx, []ulid.ID{id})
+		key, ok := keys[id]
+		if err != nil || !ok {
+			return err
+		}
+		learnt = true
+		r, err = s.score(ctx, tx, key)
+		return err
+	})
+	if err != nil || learnt {
 		return r, err
 	}
-	if err = s.Learn(ctx, id); err != nil {
-		return OrderRisk{}, err
+	o, err := s.orders.Get(ctx, id)
+	if errors.Is(err, orders.ErrOrderNotFound) {
+		return OrderRisk{}, ErrOrderNotFound
 	}
-	if r, found, err = s.forOrder(ctx, id); err == nil && !found {
-		err = ErrOrderNotFound
+	if err != nil {
+		return OrderRisk{}, fmt.Errorf("risk: read order: %w", err)
 	}
+	key := s.keyer.Key(o.Contact.Phone)
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (err error) {
+		r, err = s.score(ctx, tx, key)
+		return err
+	})
 	return r, err
 }
 
-func (s *Service) forOrder(ctx context.Context, id ulid.ID) (r OrderRisk, found bool, err error) {
-	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		keys, kErr := store.Keys(ctx, tx, []ulid.ID{id})
-		if kErr != nil {
-			return kErr
-		}
-		key, ok := keys[id]
-		if !ok {
-			return nil
-		}
-		found = true
-		signals, sErr := store.Signals(ctx, tx, [][]byte{key})
-		if sErr != nil {
-			return sErr
-		}
-		r.Band = domain.Assess(signals[string(key)], s.now()).Band
-		var hErr error
-		r.History, hErr = store.History(ctx, tx, key)
-		return hErr
-	})
-	return r, found, err
+// score is a phone's band and the store's own history of it.
+func (s *Service) score(ctx context.Context, tx pgx.Tx, key []byte) (OrderRisk, error) {
+	signals, err := store.Signals(ctx, tx, [][]byte{key})
+	if err != nil {
+		return OrderRisk{}, err
+	}
+	r := OrderRisk{Band: domain.Assess(signals[string(key)], s.now()).Band}
+	r.History, err = store.History(ctx, tx, key)
+	return r, err
 }
 
 // Purge deletes the outcomes past the score's horizon, of every store, in

@@ -65,7 +65,7 @@ exactly.
 
 | Operation | Permission | Notes |
 |---|---|---|
-| `getOrderRisk` | orders.read | The band, and the phone's history in this store; learns the order first if needed |
+| `getOrderRisk` | orders.read | The band, and the phone's history in this store; writes nothing: an order its event has not taught yet is scored by its phone from what is known |
 | `listRiskBands` (≤ 100 order IDs) | orders.read | Bands of a page of orders, three queries whatever the count; unknown and other stores' orders are left out |
 | `getRiskSettings` | orders.read | The rules, and `available` (the plan's `risk_rules`) |
 | `updateRiskSettings` | orders.manage | Turning a rule on needs `risk_rules` (403 `plan_limit`); audited |
