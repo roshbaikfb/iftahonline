@@ -62,7 +62,7 @@ whose event does not list the products using it).
 | `/policies/{slug}` | A published policy |
 | `/search?q=&page=` | Shoppers' search (only with `MEILI_SEARCH_KEY`): cards, the count, the next page; nothing found lists the categories; `noindex` |
 | `/track` (GET, POST) | Order tracking. The form asks the order number and the phone; POST shows where the order stands (five steps, or cancelled, not delivered, returned) and its parcel. It is private and never cached, and never shows back the phone, the name or the address. It is limited to 10 tries per IP and 300 per store every 10 minutes; a limiter outage refuses. It is linked from the desktop header, the footer and the thank-you page. |
-| `/o/{token}` (GET, POST) | The SMS link of an order confirmation (ADR-0040). GET shows the order (code, total, first name) and two buttons; a same-origin POST `answer=confirm\|cancel` settles it through `messaging.ConfirmLinks` (actor `customer:sms`); afterwards the page says how it settled. Private, never cached, `noindex`; an unknown token, or another store's, is 404. Limited to 20 per IP and 600 per store every 10 minutes; a limiter outage refuses. |
+| `/o/{token}` (GET, POST) | The SMS link of an order confirmation (ADR-0040). GET shows the order (code, total, first name) and two buttons; a same-origin POST `answer=confirm\|cancel` settles it through `messaging.ConfirmLinks` (actor `customer:sms`); afterwards the page says how it settled (a yes the store verifies by phone says the store will call, ADR-0070). A prepaid delivery's link shows what is due and a pay button instead of the yes (ADR-0070). Private, never cached, `noindex`; an unknown token, or another store's, is 404. Limited to 20 per IP and 600 per store every 10 minutes; a limiter outage refuses. |
 | `/thank-you/{ref}` | Also offers "confirm on WhatsApp" (ADR-0041) for a cash-on-delivery order waiting for its answer, when the platform has `WHATSAPP_DISPLAY_NUMBER`: a `wa.me` link with the ready text carrying the order's code |
 | `/cart` (GET, POST) | The shopper's cart; POST adds a line |
 | `/cart/update` (POST) | Changes a line's quantity (0 removes it) |
@@ -215,6 +215,10 @@ Card payment (ADR-0030):
   would also bind the redirect chain.
 - **What the thank-you page shows.** Paid; not paid yet (it looks again
   every 10 s, with "pay now"); or cancelled after the hour.
+- **A prepaid delivery** (ADR-0070) is not a card order here: its
+  thank-you page is any cash order's. Its customer pays from the SMS
+  link's page (`/o/{token}`), which shows what is due now and on
+  delivery and links to `/v1/pay/…&t=<token>` (`Payments.DepositURL`).
 - **The quote.** It leaves out the COD fee for card payment.
 
 Languages and responses:

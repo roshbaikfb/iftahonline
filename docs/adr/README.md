@@ -75,3 +75,4 @@ supersedes it.
 | [0067](0067-prepaid-delivery-for-risky-customers.md) | Prepaid delivery for risky customers | Accepted |
 | [0068](0068-product-costs-and-carrier-charges.md) | Product costs and carrier charges, for profit | Accepted |
 | [0069](0069-profit-dashboard-facts-and-rollups.md) | The profit dashboard: its own facts, daily rollups, the read pool | Accepted |
+| [0070](0070-risk-actions-invisible-to-whoever-orders.md) | What the risk rules do never shows to whoever places the order | Accepted |

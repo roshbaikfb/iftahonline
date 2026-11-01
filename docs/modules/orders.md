@@ -128,7 +128,9 @@ Every placed order counts one `orders_per_month` through
     `deposit_status = awaiting`. Otherwise the order is held.
   - **Paying.** `OnlineDue()` is what the shopper pays online: a card
     order's total, or the deposit. `SetPaymentStatusTx` moves the
-    deposit for such orders.
+    deposit for such orders. The deposit is paid from the link sent to
+    the customer's phone (ADR-0070); the customer's own yes does not
+    confirm the order while it is unpaid (`ErrDepositDue`).
   - **Collecting.** `OnDelivery()` is what the courier collects: the
     total, less a paid deposit.
 - **Risk rules** (ADR-0066, migration 00074).

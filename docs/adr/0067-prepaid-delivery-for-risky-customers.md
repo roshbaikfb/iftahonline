@@ -1,6 +1,6 @@
 # ADR-0067: Prepaid delivery for risky customers
 
-- Status: Accepted
+- Status: Accepted; amended by ADR-0070 (the link to pay goes to the phone)
 - Date: 2026-11-01
 
 ## Context

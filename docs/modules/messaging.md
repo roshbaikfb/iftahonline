@@ -76,6 +76,24 @@ Body, English:
 
 > Hi {{1}}, thank you for your order from {{2}}. Order {{3}}, total {{4}}. Do you confirm it?
 
+- **Template:** `order_delivery_prepay_v1` (ADR-0070): the link that pays
+  a prepaid delivery, sent to the customer's phone.
+- **Category:** Utility. **Languages:** Arabic and English. **No buttons.**
+- **Body variables:** `{{1}}` the customer's name, `{{2}}` the store's
+  name, `{{3}}` the order reference, `{{4}}` the amount to pay now, `{{5}}`
+  the link (the store's `/o/<token>` page, sent whole).
+
+Body, Arabic:
+
+> أهلاً {{1}}، لإتمام طلبك رقم {{3}} من {{2}} ادفع مصاريف التوصيل ({{4}}) مقدمًا خلال 6 ساعات من هذا الرابط: {{5}} وتدفع الباقي عند الاستلام.
+
+Body, English:
+
+> Hi {{1}}, to complete your order {{3}} from {{2}}, pay the delivery ({{4}}) upfront within 6 hours from this link: {{5}}. You pay the rest on delivery.
+
+Its SMS text is the platform's (stores cannot edit it), with `{{due}}`
+for the amount.
+
 ### Merchant notices (ADR-0054)
 
 The platform also tells a store's **owners** about billing on WhatsApp,
@@ -162,17 +180,29 @@ approved templates, so only the SMS text is the store's.
    text (`order_answer_ack`): no quota, WhatsApp only, once.
 7. **Notices** are made once each and kept 90 days. The quota warnings
    are also emailed to the owner and managers.
-8. **Risk rules** (ADR-0066).
-   - **Held order.** It gets no confirmation, so it has no deadline
-     either.
-   - **Prepaid order** (ADR-0067). It gets no confirmation either: paying
-     the delivery confirms it.
+8. **Risk rules** (ADR-0066, ADR-0070). Nothing they do may show to
+   whoever placed the order, so the thank-you page is the same for every
+   cash order:
+   - **The thank-you page's link** is offered only where `confirm_cod` is
+     on, for every order alike.
+   - **Held order.** Where `confirm_cod` is on, it gets a confirmation
+     with no message and no deadline (so the page offers the same link).
+     Elsewhere it gets none.
+   - **Prepaid order.** It always gets a confirmation and its link to pay
+     (`order_delivery_prepay`), to the phone; no deadline here (payments
+     cancels it unpaid after six hours). The SMS link's page shows what is
+     due, pays it through `/v1/pay` with the link's token
+     (`ValidPayLink`, `messaging.NewPayLinks` in the api role), and may
+     cancel. A yes does not confirm it (`ErrDepositDue`): the confirmation
+     stays open and the thanks says paying confirms it.
    - **Verified order.** It is confirmed by message even where
      `confirm_cod` is off.
-   - **A "yes" to a verified order.** Orders refuses the customer's move
-     (`ErrNeedsCall`). The confirmation is still `confirmed`, but the
-     order stays pending, and the `order_confirmed` notice carries
-     `needs_call: true`.
+   - **A "yes" to a verified or held order.** Orders refuses the
+     customer's move (`ErrNeedsCall`, `ErrOrderHeld`). The confirmation is
+     still `confirmed`, but the order stays pending, and the
+     `order_confirmed` notice carries `needs_call: true`. The thanks and
+     the SMS link's page say the store will call (`awaiting_call`), never
+     that the order is confirmed.
 
 ## Dashboard (6g)
 

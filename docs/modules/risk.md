@@ -99,3 +99,8 @@ There is no lookup by phone number.
 - **Prepaid delivery** (ADR-0067). One whose band reaches `prepay_from`
   (after the hold, before the call) pays the shipping and COD fee by
   card first. Without cards it is held instead.
+- **Invisible to whoever orders** (ADR-0070). Anyone may type any phone
+  at checkout, so no rule may change what the storefront shows: the
+  thank-you page is the same for every cash order, the link to pay a
+  prepaid delivery goes to the phone only, and `/v1/pay` pays a deposit
+  only with that link's token.
