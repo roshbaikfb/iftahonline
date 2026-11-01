@@ -162,6 +162,9 @@ func FuzzCSV(f *testing.F) {
 	f.Add([]byte("title;price\nA;1,5\n"))
 	f.Add([]byte("\"title\",\"price\"\n\"a\"\"b\",\"1\"\n"))
 	f.Add([]byte("title,price,option1_name,option1_value\nA,1,,x\nA,1,Size,\n"))
+	// The cost column (ADR-0068), in English and Arabic, good and bad.
+	f.Add([]byte("title,price,cost\nA,10,4.5\nB,10,\nC,10,-1\nD,10,abc\n"))
+	f.Add([]byte("title,price,سعر التكلفة\nساعة,300,١٢٠\n"))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		src, err := NewCSV(data, money.EGP)
 		if err != nil {

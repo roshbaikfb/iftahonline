@@ -305,3 +305,43 @@ func TestSignalsNeedAStore(t *testing.T) {
 		t.Fatalf("without a store: %d signals, want none", n)
 	}
 }
+
+// downOrders is an orders module that cannot be read.
+type downOrders struct{ err error }
+
+func (d downOrders) Get(context.Context, ulid.ID) (orders.Order, error) { return orders.Order{}, d.err }
+func (d downOrders) Before(context.Context, ulid.ID, int) ([]orders.Order, error) {
+	return nil, d.err
+}
+func (d downOrders) BeforeWithLines(context.Context, ulid.ID, int) ([]orders.Order, error) {
+	return nil, d.err
+}
+
+// TestOrdersDown (P8 review): when orders cannot be read, learning and
+// the backfill fail (River retries them) and an unlearnt order's risk is
+// an error, never a made-up band; a learnt one is still scored.
+func TestOrdersDown(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	a := f.store(t)
+	learnt := f.order(a, f.uniquePhone(t), 1, orders.StatusDelivered, orders.ReasonNone)
+	f.learn(a, t, learnt)
+	down := errors.New("orders down")
+	keyer, err := domain.NewKeyer([]byte(strings.Repeat("k", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := app.NewService(app.Deps{DB: f.pool, Orders: downOrders{down}, Keyer: keyer, Jobs: f.jobs, Plan: f.plan})
+	if err = svc.Learn(a, f.ids.New()); !errors.Is(err, down) {
+		t.Fatalf("learn: %v", err)
+	}
+	if _, err = svc.Backfill(a); !errors.Is(err, down) {
+		t.Fatalf("backfill: %v", err)
+	}
+	if _, err = svc.ForOrder(a, f.ids.New()); !errors.Is(err, down) {
+		t.Fatalf("an unlearnt order: %v", err)
+	}
+	if r, rErr := svc.ForOrder(a, learnt.ID); rErr != nil || r.History.Orders != 1 {
+		t.Fatalf("a learnt order: %+v, %v", r, rErr)
+	}
+}
