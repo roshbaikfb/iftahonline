@@ -274,3 +274,33 @@ func hasField(err error, field, code string) bool {
 	}
 	return false
 }
+
+// TestLineCost (ADR-0068): each line keeps what its variant cost the
+// merchant when the order was placed; a variant without a cost leaves
+// none, and a later change of cost does not reach the order.
+func TestLineCost(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	withCost := f.env.ProductWithCost(t, f.storeA, "ساعة", 30000, 12000, 5)
+	without := f.product(t, f.storeA, "مج", 5000, 5)
+	p, err := f.svc.PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: withCost, Qty: 2}, domain.LineInput{VariantID: without, Qty: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.svc.Get(f.ctxA, p.Order.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range got.Lines {
+		switch l.VariantID {
+		case withCost:
+			if l.UnitCost == nil || l.UnitCost.Amount() != 12000 {
+				t.Errorf("cost of the watch = %v", l.UnitCost)
+			}
+		case without:
+			if l.UnitCost != nil {
+				t.Errorf("cost of the mug = %v, want none", l.UnitCost)
+			}
+		}
+	}
+}

@@ -19,10 +19,10 @@ VALUES (@store_id, @order_created_at, @order_id, @fbp, @fbc, @ttp, @ttclid, @scc
 
 -- name: InsertOrderItems :exec
 INSERT INTO order_items (store_id, order_created_at, order_id, line, variant_id, product_id, title, variant_title, sku,
-                         qty, unit_price_minor, total_minor)
+                         qty, unit_price_minor, total_minor, unit_cost_minor)
 SELECT @store_id, @order_created_at, @order_id, n, (@variant_ids::uuid[])[n], (@product_ids::uuid[])[n],
        (@titles::text[])[n], (@variant_titles::text[])[n], (@skus::text[])[n], (@qtys::int[])[n],
-       (@unit_prices::bigint[])[n], (@totals::bigint[])[n]
+       (@unit_prices::bigint[])[n], (@totals::bigint[])[n], nullif((@unit_costs::bigint[])[n], -1)
 FROM generate_subscripts(@variant_ids::uuid[], 1) AS n;
 
 -- name: InsertOrderEvent :exec
