@@ -107,6 +107,18 @@ export function OrderDetail() {
     setBusy(false);
   }
 
+  async function release() {
+    setBusy(true);
+    setError('');
+    const { error: err } = await api.POST('/v1/stores/{store_id}/orders/{order_id}/release', {
+      params: { path: { store_id: storeId, order_id: orderId } },
+    });
+    const r = await fetchOrder(storeId, orderId);
+    if (r.detail) setDetail(r.detail);
+    setError(err ? problemMessage(err) : (r.error ?? ''));
+    setBusy(false);
+  }
+
   function reload() {
     void fetchOrder(storeId, orderId).then((r) => {
       if (r.detail) setDetail(r.detail);
@@ -170,6 +182,19 @@ export function OrderDetail() {
                 تراجع
               </button>
             </div>
+          )}
+          {o.status === 'pending' && o.risk_action === 'hold' && (
+            <div className="notice risk-hold" role="note">
+              <p>حجزنا هذا الطلب للمراجعة بحسب قواعد حماية الدفع عند الاستلام: لم نرسل للعميل رسالة تأكيد. راجعه واتصل بالعميل، ثم فك الحجز لتأكيده، أو ألغِه.</p>
+              <button type="button" disabled={busy} onClick={() => void release()}>
+                فك الحجز
+              </button>
+            </div>
+          )}
+          {o.status === 'pending' && o.risk_action === 'verify' && (
+            <p className="notice" role="note">
+              تحقّق هاتفيًا: قواعدك تطلب الاتصال بهذا العميل قبل التأكيد، حتى لو وافق على رسالة التأكيد.
+            </p>
           )}
           {o.status === 'pending' && confirm.confirmation?.status === 'pending' && (
             <p className="notice" role="note">

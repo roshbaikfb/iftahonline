@@ -2511,6 +2511,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/risk/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's risk rules
+         * @description Permission: orders.read. `available` says whether the store's plan includes the rules.
+         */
+        get: operations["getRiskSettings"];
+        /**
+         * Replace the store's risk rules
+         * @description Permission: orders.manage. Turning a rule on needs the plan's
+         *     risk_rules (403 plan_limit); turning them off never does
+         *     (ADR-0066).
+         */
+        put: operations["updateRiskSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/risk/bands": {
         parameters: {
             query?: never;
@@ -4919,6 +4947,22 @@ export interface components {
         OrderRisk: {
             band: components["schemas"]["RiskBand"];
             history: components["schemas"]["RiskHistory"];
+        };
+        /**
+         * @description The band from which a rule applies to a new storefront cash order, or off.
+         * @enum {string}
+         */
+        RiskRule: "off" | "medium" | "high";
+        RiskSettingsInput: {
+            hold_from: components["schemas"]["RiskRule"];
+            verify_from: components["schemas"]["RiskRule"];
+        };
+        /** @description hold_from: such an order waits for the merchant's review, without a confirmation message, until released. verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first. New customers are never held or verified (ADR-0066). */
+        RiskSettings: {
+            hold_from: components["schemas"]["RiskRule"];
+            verify_from: components["schemas"]["RiskRule"];
+            /** @description Whether the store's plan includes the rules (risk_rules). */
+            available: boolean;
         };
         RiskBandsInput: {
             order_ids: components["schemas"]["ULID"][];
@@ -9547,6 +9591,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderRisk"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getRiskSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateRiskSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiskSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The rules saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskSettings"];
                 };
             };
             default: components["responses"]["Problem"];

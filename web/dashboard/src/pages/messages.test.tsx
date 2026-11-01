@@ -394,3 +394,75 @@ describe('helpers', () => {
     expect(ago('2026-10-29T00:00:00Z', now)).toBe('منذ 12 ساعة');
   });
 });
+
+describe('cash-on-delivery protection rules (ADR-0066)', () => {
+  it('saves the rules the plan includes', async () => {
+    const calls = routes({
+      [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', available: true } }),
+      [`PUT ${base}/risk/settings`]: (c) => ({ status: 200, body: { ...(c.body as object), available: true } }),
+    });
+    renderAt(`/stores/${store}/messages`);
+    const user = userEvent.setup();
+    const card = await screen.findByRole('region', { name: 'حماية الدفع عند الاستلام' });
+    await user.selectOptions(within(card).getByLabelText('احجز الطلب للمراجعة'), 'high');
+    expect(await within(card).findByRole('status')).toHaveTextContent('حُفظت القواعد.');
+    expect(calls.find((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings'))?.body).toEqual({ hold_from: 'high', verify_from: 'off' });
+    await user.selectOptions(within(card).getByLabelText('اطلب تأكيدًا هاتفيًا'), 'medium');
+    await waitFor(() => {
+      expect(calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings')).at(-1)?.body).toEqual({ hold_from: 'high', verify_from: 'medium' });
+    });
+  });
+
+  it('shows them locked, with the plans, when the plan lacks them', async () => {
+    routes({ [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', available: false } }) });
+    renderAt(`/stores/${store}/messages`);
+    const card = await screen.findByRole('region', { name: 'حماية الدفع عند الاستلام' });
+    expect(within(card).getByLabelText('احجز الطلب للمراجعة')).toBeDisabled();
+    expect(within(card).getByRole('link', { name: 'اعرض الباقات' })).toHaveAttribute('href', `/stores/${store}/billing/plans`);
+  });
+});
+
+describe('held and verified orders (ADR-0066)', () => {
+  const held = {
+    id: orderID, code: orderID.slice(-8), status: 'pending', version: 1, source: 'storefront', customer_id: '01M5CUST000000000000000000',
+    name: 'منى', phone: '+201012345678', governorate: 'EG-C', city: 'القاهرة', address: '1', notes: '', currency: 'EGP',
+    subtotal_minor: 1000, shipping_minor: 0, cod_fee_minor: 0, total_minor: 1000, item_count: 1, payment_method: 'cod', payment_status: 'unpaid',
+    created_at: '2026-11-01T10:00:00Z', updated_at: '2026-11-01T10:00:00Z', status_changed_at: '2026-11-01T10:00:00Z',
+    risk_action: 'hold', risk_band: 'high',
+  };
+
+  it('releases a held order', async () => {
+    let current: Record<string, unknown> = held;
+    const calls = routes({
+      [`GET ${base}/orders/${orderID}`]: () => ({ status: 200, body: { order: current, lines: [], events: [] } }),
+      [`POST ${base}/orders/${orderID}/release`]: () => {
+        current = { ...held, risk_action: 'released', version: 2 };
+        return { status: 200, body: current };
+      },
+    });
+    renderAt(`/stores/${store}/orders/${orderID}`);
+    const user = userEvent.setup();
+    const note = await screen.findByText(/حجزنا هذا الطلب للمراجعة/);
+    await user.click(within(note.closest('div') as HTMLElement).getByRole('button', { name: 'فك الحجز' }));
+    await waitFor(() => {
+      expect(screen.queryByText(/حجزنا هذا الطلب للمراجعة/)).toBeNull();
+    });
+    expect(calls.some((c) => c.method === 'POST' && c.path.endsWith('/release'))).toBe(true);
+  });
+
+  it('asks for a call on a verified order', async () => {
+    routes({ [`GET ${base}/orders/${orderID}`]: () => ({ status: 200, body: { order: { ...held, risk_action: 'verify' }, lines: [], events: [] } }) });
+    renderAt(`/stores/${store}/orders/${orderID}`);
+    expect(await screen.findByText(/تحقّق هاتفيًا/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'فك الحجز' })).toBeNull();
+  });
+});
+
+describe('noticeText', () => {
+  it('asks for a call when the customer said yes to a verified order', async () => {
+    const { noticeText } = await import('../lib/messages');
+    const n = { id: 'N', kind: 'order_confirmed' as const, read: false, created_at: '' };
+    expect(noticeText(n).after).toBe('.');
+    expect(noticeText({ ...n, needs_call: true })).toEqual({ before: 'وافق العميل على الطلب', after: ': اتصل به للتحقق قبل التأكيد.' });
+  });
+});
