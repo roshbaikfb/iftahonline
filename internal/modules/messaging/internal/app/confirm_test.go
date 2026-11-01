@@ -46,6 +46,14 @@ func (f *fakeOrders) add(t *testing.T, ids *ulid.Generator, method orders.Paymen
 	return o.ID
 }
 
+func (f *fakeOrders) setRisk(id ulid.ID, a orders.RiskAction) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	o := f.orders[id]
+	o.RiskAction = a
+	f.orders[id] = o
+}
+
 func (f *fakeOrders) set(id ulid.ID, st orders.Status) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -79,6 +87,9 @@ func (f *fakeOrders) TransitionSystemReasonTx(_ context.Context, _ pgx.Tx, id ul
 	o := f.orders[id]
 	if o.Status != orders.StatusPending {
 		return false, fmt.Errorf("%w: %s to %s", orders.ErrInvalidTransition, o.Status, to)
+	}
+	if to == orders.StatusConfirmed && o.RiskAction == orders.RiskVerify && strings.HasPrefix(actor, "customer:") {
+		return false, orders.ErrNeedsCall // as orders refuses it (ADR-0066)
 	}
 	o.Status, o.OutcomeReason = to, reason
 	f.orders[id] = o
@@ -642,5 +653,48 @@ func TestButtonAnswerThanks(t *testing.T) {
 	}
 	if len(c.sms.Sent()) != 0 {
 		t.Fatal("a thank-you went by SMS")
+	}
+}
+
+// TestConfirmRiskRules (ADR-0066): a held order gets no message; a
+// verified one is asked even where the store does not confirm, and the
+// customer's yes leaves it pending with a call to make.
+func TestConfirmRiskRules(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	held := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(held, orders.RiskHold)
+	if err := c.svc.ConfirmOrder(ctx, held); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.svc.Confirmation(ctx, held); !errors.Is(err, app.ErrConfirmationNotFound) {
+		t.Fatalf("a held order's confirmation: %v", err)
+	}
+
+	if _, err := c.svc.SaveSettings(ctx, domain.Settings{ConfirmCOD: false, AutoCancelHours: 3}); err != nil {
+		t.Fatal(err)
+	}
+	ver := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(ver, orders.RiskVerify)
+	if err := c.svc.ConfirmOrder(ctx, ver); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.confirmation(ctx, t, ver); got.Status != domain.Pending {
+		t.Fatalf("a verified order is asked even with confirmation off: %+v", got)
+	}
+	err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
+		_, _, aErr := c.svc.AnswerTx(ctx, tx, ver, domain.Confirm, domain.ActorWhatsApp, time.Now())
+		return aErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.confirmation(ctx, t, ver); got.Status != domain.Confirmed || c.orders.status(ver) != orders.StatusPending {
+		t.Fatalf("after the customer's yes: %s, order %s", got.Status, c.orders.status(ver))
+	}
+	p, err := c.svc.Notifications(ctx, nil, false, 50)
+	if err != nil || len(p.Items) != 1 || p.Items[0].Kind != domain.OrderConfirmedNotice || !p.Items[0].Data.NeedsCall {
+		t.Fatalf("notices = %+v, %v", p.Items, err)
 	}
 }

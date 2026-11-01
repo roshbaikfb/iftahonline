@@ -75,7 +75,9 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 	if err != nil {
 		return err
 	}
-	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending {
+	// A held order waits for the merchant's review, without a message
+	// (ADR-0066).
+	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending || o.RiskAction == orders.RiskHold {
 		return nil
 	}
 	info, err := s.conf.Stores(ctx)
@@ -88,8 +90,13 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 	}
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		set, err := store.Settings(ctx, tx)
-		if err != nil || !set.ConfirmCOD {
+		if err != nil {
 			return err
+		}
+		// The risk rules' extra confirmation asks even a store that does
+		// not confirm by message.
+		if !set.ConfirmCOD && o.RiskAction != orders.RiskVerify {
+			return nil
 		}
 		token, hash, err := domain.NewToken()
 		if err != nil {
@@ -285,7 +292,13 @@ func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answ
 		to, settled, notice, verb = orders.StatusCancelled, domain.Cancelled, domain.OrderCancelledNotice, "cancelled"
 	}
 	_, err = s.conf.Orders.TransitionSystemTx(ctx, tx, orderID, to, actor, "the customer "+verb+" by "+strings.TrimPrefix(actor, "customer:"))
-	if errors.Is(err, orders.ErrInvalidTransition) {
+	needsCall := false
+	switch {
+	case errors.Is(err, orders.ErrNeedsCall):
+		// The risk rules want this yes verified by phone (ADR-0066): the
+		// answer is kept, the order stays pending for the merchant.
+		needsCall, err = true, nil
+	case errors.Is(err, orders.ErrInvalidTransition):
 		settled, err = domain.Stale, nil
 	}
 	if err != nil {
@@ -298,7 +311,9 @@ func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answ
 	if settled == domain.Stale {
 		return settled, true, nil
 	}
-	return settled, true, s.notifyTx(ctx, tx, domain.OrderNotice(notice, orderID, orders.CodeOf(orderID)))
+	n := domain.OrderNotice(notice, orderID, orders.CodeOf(orderID))
+	n.Data.NeedsCall = needsCall
+	return settled, true, s.notifyTx(ctx, tx, n)
 }
 
 // ErrConfirmationNotFound means the order asked for no confirmation.

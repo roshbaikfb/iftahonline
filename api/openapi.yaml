@@ -6569,6 +6569,11 @@ components:
         limit: { type: integer, format: int64 }
         period: { type: string, example: "2026-10" }
         feature: { type: string, example: orders_per_month, description: "For quota_*: the plan's limited feature; absent for messages." }
+        needs_call:
+          type: boolean
+          description: >-
+            For order_confirmed: the customer said yes, but the store's risk rules want it verified by phone, so the
+            order is still pending (ADR-0066). Absent otherwise.
         read: { type: boolean }
         created_at: { type: string, format: date-time }
     Billing:
