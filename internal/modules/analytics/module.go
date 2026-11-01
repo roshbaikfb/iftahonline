@@ -15,7 +15,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
-	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -64,15 +63,8 @@ func (m *Module) RegisterWorkers(w *river.Workers) error { return m.svc.AddWorke
 // PeriodicJobs are the module's schedule.
 func (*Module) PeriodicJobs() []*river.PeriodicJob { return app.Periodic() }
 
-// orderEvent is what analytics reads of the orders module's events:
-// which order.
-type orderEvent struct {
-	event.Meta
-	OrderID ulid.ID `json:"order_id"`
-}
-
 // LearnHandler keeps an order's facts whenever it is placed, moves or
 // is paid. Subscribe it as LearnSubscriber (worker role).
 func (m *Module) LearnHandler() eventbus.Handler {
-	return eventbus.Typed(func(ctx context.Context, ev orderEvent) error { return m.svc.Learn(ctx, ev.OrderID) })
+	return eventbus.Typed(func(ctx context.Context, ev orders.OrderRef) error { return m.svc.Learn(ctx, ev.OrderID) })
 }

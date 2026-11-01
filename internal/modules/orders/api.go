@@ -26,6 +26,9 @@ type (
 	// ErrInvalidTransition.
 	TransitionError = domain.TransitionError
 
+	// OrderRef is which order any orders event is about: decode any of
+	// them into it to know only that.
+	OrderRef = domain.OrderRef
 	// OrderPlaced is the orders.order.placed event.
 	OrderPlaced = domain.OrderPlaced
 	// OrderStatusChanged is the orders.order.status_changed event.
