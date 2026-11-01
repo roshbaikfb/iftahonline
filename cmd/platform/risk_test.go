@@ -33,3 +33,14 @@ func TestRiskRulesAdapter(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// TestStoreLocation: the embedded zone database serves every store's
+// zone; one that cannot be loaded counts in UTC.
+func TestStoreLocation(t *testing.T) {
+	t.Parallel()
+	for tz, want := range map[string]string{"Africa/Cairo": "Africa/Cairo", "Asia/Dubai": "Asia/Dubai", "Mars/Base": "UTC", "": "UTC"} {
+		if got := storeLocation(tz).String(); got != want {
+			t.Errorf("%q = %s, want %s", tz, got, want)
+		}
+	}
+}
