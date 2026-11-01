@@ -767,6 +767,8 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, id ulid.ID, m mov
 			return domain.Order{}, false, domain.ErrOrderHeld
 		case o.RiskAction == domain.RiskVerify && strings.HasPrefix(actor, "customer:"):
 			return domain.Order{}, false, domain.ErrNeedsCall
+		case o.DepositStatus == domain.PaymentAwaiting && strings.HasPrefix(actor, "customer:"):
+			return domain.Order{}, false, domain.ErrDepositDue
 		}
 	}
 	if actor == "" {

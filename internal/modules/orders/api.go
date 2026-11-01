@@ -229,10 +229,13 @@ var (
 	ErrVersionConflict      = app.ErrVersionConflict
 	// ErrOrderHeld: the risk rules hold the order; it cannot be confirmed
 	// until released. ErrNeedsCall: the customer's own confirmation of an
-	// order the rules want verified by phone.
-	ErrOrderHeld = domain.ErrOrderHeld
-	ErrNeedsCall = domain.ErrNeedsCall
-	ErrNotHeld   = domain.ErrNotHeld
+	// order the rules want verified by phone. ErrDepositDue: the
+	// customer's own confirmation of an order whose prepaid delivery is
+	// unpaid (paying confirms it).
+	ErrOrderHeld  = domain.ErrOrderHeld
+	ErrNeedsCall  = domain.ErrNeedsCall
+	ErrDepositDue = domain.ErrDepositDue
+	ErrNotHeld    = domain.ErrNotHeld
 )
 
 // Conversions is what the server-side conversions read (ADR-0043): an
