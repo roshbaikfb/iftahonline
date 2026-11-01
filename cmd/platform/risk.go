@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/analytics"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -52,10 +50,6 @@ func analyticsStores(ten *tenancy.Module) analytics.StoreSource {
 		if err != nil {
 			return analytics.StoreInfo{}, err
 		}
-		loc, err := time.LoadLocation(st.Timezone)
-		if err != nil {
-			return analytics.StoreInfo{}, fmt.Errorf("analytics: store time zone %q: %w", st.Timezone, err)
-		}
-		return analytics.StoreInfo{Currency: string(st.Currency), Location: loc}, nil
+		return analytics.StoreInfo{Currency: string(st.Currency), Location: storeLocation(st.Timezone)}, nil
 	}
 }

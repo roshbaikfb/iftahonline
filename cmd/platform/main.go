@@ -32,6 +32,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // stores' time zones, whatever the image ships (storeLocation)
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 
@@ -448,11 +449,7 @@ func newShipping(c clients, ten *tenancy.Module, ords shipping.Orders, inbox web
 			if !ok {
 				return shipping.StoreInfo{}, fmt.Errorf("shipping: no country for currency %q", st.Currency)
 			}
-			loc, err := time.LoadLocation(st.Timezone)
-			if err != nil {
-				loc = time.UTC
-			}
-			return shipping.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
+			return shipping.StoreInfo{Currency: st.Currency, Country: country, Location: storeLocation(st.Timezone)}, nil
 		},
 	}
 	if c.cfg.Secrets.Keyring != nil { // the api and worker roles: they connect carriers, ship and store labels
@@ -568,12 +565,19 @@ func orderStores(ten *tenancy.Module) orders.StoreSource {
 		if !ok {
 			return orders.StoreInfo{}, fmt.Errorf("orders: no country for currency %q", st.Currency)
 		}
-		loc, err := time.LoadLocation(st.Timezone)
-		if err != nil {
-			loc = time.UTC
-		}
-		return orders.StoreInfo{Currency: st.Currency, Country: country, Location: loc}, nil
+		return orders.StoreInfo{Currency: st.Currency, Country: country, Location: storeLocation(st.Timezone)}, nil
 	}
+}
+
+// storeLocation is a store's time zone, for every module that counts
+// days (orders, shipping, analytics). Tenancy validates it on save and
+// the binary embeds the zone database, so UTC is only a last resort.
+func storeLocation(tz string) *time.Location {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }
 
 // shopOrderDeps are what orders need outside the merchant API: stock and
