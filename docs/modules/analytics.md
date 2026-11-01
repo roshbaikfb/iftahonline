@@ -48,6 +48,24 @@ Deps:
 | `getProfitSettings` / `updateProfitSettings` | finance.read / finance.manage |
 | `listAdSpend` / `createAdSpend` / `deleteAdSpend` | finance.read / finance.manage |
 
+## Dashboard (8f, the approved mockup)
+
+- **«الربح الصافي»** (`/profit`, sidebar group «التقارير»):
+  - the totals and margin;
+  - «من أين جاء الربح» (income, each cost, what is left);
+  - each day's profit (losses in orange);
+  - a breakdown by product, campaign or governorate. Governorates
+    returning over 20% are flagged.
+  - A banner counts delivered orders with unknown costs.
+  - Ranges: 7, 30 or 90 days, or two dates.
+  - A plan without `profit` shows the dashboard locked, with the plans.
+- **«التقديرات والإنفاق الإعلاني»** (`/profit/settings`):
+  - the delivery, return and COD fee estimates;
+  - ad spend by day, platform and campaign, this month's list with
+    deletes.
+- **Product costs** are typed in the products editor's «التكلفة» column
+  (ADR-0068).
+
 ## Rules worth knowing
 
 - **Delivered.** Items, plus what the customer paid for delivery, less

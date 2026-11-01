@@ -26,6 +26,7 @@ export function navGroups(storeId: string): NavGroup[] {
         { label: 'العملاء' },
       ],
     },
+    { title: 'التقارير', items: [{ label: 'الربح الصافي', to: at('profit') }] },
     { title: 'التسويق', items: [{ label: 'الكوبونات', to: at('coupons') }, { label: 'بكسلات الإعلانات', to: at('pixels') }, { label: 'كتالوج المنتجات', to: at('feeds') }] },
     {
       title: 'المنتجات',
