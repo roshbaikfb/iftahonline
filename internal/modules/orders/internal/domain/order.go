@@ -362,12 +362,14 @@ func (o Order) OnlineDue() (money.Money, bool) {
 }
 
 // OnDelivery is what the courier collects: a cash order's total, less a
-// deposit that was paid; nothing for a card order.
+// deposit that was paid (a partial refund of it is the merchant's
+// gesture, not a reason to collect the delivery again; a full refund
+// is); nothing for a card order.
 func (o Order) OnDelivery() (money.Money, error) {
 	switch {
 	case o.PaymentMethod == PaymentCard:
 		return money.Zero(o.Total.Currency())
-	case o.DepositStatus == PaymentPaid && !o.Deposit.IsZero():
+	case (o.DepositStatus == PaymentPaid || o.DepositStatus == PaymentPartiallyRefunded) && !o.Deposit.IsZero():
 		return o.Total.Sub(o.Deposit)
 	}
 	return o.Total, nil

@@ -132,7 +132,10 @@ Every placed order counts one `orders_per_month` through
     the customer's phone (ADR-0070); the customer's own yes does not
     confirm the order while it is unpaid (`ErrDepositDue`).
   - **Collecting.** `OnDelivery()` is what the courier collects: the
-    total, less a paid deposit.
+    total, less a paid deposit, even partly refunded (a gesture, not a
+    reason to collect the delivery again); a fully refunded one is
+    collected. A refund after the shipment exists does not change the
+    shipment's COD: the merchant adjusts it with the carrier.
 - **Risk rules** (ADR-0066, migration 00074).
   - **Which orders.** A storefront cash order asks `RiskCheck` (the risk
     module's rules) before it is placed. It keeps the verdict

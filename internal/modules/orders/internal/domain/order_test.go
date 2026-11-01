@@ -288,6 +288,9 @@ func TestOnlineDueAndOnDelivery(t *testing.T) {
 		{"card paid", domain.Order{PaymentMethod: domain.PaymentCard, PaymentStatus: domain.PaymentPaid, Total: egp(1000)}, 0, false, 0},
 		{"deposit awaiting", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentAwaiting}, 80, true, 1000},
 		{"deposit paid", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentPaid}, 0, false, 920},
+		// A partial refund is the merchant's gesture, not a reason to collect
+		// the delivery again (P8 review M4).
+		{"deposit partly refunded", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentPartiallyRefunded}, 0, false, 920},
 		{"deposit refunded", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentRefunded}, 0, false, 1000},
 	}
 	for _, tt := range tests {

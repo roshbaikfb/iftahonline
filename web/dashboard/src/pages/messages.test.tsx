@@ -524,4 +524,21 @@ describe('prepaid delivery (ADR-0067)', () => {
     expect(card.closest('section')).toHaveTextContent('طلبت قواعد الحماية أن يدفع العميل الشحن');
     expect(screen.getByText(/يحصّل المندوب/)).toHaveTextContent('450');
   });
+
+  it('still takes a partly refunded prepaid delivery off what the courier collects (P8 review M4)', async () => {
+    const o = {
+      id: orderID, code: 'DEPOSIT1', status: 'confirmed', version: 2, source: 'storefront', name: 'منى', phone: '+201099999999',
+      governorate: 'EG-C', city: 'مدينة نصر', address: '1 شارع', notes: '', currency: 'EGP', subtotal_minor: 45000, discount_minor: 0,
+      shipping_minor: 5000, cod_fee_minor: 1500, payment_method: 'cod', payment_status: 'unpaid', total_minor: 51500, item_count: 1,
+      created_at: '2026-11-01T10:00:00Z', updated_at: '2026-11-01T10:00:00Z', status_changed_at: '2026-11-01T10:00:00Z',
+      deposit_minor: 6500, deposit_status: 'partially_refunded', risk_band: 'high',
+    };
+    routes({
+      [`GET ${base}/orders/${orderID}`]: () => ({ status: 200, body: { order: o, lines: [], events: [] } }),
+      [`GET ${base}/payments`]: () => ({ status: 200, body: { items: [] } }),
+    });
+    renderAt(`/stores/${store}/orders/${orderID}`);
+    await screen.findByRole('heading', { name: 'التوصيل المدفوع مقدمًا' });
+    expect(screen.getByText(/يحصّل المندوب/)).toHaveTextContent('450');
+  });
 });
