@@ -5103,3 +5103,39 @@ p.center {
   background: #eff6ff;
   color: #1e40af;
 }
+
+/* Customer risk bands (ADR-0065). */
+.status.risk-new {
+  background: #f1f5f9;
+  color: #334155;
+}
+.status.risk-low {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.risk-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status.risk-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.od-risk .risk-own {
+  margin: 0;
+}
+.reason-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.reason-pick p {
+  margin: 0;
+  font-weight: 600;
+}
+td .status.risk-medium,
+td .status.risk-high {
+  margin-inline-start: 0.4rem;
+  font-size: 0.72rem;
+}
