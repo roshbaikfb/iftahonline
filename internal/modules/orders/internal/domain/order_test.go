@@ -150,10 +150,12 @@ func TestCodeAndCreatedAt(t *testing.T) {
 
 func TestResolveQuery(t *testing.T) {
 	t.Parallel()
-	gen := ulid.NewGenerator()
-	cursor := gen.New()
 	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	// The cursor is inside [from, to), whatever today's date: a cursor made
+	// now stopped narrowing the range once now passed to.
+	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	cursor := ulid.NewGeneratorWith(func() time.Time { return at }, rand.Reader).New()
 
 	f, err := domain.ResolveQuery(domain.Query{}, geo.EG)
 	if err != nil || f.Limit != domain.DefaultListLimit || f.Before != domain.MaxID || !f.From.Before(f.To) {
