@@ -137,6 +137,10 @@ type NoticeData struct {
 	Limit    int64  `json:"limit,omitempty"`
 	Period   string `json:"period,omitempty"`  // YYYY-MM
 	Feature  string `json:"feature,omitempty"` // a plan limit's; "" is the messages quota
+	// NeedsCall: an order_confirmed whose order stays pending, because
+	// the store's risk rules want the customer's yes verified by phone
+	// (ADR-0066).
+	NeedsCall bool `json:"needs_call,omitempty"`
 }
 
 // QuotaNotice is the warning for a threshold reached in a month, once

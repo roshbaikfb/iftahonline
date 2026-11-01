@@ -384,6 +384,9 @@ type Notification struct {
 	Kind  NotificationKind `json:"kind"`
 	Limit *int64           `json:"limit,omitempty"`
 
+	// NeedsCall For order_confirmed: the customer said yes, but the store's risk rules want it verified by phone, so the order is still pending (ADR-0066). Absent otherwise.
+	NeedsCall *bool `json:"needs_call,omitempty"`
+
 	// OrderId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	OrderId  *ULID   `json:"order_id,omitempty"`
 	OrderRef *string `json:"order_ref,omitempty"`

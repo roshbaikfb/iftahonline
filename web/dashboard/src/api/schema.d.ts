@@ -2535,6 +2535,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/orders/{order_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift the risk rules' hold of a pending order
+         * @description Permission: orders.manage. The merchant reviewed an order the
+         *     store's risk rules held (ADR-0066); it may now be confirmed. An
+         *     order that is not held, or no longer pending, is 409
+         *     order_not_held.
+         */
+        post: operations["releaseOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/orders/{order_id}/transitions": {
         parameters: {
             query?: never;
@@ -4862,6 +4888,12 @@ export interface components {
              * @enum {string}
              */
             outcome_reason?: "refused" | "no_answer" | "unconfirmed";
+            /**
+             * @description What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+             * @enum {string}
+             */
+            risk_action?: "hold" | "verify" | "released";
+            risk_band?: components["schemas"]["RiskBand"];
         };
         /**
          * @description new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
@@ -5788,6 +5820,8 @@ export interface components {
              * @example orders_per_month
              */
             feature?: string;
+            /** @description For order_confirmed: the customer said yes, but the store's risk rules want it verified by phone, so the order is still pending (ADR-0066). Absent otherwise. */
+            needs_call?: boolean;
             read: boolean;
             /** Format: date-time */
             created_at: string;
@@ -9540,6 +9574,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RiskBands"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    releaseOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                order_id: components["parameters"]["OrderID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order, released. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Order"];
                 };
             };
             default: components["responses"]["Problem"];
