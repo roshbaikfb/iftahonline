@@ -17,6 +17,7 @@ Design, and the privacy notes:
 | `Band`, `Band…` constants | What merchants see of a phone's score |
 | `Module.LearnHandler`, `LearnSubscriber` (`risk.learn`) | Learns from an order on `orders.order.placed` and `orders.order.status_changed` (worker role) |
 | `Module.RegisterWorkers`, `Module.PeriodicJobs` | `risk.backfill` (a store's past orders, once) and the daily `risk.purge` |
+| `Checker`, `NewChecker(CheckerDeps)`, `Verdict`, `Action` (`Hold`, `Verify`) | The store's rules at placement ([ADR-0066](../adr/0066-risk-rules-hold-and-verify.md)); `cmd/platform` adapts it to `orders.RiskCheck` |
 
 Deps:
 - `orders.Outcomes`: `Get`, and `Before` for the backfill;
@@ -39,6 +40,7 @@ arrive in does not matter.
 |---|---|
 | `risk_orders` | One row per order: `phone_key` (HMAC-SHA256, 32 bytes), `placed_at`, `outcome`, `outcome_at`. Tenant table under RLS. Indexes: PK `(store_id, order_id)`, `(store_id, phone_key)`, partial `(phone_key, outcome_at DESC)`, `(placed_at)` |
 | `risk_backfills` | The stores whose past was queued for learning |
+| `risk_settings` | The store's rules: `hold_from`, `verify_from` (`off`, `medium`, `high`); no row is both off |
 
 Functions (SECURITY DEFINER, owner-only policies):
 - `app.risk_signals(keys)`: up to 100 keys' latest 200 outcomes of the
@@ -65,10 +67,16 @@ exactly.
 |---|---|---|
 | `getOrderRisk` | orders.read | The band, and the phone's history in this store; learns the order first if needed |
 | `listRiskBands` (≤ 100 order IDs) | orders.read | Bands of a page of orders, three queries whatever the count; unknown and other stores' orders are left out |
+| `getRiskSettings` | orders.read | The rules, and `available` (the plan's `risk_rules`) |
+| `updateRiskSettings` | orders.manage | Turning a rule on needs `risk_rules` (403 `plan_limit`); audited |
 
 There is no lookup by phone number.
 
 ## Dashboard
+
+- **Messages page.** A "حماية الدفع عند الاستلام" card with the two
+  rules, disabled, with a link to the plans, when the plan lacks them.
+- **Held order.** The order page says why it is held and has "فك الحجز".
 
 - **Order page.** A "تقييم العميل" card shows the band and the store's
   own history.
@@ -82,5 +90,9 @@ There is no lookup by phone number.
 - **Reasons.** A failed delivery without a reason counts as `no_answer`.
   A cancellation without one counts for nothing.
 - **The key.** `RISK_PHONE_KEY` is never rotated (see docs/go-live.md).
-- **Coming next.** Per-store rules (prepaid shipping, auto-hold, extra
-  confirmation) use the band at placement (P8 8c, 8d).
+- **Rules** (ADR-0066). A storefront cash order whose customer's band
+  reaches `hold_from` is held: no confirmation message, and it cannot be
+  confirmed until released. One that reaches `verify_from` is asked to
+  confirm even if the store does not confirm by message, but the
+  customer's yes leaves it pending for a call. New customers are never
+  held or verified. Prepaid shipping comes in 8d.

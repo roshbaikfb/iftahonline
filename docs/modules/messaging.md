@@ -162,6 +162,15 @@ approved templates, so only the SMS text is the store's.
    text (`order_answer_ack`): no quota, WhatsApp only, once.
 7. **Notices** are made once each and kept 90 days. The quota warnings
    are also emailed to the owner and managers.
+8. **Risk rules** (ADR-0066).
+   - **Held order.** It gets no confirmation, so it has no deadline
+     either.
+   - **Verified order.** It is confirmed by message even where
+     `confirm_cod` is off.
+   - **A "yes" to a verified order.** Orders refuses the customer's move
+     (`ErrNeedsCall`). The confirmation is still `confirmed`, but the
+     order stays pending, and the `order_confirmed` notice carries
+     `needs_call: true`.
 
 ## Dashboard (6g)
 

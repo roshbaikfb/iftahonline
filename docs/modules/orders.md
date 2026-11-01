@@ -82,6 +82,7 @@ encodes.
 | `createOrder` (a phone order; `Idempotency-Key`) | orders.manage |
 | `transitionOrder` (optional `version`, optional `reason`) | the move's permission |
 | `bulkTransitionOrders` (≤ 100; one result per order; optional `reason`) | the move's permission, per order |
+| `releaseOrder` (lift the risk rules' hold of a pending order) | orders.manage |
 | `exportOrders` (CSV) | orders.export |
 | `countOrders` (every status with its count, zeros included; one query on `orders_store_status`) | orders.read |
 | `getOrderStats` (`range` today, 7d or 30d, by the store's time zone; sales are every order but cancelled and returned ones, which are summed apart, totals including shipping and the COD fee; `previous` is the same span one period earlier; `daily` the last 30 days; `oldest_pending_at`). Three queries: one walk of the primary key for both periods, one grouped read for the chart, one step of `orders_store_status` | orders.read |
@@ -116,6 +117,16 @@ Every placed order counts one `orders_per_month` through
   `entitlements.usage.crossed`, and messaging warns the merchant.
 
 ## Rules worth knowing
+
+- **Risk rules** (ADR-0066, migration 00074).
+  - **Which orders.** A storefront cash order asks `RiskCheck` (the risk
+    module's rules) before it is placed. It keeps the verdict
+    (`risk_action`, `risk_band`).
+  - **Hold.** A `hold` cannot be confirmed (`409 order_held`) until
+    `releaseOrder` (orders.manage, audited `order.released`) sets it to
+    `released`.
+  - **Verify.** A `verify` cannot be confirmed by a `customer:*` actor
+    (`ErrNeedsCall`); staff confirm it after calling.
 
 - **Outcome reasons** (ADR-0065, migration 00072). A move to cancelled,
   failed_delivery or returned may say why: `refused` or `no_answer`.
