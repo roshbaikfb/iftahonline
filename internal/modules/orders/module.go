@@ -72,6 +72,9 @@ func (m *Module) Payments() Payments { return m.svc }
 // Shop is the API shoppers use (through the storefront).
 func (m *Module) Shop() Shop { return m.svc }
 
+// Outcomes is the API the risk module reads orders through (ADR-0065).
+func (m *Module) Outcomes() Outcomes { return m.svc }
+
 // ShopDeps are what the storefront role needs to place orders: no
 // merchant permissions, since shoppers never move orders.
 type ShopDeps struct {
@@ -102,6 +105,16 @@ func NewShop(d ShopDeps) (Shop, error) {
 // behalf. It takes the shopper side's
 // dependencies and holds no merchant permissions either.
 func NewFulfilment(d ShopDeps) (Payments, error) {
+	svc, err := withoutPermissions(d)
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
+
+// NewOutcomes builds what the worker role's risk module reads orders
+// through (ADR-0065): an orders service without merchant permissions.
+func NewOutcomes(d ShopDeps) (Outcomes, error) {
 	svc, err := withoutPermissions(d)
 	if err != nil {
 		return nil, err

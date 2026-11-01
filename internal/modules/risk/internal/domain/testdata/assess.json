@@ -1,0 +1,346 @@
+[
+ {
+  "name": "no history",
+  "signals": [],
+  "want": {
+   "band": "new",
+   "score": 200,
+   "evidence": 0
+  }
+ },
+ {
+  "name": "one delivery",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 3,
+    "store": 1
+   }
+  ],
+  "want": {
+   "band": "low",
+   "score": 112,
+   "evidence": 977160
+  }
+ },
+ {
+  "name": "one refusal in one store stays medium",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": 2,
+    "store": 1
+   }
+  ],
+  "want": {
+   "band": "medium",
+   "score": 552,
+   "evidence": 984715
+  }
+ },
+ {
+  "name": "refusals in two stores are high",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": 2,
+    "store": 1
+   },
+   {
+    "outcome": "returned",
+    "days_ago": 40,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "high",
+   "score": 663,
+   "evidence": 1719582
+  }
+ },
+ {
+  "name": "one delivery and one return",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 10,
+    "store": 1
+   },
+   {
+    "outcome": "returned",
+    "days_ago": 12,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "medium",
+   "score": 376,
+   "evidence": 1837597
+  }
+ },
+ {
+  "name": "three deliveries outweigh a return",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 5,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 30,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 60,
+    "store": 2
+   },
+   {
+    "outcome": "returned",
+    "days_ago": 20,
+    "store": 3
+   }
+  ],
+  "want": {
+   "band": "low",
+   "score": 246,
+   "evidence": 3243130
+  }
+ },
+ {
+  "name": "an old refusal is no history",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": 400,
+    "store": 1
+   }
+  ],
+  "want": {
+   "band": "new",
+   "score": 228,
+   "evidence": 45929
+  }
+ },
+ {
+  "name": "past the horizon counts for nothing",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": 730,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 800,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "new",
+   "score": 200,
+   "evidence": 0
+  }
+ },
+ {
+  "name": "an unanswered confirmation alone is no history",
+  "signals": [
+   {
+    "outcome": "unconfirmed",
+    "days_ago": 1,
+    "store": 1
+   }
+  ],
+  "want": {
+   "band": "new",
+   "score": 353,
+   "evidence": 297698
+  }
+ },
+ {
+  "name": "unanswered phone in one store",
+  "signals": [
+   {
+    "outcome": "no_answer",
+    "days_ago": 1,
+    "store": 1
+   }
+  ],
+  "want": {
+   "band": "medium",
+   "score": 458,
+   "evidence": 595396
+  }
+ },
+ {
+  "name": "one store cannot sink a phone",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": 1,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 2,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 3,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 4,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 5,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 6,
+    "store": 2
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 7,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "medium",
+   "score": 524,
+   "evidence": 4856561
+  }
+ },
+ {
+  "name": "recent failures outweigh old successes",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 300,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 320,
+    "store": 2
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 3,
+    "store": 3
+   },
+   {
+    "outcome": "no_answer",
+    "days_ago": 9,
+    "store": 4
+   }
+  ],
+  "want": {
+   "band": "high",
+   "score": 601,
+   "evidence": 1721241
+  }
+ },
+ {
+  "name": "a fourth outcome of one store is ignored",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 1,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 2,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 3,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 4,
+    "store": 1
+   },
+   {
+    "outcome": "refused",
+    "days_ago": 5,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "low",
+   "score": 234,
+   "evidence": 3916427
+  }
+ },
+ {
+  "name": "an outcome dated in the future weighs as today",
+  "signals": [
+   {
+    "outcome": "refused",
+    "days_ago": -2,
+    "store": 1
+   },
+   {
+    "outcome": "returned",
+    "days_ago": 0,
+    "store": 2
+   }
+  ],
+  "want": {
+   "band": "high",
+   "score": 692,
+   "evidence": 2000000
+  }
+ },
+ {
+  "name": "mostly delivered across stores",
+  "signals": [
+   {
+    "outcome": "delivered",
+    "days_ago": 1,
+    "store": 1
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 8,
+    "store": 2
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 15,
+    "store": 3
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 22,
+    "store": 4
+   },
+   {
+    "outcome": "delivered",
+    "days_ago": 29,
+    "store": 5
+   },
+   {
+    "outcome": "returned",
+    "days_ago": 3,
+    "store": 6
+   }
+  ],
+  "want": {
+   "band": "low",
+   "score": 183,
+   "evidence": 5444612
+  }
+ }
+]

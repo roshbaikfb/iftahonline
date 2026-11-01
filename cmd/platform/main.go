@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -50,6 +51,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions"
+	"github.com/roshbaikfb/iftahonline/internal/modules/risk"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -208,6 +210,9 @@ type clients struct {
 	// sellFees handles orders.order.status_changed for billing (a
 	// delivered order's fee); the worker sets it.
 	sellFees *lateHandler
+	// learnRisk handles orders.order.placed and status_changed for risk
+	// (what each order teaches about its phone); the worker sets it.
+	learnRisk *lateHandler
 }
 
 // newClients builds the shared clients and the process's event bus. Every
@@ -317,6 +322,13 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 	if err = bus.Subscribe(orders.EventOrderStatusChanged, billing.SellFeesSubscriber, fees.Handle); err != nil {
 		return clients{}, err
 	}
+	// Every order's end teaches about its customer's phone (ADR-0065).
+	learn := &lateHandler{}
+	for _, typ := range []string{orders.EventOrderPlaced, orders.EventOrderStatusChanged} {
+		if err = bus.Subscribe(typ, risk.LearnSubscriber, learn.Handle); err != nil {
+			return clients{}, err
+		}
+	}
 	bill, err := billing.New(billing.Deps{Pool: pool})
 	if err != nil {
 		return clients{}, err
@@ -330,12 +342,21 @@ func newClients(cfg config.Config, log *slog.Logger, ids *ulid.Generator, pool *
 		return clients{}, err
 	}
 	return clients{cfg: cfg, log: log, ids: ids, pool: pool, rdb: rdb, events: bus, plan: ent.Entitlements(), entitlements: ent, watchOrders: watch, countSales: sales,
-		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits, sellFees: fees}, nil
+		confirmOrders: confirm, releaseCoupons: release, reportPurchases: purchases, planLimits: limits, sellFees: fees,
+		learnRisk: learn}, nil
 }
 
 // mountFunc builds a role's modules and returns its routes. Background
 // work it starts must stop when ctx ends.
 type mountFunc func(ctx context.Context, c clients) (func(server.Routes), error)
+
+func newRisk(c clients, ords orders.Outcomes) (*risk.Module, error) {
+	inserter, err := server.NewRiverInserter(c.pool, c.log)
+	if err != nil {
+		return nil, err
+	}
+	return risk.New(risk.Deps{Pool: c.pool, Orders: ords, PhoneKey: c.cfg.Secrets.RiskPhoneKey, Jobs: inserter})
+}
 
 func newTenancy(c clients) (*tenancy.Module, error) {
 	inserter, err := server.NewRiverInserter(c.pool, c.log)
@@ -633,6 +654,10 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
+	rsk, err := newRisk(c, ord.Outcomes())
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range msg.PlatformProviders() {
 		if err = hooks.RegisterPlatform(p); err != nil {
 			return nil, err
@@ -689,6 +714,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		msg.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		prom.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		mkt.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
+		rsk.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		bill.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		c.entitlements.Mount(rt.Mux, id.Authorizer(), id.Scope(), rt.Problems)
 		if mountErr = pay.MountCheckout(rt.Mux, rt.Problems); mountErr != nil {
@@ -1000,12 +1026,25 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if err = bill.RegisterWorkers(workers); err != nil {
 		return err
 	}
+	riskOrders, err := orders.NewOutcomes(orderDeps)
+	if err != nil {
+		return err
+	}
+	rsk, err := newRisk(c, riskOrders)
+	if err != nil {
+		return err
+	}
+	if err = rsk.RegisterWorkers(workers); err != nil {
+		return err
+	}
+	c.learnRisk.Set(rsk.LearnHandler())
 	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
 		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
 	}); err != nil {
 		return err
 	}
-	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), append(cat.PeriodicJobs(), bill.PeriodicJobs()...)...)
+	periodic := slices.Concat(cat.PeriodicJobs(), bill.PeriodicJobs(), rsk.PeriodicJobs())
+	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), periodic...)
 	if err != nil {
 		return err
 	}
