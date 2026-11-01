@@ -118,6 +118,36 @@ func (q *Queries) RiskOrderKeys(ctx context.Context, arg RiskOrderKeysParams) ([
 	return items, nil
 }
 
+const riskSettings = `-- name: RiskSettings :many
+SELECT hold_from, verify_from FROM risk_settings WHERE store_id = $1
+`
+
+type RiskSettingsRow struct {
+	HoldFrom   string
+	VerifyFrom string
+}
+
+// The store's rules: no row is both off.
+func (q *Queries) RiskSettings(ctx context.Context, storeID ulid.ID) ([]RiskSettingsRow, error) {
+	rows, err := q.db.Query(ctx, riskSettings, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RiskSettingsRow{}
+	for rows.Next() {
+		var i RiskSettingsRow
+		if err := rows.Scan(&i.HoldFrom, &i.VerifyFrom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const riskSignals = `-- name: RiskSignals :many
 SELECT s.phone_key::bytea AS phone_key, s.outcome::text AS outcome, s.outcome_at::timestamptz AS outcome_at,
        s.store_no::int AS store_no
@@ -154,6 +184,22 @@ func (q *Queries) RiskSignals(ctx context.Context, phoneKeys [][]byte) ([]RiskSi
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveRiskSettings = `-- name: SaveRiskSettings :exec
+INSERT INTO risk_settings (store_id, hold_from, verify_from) VALUES ($1, $2, $3)
+ON CONFLICT (store_id) DO UPDATE SET hold_from = excluded.hold_from, verify_from = excluded.verify_from, updated_at = now()
+`
+
+type SaveRiskSettingsParams struct {
+	StoreID    ulid.ID
+	HoldFrom   string
+	VerifyFrom string
+}
+
+func (q *Queries) SaveRiskSettings(ctx context.Context, arg SaveRiskSettingsParams) error {
+	_, err := q.db.Exec(ctx, saveRiskSettings, arg.StoreID, arg.HoldFrom, arg.VerifyFrom)
+	return err
 }
 
 const upsertRiskOrders = `-- name: UpsertRiskOrders :exec

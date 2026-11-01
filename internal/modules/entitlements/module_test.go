@@ -81,6 +81,13 @@ func TestGrantsFromPlans(t *testing.T) {
 	if ok, aErr := ent.Allowed(brand, entitlements.AdFree); aErr != nil || !ok {
 		t.Errorf("brand store ad-free = %v, %v", ok, aErr)
 	}
+	// The risk rules (ADR-0066): every paid plan, not the free one.
+	if ok, aErr := ent.Allowed(free, entitlements.RiskRules); aErr != nil || ok {
+		t.Errorf("free store risk rules = %v, %v", ok, aErr)
+	}
+	if ok, aErr := ent.Allowed(brand, entitlements.RiskRules); aErr != nil || !ok {
+		t.Errorf("brand store risk rules = %v, %v", ok, aErr)
+	}
 	admit := func(ctx context.Context, have int64) (g entitlements.Grant, err error) {
 		err = postgres.InTenantTx(ctx, pool, func(tx pgx.Tx) (txErr error) {
 			g, txErr = ent.AdmitTx(ctx, tx, entitlements.Products, 1, func(context.Context, pgx.Tx) (int64, error) { return have, nil })
@@ -127,7 +134,7 @@ func TestDisplayOnlyFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := g["loyalty_points"]; ok || len(g) != 10 || g[entitlements.AdFree].Value != 1 {
+	if _, ok := g["loyalty_points"]; ok || len(g) != 11 || g[entitlements.AdFree].Value != 1 || g[entitlements.RiskRules].Value != 1 {
 		t.Errorf("grants = %+v", g)
 	}
 }

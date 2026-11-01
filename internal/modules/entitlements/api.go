@@ -72,6 +72,8 @@ const (
 	Feeds        = domain.Feeds
 	// AdFree stores show no ads (the free plan does).
 	AdFree = domain.AdFree
+	// RiskRules: holding or verifying risky customers' orders (ADR-0066).
+	RiskRules = domain.RiskRules
 )
 
 // Warning thresholds (Usage.CrossedBy, Usage.Level).

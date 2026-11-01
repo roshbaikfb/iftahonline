@@ -687,6 +687,13 @@ type RiskOrder struct {
 	UpdatedAt time.Time
 }
 
+type RiskSetting struct {
+	StoreID    ulid.ID
+	HoldFrom   string
+	VerifyFrom string
+	UpdatedAt  time.Time
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState

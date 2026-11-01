@@ -355,7 +355,8 @@ func newRisk(c clients, ords orders.Outcomes) (*risk.Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	return risk.New(risk.Deps{Pool: c.pool, Orders: ords, PhoneKey: c.cfg.Secrets.RiskPhoneKey, Jobs: inserter})
+	return risk.New(risk.Deps{Pool: c.pool, Orders: ords, PhoneKey: c.cfg.Secrets.RiskPhoneKey, Jobs: inserter, Plan: c.plan,
+		Audit: identity.NewAuditRecorder(c.ids)})
 }
 
 func newTenancy(c clients) (*tenancy.Module, error) {
@@ -529,10 +530,14 @@ func newCustomers(c clients, ten *tenancy.Module) (*customers.Module, error) {
 
 func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *customers.Module, ship *shipping.Module, prom *promotions.Module,
 	auth authz.Authorizer) (*orders.Module, error) {
+	rules, err := orderRisk(c)
+	if err != nil {
+		return nil, err
+	}
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
 		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Auth: auth,
-		Stores: orderStores(ten), Plan: c.plan,
+		Stores: orderStores(ten), Plan: c.plan, Risk: rules,
 	})
 }
 
@@ -576,8 +581,13 @@ func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (order
 	if err != nil {
 		return orders.ShopDeps{}, err
 	}
+	rules, err := orderRisk(c)
+	if err != nil {
+		return orders.ShopDeps{}, err
+	}
 	return orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
-		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten), Plan: c.plan}, nil
+		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten), Plan: c.plan,
+		Risk: rules}, nil
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {

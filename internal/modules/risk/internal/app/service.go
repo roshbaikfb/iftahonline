@@ -12,9 +12,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -39,7 +41,12 @@ type Deps struct {
 	// Jobs queues the store's backfill; nil in roles that never learn
 	// (the storefront).
 	Jobs jobs.Inserter
-	Now  func() time.Time
+	// Plan says whether the store's plan has the rules (ADR-0066); nil
+	// allows them (tests).
+	Plan entitlements.Entitlements
+	// Audit records rule changes; nil discards.
+	Audit audit.Recorder
+	Now   func() time.Time
 }
 
 // Service implements the use cases.
@@ -48,6 +55,8 @@ type Service struct {
 	orders orders.Outcomes
 	keyer  domain.Keyer
 	jobs   jobs.Inserter
+	plan   entitlements.Entitlements
+	audit  audit.Recorder
 	now    func() time.Time
 }
 
@@ -57,7 +66,13 @@ func NewService(d Deps) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{db: d.DB, orders: d.Orders, keyer: d.Keyer, jobs: d.Jobs, now: now}
+	if d.Plan == nil {
+		d.Plan = entitlements.Unrestricted()
+	}
+	if d.Audit == nil {
+		d.Audit = audit.Nop{}
+	}
+	return &Service{db: d.DB, orders: d.Orders, keyer: d.Keyer, jobs: d.Jobs, plan: d.Plan, audit: d.Audit, now: now}
 }
 
 func (s *Service) row(o orders.Order) store.Order {

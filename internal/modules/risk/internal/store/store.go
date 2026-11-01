@@ -151,3 +151,34 @@ func Purge(ctx context.Context, tx Tx, n int) (int, error) {
 	}
 	return int(purged), nil
 }
+
+// Rules returns the store's risk rules; a store without them has both
+// off.
+func Rules(ctx context.Context, tx Tx) (domain.Rules, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return domain.Rules{}, err
+	}
+	rows, err := riskdb.New(tx).RiskSettings(ctx, store)
+	if err != nil {
+		return domain.Rules{}, fmt.Errorf("risk store: rules: %w", err)
+	}
+	if len(rows) == 0 {
+		return domain.Rules{}.Normalized(), nil
+	}
+	return domain.Rules{HoldFrom: domain.Band(rows[0].HoldFrom), VerifyFrom: domain.Band(rows[0].VerifyFrom)}, nil
+}
+
+// SaveRules writes the store's risk rules.
+func SaveRules(ctx context.Context, tx Tx, r domain.Rules) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = riskdb.New(tx).SaveRiskSettings(ctx, riskdb.SaveRiskSettingsParams{
+		StoreID: store, HoldFrom: string(r.HoldFrom), VerifyFrom: string(r.VerifyFrom),
+	}); err != nil {
+		return fmt.Errorf("risk store: save rules: %w", err)
+	}
+	return nil
+}

@@ -33,22 +33,43 @@ func (e MessageTextKind) Valid() bool {
 
 // Defines values for RiskBand.
 const (
-	High   RiskBand = "high"
-	Low    RiskBand = "low"
-	Medium RiskBand = "medium"
-	New    RiskBand = "new"
+	RiskBandHigh   RiskBand = "high"
+	RiskBandLow    RiskBand = "low"
+	RiskBandMedium RiskBand = "medium"
+	RiskBandNew    RiskBand = "new"
 )
 
 // Valid indicates whether the value is a known member of the RiskBand enum.
 func (e RiskBand) Valid() bool {
 	switch e {
-	case High:
+	case RiskBandHigh:
 		return true
-	case Low:
+	case RiskBandLow:
 		return true
-	case Medium:
+	case RiskBandMedium:
 		return true
-	case New:
+	case RiskBandNew:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RiskRule.
+const (
+	RiskRuleHigh   RiskRule = "high"
+	RiskRuleMedium RiskRule = "medium"
+	RiskRuleOff    RiskRule = "off"
+)
+
+// Valid indicates whether the value is a known member of the RiskRule enum.
+func (e RiskRule) Valid() bool {
+	switch e {
+	case RiskRuleHigh:
+		return true
+	case RiskRuleMedium:
+		return true
+	case RiskRuleOff:
 		return true
 	default:
 		return false
@@ -149,6 +170,30 @@ type RiskHistory struct {
 	Unconfirmed int `json:"unconfirmed"`
 }
 
+// RiskRule The band from which a rule applies to a new storefront cash order, or off.
+type RiskRule string
+
+// RiskSettings hold_from: such an order waits for the merchant's review, without a confirmation message, until released. verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first. New customers are never held or verified (ADR-0066).
+type RiskSettings struct {
+	// Available Whether the store's plan includes the rules (risk_rules).
+	Available bool `json:"available"`
+
+	// HoldFrom The band from which a rule applies to a new storefront cash order, or off.
+	HoldFrom RiskRule `json:"hold_from"`
+
+	// VerifyFrom The band from which a rule applies to a new storefront cash order, or off.
+	VerifyFrom RiskRule `json:"verify_from"`
+}
+
+// RiskSettingsInput defines model for RiskSettingsInput.
+type RiskSettingsInput struct {
+	// HoldFrom The band from which a rule applies to a new storefront cash order, or off.
+	HoldFrom RiskRule `json:"hold_from"`
+
+	// VerifyFrom The band from which a rule applies to a new storefront cash order, or off.
+	VerifyFrom RiskRule `json:"verify_from"`
+}
+
 // ULID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ULID = string
 
@@ -203,6 +248,9 @@ type VariantID = ULID
 // ListRiskBandsJSONRequestBody defines body for ListRiskBands for application/json ContentType.
 type ListRiskBandsJSONRequestBody = RiskBandsInput
 
+// UpdateRiskSettingsJSONRequestBody defines body for UpdateRiskSettings for application/json ContentType.
+type UpdateRiskSettingsJSONRequestBody = RiskSettingsInput
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetOrderRisk The order's customer's band and their history in this store
@@ -211,6 +259,12 @@ type ServerInterface interface {
 	// ListRiskBands The bands of a page of the store's orders
 	// (POST /v1/stores/{store_id}/risk/bands)
 	ListRiskBands(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetRiskSettings The store's risk rules
+	// (GET /v1/stores/{store_id}/risk/settings)
+	GetRiskSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// UpdateRiskSettings Replace the store's risk rules
+	// (PUT /v1/stores/{store_id}/risk/settings)
+	UpdateRiskSettings(w http.ResponseWriter, r *http.Request, storeId StoreID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -274,6 +328,58 @@ func (siw *ServerInterfaceWrapper) ListRiskBands(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRiskBands(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRiskSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetRiskSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRiskSettings(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRiskSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRiskSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRiskSettings(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -404,6 +510,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/orders/{order_id}/risk", wrapper.GetOrderRisk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/risk/settings", wrapper.GetRiskSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/risk/settings", wrapper.UpdateRiskSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/risk/bands", wrapper.ListRiskBands)
 
 	return m
@@ -491,6 +599,85 @@ func (response ListRiskBandsdefaultApplicationProblemPlusJSONResponse) VisitList
 	return err
 }
 
+type GetRiskSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetRiskSettingsResponseObject interface {
+	VisitGetRiskSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetRiskSettings200JSONResponse RiskSettings
+
+func (response GetRiskSettings200JSONResponse) VisitGetRiskSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRiskSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRiskSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetRiskSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRiskSettingsRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *UpdateRiskSettingsJSONRequestBody
+}
+
+type UpdateRiskSettingsResponseObject interface {
+	VisitUpdateRiskSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateRiskSettings200JSONResponse RiskSettings
+
+func (response UpdateRiskSettings200JSONResponse) VisitUpdateRiskSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRiskSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateRiskSettingsdefaultApplicationProblemPlusJSONResponse) VisitUpdateRiskSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// GetOrderRisk The order's customer's band and their history in this store
@@ -499,6 +686,12 @@ type StrictServerInterface interface {
 	// ListRiskBands The bands of a page of the store's orders
 	// (POST /v1/stores/{store_id}/risk/bands)
 	ListRiskBands(ctx context.Context, request ListRiskBandsRequestObject) (ListRiskBandsResponseObject, error)
+	// GetRiskSettings The store's risk rules
+	// (GET /v1/stores/{store_id}/risk/settings)
+	GetRiskSettings(ctx context.Context, request GetRiskSettingsRequestObject) (GetRiskSettingsResponseObject, error)
+	// UpdateRiskSettings Replace the store's risk rules
+	// (PUT /v1/stores/{store_id}/risk/settings)
+	UpdateRiskSettings(ctx context.Context, request UpdateRiskSettingsRequestObject) (UpdateRiskSettingsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -593,6 +786,65 @@ func (sh *strictHandler) ListRiskBands(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRiskBandsResponseObject); ok {
 		if err := validResponse.VisitListRiskBandsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRiskSettings operation middleware
+func (sh *strictHandler) GetRiskSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetRiskSettingsRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRiskSettings(ctx, request.(GetRiskSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRiskSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRiskSettingsResponseObject); ok {
+		if err := validResponse.VisitGetRiskSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateRiskSettings operation middleware
+func (sh *strictHandler) UpdateRiskSettings(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request UpdateRiskSettingsRequestObject
+
+	request.StoreId = storeId
+
+	var body UpdateRiskSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateRiskSettings(ctx, request.(UpdateRiskSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateRiskSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateRiskSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateRiskSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

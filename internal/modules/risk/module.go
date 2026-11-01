@@ -7,10 +7,12 @@ import (
 
 	"github.com/riverqueue/river"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk/internal/httpapi"
+	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
@@ -27,8 +29,12 @@ type Deps struct {
 	Orders orders.Outcomes
 	// PhoneKey is RISK_PHONE_KEY (at least 32 bytes).
 	PhoneKey []byte
-	// Jobs queues each store's backfill (api and worker roles).
+	// Jobs queues each store's backfill.
 	Jobs jobs.Inserter
+	// Plan says whether the store's plan has the rules (ADR-0066).
+	Plan entitlements.Entitlements
+	// Audit records rule changes (identity's audit log); nil discards.
+	Audit audit.Recorder
 }
 
 // Module is the wired risk module.
@@ -45,7 +51,29 @@ func New(d Deps) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Keyer: keyer, Jobs: d.Jobs})}, nil
+	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Keyer: keyer, Jobs: d.Jobs, Plan: d.Plan, Audit: d.Audit})}, nil
+}
+
+// CheckerDeps are what the rules need at placement: no orders, no jobs,
+// so the orders module can be built with them (orders cannot wait for
+// the module that reads it).
+type CheckerDeps struct {
+	Pool     postgres.Beginner
+	PhoneKey []byte
+	Plan     entitlements.Entitlements
+}
+
+// NewChecker builds what orders ask before placing a storefront cash
+// order (every role that places orders).
+func NewChecker(d CheckerDeps) (Checker, error) {
+	if d.Pool == nil {
+		return nil, errors.New("risk: missing dependency")
+	}
+	keyer, err := domain.NewKeyer(d.PhoneKey)
+	if err != nil {
+		return nil, err
+	}
+	return app.NewService(app.Deps{DB: d.Pool, Keyer: keyer, Plan: d.Plan}), nil
 }
 
 // Mount registers the merchant API. scope is identity's membership

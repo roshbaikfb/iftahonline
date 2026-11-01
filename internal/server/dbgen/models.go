@@ -685,6 +685,13 @@ type RiskOrder struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type RiskSetting struct {
+	StoreID    pgtype.UUID
+	HoldFrom   string
+	VerifyFrom string
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type RiverJob struct {
 	ID           int64
 	State        RiverJobState

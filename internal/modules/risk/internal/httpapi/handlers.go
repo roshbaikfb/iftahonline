@@ -110,3 +110,34 @@ func (h *Handlers) ListRiskBands(ctx context.Context, req ListRiskBandsRequestOb
 	}
 	return out, nil
 }
+
+// GetRiskSettings implements StrictServerInterface.
+func (h *Handlers) GetRiskSettings(ctx context.Context, _ GetRiskSettingsRequestObject) (GetRiskSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermOrdersRead); err != nil {
+		return nil, err
+	}
+	v, err := h.svc.Rules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return GetRiskSettings200JSONResponse(toSettings(v)), nil
+}
+
+// UpdateRiskSettings implements StrictServerInterface.
+func (h *Handlers) UpdateRiskSettings(ctx context.Context, req UpdateRiskSettingsRequestObject) (UpdateRiskSettingsResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermOrdersManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	v, err := h.svc.SaveRules(ctx, domain.Rules{HoldFrom: domain.Band(req.Body.HoldFrom), VerifyFrom: domain.Band(req.Body.VerifyFrom)})
+	if err != nil {
+		return nil, err
+	}
+	return UpdateRiskSettings200JSONResponse(toSettings(v)), nil
+}
+
+func toSettings(v app.RulesView) RiskSettings {
+	return RiskSettings{HoldFrom: RiskRule(v.Rules.HoldFrom), VerifyFrom: RiskRule(v.Rules.VerifyFrom), Available: v.Available}
+}

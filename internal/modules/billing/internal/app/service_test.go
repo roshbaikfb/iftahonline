@@ -126,8 +126,12 @@ func TestGrants(t *testing.T) {
 				t.Errorf("%s: %s = %+v, want %+v", tt.name, feature, got, want)
 			}
 		}
-		if len(g) != 10 {
-			t.Errorf("%s: %d grants, want the 10 seeded features", tt.name, len(g))
+		if len(g) != 11 {
+			t.Errorf("%s: %d grants, want the 11 seeded features", tt.name, len(g))
+		}
+		// The risk rules (ADR-0066) follow the plan: paid plans only.
+		if want := tt.cardPayments.Value; g["risk_rules"].Value != want {
+			t.Errorf("%s: risk_rules = %+v, want %d", tt.name, g["risk_rules"], want)
 		}
 	}
 }

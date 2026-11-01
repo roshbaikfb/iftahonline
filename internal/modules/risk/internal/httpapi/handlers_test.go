@@ -333,3 +333,50 @@ func TestPrivacy(t *testing.T) {
 		}
 	}
 }
+
+func settingsPath(s tenant.StoreID) string { return "/v1/stores/" + s.String() + "/risk/settings" }
+
+// TestSettings (ADR-0066): the store's rules, read with orders.read and
+// changed with orders.manage, never another store's.
+func TestSettings(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	code, got, _ := f.do(t, req(t, http.MethodGet, settingsPath(f.storeA), tokShippingA, ""))
+	if code != http.StatusOK || got["hold_from"] != "off" || got["verify_from"] != "off" || got["available"] != true {
+		t.Fatalf("getRiskSettings = %d %v", code, got)
+	}
+	body := `{"hold_from":"high","verify_from":"medium"}`
+	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, body)); code != http.StatusOK ||
+		got["hold_from"] != "high" || got["verify_from"] != "medium" {
+		t.Fatalf("updateRiskSettings = %d %v", code, got)
+	}
+	for _, tt := range []struct {
+		name, token, body string
+		want              int
+	}{
+		{"shipping cannot change them", tokShippingA, body, http.StatusForbidden},
+		{"no auth", "", body, http.StatusUnauthorized},
+		{"from low", tokOwnerA, `{"hold_from":"low","verify_from":"off"}`, http.StatusUnprocessableEntity},
+		{"missing rule", tokOwnerA, `{"hold_from":"high"}`, http.StatusUnprocessableEntity},
+		{"no body", tokOwnerA, ``, http.StatusBadRequest},
+	} {
+		if code, _, b := f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tt.token, tt.body)); code != tt.want {
+			t.Errorf("%s = %d, want %d: %s", tt.name, code, tt.want, b)
+		}
+	}
+	if code, _, _ = f.do(t, req(t, http.MethodGet, settingsPath(f.storeA), tokNoPermA, "")); code != http.StatusForbidden {
+		t.Fatalf("get without orders.read = %d", code)
+	}
+	unchanged := func(t testing.TB) {
+		v, err := f.svc.Rules(f.ctxB)
+		if err != nil || v.Rules.Active() {
+			t.Fatalf("store B's rules changed: %+v, %v", v, err)
+		}
+	}
+	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{
+		OperationID: "getRiskSettings", Request: req(t, http.MethodGet, settingsPath(f.storeB), tokOwnerA, ""), Leaks: []string{f.storeB.String()},
+	})
+	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{
+		OperationID: "updateRiskSettings", Request: req(t, http.MethodPut, settingsPath(f.storeB), tokOwnerA, body), Unchanged: unchanged,
+	})
+}
