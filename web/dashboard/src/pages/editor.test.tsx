@@ -260,6 +260,19 @@ describe('editor helpers', () => {
     expect(b.stock).toEqual([{ id: 'v3', onHand: 7, tracked: true }]);
   });
 
+  it('sends the cost the merchant gives, and none when left empty (ADR-0068)', () => {
+    const d = draftOf({ ...tee, variants: tee.variants.map((v, i) => (i === 0 ? { ...v, cost_minor: 4200 } : v)) });
+    expect(d.variants[0]?.cost).toBe('42');
+    d.variants[1] = { ...row(d.variants, 1), cost: '٣٠' };
+    d.variants[2] = { ...row(d.variants, 2), cost: 'غالي' };
+    expect(build(d).errors).toEqual({ 'variants.2.cost': 'اكتب التكلفة رقمًا' });
+    d.variants[2] = { ...row(d.variants, 2), cost: '' };
+    const b = build(d);
+    expect(b.body.variants[0]?.cost_minor).toBe(4200);
+    expect(b.body.variants[1]?.cost_minor).toBe(3000);
+    expect(b.body.variants[2]).not.toHaveProperty('cost_minor');
+  });
+
   it('reads colours the way the shop does', () => {
     expect(isColourName('اللون')).toBe(true);
     expect(isColourName('Colour')).toBe(true);
