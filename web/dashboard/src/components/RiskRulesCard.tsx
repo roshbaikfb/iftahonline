@@ -66,7 +66,7 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
           </option>
         ))}
       </select>
-      <small className="muted">لا نرسل للعميل رسالة تأكيد، ولا يُؤكَّد الطلب حتى تراجعه وتفك حجزه.</small>
+      <small className="muted">لا يُؤكَّد الطلب حتى تراجعه وتفك حجزه، ولا يُلغى تلقائيًا.</small>
       <label className="field-label" htmlFor="rule-prepay">
         اطلب دفع التوصيل مقدمًا
       </label>
@@ -82,7 +82,7 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
           </option>
         ))}
       </select>
-      <small className="muted">يدفع العميل الشحن ورسوم الدفع عند الاستلام بالبطاقة قبل أن يكتمل طلبه، والباقي عند الاستلام. يلزم ربط بوابة دفع؛ بدونها يُحجز الطلب للمراجعة.</small>
+      <small className="muted">نرسل إلى رقم العميل رابطًا يدفع منه الشحن ورسوم الدفع عند الاستلام بالبطاقة، والباقي عند الاستلام؛ يتأكد الطلب بعد الدفع. يلزم ربط بوابة دفع؛ بدونها يُحجز الطلب للمراجعة.</small>
       <label className="field-label" htmlFor="rule-verify">
         اطلب تأكيدًا هاتفيًا
       </label>
