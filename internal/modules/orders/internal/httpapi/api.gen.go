@@ -34,6 +34,30 @@ func (e MessageTextKind) Valid() bool {
 	}
 }
 
+// Defines values for OrderDepositStatus.
+const (
+	OrderDepositStatusAwaiting          OrderDepositStatus = "awaiting"
+	OrderDepositStatusPaid              OrderDepositStatus = "paid"
+	OrderDepositStatusPartiallyRefunded OrderDepositStatus = "partially_refunded"
+	OrderDepositStatusRefunded          OrderDepositStatus = "refunded"
+)
+
+// Valid indicates whether the value is a known member of the OrderDepositStatus enum.
+func (e OrderDepositStatus) Valid() bool {
+	switch e {
+	case OrderDepositStatusAwaiting:
+		return true
+	case OrderDepositStatusPaid:
+		return true
+	case OrderDepositStatusPartiallyRefunded:
+		return true
+	case OrderDepositStatusRefunded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderOutcomeReason.
 const (
 	OrderOutcomeReasonNoAnswer    OrderOutcomeReason = "no_answer"
@@ -75,25 +99,25 @@ func (e OrderPaymentMethod) Valid() bool {
 
 // Defines values for OrderPaymentStatus.
 const (
-	Awaiting          OrderPaymentStatus = "awaiting"
-	Paid              OrderPaymentStatus = "paid"
-	PartiallyRefunded OrderPaymentStatus = "partially_refunded"
-	Refunded          OrderPaymentStatus = "refunded"
-	Unpaid            OrderPaymentStatus = "unpaid"
+	OrderPaymentStatusAwaiting          OrderPaymentStatus = "awaiting"
+	OrderPaymentStatusPaid              OrderPaymentStatus = "paid"
+	OrderPaymentStatusPartiallyRefunded OrderPaymentStatus = "partially_refunded"
+	OrderPaymentStatusRefunded          OrderPaymentStatus = "refunded"
+	OrderPaymentStatusUnpaid            OrderPaymentStatus = "unpaid"
 )
 
 // Valid indicates whether the value is a known member of the OrderPaymentStatus enum.
 func (e OrderPaymentStatus) Valid() bool {
 	switch e {
-	case Awaiting:
+	case OrderPaymentStatusAwaiting:
 		return true
-	case Paid:
+	case OrderPaymentStatusPaid:
 		return true
-	case PartiallyRefunded:
+	case OrderPaymentStatusPartiallyRefunded:
 		return true
-	case Refunded:
+	case OrderPaymentStatusRefunded:
 		return true
-	case Unpaid:
+	case OrderPaymentStatusUnpaid:
 		return true
 	default:
 		return false
@@ -353,6 +377,12 @@ type Order struct {
 	// CustomerId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	CustomerId ULID `json:"customer_id"`
 
+	// DepositMinor A cash order's prepaid delivery (shipping and COD fee), paid by card (ADR-0067); 0 without one. The courier collects total − deposit once it is paid.
+	DepositMinor *int64 `json:"deposit_minor,omitempty"`
+
+	// DepositStatus The prepaid delivery's payment, as the gateway says; absent without a deposit.
+	DepositStatus *OrderDepositStatus `json:"deposit_status,omitempty"`
+
 	// DiscountMinor The coupon's discount, off the items (ADR-0042); 0 without one.
 	DiscountMinor *int64 `json:"discount_minor,omitempty"`
 
@@ -375,7 +405,7 @@ type Order struct {
 	// Phone Example: +201012345678
 	Phone string `json:"phone"`
 
-	// RiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+	// RiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing, or asked the shopper to prepay the delivery (then deposit_minor is set, ADR-0067).
 	RiskAction *OrderRiskAction `json:"risk_action,omitempty"`
 
 	// RiskBand new: too little history; low: usually takes their orders; medium: often does not; high: mostly does not, in more than one store (ADR-0065).
@@ -394,6 +424,9 @@ type Order struct {
 	Version    int       `json:"version"`
 }
 
+// OrderDepositStatus The prepaid delivery's payment, as the gateway says; absent without a deposit.
+type OrderDepositStatus string
+
 // OrderOutcomeReason Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
 type OrderOutcomeReason string
 
@@ -403,7 +436,7 @@ type OrderPaymentMethod string
 // OrderPaymentStatus COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
 type OrderPaymentStatus string
 
-// OrderRiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing.
+// OrderRiskAction What the store's risk rules did when the order was placed (ADR-0066): hold (no confirmation message; it cannot be confirmed until released), verify (the customer's own yes does not confirm it; call them), released (a hold lifted). Absent when the rules did nothing, or asked the shopper to prepay the delivery (then deposit_minor is set, ADR-0067).
 type OrderRiskAction string
 
 // OrderSource defines model for Order.Source.

@@ -12,6 +12,7 @@ const (
 	RiskHold     RiskAction = "hold"     // waits for the merchant's review; cannot be confirmed until released
 	RiskVerify   RiskAction = "verify"   // the customer's own "yes" does not confirm it: the merchant calls
 	RiskReleased RiskAction = "released" // a hold the merchant lifted
+	RiskPrepay   RiskAction = "prepay"   // the shopper pays the delivery upfront (ADR-0067)
 )
 
 // Risk is the verdict the risk rules give a new storefront order: the

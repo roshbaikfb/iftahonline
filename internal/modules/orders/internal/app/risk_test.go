@@ -9,9 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 )
@@ -118,5 +121,84 @@ func TestRiskRules(t *testing.T) {
 	rules.err = errors.New("boom")
 	if _, err = svc.PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: v, Qty: 5})); err == nil {
 		t.Fatal("a failed check must fail the order")
+	}
+}
+
+// freeDelivery quotes every address free, without a COD fee.
+type freeDelivery struct{}
+
+func (freeDelivery) Quote(_ context.Context, req shipping.QuoteRequest) (shipping.Quote, error) {
+	zero, err := money.Zero(req.Subtotal.Currency())
+	return shipping.Quote{Deliverable: true, Shipping: zero, CODFee: zero}, err
+}
+
+// cardsOn is a CardCheck with a fixed answer.
+type cardsOn bool
+
+func (c cardsOn) CardEnabled(context.Context) (bool, error) { return bool(c), nil }
+
+// TestPrepaidDelivery (ADR-0067): a prepay verdict asks the shipping and
+// COD fee upfront when the store takes cards, and holds the order when it
+// cannot; the deposit follows the gateway like a card order's payment.
+func TestPrepaidDelivery(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.env.Risk = &riskRules{verdict: domain.Risk{Band: "high", Action: domain.RiskPrepay}}
+	f.env.Shipping = fakeShipping{last: &shipping.QuoteRequest{}} // Alexandria: 60, COD fee 15
+	f.env.Cards = cardsOn(true)
+	svc := f.env.Service(f.pool)
+	v := f.product(t, f.storeA, "ساعة", 30000, 20)
+	place := func(svc *app.Service, qty int, governorate string) domain.Order {
+		t.Helper()
+		in := newOrder("", domain.LineInput{VariantID: v, Qty: qty})
+		in.Governorate = governorate
+		p, err := svc.PlaceOrder(f.shopperA, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Order
+	}
+
+	o := place(svc, 1, "EG-ALX")
+	if o.RiskAction != domain.RiskPrepay || o.Deposit.Amount() != 7500 || o.DepositStatus != domain.PaymentAwaiting ||
+		o.PaymentMethod != domain.PaymentCOD || o.PaymentStatus != domain.PaymentUnpaid {
+		t.Fatalf("placed: %+v", o)
+	}
+	if due, ok := o.OnlineDue(); !ok || due.Amount() != 7500 {
+		t.Fatalf("online due = %v %v", due, ok)
+	}
+	read, err := svc.Get(f.ctxA, o.ID)
+	if err != nil || read.Deposit.Amount() != 7500 || read.DepositStatus != domain.PaymentAwaiting {
+		t.Fatalf("stored: %+v, %v", read, err)
+	}
+	// The gateway's word moves the deposit, not the order's payment status.
+	err = postgres.InTenantTx(f.shopperA, f.pool, func(tx pgx.Tx) error {
+		changed, sErr := svc.SetPaymentStatusTx(f.shopperA, tx, o.ID, domain.PaymentPaid, "gateway:fake")
+		if sErr == nil && !changed {
+			t.Error("the deposit did not change")
+		}
+		return sErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, _ = svc.Get(f.ctxA, o.ID)
+	rest, rErr := read.OnDelivery()
+	if read.DepositStatus != domain.PaymentPaid || read.PaymentStatus != domain.PaymentUnpaid || rErr != nil || rest.Amount() != read.Total.Amount()-7500 {
+		t.Fatalf("after the deposit: %+v; on delivery %v %v", read, rest, rErr)
+	}
+	if got := f.events.Take(); len(got) == 0 || got[len(got)-1] != domain.EventOrderPaymentChanged+" "+o.ID.String()+" awaiting->paid" {
+		t.Fatalf("events = %v", got)
+	}
+
+	// No cards: held instead.
+	f.env.Cards = cardsOn(false)
+	if h := place(f.env.Service(f.pool), 2, "EG-ALX"); h.RiskAction != domain.RiskHold || !h.Deposit.IsZero() || h.DepositStatus != "" {
+		t.Fatalf("without cards: %+v", h)
+	}
+	// Nothing to prepay (free delivery): held too.
+	f.env.Cards, f.env.Shipping = cardsOn(true), freeDelivery{}
+	if h := place(f.env.Service(f.pool), 3, "EG-ALX"); h.RiskAction != domain.RiskHold || !h.Deposit.IsZero() {
+		t.Fatalf("free delivery: %+v", h)
 	}
 }

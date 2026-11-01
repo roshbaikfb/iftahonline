@@ -49,6 +49,9 @@ type Deps struct {
 	// Risk applies the store's risk rules to storefront orders
 	// (ADR-0066); nil applies none.
 	Risk RiskCheck
+	// Cards says whether a delivery can be prepaid (ADR-0067); nil
+	// cannot.
+	Cards CardCheck
 }
 
 // Module is the wired orders module.
@@ -64,7 +67,7 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: d.Auth, Plan: d.Plan,
-		Risk: d.Risk})}, nil
+		Risk: d.Risk, Cards: d.Cards})}, nil
 }
 
 // Fulfilment is the API courier integrations use.
@@ -93,6 +96,7 @@ type ShopDeps struct {
 	Stores    StoreSource
 	Plan      entitlements.Entitlements // counts the month's orders; nil counts nothing (tests)
 	Risk      RiskCheck                 // the store's risk rules (ADR-0066); nil applies none
+	Cards     CardCheck                 // whether a delivery can be prepaid (ADR-0067); nil cannot
 }
 
 // NewShop builds the shopper's side for the storefront role. Merchant
@@ -167,7 +171,7 @@ func withoutPermissions(d ShopDeps) (*app.Service, error) {
 	}
 	return app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events,
 		Catalog: d.Catalog, Customers: d.Customers, Shipping: d.Shipping, Coupons: d.Coupons, Stores: d.Stores, Auth: denyAll{}, Plan: d.Plan,
-		Risk: d.Risk}), nil
+		Risk: d.Risk, Cards: d.Cards}), nil
 }
 
 // denyAll refuses every permission.

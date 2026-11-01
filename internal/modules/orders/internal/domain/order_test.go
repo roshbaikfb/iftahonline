@@ -10,6 +10,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
+	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -264,4 +265,36 @@ func FuzzNormalizeCode(f *testing.F) {
 			t.Fatalf("code %q from %q", code, s)
 		}
 	})
+}
+
+func TestOnlineDueAndOnDelivery(t *testing.T) {
+	t.Parallel()
+	egp := func(n int64) money.Money {
+		m, err := money.New(n, money.EGP)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	tests := []struct {
+		name     string
+		o        domain.Order
+		due      int64
+		dueOK    bool
+		delivery int64
+	}{
+		{"cash", domain.Order{PaymentMethod: domain.PaymentCOD, PaymentStatus: domain.PaymentUnpaid, Total: egp(1000)}, 0, false, 1000},
+		{"card awaiting", domain.Order{PaymentMethod: domain.PaymentCard, PaymentStatus: domain.PaymentAwaiting, Total: egp(1000)}, 1000, true, 0},
+		{"card paid", domain.Order{PaymentMethod: domain.PaymentCard, PaymentStatus: domain.PaymentPaid, Total: egp(1000)}, 0, false, 0},
+		{"deposit awaiting", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentAwaiting}, 80, true, 1000},
+		{"deposit paid", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentPaid}, 0, false, 920},
+		{"deposit refunded", domain.Order{PaymentMethod: domain.PaymentCOD, Total: egp(1000), Deposit: egp(80), DepositStatus: domain.PaymentRefunded}, 0, false, 1000},
+	}
+	for _, tt := range tests {
+		due, ok := tt.o.OnlineDue()
+		got, err := tt.o.OnDelivery()
+		if ok != tt.dueOK || (ok && due.Amount() != tt.due) || err != nil || got.Amount() != tt.delivery {
+			t.Errorf("%s: due %v %v, on delivery %v %v", tt.name, due, ok, got, err)
+		}
+	}
 }

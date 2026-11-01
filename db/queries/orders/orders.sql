@@ -5,12 +5,12 @@
 INSERT INTO orders (id, store_id, created_at, source, customer_id, name, phone, governorate, city, address, notes,
                     currency, subtotal_minor, shipping_minor, cod_fee_minor, discount_minor, coupon_code, total_minor, item_count, lines_hash,
                     updated_at, status_changed_at, payment_method, payment_status,
-                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, risk_action, risk_band)
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, risk_action, risk_band, deposit_minor, deposit_status)
 VALUES (@id, @store_id, @created_at, @source, @customer_id, @name, @phone, @governorate, @city, @address, @notes,
         @currency, @subtotal_minor, @shipping_minor, @cod_fee_minor, @discount_minor, sqlc.narg(coupon_code), @total_minor, @item_count,
         @lines_hash, @created_at, @created_at, @payment_method, @payment_status,
         sqlc.narg(utm_source), sqlc.narg(utm_medium), sqlc.narg(utm_campaign), sqlc.narg(utm_content), sqlc.narg(utm_term),
-        sqlc.narg(risk_action), sqlc.narg(risk_band));
+        sqlc.narg(risk_action), sqlc.narg(risk_band), @deposit_minor, sqlc.narg(deposit_status));
 
 -- name: InsertOrderSignals :exec
 -- In the order's transaction (ADR-0043); kept one month.
@@ -110,6 +110,11 @@ WHERE d.store_id = @store_id AND d.key IN (
 -- The gateway's word on a card order's money (ADR-0029).
 UPDATE orders SET payment_status = @payment_status, version = version + 1, updated_at = now()
 WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND payment_method = 'card';
+
+-- name: SetDepositStatus :execrows
+-- The gateway's word on a cash order's prepaid shipping (ADR-0067).
+UPDATE orders SET deposit_status = @deposit_status, version = version + 1, updated_at = now()
+WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND payment_method = 'cod' AND deposit_minor > 0;
 
 -- name: GetOrderSignals :one
 -- One partition: the order's time is its partition key.

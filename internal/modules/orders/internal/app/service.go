@@ -147,6 +147,13 @@ type RiskCheck interface {
 	Check(ctx context.Context, p phone.E164) (domain.Risk, error)
 }
 
+// CardCheck says whether the store in ctx can take card payments now: a
+// gateway connected, and the plan's card_payments (cmd/platform adapts
+// payments.CardCheck). A prepaid delivery needs it (ADR-0067).
+type CardCheck interface {
+	CardEnabled(ctx context.Context) (bool, error)
+}
+
 // StoreSource returns the StoreInfo of the store in ctx; cmd/platform
 // adapts the tenancy module to it.
 type StoreSource func(ctx context.Context) (StoreInfo, error)
@@ -165,6 +172,7 @@ type Service struct {
 	auth      authz.Authorizer
 	plan      entitlements.Entitlements
 	risk      RiskCheck
+	cards     CardCheck
 	now       func() time.Time
 }
 
@@ -190,6 +198,9 @@ type Deps struct {
 	// Risk applies the store's risk rules to storefront orders
 	// (ADR-0066); nil applies none.
 	Risk RiskCheck
+	// Cards says whether a delivery can be prepaid by card (ADR-0067);
+	// nil cannot, so a prepay verdict holds the order instead.
+	Cards CardCheck
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -204,7 +215,7 @@ func NewService(d Deps) *Service {
 		d.Plan = entitlements.Unrestricted()
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, catalog: d.Catalog, customers: d.Customers,
-		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, risk: d.Risk, now: time.Now}
+		shipping: d.Shipping, coupons: d.Coupons, stores: d.Stores, auth: d.Auth, plan: d.Plan, risk: d.Risk, cards: d.Cards, now: time.Now}
 }
 
 // SetClock replaces the clock (tests of the duplicate window).
@@ -274,6 +285,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in domain.NewOrder) (Placement
 			return Placement{}, rErr
 		}
 		o.RiskAction, o.RiskBand = r.Action, r.Band
+		if r.Action == domain.RiskPrepay {
+			if rErr = s.prepay(ctx, &o); rErr != nil {
+				return Placement{}, rErr
+			}
+		}
 	}
 
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return s.placeTx(ctx, tx, d, &o, coupon) })
@@ -568,21 +584,35 @@ func (s *Service) SetPaymentStatusTx(ctx context.Context, tx pgx.Tx, id ulid.ID,
 	if err != nil {
 		return false, notFound(err)
 	}
-	if o.PaymentMethod != domain.PaymentCard || o.PaymentStatus == st {
+	// A cash order's online money is its deposit (ADR-0067).
+	deposit := o.PaymentMethod == domain.PaymentCOD && !o.Deposit.IsZero()
+	was := o.PaymentStatus
+	if deposit {
+		was = o.DepositStatus
+	}
+	if (o.PaymentMethod != domain.PaymentCard && !deposit) || was == st {
 		return false, nil
 	}
-	if err = store.SetPaymentStatus(ctx, tx, id, st); err != nil {
+	set := store.SetPaymentStatus
+	if deposit {
+		set = store.SetDepositStatus
+	}
+	if err = set(ctx, tx, id, st); err != nil {
 		return false, notFound(err)
 	}
-	if err = s.audit.RecordTx(ctx, tx, audit.Entry{Action: "order.payment_" + string(st), TargetType: "order", TargetID: id.String(),
-		Metadata: map[string]any{"from": string(o.PaymentStatus), "to": string(st), "actor": actor}}); err != nil {
+	action := "order.payment_" + string(st)
+	if deposit {
+		action = "order.deposit_" + string(st)
+	}
+	if err = s.audit.RecordTx(ctx, tx, audit.Entry{Action: action, TargetType: "order", TargetID: id.String(),
+		Metadata: map[string]any{"from": string(was), "to": string(st), "actor": actor}}); err != nil {
 		return false, err
 	}
 	m, err := event.MetaFor(ctx, s.ids, domain.EventOrderPaymentChanged, 1)
 	if err != nil {
 		return false, err
 	}
-	return true, s.events.PublishTx(ctx, tx, domain.OrderPaymentChanged{Meta: m, OrderID: id, From: o.PaymentStatus, To: st})
+	return true, s.events.PublishTx(ctx, tx, domain.OrderPaymentChanged{Meta: m, OrderID: id, From: was, To: st, Deposit: deposit})
 }
 
 // Transition moves an order to status to, if the state machine allows it
@@ -645,6 +675,29 @@ func (s *Service) TransitionSystemReasonTx(ctx context.Context, tx pgx.Tx, id ul
 	}
 	_, moved, err = s.transitionTx(ctx, tx, id, move{to: to, note: note, reason: reason, actor: actor})
 	return moved, notFound(err)
+}
+
+// prepay asks a cash order's shopper to pay the delivery upfront
+// (ADR-0067): the shipping and the COD fee, by card. A store that cannot
+// take cards now, or an order that costs nothing to deliver, holds the
+// order for review instead: the rules wanted more than a plain order.
+func (s *Service) prepay(ctx context.Context, o *domain.Order) error {
+	deposit, err := o.Shipping.Add(o.CODFee)
+	if err != nil {
+		return err
+	}
+	cards := false
+	if s.cards != nil && !deposit.IsZero() {
+		if cards, err = s.cards.CardEnabled(ctx); err != nil {
+			return err
+		}
+	}
+	if !cards {
+		o.RiskAction = domain.RiskHold
+		return nil
+	}
+	o.Deposit, o.DepositStatus = deposit, domain.PaymentAwaiting
+	return nil
 }
 
 // ReleaseHold lifts the risk rules' hold of a pending order (ADR-0066),

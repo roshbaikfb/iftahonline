@@ -357,7 +357,7 @@ func toOrder(o domain.Order) Order {
 		reason = &r
 	}
 	var action *OrderRiskAction
-	if o.RiskAction != domain.RiskNone {
+	if o.RiskAction != domain.RiskNone && o.RiskAction != domain.RiskPrepay { // a prepay shows as the deposit (ADR-0067)
 		a := OrderRiskAction(o.RiskAction)
 		action = &a
 	}
@@ -366,8 +366,14 @@ func toOrder(o domain.Order) Order {
 		b := RiskBand(o.RiskBand)
 		band = &b
 	}
+	var depositStatus *OrderDepositStatus
+	if o.DepositStatus != "" {
+		ds := OrderDepositStatus(o.DepositStatus)
+		depositStatus = &ds
+	}
+	deposit := o.Deposit.Amount()
 	return Order{
-		OutcomeReason: reason, RiskAction: action, RiskBand: band,
+		OutcomeReason: reason, RiskAction: action, RiskBand: band, DepositMinor: &deposit, DepositStatus: depositStatus,
 		DiscountMinor: &discount, CouponCode: code, Attribution: toAttribution(o.Attribution),
 		Id: o.ID.String(), Code: o.Code(), Status: OrderStatus(o.Status), Version: o.Version, Source: OrderSource(o.Source),
 		CustomerId: o.CustomerID.String(), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate, City: c.City,

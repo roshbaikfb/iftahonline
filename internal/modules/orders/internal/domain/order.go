@@ -341,6 +341,36 @@ type Order struct {
 	// when it was placed, and the customer's band then (ADR-0066).
 	RiskAction RiskAction
 	RiskBand   string
+	// Deposit is a cash order's prepaid shipping (ADR-0067): shipping and
+	// COD fee, paid online; zero for other orders. DepositStatus follows
+	// the gateway ("" without a deposit).
+	Deposit       money.Money
+	DepositStatus PaymentStatus
+}
+
+// OnlineDue is what the shopper still has to pay online, and whether
+// anything is due: a card order's total, or a cash order's deposit,
+// while awaiting the gateway.
+func (o Order) OnlineDue() (money.Money, bool) {
+	switch {
+	case o.PaymentMethod == PaymentCard && o.PaymentStatus == PaymentAwaiting:
+		return o.Total, true
+	case o.PaymentMethod == PaymentCOD && o.DepositStatus == PaymentAwaiting:
+		return o.Deposit, true
+	}
+	return money.Money{}, false
+}
+
+// OnDelivery is what the courier collects: a cash order's total, less a
+// deposit that was paid; nothing for a card order.
+func (o Order) OnDelivery() (money.Money, error) {
+	switch {
+	case o.PaymentMethod == PaymentCard:
+		return money.Zero(o.Total.Currency())
+	case o.DepositStatus == PaymentPaid && !o.Deposit.IsZero():
+		return o.Total.Sub(o.Deposit)
+	}
+	return o.Total, nil
 }
 
 // Code is the short reference shown to merchants and shoppers: the
