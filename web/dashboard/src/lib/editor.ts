@@ -31,6 +31,9 @@ export interface VariantDraft {
   values: string[];
   price: string;
   compare: string;
+  // cost is what the variant costs the merchant (ADR-0068); '' is not
+  // known. Shoppers never see it.
+  cost?: string;
   sku: string;
   stock: string;
   tracked: boolean;
@@ -80,6 +83,7 @@ export function draftOf(p: Product): Draft {
       values: v.option_values,
       price: toMajor(v.price_minor),
       compare: v.compare_at_minor === undefined ? '' : toMajor(v.compare_at_minor),
+      cost: v.cost_minor === undefined ? '' : toMajor(v.cost_minor),
       sku: v.sku ?? '',
       stock: String(v.stock.on_hand),
       tracked: v.stock.tracked,
@@ -168,12 +172,16 @@ export function build(d: Draft): Built {
     if (v.compare.trim() !== '' && (compare === undefined || price === undefined || compare <= price)) {
       errors[`${at}.compare`] = 'السعر قبل الخصم أكبر من السعر';
     }
+    const costText = (v.cost ?? '').trim();
+    const cost = costText === '' ? undefined : toMinor(costText);
+    if (costText !== '' && cost === undefined) errors[`${at}.cost`] = 'اكتب التكلفة رقمًا';
     const onHand = toCount(v.stock);
     if (v.tracked && onHand === undefined) errors[`${at}.stock`] = 'اكتب عددًا صحيحًا';
     // tracked and on_hand only count for a new variant; the server ignores
     // them on an existing one.
     const out: VariantInput = { price_minor: price ?? 0, option_values: v.values, hidden: v.hidden, tracked: v.tracked, on_hand: onHand ?? 0 };
     if (compare !== undefined) out.compare_at_minor = compare;
+    if (cost !== undefined) out.cost_minor = cost;
     if (v.sku.trim()) out.sku = v.sku.trim();
     if (v.id) {
       out.id = v.id;

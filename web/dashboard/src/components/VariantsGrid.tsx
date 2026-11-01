@@ -12,7 +12,8 @@ interface Props {
 }
 
 // VariantsGrid is every combination of the options (the approved
-// mockup): price, price before the discount, SKU, stock and whether it
+// mockup): price, price before the discount, the merchant's cost (for
+// the profit dashboard, ADR-0068), SKU, stock and whether it
 // is on sale, grouped by colour when there is a colour option. Unticking
 // «متاح للبيع» hides the variant and keeps its stock (the owner,
 // 2026-10-27). A row applies one price or stock to all.
@@ -67,6 +68,17 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
             }}
           />
         </td>
+        <td data-label="التكلفة">
+          <input
+            inputMode="decimal"
+            value={v.cost ?? ''}
+            aria-label={`تكلفة ${name}`}
+            aria-invalid={errors[`${at}.cost`] ? true : undefined}
+            onChange={(e) => {
+              set(i, { cost: e.target.value });
+            }}
+          />
+        </td>
         <td data-label="رمز SKU">
           <input
             dir="ltr"
@@ -114,6 +126,7 @@ export function VariantsGrid({ options, variants, currency, errors, onChange }: 
         <th scope="col">النوع</th>
         <th scope="col">السعر ({currency})</th>
         <th scope="col">قبل الخصم</th>
+        <th scope="col" title="لا يراها العملاء؛ تُحسب بها أرباحك">التكلفة</th>
         <th scope="col">رمز SKU</th>
         <th scope="col">المخزون</th>
         <th scope="col">متاح للبيع</th>
