@@ -317,6 +317,7 @@ export function OrderDetail() {
                   <small className="muted">من رابط الإعلان الذي جاء منه العميل (UTM).</small>
                 </section>
               )}
+              {o.payment_method === 'cod' && (o.deposit_minor ?? 0) > 0 && <OrderPayments storeId={storeId} order={o} onChanged={reload} />}
               {o.payment_method === 'cod' ? (
                 <section className="card">
                   <h2>الدفع</h2>
@@ -327,7 +328,7 @@ export function OrderDetail() {
                     </span>
                   </p>
                   {o.payment_status !== 'paid' && !closed.has(o.status) && (
-                    <small className="muted">يحصّل المندوب {money(o.total_minor, o.currency)} ويحوّلها لك شركة الشحن.</small>
+                    <small className="muted">يحصّل المندوب {money(onDelivery(o), o.currency)} ويحوّلها لك شركة الشحن.</small>
                   )}
                 </section>
               ) : (
@@ -363,4 +364,10 @@ function byLabel(e: { from?: OrderStatus; actor?: string }, source: string): str
   if (kind === 'carrier') return ` · شركة الشحن (${name})`;
   if (kind === 'payments') return ' · بوابة الدفع';
   return ` · ${e.actor}`;
+}
+
+// onDelivery is what the courier collects: the total, less a prepaid
+// delivery once it is paid (ADR-0067).
+function onDelivery(o: { total_minor: number; deposit_minor?: number; deposit_status?: string }): number {
+  return o.deposit_status === 'paid' ? o.total_minor - (o.deposit_minor ?? 0) : o.total_minor;
 }

@@ -74,13 +74,21 @@ export function OrderPayments({ storeId, order, onChanged }: { storeId: string; 
     onChanged();
   }
 
-  if (order.payment_method !== 'card') return null;
+  // A cash order's prepaid delivery is paid by card too (ADR-0067).
+  const deposit = order.payment_method === 'cod' && (order.deposit_minor ?? 0) > 0;
+  if (order.payment_method !== 'card' && !deposit) return null;
+  const status = deposit ? (order.deposit_status ?? 'awaiting') : order.payment_status;
   return (
     <section className="card">
-      <h2>الدفع بالبطاقة</h2>
+      <h2>{deposit ? 'التوصيل المدفوع مقدمًا' : 'الدفع بالبطاقة'}</h2>
       <p>
-        حالة الدفع: <span className={`status pay-${order.payment_status}`}>{orderPaymentLabel[order.payment_status]}</span>
+        حالة الدفع: <span className={`status pay-${status}`}>{orderPaymentLabel[status]}</span>
       </p>
+      {deposit && (
+        <small className="muted">
+          طلبت قواعد الحماية أن يدفع العميل الشحن ورسوم الدفع عند الاستلام ({money(order.deposit_minor ?? 0, order.currency)}) بالبطاقة؛ يُلغى الطلب إن لم يدفع خلال ساعة.
+        </small>
+      )}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {list.length === 0 && <p className="empty">لم يبدأ العميل الدفع بعد.</p>}

@@ -26,7 +26,7 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
     };
   }, [storeId]);
 
-  async function save(next: Pick<RiskSettings, 'hold_from' | 'verify_from'>) {
+  async function save(next: Pick<RiskSettings, 'hold_from' | 'verify_from' | 'prepay_from'>) {
     setError('');
     setSaved(false);
     const { data, error: err } = await api.PUT('/v1/stores/{store_id}/risk/settings', { params: { path: { store_id: storeId } }, body: next });
@@ -58,7 +58,7 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
         id="rule-hold"
         value={s.hold_from}
         disabled={locked}
-        onChange={(e) => void save({ hold_from: e.target.value as RiskRule, verify_from: s.verify_from })}
+        onChange={(e) => void save({ hold_from: e.target.value as RiskRule, verify_from: s.verify_from, prepay_from: s.prepay_from })}
       >
         {rules.map((r) => (
           <option key={r} value={r}>
@@ -67,6 +67,22 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
         ))}
       </select>
       <small className="muted">لا نرسل للعميل رسالة تأكيد، ولا يُؤكَّد الطلب حتى تراجعه وتفك حجزه.</small>
+      <label className="field-label" htmlFor="rule-prepay">
+        اطلب دفع التوصيل مقدمًا
+      </label>
+      <select
+        id="rule-prepay"
+        value={s.prepay_from}
+        disabled={locked}
+        onChange={(e) => void save({ hold_from: s.hold_from, verify_from: s.verify_from, prepay_from: e.target.value as RiskRule })}
+      >
+        {rules.map((r) => (
+          <option key={r} value={r}>
+            {ruleLabel[r]}
+          </option>
+        ))}
+      </select>
+      <small className="muted">يدفع العميل الشحن ورسوم الدفع عند الاستلام بالبطاقة قبل أن يكتمل طلبه، والباقي عند الاستلام. يلزم ربط بوابة دفع؛ بدونها يُحجز الطلب للمراجعة.</small>
       <label className="field-label" htmlFor="rule-verify">
         اطلب تأكيدًا هاتفيًا
       </label>
@@ -74,7 +90,7 @@ export function RiskRulesCard({ storeId, manage }: { storeId: string; manage: bo
         id="rule-verify"
         value={s.verify_from}
         disabled={locked}
-        onChange={(e) => void save({ hold_from: s.hold_from, verify_from: e.target.value as RiskRule })}
+        onChange={(e) => void save({ hold_from: s.hold_from, verify_from: e.target.value as RiskRule, prepay_from: s.prepay_from })}
       >
         {rules.map((r) => (
           <option key={r} value={r}>

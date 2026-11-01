@@ -398,7 +398,7 @@ describe('helpers', () => {
 describe('cash-on-delivery protection rules (ADR-0066)', () => {
   it('saves the rules the plan includes', async () => {
     const calls = routes({
-      [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', available: true } }),
+      [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', prepay_from: 'off', available: true } }),
       [`PUT ${base}/risk/settings`]: (c) => ({ status: 200, body: { ...(c.body as object), available: true } }),
     });
     renderAt(`/stores/${store}/messages`);
@@ -406,15 +406,27 @@ describe('cash-on-delivery protection rules (ADR-0066)', () => {
     const card = await screen.findByRole('region', { name: 'حماية الدفع عند الاستلام' });
     await user.selectOptions(within(card).getByLabelText('احجز الطلب للمراجعة'), 'high');
     expect(await within(card).findByRole('status')).toHaveTextContent('حُفظت القواعد.');
-    expect(calls.find((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings'))?.body).toEqual({ hold_from: 'high', verify_from: 'off' });
+    expect(calls.find((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings'))?.body).toEqual({ hold_from: 'high', verify_from: 'off', prepay_from: 'off' });
     await user.selectOptions(within(card).getByLabelText('اطلب تأكيدًا هاتفيًا'), 'medium');
     await waitFor(() => {
-      expect(calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings')).at(-1)?.body).toEqual({ hold_from: 'high', verify_from: 'medium' });
+      expect(calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings')).at(-1)?.body).toEqual({
+        hold_from: 'high',
+        verify_from: 'medium',
+        prepay_from: 'off',
+      });
+    });
+    await user.selectOptions(within(card).getByLabelText('اطلب دفع التوصيل مقدمًا'), 'medium');
+    await waitFor(() => {
+      expect(calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/risk/settings')).at(-1)?.body).toEqual({
+        hold_from: 'high',
+        verify_from: 'medium',
+        prepay_from: 'medium',
+      });
     });
   });
 
   it('shows them locked, with the plans, when the plan lacks them', async () => {
-    routes({ [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', available: false } }) });
+    routes({ [`GET ${base}/risk/settings`]: () => ({ status: 200, body: { hold_from: 'off', verify_from: 'off', prepay_from: 'off', available: false } }) });
     renderAt(`/stores/${store}/messages`);
     const card = await screen.findByRole('region', { name: 'حماية الدفع عند الاستلام' });
     expect(within(card).getByLabelText('احجز الطلب للمراجعة')).toBeDisabled();
@@ -464,5 +476,25 @@ describe('noticeText', () => {
     const n = { id: 'N', kind: 'order_confirmed' as const, read: false, created_at: '' };
     expect(noticeText(n).after).toBe('.');
     expect(noticeText({ ...n, needs_call: true })).toEqual({ before: 'وافق العميل على الطلب', after: ': اتصل به للتحقق قبل التأكيد.' });
+  });
+});
+
+describe('prepaid delivery (ADR-0067)', () => {
+  it('shows the deposit and what the courier collects', async () => {
+    const o = {
+      id: orderID, code: orderID.slice(-8), status: 'confirmed', version: 3, source: 'storefront', customer_id: '01M5CUST000000000000000000',
+      name: 'منى', phone: '+201012345678', governorate: 'EG-C', city: 'القاهرة', address: '1', notes: '', currency: 'EGP',
+      subtotal_minor: 45000, shipping_minor: 5000, cod_fee_minor: 1500, total_minor: 51500, item_count: 1, payment_method: 'cod', payment_status: 'unpaid',
+      created_at: '2026-11-01T10:00:00Z', updated_at: '2026-11-01T10:00:00Z', status_changed_at: '2026-11-01T10:00:00Z',
+      deposit_minor: 6500, deposit_status: 'paid', risk_band: 'high',
+    };
+    routes({
+      [`GET ${base}/orders/${orderID}`]: () => ({ status: 200, body: { order: o, lines: [], events: [] } }),
+      [`GET ${base}/payments`]: () => ({ status: 200, body: { items: [] } }),
+    });
+    renderAt(`/stores/${store}/orders/${orderID}`);
+    const card = await screen.findByRole('heading', { name: 'التوصيل المدفوع مقدمًا' });
+    expect(card.closest('section')).toHaveTextContent('طلبت قواعد الحماية أن يدفع العميل الشحن');
+    expect(screen.getByText(/يحصّل المندوب/)).toHaveTextContent('450');
   });
 });
