@@ -44,11 +44,20 @@ func toConfirmView(v messaging.LinkView, err error) (web.ConfirmView, error) {
 	if err != nil {
 		return web.ConfirmView{}, err
 	}
-	out := web.ConfirmView{Code: v.OrderCode, Total: v.Total, FirstName: v.FirstName, State: web.ConfirmClosed}
+	out := web.ConfirmView{Ref: v.OrderID.String(), Code: v.OrderCode, Total: v.Total, FirstName: v.FirstName, State: web.ConfirmClosed,
+		Deposit: v.Deposit, OnDelivery: v.OnDelivery}
 	switch v.Status {
 	case messaging.ConfirmationPending, messaging.ConfirmationUnreached:
-		// An unreached customer who found the link may still answer.
-		out.State = web.ConfirmWaiting
+		// An unreached customer who found the link may still answer; a
+		// prepaid delivery's pays it (ADR-0070).
+		switch {
+		case v.DepositPaid:
+			out.State = web.ConfirmPaid
+		case v.DepositDue:
+			out.State = web.ConfirmPay
+		case v.Deposit.IsZero():
+			out.State = web.ConfirmWaiting
+		}
 	case messaging.ConfirmationConfirmed:
 		out.State = web.ConfirmDone
 		if v.AwaitingCall {

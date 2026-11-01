@@ -25,7 +25,12 @@ type fakeConfirms struct {
 
 func (f *fakeConfirms) view() web.ConfirmView {
 	total, _ := money.New(36000, money.EGP) //nolint:errcheck // a valid amount
-	return web.ConfirmView{Code: "P0R1S2T3", Total: total, FirstName: "منى", State: f.state}
+	v := web.ConfirmView{Ref: "01M6C28DBCVVA0RVVA19HVA7S9", Code: "P0R1S2T3", Total: total, FirstName: "منى", State: f.state}
+	if f.state == web.ConfirmPay || f.state == web.ConfirmPaid { // a prepaid delivery
+		v.Deposit, _ = money.New(6500, money.EGP)     //nolint:errcheck // a valid amount
+		v.OnDelivery, _ = money.New(29500, money.EGP) //nolint:errcheck // a valid amount
+	}
+	return v
 }
 
 func (f *fakeConfirms) Confirmation(_ context.Context, token string) (web.ConfirmView, error) {

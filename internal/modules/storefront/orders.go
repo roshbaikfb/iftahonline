@@ -39,8 +39,10 @@ func (o shopOrders) PlaceOrder(ctx context.Context, req web.OrderRequest) (web.P
 	}
 	p, err := o.shop.PlaceOrder(ctx, in)
 	if err == nil {
+		// Only a card order goes on to pay: a prepaid delivery's link goes
+		// to the customer's phone (ADR-0070).
 		_, due := p.Order.OnlineDue()
-		return web.Placed{Ref: p.Order.ID.String(), PayOnline: due}, nil
+		return web.Placed{Ref: p.Order.ID.String(), PayOnline: due && p.Order.PaymentMethod == orders.PaymentCard}, nil
 	}
 	var e *errs.Error
 	switch {
@@ -106,6 +108,18 @@ func (p shopPayments) PayURL(store, orderRef, back string) string {
 		return ""
 	}
 	return payments.StartURL(p.origin, s, id, back)
+}
+
+func (p shopPayments) DepositURL(store, orderRef, back, token string) string {
+	s, err := tenant.ParseStoreID(store)
+	if err != nil {
+		return ""
+	}
+	id, err := ulid.Parse(orderRef)
+	if err != nil {
+		return ""
+	}
+	return payments.DepositURL(p.origin, s, id, back, token)
 }
 
 func (o shopOrders) Quote(ctx context.Context, req web.QuoteRequest) (web.QuoteView, error) {
@@ -176,11 +190,7 @@ func (o shopOrders) OrderSummary(ctx context.Context, ref string) (web.OrderSumm
 	}
 	s := web.OrderSummary{Ref: ref, Code: ord.Code(), Card: ord.PaymentMethod == orders.PaymentCard, PaymentStatus: string(ord.PaymentStatus),
 		Cancelled: ord.Status == orders.StatusCancelled, Subtotal: ord.Subtotal, Shipping: ord.Shipping, CODFee: ord.CODFee,
-		Discount: ord.Discount, CouponCode: ord.CouponCode, Total: ord.Total, Deposit: ord.Deposit, DepositStatus: string(ord.DepositStatus),
-		Governorate: ord.Contact.Governorate, City: ord.Contact.City}
-	if s.OnDelivery, err = ord.OnDelivery(); err != nil {
-		return web.OrderSummary{}, err
-	}
+		Discount: ord.Discount, CouponCode: ord.CouponCode, Total: ord.Total, Governorate: ord.Contact.Governorate, City: ord.Contact.City}
 	if f := strings.Fields(ord.Contact.Name); len(f) > 0 {
 		s.FirstName = f[0]
 	}

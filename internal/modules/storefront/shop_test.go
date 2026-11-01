@@ -155,7 +155,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 		t.Fatal(err)
 	}
 	orderDeps := orders.ShopDeps{Pool: pool, IDs: ids, Events: bus, Catalog: cat.Catalog(), Customers: cust.Customers(),
-		Shipping: ship.Quoter(),
+		Shipping: ship.Quoter(), Risk: riskyPhone{}, Cards: cardsOn{},
 		Stores: func(ctx context.Context) (orders.StoreInfo, error) {
 			st, getErr := stores.GetStore(ctx)
 			c, _ := geo.CountryOf(st.Currency)
@@ -290,6 +290,25 @@ func (p platform) call(t *testing.T, s storeRef, method, path, body string, want
 }
 
 // visit is a shopper's GET on a store host.
+// riskPhone is the customer whose band the store's rules want a prepaid
+// delivery for (ADR-0067).
+const riskPhone = "01099999999"
+
+// riskyPhone gives riskPhone a prepaid delivery, and anyone else nothing.
+type riskyPhone struct{}
+
+func (riskyPhone) Check(_ context.Context, p phone.E164) (orders.Risk, error) {
+	if p.Unmasked() == "+2"+riskPhone {
+		return orders.Risk{Band: "high", Action: orders.RiskPrepay}, nil
+	}
+	return orders.Risk{}, nil
+}
+
+// cardsOn: every store takes cards.
+type cardsOn struct{}
+
+func (cardsOn) CardEnabled(context.Context) (bool, error) { return true, nil }
+
 func (p platform) visit(t *testing.T, host, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	rq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
@@ -564,6 +583,39 @@ func TestOrderWithShipping(t *testing.T) {
 		if strings.Contains(body, private) {
 			t.Fatalf("thank-you shows %q: its link may be shared", private)
 		}
+	}
+
+	// A phone whose band asks a prepaid delivery gets the same page
+	// (ADR-0070): its link to pay goes to the phone, so whoever typed the
+	// number learns nothing of it.
+	risky := url.Values{}
+	for k, v := range form {
+		risky[k] = v
+	}
+	risky.Set("phone", riskPhone)
+	risky.Set("key", "ship-3")
+	rr := post("/order", risky, 5)
+	riskyLoc := rr.Header().Get("Location")
+	if rr.Code != http.StatusSeeOther || !strings.HasPrefix(riskyLoc, "/thank-you/") || strings.Contains(riskyLoc, "?") {
+		t.Fatalf("prepaid order: %d %q", rr.Code, riskyLoc)
+	}
+	riskyID, err := ulid.Parse(strings.TrimPrefix(riskyLoc, "/thank-you/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deposit string
+	ctx := tenant.WithStore(t.Context(), s.id)
+	if err = postgres.InTenantTx(ctx, p.pool, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT coalesce(deposit_status, '') FROM orders WHERE id = $1`, riskyID).Scan(&deposit)
+	}); err != nil || deposit != "awaiting" {
+		t.Fatalf("the order is not a prepaid delivery: %q %v", deposit, err)
+	}
+	riskyBody := p.visit(t, s.host, riskyLoc).Body.String()
+	same := strings.NewReplacer(riskyID.String(), "REF", orders.CodeOf(riskyID), "CODE")
+	plainID := strings.TrimPrefix(loc, "/thank-you/")
+	plain := strings.NewReplacer(plainID, "REF", plainID[len(plainID)-8:], "CODE")
+	if same.Replace(riskyBody) != plain.Replace(body) {
+		t.Fatal("the thank-you page of a prepaid delivery differs from any cash order's")
 	}
 
 	// Tracking finds it by its code and phone (typed another way), and

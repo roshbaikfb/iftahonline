@@ -305,7 +305,6 @@ type orderLog struct {
 	mu        sync.Mutex
 	reqs      []web.OrderRequest
 	err       error             // returned by the next PlaceOrder
-	prepay    bool              // the next orders' delivery is prepaid (ADR-0067)
 	summary   *web.OrderSummary // what the thank-you page shows, when set
 	tracking  *web.Tracking     // what tracking finds, when set
 	best      []ulid.ID         // the bestsellers, most first
@@ -363,7 +362,7 @@ func (f fakeOrders) PlaceOrder(_ context.Context, req web.OrderRequest) (web.Pla
 		f.log.err = nil
 		return web.Placed{}, err
 	}
-	return web.Placed{Ref: "IFT-1001", PayOnline: req.Card || f.log.prepay}, nil
+	return web.Placed{Ref: "IFT-1001", PayOnline: req.Card}, nil
 }
 
 func (f fakeOrders) placed() []web.OrderRequest {

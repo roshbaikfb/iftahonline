@@ -140,7 +140,6 @@ const (
 	MsgPaymentPending
 	MsgDepositPending
 	MsgDepositPaid
-	MsgStepConfirmDeposit
 	MsgPayNow
 	MsgPaymentExpired
 	MsgErrCardUnavailable
@@ -367,10 +366,9 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgPaymentPending: {"لم يصلنا الدفع بعد. إذا دفعت للتو فسيتأكد خلال لحظات (تتحدّث الصفحة تلقائيًا)، وإلا فادفع الآن.",
 		"We have not received your payment yet. If you just paid, it will be confirmed in a moment (this page updates itself); otherwise, pay now."},
 	MsgPayNow: {"ادفع الآن", "Pay now"},
-	MsgDepositPending: {"لإتمام طلبك، ادفع مصاريف التوصيل مقدمًا بالبطاقة: %s. وتدفع الباقي (%s) عند الاستلام. إن لم يصلنا الدفع خلال ساعة يُلغى الطلب.",
-		"To complete your order, pay the delivery upfront by card: %s. You pay the rest (%s) on delivery. Unpaid orders are cancelled after an hour."},
+	MsgDepositPending: {"لإتمام طلبك، ادفع مصاريف التوصيل مقدمًا بالبطاقة: %s، وتدفع الباقي (%s) عند الاستلام. يتأكد الطلب بعد الدفع، ويُلغى إن لم يصلنا خلال 6 ساعات من الطلب.",
+		"To complete your order, pay the delivery upfront by card: %s. You pay the rest (%s) on delivery. The order is confirmed once paid, and cancelled if unpaid 6 hours after it was placed."},
 	MsgDepositPaid:           {"دُفعت مصاريف التوصيل مقدمًا", "Delivery paid upfront"},
-	MsgStepConfirmDeposit:    {"يتأكد تلقائيًا بعد دفع التوصيل", "Confirmed once the delivery is paid"},
 	MsgPaymentExpired:        {"انتهت مهلة الدفع وأُلغي الطلب. يمكنك الطلب من جديد.", "The payment window passed and the order was cancelled. You can order again."},
 	MsgErrCardUnavailable:    {"الدفع بالبطاقة غير متاح حاليًا؛ اختر الدفع عند الاستلام.", "Card payment is not available right now; please choose cash on delivery."},
 	MsgMenu:                  {"القائمة", "Menu"},
