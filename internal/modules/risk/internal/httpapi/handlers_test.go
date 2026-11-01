@@ -345,7 +345,7 @@ func TestSettings(t *testing.T) {
 	if code != http.StatusOK || got["hold_from"] != "off" || got["verify_from"] != "off" || got["prepay_from"] != "off" || got["available"] != true {
 		t.Fatalf("getRiskSettings = %d %v", code, got)
 	}
-	body := `{"hold_from":"high","verify_from":"medium"}` // without prepay_from: off
+	body := `{"hold_from":"high","verify_from":"medium"}` // without prepay_from: kept (off yet)
 	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, body)); code != http.StatusOK ||
 		got["hold_from"] != "high" || got["verify_from"] != "medium" || got["prepay_from"] != "off" {
 		t.Fatalf("updateRiskSettings = %d %v", code, got)
@@ -353,6 +353,11 @@ func TestSettings(t *testing.T) {
 	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, `{"hold_from":"off","verify_from":"medium","prepay_from":"high"}`)); code != http.StatusOK ||
 		got["prepay_from"] != "high" {
 		t.Fatalf("updateRiskSettings with prepay = %d %v", code, got)
+	}
+	// A client that does not know prepay_from keeps it (P8 review).
+	if code, got, _ = f.do(t, req(t, http.MethodPut, settingsPath(f.storeA), tokOwnerA, `{"hold_from":"high","verify_from":"off"}`)); code != http.StatusOK ||
+		got["hold_from"] != "high" || got["prepay_from"] != "high" {
+		t.Fatalf("updateRiskSettings without prepay_from = %d %v", code, got)
 	}
 	for _, tt := range []struct {
 		name, token, body string
