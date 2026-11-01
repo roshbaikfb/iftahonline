@@ -22,3 +22,16 @@ export const reasonLabel: Record<OutcomeReason, string> = {
   refused: 'العميل رفض الطلب',
   no_answer: 'العميل لم يرد',
 };
+
+export type RiskSettings = components['schemas']['RiskSettings'];
+export type RiskRule = components['schemas']['RiskRule'];
+
+// ruleLabel names a rule's starting band in the settings' lists.
+export const ruleLabel: Record<RiskRule, string> = {
+  off: 'متوقف',
+  medium: 'من المخاطرة المتوسطة',
+  high: 'المخاطرة العالية فقط',
+};
+
+// canManageRules: changing the rules needs orders.manage.
+export const canManageRules = (r: string | undefined) => r === 'owner' || r === 'manager' || r === 'support';

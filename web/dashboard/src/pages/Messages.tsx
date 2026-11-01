@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
+import { RiskRulesCard } from '../components/RiskRulesCard';
 import {
   canManageMessages,
   partsLabel,
@@ -14,6 +15,7 @@ import {
   type MessagingSettings,
 } from '../lib/messages';
 import { problemMessage } from '../lib/problem';
+import { canManageRules } from '../lib/risk';
 import { useRole } from '../lib/settings';
 
 type Locale = MessageText['locale'];
@@ -231,6 +233,7 @@ export function Messages() {
               )}
             </section>
           )}
+          <RiskRulesCard storeId={storeId} manage={canManageRules(role)} />
 
           {saved && (
             <section className="card editor-card sms" aria-labelledby="h-sms">

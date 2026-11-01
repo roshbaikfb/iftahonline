@@ -113,6 +113,7 @@ export function noticeText(n: Notice): { before: string; after: string } {
       if (n.feature) return { before: 'وصلت إلى حد طلبات باقتك هذا الشهر. الطلبات ما زالت تصلك؛ رقِّ باقتك لتبقى ضمن الحد.', after: '' };
       return { before: 'نفد رصيد رسائل هذا الشهر: لن تُرسل رسائل التأكيد حتى يتجدد.', after: '' };
     case 'order_confirmed':
+      if (n.needs_call) return { before: 'وافق العميل على الطلب', after: ': اتصل به للتحقق قبل التأكيد.' };
       return { before: 'أكّد العميل الطلب', after: '.' };
     case 'order_cancelled':
       return { before: 'ألغى العميل الطلب', after: '.' };
