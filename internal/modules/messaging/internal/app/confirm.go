@@ -263,8 +263,12 @@ func (s *Service) ackTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, settled
 	if !domain.ValidLocale(locale) {
 		locale = domain.Arabic
 	}
+	outcome := string(settled)
+	if awaitingCall(settled, o) {
+		outcome = domain.OutcomeAwaitingCall
+	}
 	_, err = s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.AnswerAck, Locale: locale, OrderID: &orderID, To: o.Contact.Phone,
-		Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Outcome: string(settled)}})
+		Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Outcome: outcome}})
 	return err
 }
 

@@ -707,3 +707,58 @@ func TestConfirmRiskRules(t *testing.T) {
 		t.Fatalf("notices = %+v, %v", p.Items, err)
 	}
 }
+
+// TestVerifiedYesAwaitsTheCall (ADR-0070): the customer of an order the
+// risk rules verify is never told it is confirmed: the WhatsApp thanks
+// and the SMS link's page say the store will call.
+func TestVerifiedYesAwaitsTheCall(t *testing.T) {
+	t.Parallel()
+	c := newConfirmFixture(t, options{})
+	ctx := c.store(t)
+	byWA := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(byWA, orders.RiskVerify)
+	if err := c.svc.ConfirmOrder(ctx, byWA); err != nil {
+		t.Fatal(err)
+	}
+	err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
+		return c.svc.HandleReplyTx(ctx, tx, app.Reply{Kind: domain.OrderConfirmation, OrderID: &byWA, Answer: domain.Confirm, At: time.Now()})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := c.sendJobs()
+	if err = c.svc.SendMessage(ctx, jobs[len(jobs)-1].MessageID, false); err != nil {
+		t.Fatal(err)
+	}
+	sent := c.wa.Sent()
+	if last := sent[len(sent)-1]; !strings.Contains(last.Text, "will call you to confirm") || strings.Contains(last.Text, "is confirmed") {
+		t.Fatalf("thanks = %q", last.Text)
+	}
+
+	c.wa.Unreachable(customer.Unmasked())
+	bySMS := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(bySMS, orders.RiskVerify)
+	if err = c.svc.ConfirmOrder(ctx, bySMS); err != nil {
+		t.Fatal(err)
+	}
+	mid := *c.confirmation(ctx, t, bySMS).MessageID
+	for range 2 { // WhatsApp refuses, then the SMS goes
+		if err = c.svc.SendMessage(ctx, mid, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sms := c.sms.Sent()
+	token := tokenOf(t, sms[len(sms)-1].Text)
+	v, err := c.svc.AnswerLink(ctx, token, domain.Confirm)
+	if err != nil || v.Status != domain.Confirmed || !v.AwaitingCall {
+		t.Fatalf("answer = %+v, %v", v, err)
+	}
+	if v, err = c.svc.LinkConfirmation(ctx, token); err != nil || !v.AwaitingCall {
+		t.Fatalf("view after = %+v, %v", v, err)
+	}
+	// Once the store confirms on the call, the page says so.
+	c.orders.set(bySMS, orders.StatusConfirmed)
+	if v, err = c.svc.LinkConfirmation(ctx, token); err != nil || v.AwaitingCall {
+		t.Fatalf("view after the call = %+v, %v", v, err)
+	}
+}

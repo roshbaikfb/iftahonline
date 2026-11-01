@@ -111,12 +111,18 @@ type Text struct {
 	UpdatedAt *time.Time
 }
 
+// OutcomeAwaitingCall is the ack's outcome for a yes that left the order
+// pending: the store calls to confirm it (ADR-0070).
+const OutcomeAwaitingCall = "awaiting_call"
+
 // AckText is the text thanking a customer who answered on WhatsApp, by
 // what the answer did (Vars.Outcome).
 func AckText(locale string, v Vars) string {
 	name, ref, store := param(v.CustomerName), param(v.OrderRef), param(v.StoreName)
 	if locale == English {
 		switch v.Outcome {
+		case OutcomeAwaitingCall:
+			return "Thank you " + name + ", we have your answer. " + store + " will call you to confirm your order " + ref + "."
 		case string(Confirmed):
 			return "Thank you " + name + ", your order " + ref + " from " + store + " is confirmed. We will let you know when it ships."
 		case string(Cancelled):
@@ -125,6 +131,8 @@ func AckText(locale string, v Vars) string {
 		return "Your order " + ref + " from " + store + " no longer needs your answer. Contact the store with any question."
 	}
 	switch v.Outcome {
+	case OutcomeAwaitingCall:
+		return "شكراً " + name + "، وصلنا ردك، وسيتصل بك " + store + " لتأكيد طلبك رقم " + ref + "."
 	case string(Confirmed):
 		return "شكراً " + name + "، تم تأكيد طلبك رقم " + ref + " من " + store + ". سنبلغك عند شحنه."
 	case string(Cancelled):

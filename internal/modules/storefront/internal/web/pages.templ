@@ -403,6 +403,8 @@ templ confirmPage(p *pageCtx, v ConfirmView, action templ.SafeURL) {
 					</form>
 				case ConfirmDone:
 					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmDone) }</p>
+				case ConfirmAwaitingCall:
+					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmAwaitingCall) }</p>
 				case ConfirmCancelled:
 					<p class="alert" role="status">{ p.l.T(MsgConfirmCancelledByYou) }</p>
 				default:
