@@ -323,6 +323,29 @@ func TestBefore(t *testing.T) {
 	if page, err := f.svc.Before(f.ctxB, ulid.ID{}, 100); err != nil || len(page) != 0 {
 		t.Fatalf("store B sees %d of A's orders, %v", len(page), err)
 	}
+	// With lines: the same page, whole, in as many queries for 1 order
+	// as for 5 (P8 review M2).
+	f.qc.Reset()
+	if _, err := f.svc.BeforeWithLines(f.ctxA, ulid.ID{}, 1); err != nil {
+		t.Fatal(err)
+	}
+	one := f.qc.Count()
+	f.qc.Reset()
+	whole, err := f.svc.BeforeWithLines(f.ctxA, ulid.ID{}, 100)
+	if err != nil || len(whole) != len(ids) {
+		t.Fatalf("with lines: %d, %v", len(whole), err)
+	}
+	if many := f.qc.Count(); many != one {
+		t.Fatalf("queries: %d for 1 order, %d for %d", one, many, len(whole))
+	}
+	for i, o := range whole {
+		if o.ID != ids[i] || len(o.Lines) != 1 || o.Lines[0].Qty != 5-i {
+			t.Fatalf("order %d: %s with %+v", i, o.ID, o.Lines)
+		}
+	}
+	if page, bErr := f.svc.BeforeWithLines(f.ctxB, ulid.ID{}, 100); bErr != nil || len(page) != 0 {
+		t.Fatalf("store B sees %d of A's orders with lines, %v", len(page), bErr)
+	}
 	for _, bad := range []int{0, 101} {
 		if _, err := f.svc.Before(f.ctxA, ulid.ID{}, bad); err == nil {
 			t.Fatalf("limit %d must fail", bad)

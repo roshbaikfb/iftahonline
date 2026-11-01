@@ -21,7 +21,7 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `Attribution`, `Signals` | Where an order came from: UTM, and what ad providers match a conversion with |
 | `Fulfilment` (`Module.Fulfilment`, `NewFulfilment`) | `Get` and `TransitionSystemTx`: a carrier's moves in the caller's transaction ([ADR-0027](../adr/0027-shipments-tracking-order-moves.md)); `TransitionSystemReasonTx` is the same with an outcome reason (the confirmation's deadline cancels as `unconfirmed`) |
 | `OutcomeReason`, `Reason…` constants | Why an order did not reach its customer, from its latest move ([ADR-0065](../adr/0065-risk-bands-from-delivery-outcomes.md)) |
-| `Outcomes` (`Module.Outcomes`, `NewOutcomes`) | `Get` and `Before(ctx, before, limit)`: the store's orders, newest first, without lines, a page (≤ 100) at a time; what the risk module learns from |
+| `Outcomes` (`Module.Outcomes`, `NewOutcomes`) | `Get` and `Before(ctx, before, limit)`: the store's orders, newest first, without lines, a page (≤ 100) at a time; what the risk module learns from. `BeforeWithLines` is the same page with its lines, in two queries (the profit backfill) |
 
 The module uses these other modules, each through its `api.go`:
 

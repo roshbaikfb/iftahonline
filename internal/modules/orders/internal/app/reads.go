@@ -128,6 +128,17 @@ func (s *Service) Before(ctx context.Context, before ulid.ID, limit int) ([]doma
 	return out, err
 }
 
+// BeforeWithLines is Before with each order's lines, in two queries
+// however long the page (the profit dashboard's backfill, P8 review).
+func (s *Service) BeforeWithLines(ctx context.Context, before ulid.ID, limit int) ([]domain.Order, error) {
+	page, err := s.Before(ctx, before, limit)
+	if err != nil || len(page) == 0 {
+		return page, err
+	}
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error { return store.LinesOf(ctx, tx, page) })
+	return page, err
+}
+
 // Counts returns every status with its number of orders (0 when none),
 // for the dashboard's tabs and badge, in one query.
 func (s *Service) Counts(ctx context.Context) (map[domain.Status]int, error) {

@@ -31,8 +31,10 @@ func TestMain(m *testing.M) { os.Exit(testinfra.Run(m, &infra)) }
 
 // fakeOrders is orders.Outcomes in memory, per store.
 type fakeOrders struct {
-	mu sync.Mutex
-	m  map[tenant.StoreID][]orders.Order
+	mu    sync.Mutex
+	m     map[tenant.StoreID][]orders.Order
+	gets  int // Get calls
+	pages int // BeforeWithLines calls
 }
 
 func (f *fakeOrders) put(ctx context.Context, o orders.Order) {
@@ -58,6 +60,7 @@ func (f *fakeOrders) Get(ctx context.Context, id ulid.ID) (orders.Order, error) 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.gets++
 	for _, o := range f.m[s] {
 		if o.ID == id {
 			return o, nil
@@ -80,6 +83,14 @@ func (f *fakeOrders) Before(ctx context.Context, before ulid.ID, limit int) ([]o
 		}
 	}
 	return out, nil
+}
+
+// BeforeWithLines implements orders.Outcomes: its orders are whole.
+func (f *fakeOrders) BeforeWithLines(ctx context.Context, before ulid.ID, limit int) ([]orders.Order, error) {
+	f.mu.Lock()
+	f.pages++
+	f.mu.Unlock()
+	return f.Before(ctx, before, limit)
 }
 
 // fakeCharges is shipping.Charges with set answers.
@@ -368,8 +379,19 @@ func TestBackfillAndRules(t *testing.T) {
 	if kinds := f.jobs.Kinds(); !slices.Contains(kinds, "analytics.backfill") {
 		t.Fatalf("jobs = %v", kinds)
 	}
+	f.orders.mu.Lock()
+	f.orders.gets, f.orders.pages = 0, 0
+	f.orders.mu.Unlock()
 	if n, err := f.svc.Backfill(a); err != nil || n != 1 {
 		t.Fatalf("backfill = %d, %v", n, err)
+	}
+	// One read a page of orders with their lines, never one an order (P8
+	// review M2).
+	f.orders.mu.Lock()
+	gets, pages := f.orders.gets, f.orders.pages
+	f.orders.mu.Unlock()
+	if gets != 0 || pages != 1 {
+		t.Fatalf("backfill read %d orders one by one and %d pages", gets, pages)
 	}
 	f.rollup(a, t)
 	r, err := f.svc.Profit(a, day("2026-10-20"), day("2026-10-21"), domain.ByProduct)

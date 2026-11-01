@@ -95,6 +95,11 @@ func (f *Orders) Before(ctx context.Context, before ulid.ID, limit int) ([]order
 	return out, nil
 }
 
+// BeforeWithLines implements orders.Outcomes: its orders are whole.
+func (f *Orders) BeforeWithLines(ctx context.Context, before ulid.ID, limit int) ([]orders.Order, error) {
+	return f.Before(ctx, before, limit)
+}
+
 // Store creates a store and returns a context in it.
 func Store(t *testing.T, db postgres.Beginner, ids *ulid.Generator) (context.Context, tenant.StoreID) {
 	t.Helper()
