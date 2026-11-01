@@ -166,7 +166,8 @@ func Rules(ctx context.Context, tx Tx) (domain.Rules, error) {
 	if len(rows) == 0 {
 		return domain.Rules{}.Normalized(), nil
 	}
-	return domain.Rules{HoldFrom: domain.Band(rows[0].HoldFrom), VerifyFrom: domain.Band(rows[0].VerifyFrom)}, nil
+	return domain.Rules{HoldFrom: domain.Band(rows[0].HoldFrom), VerifyFrom: domain.Band(rows[0].VerifyFrom),
+		PrepayFrom: domain.Band(rows[0].PrepayFrom)}, nil
 }
 
 // SaveRules writes the store's risk rules.
@@ -176,7 +177,7 @@ func SaveRules(ctx context.Context, tx Tx, r domain.Rules) error {
 		return err
 	}
 	if err = riskdb.New(tx).SaveRiskSettings(ctx, riskdb.SaveRiskSettingsParams{
-		StoreID: store, HoldFrom: string(r.HoldFrom), VerifyFrom: string(r.VerifyFrom),
+		StoreID: store, HoldFrom: string(r.HoldFrom), VerifyFrom: string(r.VerifyFrom), PrepayFrom: string(r.PrepayFrom),
 	}); err != nil {
 		return fmt.Errorf("risk store: save rules: %w", err)
 	}

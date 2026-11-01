@@ -55,6 +55,16 @@ func TestCheck(t *testing.T) {
 	if v, err = f.svc.Check(c, fresh); err != nil || v.Band != domain.BandNew || v.Action != domain.NoAction {
 		t.Fatalf("a new customer: %+v, %v", v, err)
 	}
+	// A prepaid delivery comes after a hold, before a call (ADR-0067).
+	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.Off, VerifyFrom: domain.BandMedium, PrepayFrom: domain.BandHigh}); err != nil {
+		t.Fatal(err)
+	}
+	if v, err = f.svc.Check(c, risky); err != nil || v.Action != domain.Prepay {
+		t.Fatalf("prepay from high: %+v, %v", v, err)
+	}
+	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandHigh, VerifyFrom: domain.BandMedium, PrepayFrom: domain.Off}); err != nil {
+		t.Fatal(err)
+	}
 	// Another store's rules are its own.
 	if v, err = f.svc.Check(a, risky); err != nil || v.Action != domain.NoAction {
 		t.Fatalf("store A has no rules: %+v, %v", v, err)
@@ -69,13 +79,13 @@ func TestCheck(t *testing.T) {
 	if err != nil || view.Available || view.Rules.HoldFrom != domain.BandHigh {
 		t.Fatalf("rules view: %+v, %v", view, err)
 	}
-	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandMedium, VerifyFrom: domain.Off}); !errs.Is(err, errs.KindForbidden) {
+	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandMedium, VerifyFrom: domain.Off, PrepayFrom: domain.Off}); !errs.Is(err, errs.KindForbidden) {
 		t.Fatalf("turning a rule on without the plan: %v", err)
 	}
-	if view, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.Off, VerifyFrom: domain.Off}); err != nil || view.Rules.Active() {
+	if view, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.Off, VerifyFrom: domain.Off, PrepayFrom: domain.Off}); err != nil || view.Rules.Active() {
 		t.Fatalf("turning them off: %+v, %v", view, err)
 	}
-	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandLow, VerifyFrom: domain.Off}); !errs.Is(err, errs.KindValidation) {
+	if _, err = f.svc.SaveRules(c, domain.Rules{HoldFrom: domain.BandLow, VerifyFrom: domain.Off, PrepayFrom: domain.Off}); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("a rule from low: %v", err)
 	}
 	if _, err = f.svc.Check(t.Context(), risky); err == nil {

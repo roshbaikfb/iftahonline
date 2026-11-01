@@ -671,6 +671,15 @@ func TestConfirmRiskRules(t *testing.T) {
 	if _, err := c.svc.Confirmation(ctx, held); !errors.Is(err, app.ErrConfirmationNotFound) {
 		t.Fatalf("a held order's confirmation: %v", err)
 	}
+	// A prepaid delivery confirms the order itself when paid (ADR-0067).
+	prepaid := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(prepaid, orders.RiskPrepay)
+	if err := c.svc.ConfirmOrder(ctx, prepaid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.svc.Confirmation(ctx, prepaid); !errors.Is(err, app.ErrConfirmationNotFound) {
+		t.Fatalf("a prepaid order's confirmation: %v", err)
+	}
 
 	if _, err := c.svc.SaveSettings(ctx, domain.Settings{ConfirmCOD: false, AutoCancelHours: 3}); err != nil {
 		t.Fatal(err)

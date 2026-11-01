@@ -32,6 +32,8 @@ func (r riskRules) Check(ctx context.Context, p phone.E164) (orders.Risk, error)
 		out.Action = orders.RiskHold
 	case risk.Verify:
 		out.Action = orders.RiskVerify
+	case risk.Prepay:
+		out.Action = orders.RiskPrepay
 	case risk.NoAction:
 	}
 	return out, nil

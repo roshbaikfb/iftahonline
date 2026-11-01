@@ -10,7 +10,6 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
-	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -51,11 +50,11 @@ func orderInfo(o orders.Order, err error) (shipping.OrderInfo, error) {
 		items = append(items, t+" × "+strconv.Itoa(l.Qty))
 	}
 	c := o.Contact
-	cod := o.Total
-	if o.PaymentMethod == orders.PaymentCard { // paid online: the courier collects nothing
-		if cod, err = money.Zero(o.Total.Currency()); err != nil {
-			return shipping.OrderInfo{}, err
-		}
+	// The courier collects what was not paid online: nothing for a card
+	// order, the rest after a prepaid delivery (ADR-0067).
+	cod, err := o.OnDelivery()
+	if err != nil {
+		return shipping.OrderInfo{}, err
 	}
 	return shipping.OrderInfo{
 		ID: o.ID, Status: string(o.Status), Name: c.Name, Phone: c.Phone.Unmasked(), Governorate: c.Governorate,
