@@ -432,6 +432,7 @@ type Order struct {
 	UtmCampaign     pgtype.Text
 	UtmContent      pgtype.Text
 	UtmTerm         pgtype.Text
+	OutcomeReason   pgtype.Text
 }
 
 type OrderConfirmation struct {

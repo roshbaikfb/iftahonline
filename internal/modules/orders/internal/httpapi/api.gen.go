@@ -34,6 +34,27 @@ func (e MessageTextKind) Valid() bool {
 	}
 }
 
+// Defines values for OrderOutcomeReason.
+const (
+	OrderOutcomeReasonNoAnswer    OrderOutcomeReason = "no_answer"
+	OrderOutcomeReasonRefused     OrderOutcomeReason = "refused"
+	OrderOutcomeReasonUnconfirmed OrderOutcomeReason = "unconfirmed"
+)
+
+// Valid indicates whether the value is a known member of the OrderOutcomeReason enum.
+func (e OrderOutcomeReason) Valid() bool {
+	switch e {
+	case OrderOutcomeReasonNoAnswer:
+		return true
+	case OrderOutcomeReasonRefused:
+		return true
+	case OrderOutcomeReasonUnconfirmed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderPaymentMethod.
 const (
 	Card OrderPaymentMethod = "card"
@@ -154,6 +175,24 @@ func (e OrderStatus) Valid() bool {
 	}
 }
 
+// Defines values for OutcomeReasonInput.
+const (
+	OutcomeReasonInputNoAnswer OutcomeReasonInput = "no_answer"
+	OutcomeReasonInputRefused  OutcomeReasonInput = "refused"
+)
+
+// Valid indicates whether the value is a known member of the OutcomeReasonInput enum.
+func (e OutcomeReasonInput) Valid() bool {
+	switch e {
+	case OutcomeReasonInputNoAnswer:
+		return true
+	case OutcomeReasonInputRefused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicySlug.
 const (
 	Privacy  PolicySlug = "privacy"
@@ -218,9 +257,12 @@ type BulkResult struct {
 
 // BulkTransitionInput defines model for BulkTransitionInput.
 type BulkTransitionInput struct {
-	Note     *string     `json:"note,omitempty"`
-	OrderIds []ULID      `json:"order_ids"`
-	Status   OrderStatus `json:"status"`
+	Note     *string `json:"note,omitempty"`
+	OrderIds []ULID  `json:"order_ids"`
+
+	// Reason Why the order did not reach its customer (ADR-0065). Only a move to cancelled, failed_delivery or returned takes one (otherwise 422 on reason). It teaches the risk score; omit it when neither applies.
+	Reason *OutcomeReasonInput `json:"reason,omitempty"`
+	Status OrderStatus         `json:"status"`
 }
 
 // BulkTransitionResult defines model for BulkTransitionResult.
@@ -273,11 +315,14 @@ type Order struct {
 	Governorate string `json:"governorate"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id            ULID               `json:"id"`
-	ItemCount     int                `json:"item_count"`
-	Name          string             `json:"name"`
-	Notes         string             `json:"notes"`
-	PaymentMethod OrderPaymentMethod `json:"payment_method"`
+	Id        ULID   `json:"id"`
+	ItemCount int    `json:"item_count"`
+	Name      string `json:"name"`
+	Notes     string `json:"notes"`
+
+	// OutcomeReason Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
+	OutcomeReason *OrderOutcomeReason `json:"outcome_reason,omitempty"`
+	PaymentMethod OrderPaymentMethod  `json:"payment_method"`
 
 	// PaymentStatus COD orders are unpaid until the carrier collects; card orders await the gateway, then are paid (ADR-0029).
 	PaymentStatus OrderPaymentStatus `json:"payment_status"`
@@ -297,6 +342,9 @@ type Order struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	Version    int       `json:"version"`
 }
+
+// OrderOutcomeReason Why the order did not reach its customer, from its latest move (ADR-0065): refused or no_answer as staff gave it, or unconfirmed when the confirmation message went unanswered. Absent otherwise.
+type OrderOutcomeReason string
 
 // OrderPaymentMethod defines model for Order.PaymentMethod.
 type OrderPaymentMethod string
@@ -450,6 +498,9 @@ type OrderTally struct {
 	TotalMinor int64 `json:"total_minor"`
 }
 
+// OutcomeReasonInput Why the order did not reach its customer (ADR-0065). Only a move to cancelled, failed_delivery or returned takes one (otherwise 422 on reason). It teaches the risk score; omit it when neither applies.
+type OutcomeReasonInput string
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -467,8 +518,11 @@ type Problem struct {
 
 // TransitionInput defines model for TransitionInput.
 type TransitionInput struct {
-	Note   *string     `json:"note,omitempty"`
-	Status OrderStatus `json:"status"`
+	Note *string `json:"note,omitempty"`
+
+	// Reason Why the order did not reach its customer (ADR-0065). Only a move to cancelled, failed_delivery or returned takes one (otherwise 422 on reason). It teaches the risk score; omit it when neither applies.
+	Reason *OutcomeReasonInput `json:"reason,omitempty"`
+	Status OrderStatus         `json:"status"`
 
 	// Version The version you read; omit to move whatever the version.
 	Version *int `json:"version,omitempty"`

@@ -351,7 +351,8 @@ func (s *Service) AutoCancel(ctx context.Context, orderID ulid.ID) error {
 			}
 			return s.notifyTx(ctx, tx, domain.OrderNotice(domain.ConfirmationUnreached, orderID, ref))
 		}
-		_, err = s.conf.Orders.TransitionSystemTx(ctx, tx, orderID, orders.StatusCancelled, domain.ActorAutoCancel, "not confirmed in time")
+		_, err = s.conf.Orders.TransitionSystemReasonTx(ctx, tx, orderID, orders.StatusCancelled, domain.ActorAutoCancel, "not confirmed in time",
+			orders.ReasonUnconfirmed)
 		settled := domain.Expired
 		if errors.Is(err, orders.ErrInvalidTransition) {
 			settled, err = domain.Stale, nil

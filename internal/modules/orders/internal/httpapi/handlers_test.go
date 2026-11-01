@@ -170,6 +170,21 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("transitionOrder = %d %v", code, moved)
 	}
 
+	// A cancellation with its reason (ADR-0065).
+	rq = req(t, http.MethodPost, path(a, ""), owner, strings.Replace(f.orderBody(), `"qty":2`, `"qty":3`, 1))
+	code, d3, _ := f.do(t, rq)
+	if code != http.StatusCreated {
+		t.Fatal(code, d3)
+	}
+	id3 := d3["order"].(map[string]any)["id"].(string)
+	code, cancelled, _ := f.do(t, req(t, http.MethodPost, path(a, "/"+id3+"/transitions"), owner, `{"status":"cancelled","reason":"refused"}`))
+	if code != http.StatusOK || cancelled["status"] != "cancelled" || cancelled["outcome_reason"] != "refused" {
+		t.Fatalf("cancel with a reason = %d %v", code, cancelled)
+	}
+	if _, has := moved["outcome_reason"]; has {
+		t.Fatalf("a confirmed order has no outcome reason: %v", moved)
+	}
+
 	// Bulk: the confirmed one fails, a new pending one moves.
 	rq = req(t, http.MethodPost, path(a, ""), owner, strings.Replace(f.orderBody(), `"qty":2`, `"qty":1`, 1))
 	code, d2, _ := f.do(t, rq)
@@ -226,6 +241,9 @@ func TestValidation(t *testing.T) {
 		{"bad target", http.MethodPost, "/" + ulid.NewGenerator().New().String() + "/transitions", `{"status":"paid"}`, 422, "validation_failed"},
 		{"bulk too big", http.MethodPost, "/transitions", `{"order_ids":[],"status":"confirmed"}`, 422, "validation_failed"},
 		{"bulk bad id", http.MethodPost, "/transitions", `{"order_ids":["x"],"status":"confirmed"}`, 422, "validation_failed"},
+		{"reason on confirm", http.MethodPost, "/" + ulid.NewGenerator().New().String() + "/transitions", `{"status":"confirmed","reason":"refused"}`, 422, "validation_failed"},
+		{"unknown reason", http.MethodPost, "/" + ulid.NewGenerator().New().String() + "/transitions", `{"status":"cancelled","reason":"lost"}`, 422, "validation_failed"},
+		{"bulk reason on confirm", http.MethodPost, "/transitions", `{"order_ids":["` + ulid.NewGenerator().New().String() + `"],"status":"confirmed","reason":"no_answer"}`, 422, "validation_failed"},
 		{"export bad dates", http.MethodGet, "/export?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z", "", 422, "validation_failed"},
 	}
 	for _, tt := range tests {

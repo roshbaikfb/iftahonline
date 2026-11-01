@@ -65,7 +65,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3
 `
 
 type GetOrderParams struct {
@@ -109,12 +109,13 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.UtmCampaign,
 		&i.UtmContent,
 		&i.UtmTerm,
+		&i.OutcomeReason,
 	)
 	return i, err
 }
 
 const getOrderForUpdate = `-- name: GetOrderForUpdate :one
-SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
+SELECT id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason FROM orders WHERE store_id = $1 AND created_at = $2 AND id = $3 FOR UPDATE
 `
 
 type GetOrderForUpdateParams struct {
@@ -160,6 +161,7 @@ func (q *Queries) GetOrderForUpdate(ctx context.Context, arg GetOrderForUpdatePa
 		&i.UtmCampaign,
 		&i.UtmContent,
 		&i.UtmTerm,
+		&i.OutcomeReason,
 	)
 	return i, err
 }
@@ -581,23 +583,26 @@ func (q *Queries) PurgeIdempotencyKeys(ctx context.Context, arg PurgeIdempotency
 
 const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders
-SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2
-WHERE store_id = $3 AND created_at = $4 AND id = $5
-RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term
+SET status = $1, version = version + 1, updated_at = $2, status_changed_at = $2,
+    outcome_reason = $3
+WHERE store_id = $4 AND created_at = $5 AND id = $6
+RETURNING id, store_id, created_at, status, version, source, customer_id, name, phone, governorate, city, address, notes, currency, subtotal_minor, shipping_minor, total_minor, item_count, lines_hash, updated_at, status_changed_at, cod_fee_minor, payment_method, payment_status, discount_minor, coupon_code, utm_source, utm_medium, utm_campaign, utm_content, utm_term, outcome_reason
 `
 
 type SetOrderStatusParams struct {
-	ToStatus  string
-	At        time.Time
-	StoreID   ulid.ID
-	CreatedAt time.Time
-	ID        ulid.ID
+	ToStatus      string
+	At            time.Time
+	OutcomeReason *string
+	StoreID       ulid.ID
+	CreatedAt     time.Time
+	ID            ulid.ID
 }
 
 func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) (Order, error) {
 	row := q.db.QueryRow(ctx, setOrderStatus,
 		arg.ToStatus,
 		arg.At,
+		arg.OutcomeReason,
 		arg.StoreID,
 		arg.CreatedAt,
 		arg.ID,
@@ -635,6 +640,7 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.UtmCampaign,
 		&i.UtmContent,
 		&i.UtmTerm,
+		&i.OutcomeReason,
 	)
 	return i, err
 }

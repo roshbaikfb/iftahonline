@@ -35,6 +35,10 @@ func (oneOrder) TransitionSystemTx(context.Context, pgx.Tx, ulid.ID, orders.Stat
 	return false, nil
 }
 
+func (oneOrder) TransitionSystemReasonTx(context.Context, pgx.Tx, ulid.ID, orders.Status, string, string, orders.OutcomeReason) (bool, error) {
+	return false, nil
+}
+
 func egpOf(t *testing.T, minor int64) money.Money {
 	t.Helper()
 	m, err := money.New(minor, money.EGP)

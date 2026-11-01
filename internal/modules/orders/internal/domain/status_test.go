@@ -128,3 +128,34 @@ func TestCountsAsSale(t *testing.T) {
 		}
 	}
 }
+
+func TestParseReason(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		reason string
+		to     domain.Status
+		want   domain.OutcomeReason
+		code   string // the field error's code, "" for none
+	}{
+		{"", domain.StatusConfirmed, domain.ReasonNone, ""},
+		{"", domain.StatusCancelled, domain.ReasonNone, ""},
+		{"refused", domain.StatusCancelled, domain.ReasonRefused, ""},
+		{"refused", domain.StatusReturned, domain.ReasonRefused, ""},
+		{"no_answer", domain.StatusFailedDelivery, domain.ReasonNoAnswer, ""},
+		{"no_answer", domain.StatusCancelled, domain.ReasonNoAnswer, ""},
+		{"refused", domain.StatusDelivered, "", "not_allowed"},
+		{"no_answer", domain.StatusConfirmed, "", "not_allowed"},
+		{"unconfirmed", domain.StatusCancelled, "", "invalid"}, // the confirmation's own
+		{"fake", domain.StatusCancelled, "", "invalid"},
+	}
+	for _, tt := range tests {
+		got, err := domain.ParseReason(tt.reason, tt.to)
+		var e *errs.Error
+		switch {
+		case tt.code == "" && (err != nil || got != tt.want):
+			t.Errorf("%q to %s = %q, %v; want %q", tt.reason, tt.to, got, err, tt.want)
+		case tt.code != "" && (!errors.As(err, &e) || len(e.Fields) != 1 || e.Fields[0].Field != "reason" || e.Fields[0].Code != tt.code):
+			t.Errorf("%q to %s: err = %v, want reason/%s", tt.reason, tt.to, err, tt.code)
+		}
+	}
+}

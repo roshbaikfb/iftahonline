@@ -282,3 +282,50 @@ func lastMatching(t *testing.T, c *testkit.SQLCapture, marker string) pgx.TraceQ
 	}
 	return c.Last(t, marker)
 }
+
+// TestBefore pages through a store's orders newest first, as the risk
+// module's backfill does (ADR-0065), and never sees another store's.
+func TestBefore(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	v := f.product(t, f.storeA, "ساعة", 120000, 20)
+	var ids []ulid.ID
+	for qty := 1; qty <= 5; qty++ {
+		p, err := f.svc.PlaceOrder(f.shopperA, newOrder("", domain.LineInput{VariantID: v, Qty: qty}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append([]ulid.ID{p.Order.ID}, ids...) // newest first
+	}
+	var got []ulid.ID
+	var before ulid.ID
+	for {
+		page, err := f.svc.Before(f.ctxA, before, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range page {
+			got = append(got, o.ID)
+		}
+		if len(page) < 2 {
+			break
+		}
+		before = page[len(page)-1].ID
+	}
+	if len(got) != len(ids) {
+		t.Fatalf("paged %v, want %v", got, ids)
+	}
+	for i := range ids {
+		if got[i] != ids[i] {
+			t.Fatalf("paged %v, want %v", got, ids)
+		}
+	}
+	if page, err := f.svc.Before(f.ctxB, ulid.ID{}, 100); err != nil || len(page) != 0 {
+		t.Fatalf("store B sees %d of A's orders, %v", len(page), err)
+	}
+	for _, bad := range []int{0, 101} {
+		if _, err := f.svc.Before(f.ctxA, ulid.ID{}, bad); err == nil {
+			t.Fatalf("limit %d must fail", bad)
+		}
+	}
+}

@@ -38,7 +38,8 @@ SELECT * FROM orders WHERE store_id = @store_id AND created_at = @created_at AND
 
 -- name: SetOrderStatus :one
 UPDATE orders
-SET status = @to_status, version = version + 1, updated_at = @at, status_changed_at = @at
+SET status = @to_status, version = version + 1, updated_at = @at, status_changed_at = @at,
+    outcome_reason = sqlc.narg(outcome_reason)
 WHERE store_id = @store_id AND created_at = @created_at AND id = @id
 RETURNING *;
 

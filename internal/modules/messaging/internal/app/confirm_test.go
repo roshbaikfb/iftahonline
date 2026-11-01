@@ -68,17 +68,28 @@ func (f *fakeOrders) GetTx(ctx context.Context, _ pgx.Tx, id ulid.ID) (orders.Or
 	return f.Get(ctx, id)
 }
 
-func (f *fakeOrders) TransitionSystemTx(_ context.Context, _ pgx.Tx, id ulid.ID, to orders.Status, actor, _ string) (bool, error) {
+func (f *fakeOrders) TransitionSystemTx(ctx context.Context, tx pgx.Tx, id ulid.ID, to orders.Status, actor, note string) (bool, error) {
+	return f.TransitionSystemReasonTx(ctx, tx, id, to, actor, note, orders.ReasonNone)
+}
+
+func (f *fakeOrders) TransitionSystemReasonTx(_ context.Context, _ pgx.Tx, id ulid.ID, to orders.Status, actor, _ string,
+	reason orders.OutcomeReason) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	o := f.orders[id]
 	if o.Status != orders.StatusPending {
 		return false, fmt.Errorf("%w: %s to %s", orders.ErrInvalidTransition, o.Status, to)
 	}
-	o.Status = to
+	o.Status, o.OutcomeReason = to, reason
 	f.orders[id] = o
 	f.moves = append(f.moves, actor+">"+string(to))
 	return true, nil
+}
+
+func (f *fakeOrders) reason(id ulid.ID) orders.OutcomeReason {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.orders[id].OutcomeReason
 }
 
 func (f *fakeOrders) status(id ulid.ID) orders.Status {
@@ -319,7 +330,8 @@ func TestAutoCancelJob(t *testing.T) {
 			}
 		}
 	}
-	if got := c.confirmation(ctx, t, reachedID); got.Status != domain.Expired || got.AnsweredBy != domain.ActorAutoCancel || c.orders.status(reachedID) != orders.StatusCancelled {
+	if got := c.confirmation(ctx, t, reachedID); got.Status != domain.Expired || got.AnsweredBy != domain.ActorAutoCancel || c.orders.status(reachedID) != orders.StatusCancelled ||
+		c.orders.reason(reachedID) != orders.ReasonUnconfirmed {
 		t.Fatalf("reached = %+v, order %s", got, c.orders.status(reachedID))
 	}
 	if got := c.confirmation(ctx, t, lostID); got.Status != domain.Unreached || c.orders.status(lostID) != orders.StatusPending {
