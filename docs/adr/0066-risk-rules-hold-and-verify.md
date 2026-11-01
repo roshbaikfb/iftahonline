@@ -61,7 +61,12 @@ Constraints:
      that moment (migration 00074, expand only). Both are in the API.
    - **Failure.** A check that fails, fails the placement, like any other
      database error on that path. Skipping the rules silently would let
-     risky orders through.
+     risky orders through. *Amended 2026-11-01 (P8 review, the owner's
+     decision):* the rules fail open. A check that errs, or takes longer
+     than `RiskTimeout` (300 ms), places the order with no action and logs
+     a warning; a card check that errs holds a prepaid delivery instead.
+     Losing a real order costs the merchant more than one unchecked
+     order, which still waits for the merchant to confirm it.
    - **No dependency cycle.** `risk.NewChecker` needs only the pool, the
      phone key and the plan, not orders. So the orders module can be
      built with it, in every role that places orders (api, storefront,

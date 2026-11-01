@@ -551,7 +551,7 @@ func newOrders(c clients, ten *tenancy.Module, cat *catalog.Module, cust *custom
 	return orders.New(orders.Deps{
 		Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
 		Catalog: cat.Catalog(), Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Auth: auth,
-		Stores: orderStores(ten), Plan: c.plan, Risk: rules, Cards: payments.NewCardCheck(c.pool, c.plan),
+		Stores: orderStores(ten), Plan: c.plan, Risk: rules, Cards: payments.NewCardCheck(c.pool, c.plan), Log: c.log,
 	})
 }
 
@@ -601,7 +601,7 @@ func shopOrderDeps(c clients, ten *tenancy.Module, ship *shipping.Module) (order
 	}
 	return orders.ShopDeps{Pool: c.pool, IDs: c.ids, Audit: identity.NewAuditRecorder(c.ids), Events: c.events,
 		Catalog: stock, Customers: cust.Customers(), Shipping: ship.Quoter(), Coupons: orderCoupons{prom.Coupons()}, Stores: orderStores(ten), Plan: c.plan,
-		Risk: rules, Cards: payments.NewCardCheck(c.pool, c.plan)}, nil
+		Risk: rules, Cards: payments.NewCardCheck(c.pool, c.plan), Log: c.log}, nil
 }
 
 func newStorefront(c clients) (*storefront.Module, error) {
