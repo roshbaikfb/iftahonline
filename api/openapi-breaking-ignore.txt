@@ -39,3 +39,6 @@ PUT /v1/stores/{store_id}/storefront/policies/{policy} added the new `whatsapp_c
 #
 # 6c-2b (ADR-0041): order_answer_ack, the thanks to a customer who answered
 GET /v1/stores/{store_id}/messages added the new `order_answer_ack` enum value to the `items/items/kind` response property for the response status `200`
+#
+# P8 review R1 (ADR-0070): order_delivery_prepay, the link that pays a prepaid delivery
+GET /v1/stores/{store_id}/messages added the new `order_delivery_prepay` enum value to the `items/items/kind` response property for the response status `200`
