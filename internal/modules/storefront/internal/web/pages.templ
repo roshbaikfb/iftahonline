@@ -405,6 +405,17 @@ templ confirmPage(p *pageCtx, v ConfirmView, action templ.SafeURL) {
 					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmDone) }</p>
 				case ConfirmAwaitingCall:
 					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmAwaitingCall) }</p>
+				case ConfirmPay:
+					<p role="status">{ fmt.Sprintf(p.l.T(MsgDepositPending), p.l.Price(v.Deposit), p.l.Price(v.OnDelivery)) }</p>
+					if v.PayURL != "" {
+						<a class="btn btn-block" href={ templ.URL(v.PayURL) } rel="nofollow">{ p.l.T(MsgPayNow) }</a>
+					}
+					<form method="post" action={ action }>
+						<button class="btn btn-block btn-ghost" type="submit" name="answer" value="cancel">{ p.l.T(MsgConfirmNo) }</button>
+					</form>
+				case ConfirmPaid:
+					<span class="paid-chip">{ p.l.T(MsgDepositPaid) } · { p.l.Price(v.Deposit) }</span>
+					<p class="confirm-ok" role="status">{ p.l.T(MsgConfirmDone) }</p>
 				case ConfirmCancelled:
 					<p class="alert" role="status">{ p.l.T(MsgConfirmCancelledByYou) }</p>
 				default:

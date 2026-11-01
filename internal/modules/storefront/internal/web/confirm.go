@@ -34,14 +34,23 @@ const (
 	ConfirmAwaitingCall = "awaiting_call" // confirmed, the store calls first (ADR-0070)
 	ConfirmCancelled    = "cancelled"     // the customer cancelled
 	ConfirmClosed       = "closed"        // settled otherwise (deadline, merchant)
+	ConfirmPay          = "pay"           // a prepaid delivery to pay (ADR-0070)
+	ConfirmPaid         = "paid"          // its delivery paid, the order confirmed
 )
 
-// ConfirmView is the order the link names, and where it stands.
+// ConfirmView is the order the link names, and where it stands. A
+// prepaid delivery's link pays it (ConfirmPay): Ref is the order's
+// reference, Deposit the amount, OnDelivery what the courier collects,
+// and PayURL where to pay (set by the page).
 type ConfirmView struct {
-	Code      string
-	Total     money.Money
-	FirstName string
-	State     string
+	Ref        string
+	Code       string
+	Total      money.Money
+	FirstName  string
+	State      string
+	Deposit    money.Money
+	OnDelivery money.Money
+	PayURL     string
 }
 
 // A link's token is a secret of 128 bits; these bound guessing anyway,
@@ -102,6 +111,11 @@ func (s *Shop) confirmRoute(w http.ResponseWriter, r *http.Request, store tenant
 	case err != nil:
 		s.unavailable(w, r, err)
 	default:
+		if v.State == ConfirmPay && s.payments != nil {
+			// The link's token goes with it: only the phone's link pays a
+			// prepaid delivery (ADR-0070).
+			v.PayURL = s.payments.DepositURL(p.store, v.Ref, p.base+p.localize(p.l, "/o/"+token), token)
+		}
 		s.writePrivate(w, r, p, http.StatusOK, confirmPage(p, v, p.URL("/o/"+token)))
 	}
 }

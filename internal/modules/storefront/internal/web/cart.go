@@ -51,12 +51,6 @@ type OrderSummary struct {
 	Discount      money.Money // the coupon's; zero without one
 	CouponCode    string
 	Total         money.Money
-	// Deposit is a cash order's prepaid delivery (ADR-0067), zero
-	// without one; DepositStatus is its payment ("" without one).
-	Deposit       money.Money
-	DepositStatus string
-	// OnDelivery is what the courier collects.
-	OnDelivery money.Money
 	// What the thank-you page says to the shopper: the first name only and
 	// where it goes, never the street (the page's link may be shared).
 	FirstName   string
@@ -72,10 +66,12 @@ type Placed struct {
 	PayOnline bool
 }
 
-// PaysOnline reports whether the shopper still has money to pay online:
-// a card order's total, or a cash order's prepaid delivery.
+// PaysOnline reports whether the shopper still has a card order's total
+// to pay online. A cash order's prepaid delivery is paid from the link
+// sent to the customer's phone, never from here (ADR-0070): this page
+// shows any cash order alike.
 func (o OrderSummary) PaysOnline() bool {
-	return (o.Card && o.PaymentStatus == PaymentAwaiting) || o.DepositStatus == PaymentAwaiting
+	return o.Card && o.PaymentStatus == PaymentAwaiting
 }
 
 // OrderLine is one line of an OrderSummary.
@@ -184,6 +180,9 @@ type Payments interface {
 	// PayURL is where a card order's shopper pays; back is the absolute
 	// thank-you URL they return to.
 	PayURL(store, orderRef, back string) string
+	// DepositURL is where a prepaid delivery is paid, from its SMS link
+	// (token, ADR-0070); back is the link's page.
+	DepositURL(store, orderRef, back, token string) string
 }
 
 // OrderRequestLine is one variant and quantity.
