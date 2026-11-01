@@ -28,13 +28,14 @@ async function fetchOrder(storeId: string, orderId: string): Promise<{ detail?: 
 
 // fetchConfirmation reads the messages sent for an order and, when one
 // asked the customer to confirm, the confirmation itself: an order that
-// asked for none (a card order, a store that does not confirm) costs no
-// request that would answer 404.
+// asked for none (a card order, a store that does not confirm, a held
+// order) costs no request that would answer 404. A prepaid delivery's
+// link to pay is its confirmation's message (ADR-0070).
 async function fetchConfirmation(storeId: string, orderId: string): Promise<{ confirmation?: OrderConfirmation; messages: CustomerMessage[] }> {
   const path = { store_id: storeId };
   const m = await api.GET('/v1/stores/{store_id}/messages', { params: { path, query: { order_id: orderId } } });
   const messages = m.data?.items ?? [];
-  if (!messages.some((x) => x.kind === 'order_confirmation')) return { messages };
+  if (!messages.some((x) => x.kind === 'order_confirmation' || x.kind === 'order_delivery_prepay')) return { messages };
   const c = await api.GET('/v1/stores/{store_id}/messaging/confirmations/{order_id}', { params: { path: { ...path, order_id: orderId } } });
   return c.data ? { confirmation: c.data, messages } : { messages };
 }
@@ -196,7 +197,7 @@ export function OrderDetail() {
               تحقّق هاتفيًا: قواعدك تطلب الاتصال بهذا العميل قبل التأكيد، حتى لو وافق على رسالة التأكيد.
             </p>
           )}
-          {o.status === 'pending' && confirm.confirmation?.status === 'pending' && (
+          {o.status === 'pending' && confirm.confirmation?.status === 'pending' && o.deposit_status !== 'awaiting' && (
             <p className="notice" role="note">
               أرسلنا للعميل رسالة تأكيد على {channelLabel(confirm.messages.find((m) => m.kind === 'order_confirmation')?.channel ?? 'whatsapp')}. يتحوّل الطلب وحده حين يرد، ويمكنك
               تأكيده أو إلغاؤه بنفسك قبل ذلك.
@@ -279,7 +280,14 @@ export function OrderDetail() {
               </section>
             </div>
             <div className="od-side">
-              {confirm.confirmation && <OrderConfirmationCard storeId={storeId} confirmation={confirm.confirmation} messages={confirm.messages} />}
+              {confirm.confirmation && (
+                <OrderConfirmationCard
+                  storeId={storeId}
+                  confirmation={confirm.confirmation}
+                  messages={confirm.messages}
+                  prepaid={o.deposit_status === 'awaiting'}
+                />
+              )}
               <section className="card customer">
                 <h2>العميل</h2>
                 <strong>{o.name}</strong>

@@ -362,6 +362,33 @@ describe('OrderDetail', () => {
     expect(within(source).getByText('summer_sale')).toBeInTheDocument();
   });
 
+  const pendingConfirmation = { order_id: orderID, status: 'pending', expires_at: '2026-10-30T12:02:00Z', created_at: '2026-10-29T12:02:00Z' };
+
+  it('says a prepaid delivery waits for its payment (ADR-0070)', async () => {
+    const confirmation = pendingConfirmation;
+    routes({
+      ...orderRoutes,
+      [`GET ${base}/orders/${orderID}`]: () => ({
+        status: 200,
+        body: { order: { ...order, deposit_minor: 5000, deposit_status: 'awaiting' }, lines: [], events: [] },
+      }),
+      [`GET ${base}/messaging/confirmations/${orderID}`]: () => ({ status: 200, body: confirmation }),
+      [`GET ${base}/messages`]: () => ({
+        status: 200,
+        body: {
+          items: [{ id: 'M2', kind: 'order_delivery_prepay', locale: 'ar', status: 'delivered', channel: 'sms', to: '+20…', fallback: true, order_id: orderID, created_at: '2026-10-29T12:02:00Z', updated_at: '2026-10-29T12:03:00Z' }],
+        },
+      }),
+    });
+    renderAt(`/stores/${store}/orders/${orderID}`);
+    const card = (await screen.findByRole('heading', { name: 'تأكيد العميل' })).closest('section');
+    if (!card) throw new Error('no confirmation card');
+    expect(within(card).getByText('بانتظار دفع التوصيل')).toBeInTheDocument();
+    expect(within(card).getByText('أُرسلت على SMS')).toBeInTheDocument();
+    expect(within(card).getByText(/يتأكد الطلب بعد الدفع/)).toBeInTheDocument();
+    expect(screen.queryByText(/أرسلنا للعميل رسالة تأكيد/)).toBeNull();
+  });
+
   it('asks the merchant to call when no message confirms the order, without asking for a confirmation', async () => {
     const calls = routes({ ...orderRoutes, [`GET ${base}/messages`]: () => ({ status: 200, body: { items: [] } }) });
     renderAt(`/stores/${store}/orders/${orderID}`);

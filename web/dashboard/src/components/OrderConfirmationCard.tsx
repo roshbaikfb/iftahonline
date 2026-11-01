@@ -31,10 +31,23 @@ function Step({ tone, icon, children, at }: { tone: 'ok' | 'wait' | 'no'; icon: 
 // OrderConfirmationCard is the order page's "customer confirmation"
 // (6g, the approved mockup): the confirmation message's way to the
 // customer, their answer, and when an unanswered order is cancelled.
-export function OrderConfirmationCard({ storeId, confirmation: c, messages }: { storeId: string; confirmation: OrderConfirmation; messages: CustomerMessage[] }) {
+// A prepaid delivery's sends the link to pay it, and payments cancels it
+// unpaid (ADR-0070).
+export function OrderConfirmationCard({
+  storeId,
+  confirmation: c,
+  messages,
+  prepaid = false,
+}: {
+  storeId: string;
+  confirmation: OrderConfirmation;
+  messages: CustomerMessage[];
+  prepaid?: boolean;
+}) {
   const pill = confirmationLabel[c.status];
-  // The message the customer answers: the latest confirmation sent.
-  const m = messages.find((x) => x.kind === 'order_confirmation');
+  // The message the customer answers: the latest confirmation (or pay
+  // link) sent.
+  const m = messages.find((x) => x.kind === 'order_confirmation' || x.kind === 'order_delivery_prepay');
   const sent = m && m.status !== 'queued' && m.status !== 'skipped_quota';
   return (
     <section className="card od-confirm" aria-labelledby="h-confirm">
@@ -65,8 +78,8 @@ export function OrderConfirmationCard({ storeId, confirmation: c, messages }: { 
         )}
         {c.status === 'pending' && (
           <Step tone="wait" icon={clock}>
-            بانتظار ردّه
-            <small>«تأكيد الطلب» أو «إلغاء الطلب»</small>
+            {prepaid ? 'بانتظار دفع التوصيل' : 'بانتظار ردّه'}
+            {!prepaid && <small>«تأكيد الطلب» أو «إلغاء الطلب»</small>}
           </Step>
         )}
         {c.status === 'confirmed' && (
@@ -85,7 +98,10 @@ export function OrderConfirmationCard({ storeId, confirmation: c, messages }: { 
           </Step>
         )}
       </ol>
-      {c.status === 'pending' && (
+      {c.status === 'pending' && prepaid && (
+        <p className="deadline">أرسلنا للعميل رابط دفع التوصيل: يتأكد الطلب بعد الدفع، ويُلغى إن لم يُدفع خلال 6 ساعات من الطلب.</p>
+      )}
+      {c.status === 'pending' && !prepaid && (
         <p className="deadline">
           يُلغى تلقائيًا <strong>{dateTime(c.expires_at)}</strong> إن لم يرد. <Link to={`/stores/${storeId}/messages`}>غيّر المدة</Link>
         </p>

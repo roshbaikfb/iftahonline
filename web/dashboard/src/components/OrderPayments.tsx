@@ -86,7 +86,7 @@ export function OrderPayments({ storeId, order, onChanged }: { storeId: string; 
       </p>
       {deposit && (
         <small className="muted">
-          طلبت قواعد الحماية أن يدفع العميل الشحن ورسوم الدفع عند الاستلام ({money(order.deposit_minor ?? 0, order.currency)}) بالبطاقة؛ يُلغى الطلب إن لم يدفع خلال ساعة.
+          طلبت قواعد الحماية أن يدفع العميل الشحن ورسوم الدفع عند الاستلام ({money(order.deposit_minor ?? 0, order.currency)}) بالبطاقة، من رابط أرسلناه إلى رقمه؛ يُلغى الطلب إن لم يدفع خلال 6 ساعات.
         </small>
       )}
       {error && <p role="alert">{error}</p>}
