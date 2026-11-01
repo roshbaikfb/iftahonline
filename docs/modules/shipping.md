@@ -145,6 +145,11 @@ Roles: every role reads; the owner and manager change.
 
 ## Rules worth knowing
 
+- **Carrier charges** (ADR-0068). `Charges.CarrierCharges(orderIDs)` (at
+  most 500) is what carriers kept of settled parcels: a delivered
+  parcel's COD less its payouts, or a returned one's negative payouts.
+  It is one query; orders without settled parcels are missing.
+
 - **Caching.** Quotes come from an in-memory cache: 30 s TTL,
   invalidated through `shipping.rates.changed` → Redis. Merchant reads
   (`getShipping`) are never cached.
