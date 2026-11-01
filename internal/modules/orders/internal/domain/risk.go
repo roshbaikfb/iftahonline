@@ -32,4 +32,7 @@ var (
 	// ErrNeedsCall is the customer's own confirmation of an order the
 	// rules want the merchant to verify by phone.
 	ErrNeedsCall = errs.Conflict("order_needs_call", "the store confirms this order by phone")
+	// ErrDepositDue is the customer's own confirmation of an order whose
+	// prepaid delivery is not paid yet: paying confirms it (ADR-0070).
+	ErrDepositDue = errs.Conflict("order_deposit_due", "the order is confirmed once its delivery is paid")
 )

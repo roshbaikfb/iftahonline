@@ -171,6 +171,15 @@ func TestPrepaidDelivery(t *testing.T) {
 	if err != nil || read.Deposit.Amount() != 7500 || read.DepositStatus != domain.PaymentAwaiting {
 		t.Fatalf("stored: %+v, %v", read, err)
 	}
+	// The customer's own yes does not confirm it while the delivery is
+	// unpaid (ADR-0070); the merchant's would.
+	err = postgres.InTenantTx(f.shopperA, f.pool, func(tx pgx.Tx) error {
+		_, mErr := svc.TransitionSystemTx(f.shopperA, tx, o.ID, domain.StatusConfirmed, "customer:whatsapp", "")
+		return mErr
+	})
+	if !errors.Is(err, domain.ErrDepositDue) {
+		t.Fatalf("the customer confirming an unpaid prepaid delivery: %v", err)
+	}
 	// The gateway's word moves the deposit, not the order's payment status.
 	err = postgres.InTenantTx(f.shopperA, f.pool, func(tx pgx.Tx) error {
 		changed, sErr := svc.SetPaymentStatusTx(f.shopperA, tx, o.ID, domain.PaymentPaid, "gateway:fake")
