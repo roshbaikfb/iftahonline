@@ -74,6 +74,8 @@ const (
 	AdFree = domain.AdFree
 	// RiskRules: holding or verifying risky customers' orders (ADR-0066).
 	RiskRules = domain.RiskRules
+	// Profit: the net profit dashboard (ADR-0069).
+	Profit = domain.Profit
 )
 
 // Warning thresholds (Usage.CrossedBy, Usage.Level).

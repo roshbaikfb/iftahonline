@@ -77,8 +77,8 @@ func TestUsageLevels(t *testing.T) {
 func TestFeatureKinds(t *testing.T) {
 	t.Parallel()
 	all := domain.Features()
-	if len(all) != 11 {
-		t.Fatalf("%d enforced features, want 11", len(all))
+	if len(all) != 12 {
+		t.Fatalf("%d enforced features, want 12", len(all))
 	}
 	for f, k := range all {
 		if f.Kind() != k || k == "" {
