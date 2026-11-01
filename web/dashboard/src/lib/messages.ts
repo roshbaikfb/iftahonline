@@ -39,6 +39,7 @@ export const messageTabs: { status: MessageStatus | ''; label: string }[] = [
 export const messageKindLabel: Record<CustomerMessage['kind'], string> = {
   order_confirmation: 'تأكيد طلب',
   order_answer_ack: 'شكر على الرد',
+  order_delivery_prepay: 'رابط دفع التوصيل',
 };
 
 export const channelLabel = (c: CustomerMessage['channel']) => (c === 'whatsapp' ? 'واتساب' : c === 'sms' ? 'SMS' : '—');

@@ -32,6 +32,8 @@ func WhatsAppTemplate(k Kind) (Template, bool) {
 	switch k {
 	case OrderConfirmation:
 		return Template{Name: "order_confirmation_v1", Buttons: []Reply{Confirm, Cancel}}, true
+	case DeliveryPrepay:
+		return Template{Name: "order_delivery_prepay_v1"}, true
 	}
 	return Template{}, false
 }
@@ -41,13 +43,29 @@ func WhatsAppTemplate(k Kind) (Template, bool) {
 const maxParam = 60
 
 // TemplateParams are the template body's values, {{1}}…{{4}}: the
-// customer's name, the store's name, the order's reference and total.
+// customer's name, the store's name, the order's reference and total;
+// a prepaid delivery's {{4}} is the amount due and {{5}} the link.
 func TemplateParams(k Kind, v Vars) []string {
 	switch k {
 	case OrderConfirmation:
 		return []string{param(v.CustomerName), param(v.StoreName), param(v.OrderRef), param(v.Total)}
+	case DeliveryPrepay:
+		return []string{param(v.CustomerName), param(v.StoreName), param(v.OrderRef), param(v.Due), link(v.ConfirmURL)}
 	}
 	return nil
+}
+
+// maxLink bounds a link in a template: our links are a store's host and
+// a 22-character token.
+const maxLink = 300
+
+// link makes a URL a template value: whole (a cut link opens nothing),
+// without spaces; "-" when it cannot be one.
+func link(s string) string {
+	if s == "" || len(s) > maxLink || strings.IndexFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return "-"
+	}
+	return s
 }
 
 // param makes a value WhatsApp takes: one line, single spaces, at most
@@ -73,6 +91,10 @@ func DefaultSMS(k Kind, locale string) string {
 		return "{{store}}: Hi {{name}}, please confirm your order {{ref}} ({{total}}): {{url}}"
 	case k == OrderConfirmation:
 		return "{{store}}: أهلاً {{name}}، أكّد طلبك رقم {{ref}} ({{total}}) من هنا: {{url}}"
+	case k == DeliveryPrepay && locale == English:
+		return "{{store}}: Hi {{name}}, to complete your order {{ref}}, pay the delivery ({{due}}) upfront within 6 hours: {{url}}. You pay the rest on delivery."
+	case k == DeliveryPrepay:
+		return "{{store}}: أهلاً {{name}}، لإتمام طلبك رقم {{ref}} ادفع مصاريف التوصيل ({{due}}) مقدمًا خلال 6 ساعات: {{url}} وتدفع الباقي عند الاستلام."
 	}
 	return ""
 }
@@ -97,7 +119,7 @@ func ValidSMS(k Kind, body string) bool {
 func RenderSMS(body string, v Vars) string {
 	return strings.NewReplacer(
 		"{{name}}", param(v.CustomerName), "{{store}}", param(v.StoreName), "{{ref}}", param(v.OrderRef),
-		"{{total}}", param(v.Total), "{{url}}", v.ConfirmURL,
+		"{{total}}", param(v.Total), "{{url}}", v.ConfirmURL, "{{due}}", param(v.Due),
 	).Replace(body)
 }
 
@@ -111,9 +133,13 @@ type Text struct {
 	UpdatedAt *time.Time
 }
 
-// OutcomeAwaitingCall is the ack's outcome for a yes that left the order
-// pending: the store calls to confirm it (ADR-0070).
-const OutcomeAwaitingCall = "awaiting_call"
+// The ack's outcomes beyond a confirmation's status (ADR-0070):
+// OutcomeAwaitingCall, a yes that left the order pending for the store's
+// call; OutcomeDepositDue, a yes to an order whose delivery is unpaid.
+const (
+	OutcomeAwaitingCall = "awaiting_call"
+	OutcomeDepositDue   = "deposit_due"
+)
 
 // AckText is the text thanking a customer who answered on WhatsApp, by
 // what the answer did (Vars.Outcome).
@@ -123,6 +149,8 @@ func AckText(locale string, v Vars) string {
 		switch v.Outcome {
 		case OutcomeAwaitingCall:
 			return "Thank you " + name + ", we have your answer. " + store + " will call you to confirm your order " + ref + "."
+		case OutcomeDepositDue:
+			return "Thank you " + name + ". Your order " + ref + " from " + store + " is confirmed once its delivery is paid, from the link we sent you."
 		case string(Confirmed):
 			return "Thank you " + name + ", your order " + ref + " from " + store + " is confirmed. We will let you know when it ships."
 		case string(Cancelled):
@@ -133,6 +161,8 @@ func AckText(locale string, v Vars) string {
 	switch v.Outcome {
 	case OutcomeAwaitingCall:
 		return "شكراً " + name + "، وصلنا ردك، وسيتصل بك " + store + " لتأكيد طلبك رقم " + ref + "."
+	case OutcomeDepositDue:
+		return "شكراً " + name + "، يتأكد طلبك رقم " + ref + " من " + store + " بعد دفع مصاريف التوصيل من الرابط الذي أرسلناه لك."
 	case string(Confirmed):
 		return "شكراً " + name + "، تم تأكيد طلبك رقم " + ref + " من " + store + ". سنبلغك عند شحنه."
 	case string(Cancelled):

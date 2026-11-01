@@ -25,10 +25,15 @@ const (
 	// just opened, free on WhatsApp, so it costs no quota and never goes
 	// by SMS.
 	AnswerAck Kind = "order_answer_ack"
+	// DeliveryPrepay sends a cash order's customer the link to pay its
+	// delivery upfront (ADR-0070): to the phone, never to whoever filled
+	// in the order form, so the page after checkout says nothing of it.
+	// Its texts are the platform's.
+	DeliveryPrepay Kind = "order_delivery_prepay"
 )
 
 // Valid reports whether k is a kind.
-func (k Kind) Valid() bool { return k == OrderConfirmation || k == AnswerAck }
+func (k Kind) Valid() bool { return k == OrderConfirmation || k == AnswerAck || k == DeliveryPrepay }
 
 // Metered reports whether a message of kind k costs a quota unit.
 func (k Kind) Metered() bool { return k != AnswerAck }
@@ -163,8 +168,11 @@ type Vars struct {
 	StoreName    string `json:"store_name"`
 	OrderRef     string `json:"order_ref"`
 	Total        string `json:"total"` // formatted, e.g. "520.00 EGP"
-	// ConfirmURL is where an SMS customer confirms or cancels (6c).
+	// ConfirmURL is where an SMS customer confirms or cancels (6c), or
+	// pays a prepaid delivery (DeliveryPrepay).
 	ConfirmURL string `json:"confirm_url,omitempty"`
+	// Due is a prepaid delivery's amount, formatted (DeliveryPrepay).
+	Due string `json:"due,omitempty"`
 	// Outcome is what an answer did (AnswerAck): confirmed, cancelled or
 	// stale.
 	Outcome string `json:"outcome,omitempty"`

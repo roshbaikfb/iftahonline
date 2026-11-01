@@ -54,6 +54,20 @@ func (f *fakeOrders) setRisk(id ulid.ID, a orders.RiskAction) {
 	f.orders[id] = o
 }
 
+// setDeposit makes id a prepaid delivery awaiting its 65 EGP (ADR-0067).
+func (f *fakeOrders) setDeposit(t *testing.T, id ulid.ID) {
+	t.Helper()
+	deposit, err := money.New(6500, money.EGP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	o := f.orders[id]
+	o.RiskAction, o.Deposit, o.DepositStatus = orders.RiskPrepay, deposit, orders.PaymentAwaiting
+	f.orders[id] = o
+}
+
 func (f *fakeOrders) set(id ulid.ID, st orders.Status) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -88,8 +102,16 @@ func (f *fakeOrders) TransitionSystemReasonTx(_ context.Context, _ pgx.Tx, id ul
 	if o.Status != orders.StatusPending {
 		return false, fmt.Errorf("%w: %s to %s", orders.ErrInvalidTransition, o.Status, to)
 	}
-	if to == orders.StatusConfirmed && o.RiskAction == orders.RiskVerify && strings.HasPrefix(actor, "customer:") {
-		return false, orders.ErrNeedsCall // as orders refuses it (ADR-0066)
+	if to == orders.StatusConfirmed { // as orders refuses them (ADR-0066, ADR-0070)
+		byCustomer := strings.HasPrefix(actor, "customer:")
+		switch {
+		case o.RiskAction == orders.RiskHold:
+			return false, orders.ErrOrderHeld
+		case o.RiskAction == orders.RiskVerify && byCustomer:
+			return false, orders.ErrNeedsCall
+		case o.DepositStatus == orders.PaymentAwaiting && byCustomer:
+			return false, orders.ErrDepositDue
+		}
 	}
 	o.Status, o.OutcomeReason = to, reason
 	f.orders[id] = o
@@ -656,43 +678,118 @@ func TestButtonAnswerThanks(t *testing.T) {
 	}
 }
 
-// TestConfirmRiskRules (ADR-0066): a held order gets no message; a
-// verified one is asked even where the store does not confirm, and the
-// customer's yes leaves it pending with a call to make.
+// TestConfirmRiskRules (ADR-0066, ADR-0070): where the store confirms,
+// every order gets a confirmation, so the thank-you page is the same for
+// all: a held one is sent nothing and never cancelled, a prepaid one is
+// sent the link to pay. The extra confirmation asks even where the store
+// does not confirm, and the customer's yes leaves it pending with a call
+// to make; nor is the thank-you page's link offered there.
 func TestConfirmRiskRules(t *testing.T) {
 	t.Parallel()
-	c := newConfirmFixture(t, options{})
+	c := newConfirmFixture(t, options{number: "+201000000000"})
 	ctx := c.store(t)
+	plain := c.orders.add(t, c.ids, orders.PaymentCOD)
 	held := c.orders.add(t, c.ids, orders.PaymentCOD)
 	c.orders.setRisk(held, orders.RiskHold)
-	if err := c.svc.ConfirmOrder(ctx, held); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.svc.Confirmation(ctx, held); !errors.Is(err, app.ErrConfirmationNotFound) {
-		t.Fatalf("a held order's confirmation: %v", err)
-	}
-	// A prepaid delivery confirms the order itself when paid (ADR-0067).
 	prepaid := c.orders.add(t, c.ids, orders.PaymentCOD)
-	c.orders.setRisk(prepaid, orders.RiskPrepay)
-	if err := c.svc.ConfirmOrder(ctx, prepaid); err != nil {
+	c.orders.setDeposit(t, prepaid)
+	for _, id := range []ulid.ID{plain, held, prepaid} {
+		if err := c.svc.ConfirmOrder(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if link, err := c.svc.WhatsAppLink(ctx, id, "ar"); err != nil || link == "" {
+			t.Fatalf("%s: the thank-you link = %q %v", id, link, err)
+		}
+	}
+	if got := c.confirmation(ctx, t, held); got.Status != domain.Pending || got.MessageID != nil {
+		t.Fatalf("a held order's confirmation: %+v", got)
+	}
+	if n := len(c.jobsOf("messaging.auto_cancel_order")); n != 1 {
+		t.Fatalf("%d deadlines, want the plain order's only", n)
+	}
+	pc := c.confirmation(ctx, t, prepaid)
+	if pc.MessageID == nil || c.message(ctx, t, *pc.MessageID).Kind != domain.DeliveryPrepay {
+		t.Fatalf("a prepaid order's message: %+v", pc)
+	}
+	if err := c.svc.SendMessage(ctx, *pc.MessageID, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.svc.Confirmation(ctx, prepaid); !errors.Is(err, app.ErrConfirmationNotFound) {
-		t.Fatalf("a prepaid order's confirmation: %v", err)
+	sent := c.wa.Sent()
+	last := sent[len(sent)-1]
+	if last.Template != "order_delivery_prepay_v1" || len(last.Params) != 5 || last.Params[3] != "EGP 65.00" ||
+		!strings.HasPrefix(last.Params[4], "https://souq.example.com/en/o/") {
+		t.Fatalf("the prepaid delivery's message = %+v", last)
 	}
 
-	if _, err := c.svc.SaveSettings(ctx, domain.Settings{ConfirmCOD: false, AutoCancelHours: 3}); err != nil {
+	// A yes to the held order waits for the merchant; to the unpaid one,
+	// for the payment. Each is told so, not that it is confirmed.
+	for _, id := range []ulid.ID{held, prepaid} {
+		err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
+			return c.svc.HandleReplyTx(ctx, tx, app.Reply{Kind: domain.OrderConfirmation, OrderID: &id, Answer: domain.Confirm, At: time.Now()})
+		})
+		if err != nil || c.orders.status(id) != orders.StatusPending {
+			t.Fatalf("%s after the yes: %s %v", id, c.orders.status(id), err)
+		}
+		jobs := c.sendJobs()
+		if err = c.svc.SendMessage(ctx, jobs[len(jobs)-1].MessageID, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sent = c.wa.Sent()
+	if a, b := sent[len(sent)-2].Text, sent[len(sent)-1].Text; !strings.Contains(a, "will call you") || !strings.Contains(b, "once its delivery is paid") {
+		t.Fatalf("thanks = %q / %q", a, b)
+	}
+	if got := c.confirmation(ctx, t, prepaid); got.Status != domain.Pending {
+		t.Fatalf("the unpaid order's confirmation: %s", got.Status)
+	}
+
+	// The SMS link is the prepaid delivery's only way to pay.
+	v, err := c.svc.LinkConfirmation(ctx, tokenOf(t, last.Params[4]))
+	if err != nil || !v.DepositDue || v.Deposit.Amount() != 6500 || v.OnDelivery.Amount() != 52000 || v.OrderID != prepaid {
+		t.Fatalf("link view = %+v, %v", v, err)
+	}
+	token := tokenOf(t, last.Params[4])
+	for _, tt := range []struct {
+		ctx   context.Context
+		order ulid.ID
+		token string
+		want  bool
+	}{{ctx, prepaid, token, true}, {ctx, held, token, false}, {ctx, prepaid, "nope", false}, {c.store(t), prepaid, token, false}} {
+		if ok, vErr := c.svc.ValidPayLink(tt.ctx, tt.order, tt.token); vErr != nil || ok != tt.want {
+			t.Errorf("ValidPayLink(%s, %q) = %v %v", tt.order, tt.token, ok, vErr)
+		}
+	}
+
+	// A store that does not confirm: a verified order is asked, but the
+	// thank-you page offers no link; a held one gets nothing; a prepaid
+	// one, its link to pay.
+	if _, err = c.svc.SaveSettings(ctx, domain.Settings{ConfirmCOD: false, AutoCancelHours: 3}); err != nil {
 		t.Fatal(err)
 	}
 	ver := c.orders.add(t, c.ids, orders.PaymentCOD)
 	c.orders.setRisk(ver, orders.RiskVerify)
-	if err := c.svc.ConfirmOrder(ctx, ver); err != nil {
-		t.Fatal(err)
+	held2 := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setRisk(held2, orders.RiskHold)
+	prepaid2 := c.orders.add(t, c.ids, orders.PaymentCOD)
+	c.orders.setDeposit(t, prepaid2)
+	for _, id := range []ulid.ID{ver, held2, prepaid2} {
+		if err = c.svc.ConfirmOrder(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if link, lErr := c.svc.WhatsAppLink(ctx, id, "ar"); lErr != nil || link != "" {
+			t.Fatalf("%s: a thank-you link where the store does not confirm: %q %v", id, link, lErr)
+		}
 	}
-	if got := c.confirmation(ctx, t, ver); got.Status != domain.Pending {
+	if got := c.confirmation(ctx, t, ver); got.Status != domain.Pending || got.MessageID == nil {
 		t.Fatalf("a verified order is asked even with confirmation off: %+v", got)
 	}
-	err := pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
+	if _, err = c.svc.Confirmation(ctx, held2); !errors.Is(err, app.ErrConfirmationNotFound) {
+		t.Fatalf("a held order's confirmation with confirmation off: %v", err)
+	}
+	if got := c.confirmation(ctx, t, prepaid2); got.MessageID == nil {
+		t.Fatalf("a prepaid order with confirmation off is not sent its link: %+v", got)
+	}
+	err = pgxTx(ctx, c.pool, func(tx pgx.Tx) error {
 		_, _, aErr := c.svc.AnswerTx(ctx, tx, ver, domain.Confirm, domain.ActorWhatsApp, time.Now())
 		return aErr
 	})
@@ -703,7 +800,7 @@ func TestConfirmRiskRules(t *testing.T) {
 		t.Fatalf("after the customer's yes: %s, order %s", got.Status, c.orders.status(ver))
 	}
 	p, err := c.svc.Notifications(ctx, nil, false, 50)
-	if err != nil || len(p.Items) != 1 || p.Items[0].Kind != domain.OrderConfirmedNotice || !p.Items[0].Data.NeedsCall {
+	if err != nil || len(p.Items) == 0 || p.Items[0].Kind != domain.OrderConfirmedNotice || !p.Items[0].Data.NeedsCall {
 		t.Fatalf("notices = %+v, %v", p.Items, err)
 	}
 }

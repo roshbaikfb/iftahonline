@@ -5985,7 +5985,7 @@ export interface components {
          *     do not know as a message, never fail on it.
          * @enum {string}
          */
-        MessageKind: "order_confirmation" | "order_answer_ack";
+        MessageKind: "order_confirmation" | "order_answer_ack" | "order_delivery_prepay";
         /**
          * @description The kinds whose SMS text a store writes.
          * @enum {string}

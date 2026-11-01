@@ -112,6 +112,45 @@ func TestTemplate(t *testing.T) {
 	}
 }
 
+// TestPrepayTexts (ADR-0070): the prepaid delivery's template and SMS
+// carry the amount and the whole link; a link that cannot be one is "-".
+func TestPrepayTexts(t *testing.T) {
+	t.Parallel()
+	tpl, ok := domain.WhatsAppTemplate(domain.DeliveryPrepay)
+	if !ok || tpl.Name != "order_delivery_prepay_v1" || len(tpl.Buttons) != 0 || !domain.DeliveryPrepay.Valid() || !domain.DeliveryPrepay.Metered() {
+		t.Fatalf("template = %+v %v", tpl, ok)
+	}
+	url := "https://souq.example.com/o/" + strings.Repeat("a", 22)
+	params := domain.TemplateParams(domain.DeliveryPrepay, domain.Vars{CustomerName: "منى", StoreName: "سوق", OrderRef: "7P0R", Due: "65.00 EGP", ConfirmURL: url})
+	if strings.Join(params, "|") != "منى|سوق|7P0R|65.00 EGP|"+url {
+		t.Fatalf("params = %q", params)
+	}
+	for _, bad := range []string{"", "https://x.example.com/o/a b", "https://x.example.com/" + strings.Repeat("a", 300)} {
+		if got := domain.TemplateParams(domain.DeliveryPrepay, domain.Vars{ConfirmURL: bad}); got[4] != "-" {
+			t.Errorf("link %.30q = %q", bad, got[4])
+		}
+	}
+	got := domain.RenderSMS(domain.DefaultSMS(domain.DeliveryPrepay, domain.English), domain.Vars{
+		CustomerName: "Mona", StoreName: "Souq", OrderRef: "7P0R", Due: "65.00 EGP", ConfirmURL: "https://souq.example.com/en/o/tok",
+	})
+	if got != "Souq: Hi Mona, to complete your order 7P0R, pay the delivery (65.00 EGP) upfront within 6 hours: https://souq.example.com/en/o/tok. You pay the rest on delivery." {
+		t.Fatalf("rendered %q", got)
+	}
+	if ar := domain.DefaultSMS(domain.DeliveryPrepay, domain.Arabic); !strings.Contains(ar, "{{url}}") || !strings.Contains(ar, "{{due}}") {
+		t.Fatalf("Arabic = %q", ar)
+	}
+	for outcome, want := range map[string]string{
+		domain.OutcomeAwaitingCall: "سيتصل بك سوق", domain.OutcomeDepositDue: "بعد دفع مصاريف التوصيل", string(domain.Confirmed): "تم تأكيد طلبك",
+	} {
+		if got := domain.AckText(domain.Arabic, domain.Vars{StoreName: "سوق", Outcome: outcome}); !strings.Contains(got, want) {
+			t.Errorf("ack %s = %q", outcome, got)
+		}
+	}
+	if got := domain.AckText(domain.English, domain.Vars{Outcome: domain.OutcomeDepositDue}); !strings.Contains(got, "once its delivery is paid") {
+		t.Errorf("English ack = %q", got)
+	}
+}
+
 func TestSMSTexts(t *testing.T) {
 	t.Parallel()
 	for _, l := range []string{domain.Arabic, domain.English} {

@@ -82,6 +82,16 @@ type ConfirmLinks interface {
 
 var _ ConfirmLinks = (*app.Service)(nil)
 
+// PayLinks checks the SMS links that pay a prepaid delivery (the api
+// role's payments.DepositLinkCheck, ADR-0070). It acts on the store in
+// ctx.
+type PayLinks interface {
+	// ValidPayLink reports whether token is the SMS link of orderID.
+	ValidPayLink(ctx context.Context, orderID ulid.ID, token string) (bool, error)
+}
+
+var _ PayLinks = (*app.Service)(nil)
+
 // PlanLimitsSubscriber is the event bus subscriber name of
 // Module.PlanLimitHandler.
 const PlanLimitsSubscriber = "messaging.plan_limits"

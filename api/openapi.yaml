@@ -6766,7 +6766,7 @@ components:
               message: { type: string }
     MessageKind:
       type: string
-      enum: [order_confirmation, order_answer_ack]
+      enum: [order_confirmation, order_answer_ack, order_delivery_prepay]
       description: |
         What a message is for. An extensible list (ADR-0032, ADR-0041):
         new kinds are added within /v1, and clients must show a kind they

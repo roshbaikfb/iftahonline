@@ -64,6 +64,13 @@ var errNoOrders = errors.New("messaging: order confirmation needs the orders (an
 // still pending, in a store that confirms, gets its confirmation and
 // message in one transaction, and its deadline job. Redeliveries of the
 // event do nothing (one confirmation per order).
+//
+// What the risk rules did must not show to whoever placed the order
+// (ADR-0070): where the store confirms, every order gets a confirmation
+// (and the thank-you page its WhatsApp link). A held one is asked
+// nothing (the merchant reviews it); a prepaid delivery is sent the link
+// to pay it, to the phone, whether or not the store confirms; the extra
+// confirmation asks even a store that does not confirm.
 func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 	if !s.conf.ready() || s.conf.Stores == nil {
 		return errNoOrders
@@ -75,11 +82,7 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 	if err != nil {
 		return err
 	}
-	// A held order waits for the merchant's review, without a message
-	// (ADR-0066); a prepaid delivery confirms the order itself when it is
-	// paid, and an unpaid one is cancelled within the hour (ADR-0067).
-	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending || o.RiskAction == orders.RiskHold ||
-		o.RiskAction == orders.RiskPrepay {
+	if o.PaymentMethod != orders.PaymentCOD || o.Status != orders.StatusPending {
 		return nil
 	}
 	info, err := s.conf.Stores(ctx)
@@ -90,14 +93,13 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 	if !domain.ValidLocale(locale) {
 		locale = domain.Arabic
 	}
+	prepay := o.RiskAction == orders.RiskPrepay && o.DepositStatus == orders.PaymentAwaiting
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		set, err := store.Settings(ctx, tx)
 		if err != nil {
 			return err
 		}
-		// The risk rules' extra confirmation asks even a store that does
-		// not confirm by message.
-		if !set.ConfirmCOD && o.RiskAction != orders.RiskVerify {
+		if !set.ConfirmCOD && !prepay && o.RiskAction != orders.RiskVerify {
 			return nil
 		}
 		token, hash, err := domain.NewToken()
@@ -110,31 +112,38 @@ func (s *Service) ConfirmOrder(ctx context.Context, orderID ulid.ID) error {
 		}
 		c := domain.Confirmation{OrderID: o.ID, Status: domain.Pending, ExpiresAt: deadline}
 		created, err := s.insertConfirmation(ctx, tx, &c, hash)
-		if err != nil || !created {
+		if err != nil || !created || o.RiskAction == orders.RiskHold {
 			return err
-		}
-		// With a number to confirm on, the customer may confirm for free
-		// from the thank-you page first: the paid template waits.
-		var sendAt time.Time
-		if c.WACode != "" {
-			sendAt = s.now().Add(CustomerFirst)
 		}
 		ml := money.LocaleEN
 		if locale == domain.Arabic {
 			ml = money.LocaleAR
 		}
-		q, err := s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.OrderConfirmation, Locale: locale, OrderID: &o.ID, To: o.Contact.Phone, SendAt: sendAt,
+		out := Outgoing{Kind: domain.OrderConfirmation, Locale: locale, OrderID: &o.ID, To: o.Contact.Phone,
 			Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Total: o.Total.Format(ml),
-				ConfirmURL: "https://" + info.Host + domain.ConfirmPath(locale, token)}})
+				ConfirmURL: "https://" + info.Host + domain.ConfirmPath(locale, token)}}
+		switch {
+		case prepay:
+			// The payment confirms the order, and payments cancels it
+			// unpaid: no deadline here.
+			out.Kind, out.Vars.Due = domain.DeliveryPrepay, o.Deposit.Format(ml)
+		case c.WACode != "" && set.ConfirmCOD:
+			// The customer may confirm for free from the thank-you page
+			// first: the paid template waits.
+			out.SendAt = s.now().Add(CustomerFirst)
+		}
+		q, err := s.EnqueueTx(ctx, tx, out)
 		if err != nil {
 			return err
 		}
 		c.MessageID = &q.ID
 		switch q.Status {
 		case domain.Queued:
-			if err = s.enqueueTx(ctx, tx, AutoCancelArgs{OrderID: o.ID}, &river.InsertOpts{ScheduledAt: deadline,
-				UniqueOpts: river.UniqueOpts{ByArgs: true}}); err != nil {
-				return err
+			if !prepay {
+				if err = s.enqueueTx(ctx, tx, AutoCancelArgs{OrderID: o.ID}, &river.InsertOpts{ScheduledAt: deadline,
+					UniqueOpts: river.UniqueOpts{ByArgs: true}}); err != nil {
+					return err
+				}
 			}
 		case domain.Skipped:
 			c.Status = domain.QuotaSkipped
@@ -264,8 +273,11 @@ func (s *Service) ackTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, settled
 		locale = domain.Arabic
 	}
 	outcome := string(settled)
-	if awaitingCall(settled, o) {
+	switch {
+	case awaitingCall(settled, o):
 		outcome = domain.OutcomeAwaitingCall
+	case settled == domain.Pending && o.DepositStatus == orders.PaymentAwaiting:
+		outcome = domain.OutcomeDepositDue
 	}
 	_, err = s.EnqueueTx(ctx, tx, Outgoing{Kind: domain.AnswerAck, Locale: locale, OrderID: &orderID, To: o.Contact.Phone,
 		Vars: domain.Vars{CustomerName: o.Contact.Name, StoreName: info.Name, OrderRef: o.Code(), Outcome: outcome}})
@@ -300,10 +312,15 @@ func (s *Service) AnswerTx(ctx context.Context, tx pgx.Tx, orderID ulid.ID, answ
 	_, err = s.conf.Orders.TransitionSystemTx(ctx, tx, orderID, to, actor, "the customer "+verb+" by "+strings.TrimPrefix(actor, "customer:"))
 	needsCall := false
 	switch {
-	case errors.Is(err, orders.ErrNeedsCall):
-		// The risk rules want this yes verified by phone (ADR-0066): the
-		// answer is kept, the order stays pending for the merchant.
+	case errors.Is(err, orders.ErrNeedsCall), errors.Is(err, orders.ErrOrderHeld):
+		// The risk rules want this yes verified by phone, or the order
+		// reviewed (ADR-0066): the answer is kept, the order stays
+		// pending for the merchant.
 		needsCall, err = true, nil
+	case errors.Is(err, orders.ErrDepositDue):
+		// Paying the delivery confirms it (ADR-0070); the confirmation
+		// stays open for the payment, or a cancel.
+		return domain.Pending, true, nil
 	case errors.Is(err, orders.ErrInvalidTransition):
 		settled, err = domain.Stale, nil
 	}

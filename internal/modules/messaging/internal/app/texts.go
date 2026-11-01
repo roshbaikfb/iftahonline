@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -69,7 +70,7 @@ func (s *Service) Texts(ctx context.Context) ([]domain.Text, error) {
 }
 
 func checkText(kind domain.Kind, locale string) error {
-	if !kind.Valid() || !domain.ValidLocale(locale) {
+	if !slices.Contains(domain.Kinds(), kind) || !domain.ValidLocale(locale) {
 		return ErrTextNotFound
 	}
 	return nil

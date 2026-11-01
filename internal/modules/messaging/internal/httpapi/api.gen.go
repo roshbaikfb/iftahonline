@@ -74,8 +74,9 @@ func (e CustomerMessageReply) Valid() bool {
 
 // Defines values for MessageKind.
 const (
-	MessageKindOrderAnswerAck    MessageKind = "order_answer_ack"
-	MessageKindOrderConfirmation MessageKind = "order_confirmation"
+	MessageKindOrderAnswerAck      MessageKind = "order_answer_ack"
+	MessageKindOrderConfirmation   MessageKind = "order_confirmation"
+	MessageKindOrderDeliveryPrepay MessageKind = "order_delivery_prepay"
 )
 
 // Valid indicates whether the value is a known member of the MessageKind enum.
@@ -84,6 +85,8 @@ func (e MessageKind) Valid() bool {
 	case MessageKindOrderAnswerAck:
 		return true
 	case MessageKindOrderConfirmation:
+		return true
+	case MessageKindOrderDeliveryPrepay:
 		return true
 	default:
 		return false

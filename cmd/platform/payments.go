@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
@@ -20,7 +21,8 @@ import (
 
 // newPayments builds the payments module (api and worker roles). inbox
 // is the worker's, for webhook jobs; ten (the api role's) checks the
-// card checkout's return URLs (ADR-0030). Each is nil in the other role.
+// card checkout's return URLs (ADR-0030), and messaging the links that
+// pay a prepaid delivery (ADR-0070). Each is nil in the other role.
 func newPayments(c clients, ords orders.Payments, inbox webhooks.Inbox, ten *tenancy.Module) (*payments.Module, error) {
 	sealer, err := envelope.New(envelope.FromKeyring(c.cfg.Secrets.Keyring))
 	if err != nil {
@@ -44,6 +46,11 @@ func newPayments(c clients, ords orders.Payments, inbox webhooks.Inbox, ten *ten
 			res, resErr := resolver.Resolve(ctx, host)
 			return res.StoreID, resErr
 		}
+		links, linksErr := messaging.NewPayLinks(c.pool)
+		if linksErr != nil {
+			return nil, linksErr
+		}
+		d.DepositLinks = links.ValidPayLink
 	}
 	return payments.New(d)
 }
