@@ -375,7 +375,9 @@ function byLabel(e: { from?: OrderStatus; actor?: string }, source: string): str
 }
 
 // onDelivery is what the courier collects: the total, less a prepaid
-// delivery once it is paid (ADR-0067).
+// delivery once it is paid, even partly refunded (ADR-0067; the server's
+// orders.Order.OnDelivery).
 function onDelivery(o: { total_minor: number; deposit_minor?: number; deposit_status?: string }): number {
-  return o.deposit_status === 'paid' ? o.total_minor - (o.deposit_minor ?? 0) : o.total_minor;
+  const kept = o.deposit_status === 'paid' || o.deposit_status === 'partially_refunded';
+  return kept ? o.total_minor - (o.deposit_minor ?? 0) : o.total_minor;
 }
