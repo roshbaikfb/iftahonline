@@ -72,3 +72,4 @@ supersedes it.
 | [0064](0064-read-pool-for-lagging-reads.md) | A read pool for reads that may lag | Accepted |
 | [0065](0065-risk-bands-from-delivery-outcomes.md) | Risk bands from every store's delivery outcomes | Accepted |
 | [0066](0066-risk-rules-hold-and-verify.md) | Risk rules: hold or verify risky customers' orders | Accepted |
+| [0067](0067-prepaid-delivery-for-risky-customers.md) | Prepaid delivery for risky customers | Accepted |

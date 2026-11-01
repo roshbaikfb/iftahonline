@@ -40,7 +40,7 @@ arrive in does not matter.
 |---|---|
 | `risk_orders` | One row per order: `phone_key` (HMAC-SHA256, 32 bytes), `placed_at`, `outcome`, `outcome_at`. Tenant table under RLS. Indexes: PK `(store_id, order_id)`, `(store_id, phone_key)`, partial `(phone_key, outcome_at DESC)`, `(placed_at)` |
 | `risk_backfills` | The stores whose past was queued for learning |
-| `risk_settings` | The store's rules: `hold_from`, `verify_from` (`off`, `medium`, `high`); no row is both off |
+| `risk_settings` | The store's rules: `hold_from`, `verify_from`, `prepay_from` (`off`, `medium`, `high`); no row is all off |
 
 Functions (SECURITY DEFINER, owner-only policies):
 - `app.risk_signals(keys)`: up to 100 keys' latest 200 outcomes of the
@@ -95,4 +95,7 @@ There is no lookup by phone number.
   confirmed until released. One that reaches `verify_from` is asked to
   confirm even if the store does not confirm by message, but the
   customer's yes leaves it pending for a call. New customers are never
-  held or verified. Prepaid shipping comes in 8d.
+  held or verified.
+- **Prepaid delivery** (ADR-0067). One whose band reaches `prepay_from`
+  (after the hold, before the call) pays the shipping and COD fee by
+  card first. Without cards it is held instead.
