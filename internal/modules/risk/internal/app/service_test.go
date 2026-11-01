@@ -32,6 +32,7 @@ type fixture struct {
 	ids    *ulid.Generator
 	orders *risktest.Orders
 	jobs   *testkit.Jobs
+	plan   *plan
 	now    time.Time
 }
 
@@ -52,8 +53,9 @@ func newFixtureOn(t *testing.T, db *pgxpool.Pool) *fixture {
 		t.Fatal(err)
 	}
 	ids, now := ulid.NewGenerator(), time.Now().UTC().Truncate(time.Second)
-	f := &fixture{pool: db, ids: ids, orders: risktest.NewOrders(ids, now), jobs: testkit.NewJobs(), now: now}
-	f.svc = app.NewService(app.Deps{DB: db, Orders: f.orders, Keyer: keyer, Jobs: f.jobs, Now: func() time.Time { return f.now }})
+	f := &fixture{pool: db, ids: ids, orders: risktest.NewOrders(ids, now), jobs: testkit.NewJobs(), plan: &plan{}, now: now}
+	f.plan.rules.Store(true)
+	f.svc = app.NewService(app.Deps{DB: db, Orders: f.orders, Keyer: keyer, Jobs: f.jobs, Plan: f.plan, Now: func() time.Time { return f.now }})
 	return f
 }
 

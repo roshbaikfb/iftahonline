@@ -40,11 +40,14 @@ const (
 	Pixels         Feature = "pixels"
 	Feeds          Feature = "feeds"
 	AdFree         Feature = "ad_free"
+	// RiskRules lets a store hold or verify risky customers' orders
+	// (ADR-0066); the bands themselves are free.
+	RiskRules Feature = "risk_rules"
 )
 
 // Features lists the enforced features with their kinds.
 func Features() map[Feature]Kind {
-	all := [...]Feature{Messages, OrdersPerMonth, Products, Staff, CustomDomains, CardPayments, Coupons, Pixels, Feeds, AdFree}
+	all := [...]Feature{Messages, OrdersPerMonth, Products, Staff, CustomDomains, CardPayments, Coupons, Pixels, Feeds, AdFree, RiskRules}
 	m := make(map[Feature]Kind, len(all))
 	for _, f := range all {
 		m[f] = f.Kind()
@@ -59,7 +62,7 @@ func (f Feature) Kind() Kind {
 		return Monthly
 	case Products, Staff, CustomDomains:
 		return Count
-	case CardPayments, Coupons, Pixels, Feeds, AdFree:
+	case CardPayments, Coupons, Pixels, Feeds, AdFree, RiskRules:
 		return Flag
 	}
 	return ""

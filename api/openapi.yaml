@@ -175,8 +175,9 @@ tags:
       the platform about a phone number, most recent first; merchants see
       only a band (new, low, medium, high) and their own store's history
       of the number, never another store's orders or counts. A band is
-      asked for by the store's own orders, never by a number. Permission:
-      orders.read.
+      asked for by the store's own orders, never by a number. Reading
+      needs orders.read. The store's rules (hold or verify risky
+      customers' orders, ADR-0066) need orders.manage to change.
 paths:
   /livez:
     get:
@@ -2907,6 +2908,43 @@ paths:
               schema: { $ref: "#/components/schemas/OrderRisk" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/risk/settings:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [risk]
+      operationId: getRiskSettings
+      summary: The store's risk rules
+      description: "Permission: orders.read. `available` says whether the store's plan includes the rules."
+      responses:
+        "200":
+          description: The rules.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RiskSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [risk]
+      operationId: updateRiskSettings
+      summary: Replace the store's risk rules
+      description: |
+        Permission: orders.manage. Turning a rule on needs the plan's
+        risk_rules (403 plan_limit); turning them off never does
+        (ADR-0066).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RiskSettingsInput" }
+      responses:
+        "200":
+          description: The rules saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RiskSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/risk/bands:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -5601,6 +5639,27 @@ components:
       properties:
         band: { $ref: "#/components/schemas/RiskBand" }
         history: { $ref: "#/components/schemas/RiskHistory" }
+    RiskRule:
+      type: string
+      enum: ["off", medium, high]
+      description: The band from which a rule applies to a new storefront cash order, or off.
+    RiskSettingsInput:
+      type: object
+      required: [hold_from, verify_from]
+      properties:
+        hold_from: { $ref: "#/components/schemas/RiskRule" }
+        verify_from: { $ref: "#/components/schemas/RiskRule" }
+    RiskSettings:
+      type: object
+      required: [hold_from, verify_from, available]
+      description: >-
+        hold_from: such an order waits for the merchant's review, without a confirmation message, until released.
+        verify_from: the customer's own yes does not confirm it; the merchant calls. A hold comes first. New customers
+        are never held or verified (ADR-0066).
+      properties:
+        hold_from: { $ref: "#/components/schemas/RiskRule" }
+        verify_from: { $ref: "#/components/schemas/RiskRule" }
+        available: { type: boolean, description: Whether the store's plan includes the rules (risk_rules). }
     RiskBandsInput:
       type: object
       required: [order_ids]
