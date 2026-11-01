@@ -54,8 +54,6 @@ type InvoiceAccountArgs struct {
 // Kind implements river.JobArgs.
 func (InvoiceAccountArgs) Kind() string { return "billing.invoice_account" }
 
-func unique() *river.InsertOpts { return &river.InsertOpts{UniqueOpts: river.UniqueOpts{ByArgs: true}} }
-
 // StartMonth asks for the previous month's invoice of every store with
 // something to bill. It runs daily; what was invoiced already is skipped.
 func (s *Service) StartMonth(ctx context.Context) error {
@@ -70,7 +68,7 @@ func (s *Service) StartMonth(ctx context.Context) error {
 		}
 		for _, id := range stores {
 			sid := tenant.StoreID{ID: id}
-			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, InvoiceStoreArgs{TenantArgs: jobs.TenantArgs{StoreID: sid}, Period: period}, unique()); err != nil {
+			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, InvoiceStoreArgs{TenantArgs: jobs.TenantArgs{StoreID: sid}, Period: period}, jobs.Unique()); err != nil {
 				return fmt.Errorf("billing: enqueue store invoice: %w", err)
 			}
 		}
@@ -104,7 +102,7 @@ func (s *Service) InvoiceStore(ctx context.Context, period time.Time) error {
 				return err
 			}
 		}
-		if _, err = s.jobs.InsertTx(ctx, tx, InvoiceAccountArgs{AccountID: account, Period: period}, unique()); err != nil {
+		if _, err = s.jobs.InsertTx(ctx, tx, InvoiceAccountArgs{AccountID: account, Period: period}, jobs.Unique()); err != nil {
 			return fmt.Errorf("billing: enqueue account invoice: %w", err)
 		}
 		return nil

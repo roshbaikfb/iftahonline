@@ -63,7 +63,7 @@ func (s *Service) EndPeriods(ctx context.Context) error {
 		}
 		for _, id := range ids {
 			sid := tenant.StoreID{ID: id}
-			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, EndPeriodArgs{TenantArgs: jobs.TenantArgs{StoreID: sid}}, unique()); err != nil {
+			if _, err = s.jobs.InsertTx(tenant.WithStore(ctx, sid), tx, EndPeriodArgs{TenantArgs: jobs.TenantArgs{StoreID: sid}}, jobs.Unique()); err != nil {
 				return fmt.Errorf("billing: enqueue end period: %w", err)
 			}
 		}

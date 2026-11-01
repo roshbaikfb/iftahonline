@@ -137,11 +137,11 @@ func (s *Service) Dunning(ctx context.Context) error {
 			sid := jobs.TenantArgs{StoreID: tenant.StoreID{ID: t.ID}}
 			switch t.Kind {
 			case "charge":
-				_, err = s.jobs.InsertTx(ctx, tx, ChargeInvoiceArgs{AccountID: t.Account, InvoiceID: t.ID}, unique())
+				_, err = s.jobs.InsertTx(ctx, tx, ChargeInvoiceArgs{AccountID: t.Account, InvoiceID: t.ID}, jobs.Unique())
 			case "suspend":
-				_, err = s.jobs.InsertTx(sctx, tx, SuspendArgs{TenantArgs: sid}, unique())
+				_, err = s.jobs.InsertTx(sctx, tx, SuspendArgs{TenantArgs: sid}, jobs.Unique())
 			case "cancel":
-				_, err = s.jobs.InsertTx(sctx, tx, CancelArgs{TenantArgs: sid}, unique())
+				_, err = s.jobs.InsertTx(sctx, tx, CancelArgs{TenantArgs: sid}, jobs.Unique())
 			}
 			if err != nil {
 				return fmt.Errorf("billing: enqueue %s: %w", t.Kind, err)
