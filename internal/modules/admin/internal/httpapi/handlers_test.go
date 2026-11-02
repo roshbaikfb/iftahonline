@@ -23,6 +23,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site"
@@ -31,6 +32,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
@@ -104,7 +106,10 @@ func newFixture(t *testing.T) fixture {
 		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
-		Site:    site.NewConsole(adminPool, ids, log),
+		Site: site.NewConsole(adminPool, ids, log),
+		// The package's tests all sign in from one address: room for all
+		// of them (the per-IP limit itself is tested in app).
+		Limits:  &app.Limits{LoginPerIP: ratelimit.Limit{Burst: 50, Period: time.Hour}, LoginFailPerKey: ratelimit.Limit{Burst: 5, Period: 30 * time.Minute}},
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)

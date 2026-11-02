@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"os"
 	"sync"
 	"testing"
@@ -162,9 +163,14 @@ func TestFAQLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	var made []ulid.ID
+	// t.Context() is cancelled before cleanups run: the questions added
+	// are removed with a context of their own, so the next test (in any
+	// order) finds the shipped FAQ.
 	t.Cleanup(func() {
 		for _, id := range made {
-			_ = console.DeleteFAQ(t.Context(), id) //nolint:errcheck // cleanup
+			if delErr := console.DeleteFAQ(context.Background(), id); delErr != nil {
+				t.Error(delErr)
+			}
 		}
 	})
 	for range domain.MaxFAQs - len(list) {
