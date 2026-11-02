@@ -54,11 +54,11 @@ VALUES (@invoice_id, @account_id, @line_no, @kind, @line_store_id, @description,
 -- has them (ADR-0060), else its own: the newest active version of that
 -- plan's code that sells the cycle in the currency, or the version
 -- itself (ADR-0056).
-SELECT t.id AS plan_id, t.kind, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
+SELECT t.id AS plan_id, t.kind, t.code, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
 FROM subscriptions s
 JOIN plans cur ON cur.id = coalesce(s.next_plan_id, s.plan_id)
 CROSS JOIN LATERAL (
-  SELECT p.id, p.kind, p.name_ar
+  SELECT p.id, p.kind, p.code, p.name_ar
   FROM plans p
   JOIN plan_prices x ON x.plan_id = p.id AND x.currency = @currency AND x.cycle = coalesce(s.next_cycle, s.cycle)
   WHERE p.id = cur.id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')

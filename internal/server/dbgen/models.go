@@ -347,6 +347,29 @@ type Feature struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type FoundingMember struct {
+	StoreID     pgtype.UUID
+	OwnerID     pgtype.UUID
+	Seat        int32
+	DiscountBps int32
+	Currency    string
+	PlanCode    string
+	Cycle       string
+	LockedMinor int64
+	JoinedAt    pgtype.Timestamptz
+	LostAt      pgtype.Timestamptz
+	LostReason  pgtype.Text
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type FoundingProgram struct {
+	ID          int32
+	Enabled     bool
+	Seats       int32
+	DiscountBps int32
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type InventoryLevel struct {
 	VariantID pgtype.UUID
 	StoreID   pgtype.UUID

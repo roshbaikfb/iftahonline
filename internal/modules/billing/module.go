@@ -1,10 +1,12 @@
 package billing
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
@@ -49,6 +51,10 @@ type Deps struct {
 	Log          *slog.Logger
 	PublicURL    string
 	DashboardURL string
+	// Owner is the store-in-ctx's owner, read in its tenant transaction
+	// (identity.OwnerTx): the founding program admits one store per
+	// owner. nil leaves the program out.
+	Owner func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
 }
 
 // Module is the wired billing module.
@@ -76,7 +82,7 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
 		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier,
-		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL}), collect: d.Collect}, nil
+		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL, Owner: d.Owner}), collect: d.Collect}, nil
 }
 
 // Grants is what the entitlements module reads.
@@ -112,10 +118,11 @@ func (m *Module) Console() Console { return m.svc }
 func (m *Module) Agencies() Agencies { return m.svc }
 
 // PeriodicJobs start each month's invoices (daily), end trials and
-// cancelled periods (hourly) and, with Deps.Collect, run the dunning
-// (hourly); all at worker start.
+// cancelled periods (hourly), end founding memberships of stores that
+// left (daily) and, with Deps.Collect, run the dunning (hourly); all at
+// worker start.
 func (m *Module) PeriodicJobs() []*river.PeriodicJob {
-	jobs := []*river.PeriodicJob{app.InvoicesPeriodic(), app.EndPeriodsPeriodic()}
+	jobs := []*river.PeriodicJob{app.InvoicesPeriodic(), app.EndPeriodsPeriodic(), app.FoundingSweepPeriodic()}
 	if m.collect {
 		jobs = append(jobs, app.DunningPeriodic())
 	}
@@ -132,4 +139,10 @@ func NewShowcase(pool *pgxpool.Pool) Showcase {
 // role (app_admin): the only role that may change plans.
 func NewCatalog(adminPool *pgxpool.Pool, ids *ulid.Generator) Catalog {
 	return app.NewCatalog(adminPool, ids)
+}
+
+// NewFounding is the founding-merchants program for the super-admin
+// console, on adminPool (app_admin): its settings and its members.
+func NewFounding(adminPool *pgxpool.Pool) Founding {
+	return app.NewService(app.Deps{DB: adminPool})
 }

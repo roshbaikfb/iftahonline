@@ -59,6 +59,7 @@ type Service struct {
 	notifier Notifier
 	inbox    webhooks.Inbox
 	log      *slog.Logger
+	owner    func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
 	// callbackURL and dashboardURL are where the gateway sends callbacks
 	// and merchants back (ADR-0053).
 	callbackURL, dashboardURL string
@@ -90,6 +91,10 @@ type Deps struct {
 	Log          *slog.Logger
 	PublicURL    string
 	DashboardURL string
+	// Owner is the store-in-ctx's owner, read in its tenant transaction:
+	// the founding program admits one store per owner. nil leaves the
+	// program out.
+	Owner func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
 	// IDs makes accounts' and invoices' IDs; nil is a new generator.
 	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
@@ -109,7 +114,7 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	svc := &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
-		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, dashboardURL: d.DashboardURL,
+		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, owner: d.Owner, dashboardURL: d.DashboardURL,
 		policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
 	if d.PublicURL != "" {
 		svc.callbackURL = CallbackURL(d.PublicURL)

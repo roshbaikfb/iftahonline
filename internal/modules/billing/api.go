@@ -207,6 +207,35 @@ type Showcase interface {
 
 var _ Showcase = (*app.Service)(nil)
 
+// The founding-merchants program (S4b-2).
+type (
+	// FoundingProgram is the program's settings: on, seats, discount.
+	FoundingProgram = domain.Program
+	// FoundingMember is a store in the program.
+	FoundingMember = domain.Member
+	// FoundingLost is why a member lost the program.
+	FoundingLost = domain.Lost
+)
+
+// Why a member lost the program.
+const (
+	FoundingLostCancelled = domain.LostCancelled
+	FoundingLostUnpaid    = domain.LostUnpaid
+)
+
+// Founding is the program for the super-admin console (NewFounding, on
+// the console's role): its settings and every member.
+type Founding interface {
+	FoundingProgram(ctx context.Context) (FoundingProgram, error)
+	// SaveFoundingProgram checks and writes the settings. A new discount
+	// reaches only merchants who join after it.
+	SaveFoundingProgram(ctx context.Context, p FoundingProgram) error
+	// FoundingMembers are every member, by seat (lost ones too).
+	FoundingMembers(ctx context.Context) ([]FoundingMember, error)
+}
+
+var _ Founding = (*app.Service)(nil)
+
 // Catalog is the console's plan catalog. It runs as the console's role;
 // see NewCatalog.
 type Catalog interface {
