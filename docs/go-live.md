@@ -241,6 +241,10 @@ account, before merchants rely on it:
 - **Contact details:** fill them in the console, under «الموقع التعريفي»
   (`/console/site`): the international WhatsApp, the email, the social
   profiles and the Companies House number. Empty fields stay hidden.
+- **About page and identity:** in the same screen, add the logo, the
+  share image (1200×630), the founding story, the founders and the team.
+  Add the video once it is recorded. Add merchants' reviews only when
+  they are real and their authors agree.
 - **Legal pages, before launch:** `/terms` and `/privacy` are drafts
   written from what the platform does (`internal/modules/site/internal/web/legal.go`).
   A lawyer must:

@@ -50,6 +50,18 @@ It owns no tables, emits no events and has no HTTP API of its own.
   - `POST /admin/v1/site/faqs`;
   - `PUT` and `DELETE /admin/v1/site/faqs/{id}` (`DELETE` takes
     `?reason=`).
+- **The about page and identity (S4b-1):**
+  - the story, the video, the logo and the share image;
+  - founders and team (`site_people`);
+  - merchants' real reviews (`site_testimonials`, on the home page too).
+
+  Images are re-encoded under `platform/site/` and served through
+  imgproxy. More API:
+  - `PUT /admin/v1/site/story`;
+  - `POST /admin/v1/site/uploads`;
+  - `PUT` and `DELETE /admin/v1/site/images/{logo|share}`;
+  - `POST /admin/v1/site/people`, then `PUT` and `DELETE /{id}`;
+  - `POST /admin/v1/site/testimonials`, then `PUT` and `DELETE /{id}`.
 - **Caching:** the site keeps a one-minute cache and keeps the last read
   when a read fails. Pages stay 10 minutes at the edge.
 
@@ -96,8 +108,7 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S4b:** founders, team, the founding story, merchants' reviews, the
-  video, the logo, and the founding-merchants program.
+- **S4b-2:** the founding-merchants program, with its billing discount.
 - **S4c:** the guides (articles) and their editor.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).
