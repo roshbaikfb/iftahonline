@@ -310,8 +310,20 @@ func TestPublicOffers(t *testing.T) {
 		t.Fatalf("offers by code = %+v", byCode)
 	}
 	usd, err := d.svc.PublicOffers(t.Context(), "USD")
-	if err != nil || len(usd.Plans) != len(egp.Plans) {
-		t.Fatalf("USD offers = %+v, %v", usd, err)
+	if err != nil {
+		t.Fatalf("USD offers: %v", err)
+	}
+	// The seeded plans are on sale in dollars too (unpriced). Parallel
+	// tests add plans of their own between the two reads, so the lists
+	// are compared by the seeded codes, not by length.
+	inUSD := map[string]bool{}
+	for _, o := range usd.Plans {
+		inUSD[o.Code] = true
+	}
+	for _, code := range []string{"free", "pays", "merchant", "pro", "brand"} {
+		if !inUSD[code] {
+			t.Errorf("%s is not on sale in USD", code)
+		}
 	}
 	for _, o := range usd.Plans {
 		if o.Monthly != nil || o.Annual != nil || o.Fee != nil {
