@@ -290,3 +290,32 @@ func TestSubscribingFromAnInvoicedStore(t *testing.T) {
 		t.Fatalf("after paying: %+v", sum)
 	}
 }
+
+// TestPublicOffers: the platform site's plans, with no store: the same
+// plans and prices as a store sees, none current, the agencies' left
+// out, and a currency nothing is sold in priced at nothing.
+func TestPublicOffers(t *testing.T) {
+	t.Parallel()
+	d, _ := subscribing(t)
+	egp, err := d.svc.PublicOffers(t.Context(), "EGP")
+	if err != nil || egp.Currency != "EGP" || len(egp.Features) < 10 {
+		t.Fatalf("offers = %+v, %v", egp, err)
+	}
+	byCode := map[string]app.Offer{}
+	for _, o := range egp.Plans {
+		byCode[o.Code] = o
+	}
+	if _, agency := byCode["agency"]; agency || byCode["free"].Current || byCode["merchant"].Monthly == nil || *byCode["merchant"].Monthly != 29900 ||
+		byCode["pays"].Fee == nil || byCode["pays"].Fee.RateBps != 250 || !byCode["pro"].TrialAvailable || byCode["free"].TrialAvailable {
+		t.Fatalf("offers by code = %+v", byCode)
+	}
+	usd, err := d.svc.PublicOffers(t.Context(), "USD")
+	if err != nil || len(usd.Plans) != len(egp.Plans) {
+		t.Fatalf("USD offers = %+v, %v", usd, err)
+	}
+	for _, o := range usd.Plans {
+		if o.Monthly != nil || o.Annual != nil || o.Fee != nil {
+			t.Errorf("%s is priced in USD: %+v", o.Code, o)
+		}
+	}
+}

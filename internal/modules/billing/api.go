@@ -181,6 +181,25 @@ type (
 	Cycle = domain.Cycle
 )
 
+// What the platform's own site shows of the plans (the site module).
+type (
+	// Offers are the public plans on sale in one currency, with the
+	// features catalog naming their grants.
+	Offers = app.Offers
+	// Offer is one plan on sale: its prices and fee in that currency (nil
+	// when not sold in it).
+	Offer = app.Offer
+)
+
+// Showcase lists the plans on sale for the platform's site: no store.
+type Showcase interface {
+	// PublicOffers is every public plan on sale (not the agencies'),
+	// priced in currency.
+	PublicOffers(ctx context.Context, currency string) (Offers, error)
+}
+
+var _ Showcase = (*app.Service)(nil)
+
 // Catalog is the console's plan catalog. It runs as the console's role;
 // see NewCatalog.
 type Catalog interface {

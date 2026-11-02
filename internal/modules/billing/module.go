@@ -122,6 +122,12 @@ func (m *Module) PeriodicJobs() []*river.PeriodicJob {
 	return jobs
 }
 
+// NewShowcase is the platform site's read of the plans on sale, on pool
+// (the storefront role: it reads plans only, holds no keys).
+func NewShowcase(pool *pgxpool.Pool) Showcase {
+	return app.NewService(app.Deps{DB: pool})
+}
+
 // NewCatalog is the console's plan catalog on adminPool, the console's
 // role (app_admin): the only role that may change plans.
 func NewCatalog(adminPool *pgxpool.Pool, ids *ulid.Generator) Catalog {
