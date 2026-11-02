@@ -704,7 +704,8 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	// Stores, Holds and Events: the console settles invoices and sets up
 	// agencies here (ADR-0058, ADR-0059).
 	bill, err := billing.New(billing.Deps{Pool: c.pool, Jobs: billJobs, IDs: c.ids, Log: c.log, Paymob: c.cfg.Billing,
-		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL, Stores: billingStores(ten), Holds: billingHolds(ten), Events: c.events})
+		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL, Stores: billingStores(ten), Holds: billingHolds(ten), Events: c.events,
+		Owner: identity.OwnerTx})
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +734,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
-			Site: siteConsole,
+			Site: siteConsole, Founding: billing.NewFounding(c.adminPool),
 		}); err != nil {
 			return nil, err
 		}
@@ -1077,7 +1078,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	}
 	bill, err := billing.New(billing.Deps{Pool: pool, Orders: billingOrders(ords), Stores: billingStores(ten), Jobs: billJobs, IDs: c.ids, Events: c.events,
 		Sealer: billSealer, Holds: billingHolds(ten), Collect: cfg.Billing.CollectionEnabled, Paymob: cfg.Billing,
-		Inbox: hooks.Inbox(), Log: log, PublicURL: cfg.Mail.DashboardURL, DashboardURL: cfg.Mail.DashboardURL,
+		Inbox: hooks.Inbox(), Log: log, PublicURL: cfg.Mail.DashboardURL, DashboardURL: cfg.Mail.DashboardURL, Owner: identity.OwnerTx,
 		Notifier: billingNotifier(ten, identity.StaffEmails(pool, authz.RoleOwner), mailer.FromConfig(cfg.Mail, log), cfg.Mail.DashboardURL,
 			ownerNotices{phones: identity.StaffPhones(pool, authz.RoleOwner), whatsapp: msg.Merchant(), log: log})})
 	if err != nil {

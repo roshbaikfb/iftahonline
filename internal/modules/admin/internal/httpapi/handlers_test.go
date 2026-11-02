@@ -110,7 +110,7 @@ func newFixture(t *testing.T) fixture {
 		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
-		Site: siteConsole,
+		Site: siteConsole, Founding: billing.NewFounding(adminPool),
 		// The package's tests all sign in from one address: room for all
 		// of them (the per-IP limit itself is tested in app).
 		Limits:  &app.Limits{LoginPerIP: ratelimit.Limit{Burst: 50, Period: time.Hour}, LoginFailPerKey: ratelimit.Limit{Burst: 5, Period: 30 * time.Minute}},
@@ -788,5 +788,46 @@ func TestConsoleSiteAbout(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodDelete, adminHost, "/admin/v1/site/images/logo?reason=no+logo", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
 		t.Fatalf("remove logo = %d %v", r.status, r.body)
+	}
+}
+
+// TestConsoleFounding: the founding-merchants program from the console:
+// its settings with a reason, and its members (none yet).
+func TestConsoleFounding(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/founding", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	save := `{"enabled":true,"seats":100,"discount_bps":2000,"reason":"launch the program"}`
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/founding", save, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/founding", save, withCookie(sess), sameOrigin); r.status != http.StatusOK || r.body["enabled"] != true {
+		t.Fatalf("save = %d %v", r.status, r.body)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/founding", "", withCookie(sess))
+	if p := r.body["program"].(map[string]any); r.status != http.StatusOK || p["seats"] != float64(100) || p["discount_bps"] != float64(2000) ||
+		len(r.body["members"].([]any)) != 0 {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	for _, bad := range []struct {
+		body   string
+		status int
+	}{
+		{`{"enabled":true,"seats":0,"discount_bps":2000,"reason":"no seats"}`, http.StatusUnprocessableEntity},
+		{`{"enabled":true,"seats":100,"discount_bps":9500,"reason":"too much"}`, http.StatusUnprocessableEntity},
+		{`{"enabled":true,"seats":100,"discount_bps":2000,"reason":"x"}`, http.StatusUnprocessableEntity},
+		{``, http.StatusBadRequest},
+	} {
+		if got := f.do(t, http.MethodPut, adminHost, "/admin/v1/founding", bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("PUT %s = %d %v; want %d", bad.body, got.status, got.body, bad.status)
+		}
+	}
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/founding", `{"enabled":false,"seats":100,"discount_bps":2000,"reason":"off again"}`,
+		withCookie(sess), sameOrigin); r.status != http.StatusOK {
+		t.Fatalf("off = %d", r.status)
 	}
 }

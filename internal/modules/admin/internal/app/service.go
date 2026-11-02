@@ -85,6 +85,8 @@ type Deps struct {
 	Ads ads.Console
 	// Site is the platform site's content (ADR-0073); nil for the CLI.
 	Site site.Console
+	// Founding is the founding-merchants program; nil for the CLI.
+	Founding billing.Founding
 }
 
 // Service implements the console.

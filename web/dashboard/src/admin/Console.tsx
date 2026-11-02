@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
+import { FoundingPage } from './FoundingPage';
 import { AuditPage } from './AuditPage';
 import { Login } from './Login';
 import { Overview } from './Overview';
@@ -24,6 +25,7 @@ export function ConsoleRoutes() {
       <Route path="/agencies/:agencyId" element={<AgencyPage />} />
       <Route path="/ads" element={<AdsPage />} />
       <Route path="/site" element={<SitePage />} />
+      <Route path="/founding" element={<FoundingPage />} />
       <Route path="/audit" element={<AuditPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
