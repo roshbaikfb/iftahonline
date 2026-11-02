@@ -152,3 +152,20 @@ test('the English store mirrors the Arabic one', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect(errors).toEqual([]);
 });
+
+test.describe('on a desktop', () => {
+  test.use({ viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false });
+
+  // A store with one category got one circle as wide as the page: the
+  // tiles' columns stretched to fill the row. They keep their size now.
+  test('category tiles keep their size with few categories', async ({ page }) => {
+    const errors = watch(page);
+    expect((await page.goto('/'))?.status()).toBe(200);
+    const circle = page.locator('section.tiles nav a:not(.all) i').first();
+    await expect(circle).toBeVisible();
+    const box = await circle.boundingBox();
+    expect(box?.width).toBeLessThanOrEqual(161); // 10rem
+    expect(box?.width).toBeGreaterThan(100);
+    expect(errors).toEqual([]);
+  });
+});
