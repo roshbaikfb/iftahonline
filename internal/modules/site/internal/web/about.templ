@@ -1,7 +1,7 @@
 package web
 
-// aboutPage is who we are. The founders, the team and the founding
-// story come with the console (S4) and show once they are set.
+// aboutPage is who we are. The story, the founders, the team, the video
+// and merchants' reviews are the console's (S4b-1) and show once set.
 templ aboutPage(p *pageCtx) {
 	<section class="dots">
 		<div class="wrap page-head">
@@ -11,10 +11,15 @@ templ aboutPage(p *pageCtx) {
 		</div>
 	</section>
 	<section class="wrap section tight story" aria-labelledby="h-story">
+		<span class="eyebrow">{ p.t.OurStory }</span>
 		<h2 id="h-story">{ p.t.WhyH2About }</h2>
+		for _, para := range p.story {
+			<p>{ para }</p>
+		}
 		<p>{ p.t.WhyP1 }</p>
 		<p>{ p.t.WhyP2 }</p>
 	</section>
+	@foundersSection(p)
 	<section class="soft" aria-labelledby="h-values">
 		<div class="wrap section tight">
 			<h2 id="h-values" class="center">{ p.t.ValuesH2 }</h2>
@@ -28,6 +33,9 @@ templ aboutPage(p *pageCtx) {
 			</div>
 		</div>
 	</section>
+	@teamSection(p)
+	@videoSection(p)
+	@reviewsSection(p)
 	<section class="wrap section tight" aria-labelledby="h-company">
 		<h2 id="h-company" class="center">{ p.t.CompanyH2 }</h2>
 		<div class="grid2 company">

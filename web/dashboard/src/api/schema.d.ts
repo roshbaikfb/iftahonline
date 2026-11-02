@@ -2083,6 +2083,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/site/story": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the founding story and the video
+         * @description Shown on the about page (the video on the home page too). Recorded in the admin log first.
+         */
+        put: operations["adminSaveSiteStory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an image for the site
+         * @description A presigned POST of at most 4 MiB; pass `key` as `upload_key`.
+         *     The image is re-encoded on use (never SVG).
+         */
+        post: operations["adminCreateSiteUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/images/{image}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image: "logo" | "share";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the logo or the share image
+         * @description The old image is deleted. Recorded in the admin log once done.
+         */
+        put: operations["adminSetSiteImage"];
+        post?: never;
+        /** Remove the logo or the share image */
+        delete: operations["adminRemoveSiteImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a founder or a team member
+         * @description At most 50 people. Recorded in the admin log once saved.
+         */
+        post: operations["adminCreateSitePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/people/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rewrite a person
+         * @description A new photo replaces the old one (deleted). Recorded in the admin log once saved.
+         */
+        put: operations["adminUpdateSitePerson"];
+        post?: never;
+        /** Remove a person and their photo */
+        delete: operations["adminDeleteSitePerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/testimonials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a merchant's real review
+         * @description At most 50. Recorded in the admin log once saved.
+         */
+        post: operations["adminCreateSiteTestimonial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/testimonials/{testimonial_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testimonial_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Rewrite a review */
+        put: operations["adminUpdateSiteTestimonial"];
+        post?: never;
+        /** Remove a review and its photo */
+        delete: operations["adminDeleteSiteTestimonial"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/duplicates": {
         parameters: {
             query?: never;
@@ -4412,6 +4559,108 @@ export interface components {
         AdminSite: {
             settings: components["schemas"]["AdminSiteSettings"];
             faqs: components["schemas"]["AdminSiteFAQ"][];
+            story: components["schemas"]["AdminSiteStory"];
+            images: components["schemas"]["AdminSiteImages"];
+            /** @description The founders, then the team, each in order. */
+            people: components["schemas"]["AdminSitePerson"][];
+            testimonials: components["schemas"]["AdminSiteTestimonial"][];
+        };
+        AdminSiteStory: {
+            /** @description The founding story; blank lines split paragraphs. */
+            story_ar: string;
+            story_en: string;
+            /** @description The YouTube video's ID; empty shows none. */
+            video_id: string;
+        };
+        AdminSiteStoryInput: {
+            story_ar: string;
+            story_en: string;
+            /** @description A YouTube link (watch, youtu.be, shorts); empty removes the video. */
+            video_url: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminSiteImages: {
+            /** @description A signed thumbnail; empty when none. */
+            logo_url: string;
+            /** @description The image a shared link shows; empty when none. */
+            share_url: string;
+        };
+        AdminSiteImage: {
+            /** @description A signed thumbnail; empty once removed. */
+            url: string;
+        };
+        AdminSiteImageInput: {
+            upload_key: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminSiteUploadRequest: {
+            /** @enum {string} */
+            content_type: "image/jpeg" | "image/png" | "image/webp";
+        };
+        AdminSiteUpload: {
+            /** @description Pass it as upload_key once the image is posted. */
+            key: string;
+            upload: components["schemas"]["PresignedUpload"];
+        };
+        AdminSitePerson: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "founder" | "team";
+            position: number;
+            name_ar: string;
+            name_en: string;
+            role_ar: string;
+            role_en: string;
+            bio_ar: string;
+            bio_en: string;
+            /** @description A signed thumbnail; empty shows the initials. */
+            photo_url: string;
+            linkedin_url: string;
+            x_url: string;
+        };
+        AdminSitePersonInput: {
+            /** @enum {string} */
+            kind: "founder" | "team";
+            position: number;
+            name_ar: string;
+            name_en?: string;
+            role_ar: string;
+            role_en?: string;
+            bio_ar?: string;
+            bio_en?: string;
+            linkedin_url?: string;
+            x_url?: string;
+            /** @description A new photo */
+            upload_key?: string;
+            /** @description Takes the photo off (on an update). */
+            remove_photo?: boolean;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminSiteTestimonial: {
+            id: components["schemas"]["ULID"];
+            position: number;
+            name: string;
+            store_name: string;
+            store_url: string;
+            quote_ar: string;
+            /** @description Empty leaves the review off the English site. */
+            quote_en: string;
+            photo_url: string;
+        };
+        AdminSiteTestimonialInput: {
+            position: number;
+            name: string;
+            store_name?: string;
+            store_url?: string;
+            quote_ar: string;
+            quote_en?: string;
+            upload_key?: string;
+            remove_photo?: boolean;
+            /** @description Kept in the admin audit log. */
+            reason: string;
         };
         /** @description Each network's profile link; absent hides it. */
         AdminSiteSocials: {
@@ -9481,6 +9730,256 @@ export interface operations {
             header?: never;
             path: {
                 faq_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveSiteStory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteStoryInput"];
+            };
+        };
+        responses: {
+            /** @description Saved, as the site shows it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteStory"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateSiteUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Where to post the image. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteUpload"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetSiteImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image: "logo" | "share";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteImageInput"];
+            };
+        };
+        responses: {
+            /** @description Set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteImage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRemoveSiteImage: {
+        parameters: {
+            query: {
+                reason: string;
+            };
+            header?: never;
+            path: {
+                image: "logo" | "share";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateSitePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSitePersonInput"];
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSitePerson"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateSitePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSitePersonInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSitePerson"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteSitePerson: {
+        parameters: {
+            query: {
+                reason: string;
+            };
+            header?: never;
+            path: {
+                person_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateSiteTestimonial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteTestimonialInput"];
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteTestimonial"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateSiteTestimonial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testimonial_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteTestimonialInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteTestimonial"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteSiteTestimonial: {
+        parameters: {
+            query: {
+                reason: string;
+            };
+            header?: never;
+            path: {
+                testimonial_id: components["schemas"]["ULID"];
             };
             cookie?: never;
         };

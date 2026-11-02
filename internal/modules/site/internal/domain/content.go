@@ -171,9 +171,19 @@ func (f FAQ) Validate() error {
 	return nil
 }
 
-// Content is what the site shows from the console: the settings and the
-// FAQ in order.
+// Identity is the site's own: the founding story, the video, the logo
+// and the share image ("" keys show none).
+type Identity struct {
+	Story             Story
+	LogoKey, ShareKey string
+}
+
+// Content is what the site shows from the console: the settings, the
+// identity, and the FAQ, the people and the reviews in order.
 type Content struct {
-	Settings Settings
-	FAQs     []FAQ
+	Settings     Settings
+	Identity     Identity
+	FAQs         []FAQ
+	People       []Person
+	Testimonials []Testimonial
 }

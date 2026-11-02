@@ -34,6 +34,11 @@ type Content interface {
 type Deps struct {
 	Plans   Plans
 	Content Content
+	// Images signs an image's URL fitted into size × size, in format;
+	// nil (or "") shows none. ImagesOrigin is where they are served
+	// (imgproxy), for the policy.
+	Images       func(key string, size int, format string) string
+	ImagesOrigin string
 	// FontFaces and FontPreload are the brand typeface the shop serves.
 	FontFaces   string
 	FontPreload []string
@@ -70,9 +75,27 @@ func New(d Deps) (*Site, error) {
 	}
 	css := d.FontFaces + strings.TrimSpace(siteCSS)
 	sum := sha256.Sum256([]byte(css))
-	csp := "default-src 'none'; style-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; font-src 'self'; img-src 'self' data:; " +
+	// Images: the site's own, the console's through imgproxy, and the
+	// video's YouTube thumbnail (the video itself opens on YouTube).
+	img := "'self' data: " + youTubeThumbs
+	if o := origin(d.ImagesOrigin); o != "" {
+		img += " " + o
+	}
+	csp := "default-src 'none'; style-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; font-src 'self'; img-src " + img + "; " +
 		"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, css: css, csp: csp}, nil
+}
+
+// youTubeThumbs serves the video's thumbnail.
+const youTubeThumbs = "https://i.ytimg.com"
+
+// origin is a URL's scheme and host ("" when it has none).
+func origin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // Cache lifetimes: pages change when the copy, the console's content or
@@ -249,6 +272,12 @@ type pageCtx struct {
 	intl, intlDisplay string // the international WhatsApp's link
 	socials           []socialLink
 	faqs              []faq // in the page's language
+	// The about page's and the identity's, in the page's language.
+	story          []string // paragraphs
+	videoID        string
+	logo, share    string // signed URLs; "" shows none
+	founders, team []personView
+	reviews        []reviewView
 }
 
 // socialLink is a network the site links to, by its own name.
@@ -273,7 +302,14 @@ func (s *Site) page(ctx context.Context, l *language, path, title, description s
 		signup: strings.TrimRight(s.d.DashboardURL, "/") + "/signup", login: strings.TrimRight(s.d.DashboardURL, "/") + "/login",
 		whatsApp: whatsAppLink(l, set.WhatsApp), whatsDisplay: displayPhone(set.WhatsApp),
 		intl: whatsAppLink(l, set.WhatsAppIntl), intlDisplay: displayPhone(set.WhatsAppIntl),
-		contentOK: ok, settings: set, faqs: faqsIn(l, ct.FAQs)}
+		contentOK: ok, settings: set, faqs: faqsIn(l, ct.FAQs),
+		videoID: ct.Identity.Story.VideoID, reviews: s.reviewsIn(l, ct.Testimonials),
+		logo: s.image(ct.Identity.LogoKey, 160, "webp"), share: s.image(ct.Identity.ShareKey, 1200, "jpg")}
+	p.story = domain.Paragraphs(ct.Identity.Story.Ar)
+	if l == english {
+		p.story = domain.Paragraphs(ct.Identity.Story.En)
+	}
+	p.founders, p.team = s.peopleIn(l, ct.People)
 	for _, k := range domain.Socials() {
 		if u := set.Socials[k]; u != "" {
 			p.socials = append(p.socials, socialLink{socialNames[k], u})

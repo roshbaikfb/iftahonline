@@ -86,19 +86,19 @@ func (e AdminAdPlacement) Valid() bool {
 
 // Defines values for AdminAdUploadRequestContentType.
 const (
-	Imagejpeg AdminAdUploadRequestContentType = "image/jpeg"
-	Imagepng  AdminAdUploadRequestContentType = "image/png"
-	Imagewebp AdminAdUploadRequestContentType = "image/webp"
+	AdminAdUploadRequestContentTypeImagejpeg AdminAdUploadRequestContentType = "image/jpeg"
+	AdminAdUploadRequestContentTypeImagepng  AdminAdUploadRequestContentType = "image/png"
+	AdminAdUploadRequestContentTypeImagewebp AdminAdUploadRequestContentType = "image/webp"
 )
 
 // Valid indicates whether the value is a known member of the AdminAdUploadRequestContentType enum.
 func (e AdminAdUploadRequestContentType) Valid() bool {
 	switch e {
-	case Imagejpeg:
+	case AdminAdUploadRequestContentTypeImagejpeg:
 		return true
-	case Imagepng:
+	case AdminAdUploadRequestContentTypeImagepng:
 		return true
-	case Imagewebp:
+	case AdminAdUploadRequestContentTypeImagewebp:
 		return true
 	default:
 		return false
@@ -294,6 +294,63 @@ func (e AdminPlanPriceCycle) Valid() bool {
 	case AdminPlanPriceCycleAnnual:
 		return true
 	case AdminPlanPriceCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSitePersonKind.
+const (
+	AdminSitePersonKindFounder AdminSitePersonKind = "founder"
+	AdminSitePersonKindTeam    AdminSitePersonKind = "team"
+)
+
+// Valid indicates whether the value is a known member of the AdminSitePersonKind enum.
+func (e AdminSitePersonKind) Valid() bool {
+	switch e {
+	case AdminSitePersonKindFounder:
+		return true
+	case AdminSitePersonKindTeam:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSitePersonInputKind.
+const (
+	AdminSitePersonInputKindFounder AdminSitePersonInputKind = "founder"
+	AdminSitePersonInputKindTeam    AdminSitePersonInputKind = "team"
+)
+
+// Valid indicates whether the value is a known member of the AdminSitePersonInputKind enum.
+func (e AdminSitePersonInputKind) Valid() bool {
+	switch e {
+	case AdminSitePersonInputKindFounder:
+		return true
+	case AdminSitePersonInputKindTeam:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSiteUploadRequestContentType.
+const (
+	AdminSiteUploadRequestContentTypeImagejpeg AdminSiteUploadRequestContentType = "image/jpeg"
+	AdminSiteUploadRequestContentTypeImagepng  AdminSiteUploadRequestContentType = "image/png"
+	AdminSiteUploadRequestContentTypeImagewebp AdminSiteUploadRequestContentType = "image/webp"
+)
+
+// Valid indicates whether the value is a known member of the AdminSiteUploadRequestContentType enum.
+func (e AdminSiteUploadRequestContentType) Valid() bool {
+	switch e {
+	case AdminSiteUploadRequestContentTypeImagejpeg:
+		return true
+	case AdminSiteUploadRequestContentTypeImagepng:
+		return true
+	case AdminSiteUploadRequestContentTypeImagewebp:
 		return true
 	default:
 		return false
@@ -1074,8 +1131,14 @@ type AdminSettleInput struct {
 
 // AdminSite defines model for AdminSite.
 type AdminSite struct {
-	Faqs     []AdminSiteFAQ    `json:"faqs"`
-	Settings AdminSiteSettings `json:"settings"`
+	Faqs   []AdminSiteFAQ  `json:"faqs"`
+	Images AdminSiteImages `json:"images"`
+
+	// People The founders, then the team, each in order.
+	People       []AdminSitePerson      `json:"people"`
+	Settings     AdminSiteSettings      `json:"settings"`
+	Story        AdminSiteStory         `json:"story"`
+	Testimonials []AdminSiteTestimonial `json:"testimonials"`
 }
 
 // AdminSiteFAQ defines model for AdminSiteFAQ.
@@ -1109,6 +1172,77 @@ type AdminSiteFAQInput struct {
 	// Reason Kept in the admin audit log.
 	Reason string `json:"reason"`
 }
+
+// AdminSiteImage defines model for AdminSiteImage.
+type AdminSiteImage struct {
+	// Url A signed thumbnail; empty once removed.
+	Url string `json:"url"`
+}
+
+// AdminSiteImageInput defines model for AdminSiteImageInput.
+type AdminSiteImageInput struct {
+	// Reason Kept in the admin audit log.
+	Reason    string `json:"reason"`
+	UploadKey string `json:"upload_key"`
+}
+
+// AdminSiteImages defines model for AdminSiteImages.
+type AdminSiteImages struct {
+	// LogoUrl A signed thumbnail; empty when none.
+	LogoUrl string `json:"logo_url"`
+
+	// ShareUrl The image a shared link shows; empty when none.
+	ShareUrl string `json:"share_url"`
+}
+
+// AdminSitePerson defines model for AdminSitePerson.
+type AdminSitePerson struct {
+	BioAr string `json:"bio_ar"`
+	BioEn string `json:"bio_en"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id          ULID                `json:"id"`
+	Kind        AdminSitePersonKind `json:"kind"`
+	LinkedinUrl string              `json:"linkedin_url"`
+	NameAr      string              `json:"name_ar"`
+	NameEn      string              `json:"name_en"`
+
+	// PhotoUrl A signed thumbnail; empty shows the initials.
+	PhotoUrl string `json:"photo_url"`
+	Position int    `json:"position"`
+	RoleAr   string `json:"role_ar"`
+	RoleEn   string `json:"role_en"`
+	XUrl     string `json:"x_url"`
+}
+
+// AdminSitePersonKind defines model for AdminSitePerson.Kind.
+type AdminSitePersonKind string
+
+// AdminSitePersonInput defines model for AdminSitePersonInput.
+type AdminSitePersonInput struct {
+	BioAr       *string                  `json:"bio_ar,omitempty"`
+	BioEn       *string                  `json:"bio_en,omitempty"`
+	Kind        AdminSitePersonInputKind `json:"kind"`
+	LinkedinUrl *string                  `json:"linkedin_url,omitempty"`
+	NameAr      string                   `json:"name_ar"`
+	NameEn      *string                  `json:"name_en,omitempty"`
+	Position    int                      `json:"position"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// RemovePhoto Takes the photo off (on an update).
+	RemovePhoto *bool   `json:"remove_photo,omitempty"`
+	RoleAr      string  `json:"role_ar"`
+	RoleEn      *string `json:"role_en,omitempty"`
+
+	// UploadKey A new photo
+	UploadKey *string `json:"upload_key,omitempty"`
+	XUrl      *string `json:"x_url,omitempty"`
+}
+
+// AdminSitePersonInputKind defines model for AdminSitePersonInput.Kind.
+type AdminSitePersonInputKind string
 
 // AdminSiteSettings defines model for AdminSiteSettings.
 type AdminSiteSettings struct {
@@ -1157,6 +1291,72 @@ type AdminSiteSocials struct {
 	X         *string `json:"x,omitempty"`
 	Youtube   *string `json:"youtube,omitempty"`
 }
+
+// AdminSiteStory defines model for AdminSiteStory.
+type AdminSiteStory struct {
+	// StoryAr The founding story; blank lines split paragraphs.
+	StoryAr string `json:"story_ar"`
+	StoryEn string `json:"story_en"`
+
+	// VideoId The YouTube video's ID; empty shows none.
+	VideoId string `json:"video_id"`
+}
+
+// AdminSiteStoryInput defines model for AdminSiteStoryInput.
+type AdminSiteStoryInput struct {
+	// Reason Kept in the admin audit log.
+	Reason  string `json:"reason"`
+	StoryAr string `json:"story_ar"`
+	StoryEn string `json:"story_en"`
+
+	// VideoUrl A YouTube link (watch, youtu.be, shorts); empty removes the video.
+	VideoUrl string `json:"video_url"`
+}
+
+// AdminSiteTestimonial defines model for AdminSiteTestimonial.
+type AdminSiteTestimonial struct {
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id       ULID   `json:"id"`
+	Name     string `json:"name"`
+	PhotoUrl string `json:"photo_url"`
+	Position int    `json:"position"`
+	QuoteAr  string `json:"quote_ar"`
+
+	// QuoteEn Empty leaves the review off the English site.
+	QuoteEn   string `json:"quote_en"`
+	StoreName string `json:"store_name"`
+	StoreUrl  string `json:"store_url"`
+}
+
+// AdminSiteTestimonialInput defines model for AdminSiteTestimonialInput.
+type AdminSiteTestimonialInput struct {
+	Name     string  `json:"name"`
+	Position int     `json:"position"`
+	QuoteAr  string  `json:"quote_ar"`
+	QuoteEn  *string `json:"quote_en,omitempty"`
+
+	// Reason Kept in the admin audit log.
+	Reason      string  `json:"reason"`
+	RemovePhoto *bool   `json:"remove_photo,omitempty"`
+	StoreName   *string `json:"store_name,omitempty"`
+	StoreUrl    *string `json:"store_url,omitempty"`
+	UploadKey   *string `json:"upload_key,omitempty"`
+}
+
+// AdminSiteUpload defines model for AdminSiteUpload.
+type AdminSiteUpload struct {
+	// Key Pass it as upload_key once the image is posted.
+	Key    string          `json:"key"`
+	Upload PresignedUpload `json:"upload"`
+}
+
+// AdminSiteUploadRequest defines model for AdminSiteUploadRequest.
+type AdminSiteUploadRequest struct {
+	ContentType AdminSiteUploadRequestContentType `json:"content_type"`
+}
+
+// AdminSiteUploadRequestContentType defines model for AdminSiteUploadRequest.ContentType.
+type AdminSiteUploadRequestContentType string
 
 // AdminStoreCounts defines model for AdminStoreCounts.
 type AdminStoreCounts struct {
@@ -1464,6 +1664,21 @@ type AdminDeleteSiteFAQParams struct {
 	Reason string `form:"reason" json:"reason"`
 }
 
+// AdminRemoveSiteImageParams defines parameters for AdminRemoveSiteImage.
+type AdminRemoveSiteImageParams struct {
+	Reason string `form:"reason" json:"reason"`
+}
+
+// AdminDeleteSitePersonParams defines parameters for AdminDeleteSitePerson.
+type AdminDeleteSitePersonParams struct {
+	Reason string `form:"reason" json:"reason"`
+}
+
+// AdminDeleteSiteTestimonialParams defines parameters for AdminDeleteSiteTestimonial.
+type AdminDeleteSiteTestimonialParams struct {
+	Reason string `form:"reason" json:"reason"`
+}
+
 // AdminListStoresParams defines parameters for AdminListStores.
 type AdminListStoresParams struct {
 	// Query Slug prefix or name substring.
@@ -1518,8 +1733,29 @@ type AdminCreateSiteFAQJSONRequestBody = AdminSiteFAQInput
 // AdminUpdateSiteFAQJSONRequestBody defines body for AdminUpdateSiteFAQ for application/json ContentType.
 type AdminUpdateSiteFAQJSONRequestBody = AdminSiteFAQInput
 
+// AdminSetSiteImageJSONRequestBody defines body for AdminSetSiteImage for application/json ContentType.
+type AdminSetSiteImageJSONRequestBody = AdminSiteImageInput
+
+// AdminCreateSitePersonJSONRequestBody defines body for AdminCreateSitePerson for application/json ContentType.
+type AdminCreateSitePersonJSONRequestBody = AdminSitePersonInput
+
+// AdminUpdateSitePersonJSONRequestBody defines body for AdminUpdateSitePerson for application/json ContentType.
+type AdminUpdateSitePersonJSONRequestBody = AdminSitePersonInput
+
 // AdminSaveSiteSettingsJSONRequestBody defines body for AdminSaveSiteSettings for application/json ContentType.
 type AdminSaveSiteSettingsJSONRequestBody = AdminSiteSettingsInput
+
+// AdminSaveSiteStoryJSONRequestBody defines body for AdminSaveSiteStory for application/json ContentType.
+type AdminSaveSiteStoryJSONRequestBody = AdminSiteStoryInput
+
+// AdminCreateSiteTestimonialJSONRequestBody defines body for AdminCreateSiteTestimonial for application/json ContentType.
+type AdminCreateSiteTestimonialJSONRequestBody = AdminSiteTestimonialInput
+
+// AdminUpdateSiteTestimonialJSONRequestBody defines body for AdminUpdateSiteTestimonial for application/json ContentType.
+type AdminUpdateSiteTestimonialJSONRequestBody = AdminSiteTestimonialInput
+
+// AdminCreateSiteUploadJSONRequestBody defines body for AdminCreateSiteUpload for application/json ContentType.
+type AdminCreateSiteUploadJSONRequestBody = AdminSiteUploadRequest
 
 // AdminSetStoreOverrideJSONRequestBody defines body for AdminSetStoreOverride for application/json ContentType.
 type AdminSetStoreOverrideJSONRequestBody = AdminOverrideInput
@@ -1619,9 +1855,39 @@ type ServerInterface interface {
 	// AdminUpdateSiteFAQ Rewrite a question
 	// (PUT /admin/v1/site/faqs/{faq_id})
 	AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID)
+	// AdminRemoveSiteImage Remove the logo or the share image
+	// (DELETE /admin/v1/site/images/{image})
+	AdminRemoveSiteImage(w http.ResponseWriter, r *http.Request, image string, params AdminRemoveSiteImageParams)
+	// AdminSetSiteImage Set the logo or the share image
+	// (PUT /admin/v1/site/images/{image})
+	AdminSetSiteImage(w http.ResponseWriter, r *http.Request, image string)
+	// AdminCreateSitePerson Add a founder or a team member
+	// (POST /admin/v1/site/people)
+	AdminCreateSitePerson(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteSitePerson Remove a person and their photo
+	// (DELETE /admin/v1/site/people/{person_id})
+	AdminDeleteSitePerson(w http.ResponseWriter, r *http.Request, personId ULID, params AdminDeleteSitePersonParams)
+	// AdminUpdateSitePerson Rewrite a person
+	// (PUT /admin/v1/site/people/{person_id})
+	AdminUpdateSitePerson(w http.ResponseWriter, r *http.Request, personId ULID)
 	// AdminSaveSiteSettings Save the site's contact details
 	// (PUT /admin/v1/site/settings)
 	AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request)
+	// AdminSaveSiteStory Save the founding story and the video
+	// (PUT /admin/v1/site/story)
+	AdminSaveSiteStory(w http.ResponseWriter, r *http.Request)
+	// AdminCreateSiteTestimonial Add a merchant's real review
+	// (POST /admin/v1/site/testimonials)
+	AdminCreateSiteTestimonial(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteSiteTestimonial Remove a review and its photo
+	// (DELETE /admin/v1/site/testimonials/{testimonial_id})
+	AdminDeleteSiteTestimonial(w http.ResponseWriter, r *http.Request, testimonialId ULID, params AdminDeleteSiteTestimonialParams)
+	// AdminUpdateSiteTestimonial Rewrite a review
+	// (PUT /admin/v1/site/testimonials/{testimonial_id})
+	AdminUpdateSiteTestimonial(w http.ResponseWriter, r *http.Request, testimonialId ULID)
+	// AdminCreateSiteUpload Upload an image for the site
+	// (POST /admin/v1/site/uploads)
+	AdminCreateSiteUpload(w http.ResponseWriter, r *http.Request)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(w http.ResponseWriter, r *http.Request, params AdminListStoresParams)
@@ -2201,11 +2467,271 @@ func (siw *ServerInterfaceWrapper) AdminUpdateSiteFAQ(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// AdminRemoveSiteImage operation middleware
+func (siw *ServerInterfaceWrapper) AdminRemoveSiteImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "image" -------------
+	var image string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "image", r.PathValue("image"), &image, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "image", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminRemoveSiteImageParams
+
+	// ------------- Required query parameter "reason" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reason", r.URL.Query(), &params.Reason, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reason"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRemoveSiteImage(w, r, image, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetSiteImage operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetSiteImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "image" -------------
+	var image string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "image", r.PathValue("image"), &image, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "image", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetSiteImage(w, r, image)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateSitePerson operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateSitePerson(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateSitePerson(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteSitePerson operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteSitePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "person_id" -------------
+	var personId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "person_id", r.PathValue("person_id"), &personId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "person_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminDeleteSitePersonParams
+
+	// ------------- Required query parameter "reason" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reason", r.URL.Query(), &params.Reason, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reason"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteSitePerson(w, r, personId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateSitePerson operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSitePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "person_id" -------------
+	var personId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "person_id", r.PathValue("person_id"), &personId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "person_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSitePerson(w, r, personId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminSaveSiteSettings operation middleware
 func (siw *ServerInterfaceWrapper) AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSaveSiteSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveSiteStory operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveSiteStory(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveSiteStory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateSiteTestimonial operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateSiteTestimonial(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateSiteTestimonial(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteSiteTestimonial operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteSiteTestimonial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "testimonial_id" -------------
+	var testimonialId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "testimonial_id", r.PathValue("testimonial_id"), &testimonialId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "testimonial_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminDeleteSiteTestimonialParams
+
+	// ------------- Required query parameter "reason" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reason", r.URL.Query(), &params.Reason, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reason"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteSiteTestimonial(w, r, testimonialId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateSiteTestimonial operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSiteTestimonial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "testimonial_id" -------------
+	var testimonialId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "testimonial_id", r.PathValue("testimonial_id"), &testimonialId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "testimonial_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSiteTestimonial(w, r, testimonialId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateSiteUpload operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateSiteUpload(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateSiteUpload(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2697,6 +3223,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/faqs", wrapper.AdminCreateSiteFAQ)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/faqs/{faq_id}", wrapper.AdminDeleteSiteFAQ)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/faqs/{faq_id}", wrapper.AdminUpdateSiteFAQ)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/story", wrapper.AdminSaveSiteStory)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/uploads", wrapper.AdminCreateSiteUpload)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/images/{image}", wrapper.AdminRemoveSiteImage)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/images/{image}", wrapper.AdminSetSiteImage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/people", wrapper.AdminCreateSitePerson)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/people/{person_id}", wrapper.AdminDeleteSitePerson)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/people/{person_id}", wrapper.AdminUpdateSitePerson)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/testimonials", wrapper.AdminCreateSiteTestimonial)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/testimonials/{testimonial_id}", wrapper.AdminDeleteSiteTestimonial)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/testimonials/{testimonial_id}", wrapper.AdminUpdateSiteTestimonial)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
@@ -3714,6 +4250,193 @@ func (response AdminUpdateSiteFAQdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type AdminRemoveSiteImageRequestObject struct {
+	Image  string `json:"image"`
+	Params AdminRemoveSiteImageParams
+}
+
+type AdminRemoveSiteImageResponseObject interface {
+	VisitAdminRemoveSiteImageResponse(w http.ResponseWriter) error
+}
+
+type AdminRemoveSiteImage204Response struct {
+}
+
+func (response AdminRemoveSiteImage204Response) VisitAdminRemoveSiteImageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRemoveSiteImagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRemoveSiteImagedefaultApplicationProblemPlusJSONResponse) VisitAdminRemoveSiteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetSiteImageRequestObject struct {
+	Image string `json:"image"`
+	Body  *AdminSetSiteImageJSONRequestBody
+}
+
+type AdminSetSiteImageResponseObject interface {
+	VisitAdminSetSiteImageResponse(w http.ResponseWriter) error
+}
+
+type AdminSetSiteImage200JSONResponse AdminSiteImage
+
+func (response AdminSetSiteImage200JSONResponse) VisitAdminSetSiteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetSiteImagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetSiteImagedefaultApplicationProblemPlusJSONResponse) VisitAdminSetSiteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSitePersonRequestObject struct {
+	Body *AdminCreateSitePersonJSONRequestBody
+}
+
+type AdminCreateSitePersonResponseObject interface {
+	VisitAdminCreateSitePersonResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateSitePerson201JSONResponse AdminSitePerson
+
+func (response AdminCreateSitePerson201JSONResponse) VisitAdminCreateSitePersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSitePersondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateSitePersondefaultApplicationProblemPlusJSONResponse) VisitAdminCreateSitePersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteSitePersonRequestObject struct {
+	PersonId ULID `json:"person_id"`
+	Params   AdminDeleteSitePersonParams
+}
+
+type AdminDeleteSitePersonResponseObject interface {
+	VisitAdminDeleteSitePersonResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteSitePerson204Response struct {
+}
+
+func (response AdminDeleteSitePerson204Response) VisitAdminDeleteSitePersonResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteSitePersondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDeleteSitePersondefaultApplicationProblemPlusJSONResponse) VisitAdminDeleteSitePersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSitePersonRequestObject struct {
+	PersonId ULID `json:"person_id"`
+	Body     *AdminUpdateSitePersonJSONRequestBody
+}
+
+type AdminUpdateSitePersonResponseObject interface {
+	VisitAdminUpdateSitePersonResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSitePerson200JSONResponse AdminSitePerson
+
+func (response AdminUpdateSitePerson200JSONResponse) VisitAdminUpdateSitePersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSitePersondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUpdateSitePersondefaultApplicationProblemPlusJSONResponse) VisitAdminUpdateSitePersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminSaveSiteSettingsRequestObject struct {
 	Body *AdminSaveSiteSettingsJSONRequestBody
 }
@@ -3742,6 +4465,197 @@ type AdminSaveSiteSettingsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminSaveSiteSettingsdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveSiteStoryRequestObject struct {
+	Body *AdminSaveSiteStoryJSONRequestBody
+}
+
+type AdminSaveSiteStoryResponseObject interface {
+	VisitAdminSaveSiteStoryResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveSiteStory200JSONResponse AdminSiteStory
+
+func (response AdminSaveSiteStory200JSONResponse) VisitAdminSaveSiteStoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveSiteStorydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveSiteStorydefaultApplicationProblemPlusJSONResponse) VisitAdminSaveSiteStoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteTestimonialRequestObject struct {
+	Body *AdminCreateSiteTestimonialJSONRequestBody
+}
+
+type AdminCreateSiteTestimonialResponseObject interface {
+	VisitAdminCreateSiteTestimonialResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateSiteTestimonial201JSONResponse AdminSiteTestimonial
+
+func (response AdminCreateSiteTestimonial201JSONResponse) VisitAdminCreateSiteTestimonialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteTestimonialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateSiteTestimonialdefaultApplicationProblemPlusJSONResponse) VisitAdminCreateSiteTestimonialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteSiteTestimonialRequestObject struct {
+	TestimonialId ULID `json:"testimonial_id"`
+	Params        AdminDeleteSiteTestimonialParams
+}
+
+type AdminDeleteSiteTestimonialResponseObject interface {
+	VisitAdminDeleteSiteTestimonialResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteSiteTestimonial204Response struct {
+}
+
+func (response AdminDeleteSiteTestimonial204Response) VisitAdminDeleteSiteTestimonialResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteSiteTestimonialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDeleteSiteTestimonialdefaultApplicationProblemPlusJSONResponse) VisitAdminDeleteSiteTestimonialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteTestimonialRequestObject struct {
+	TestimonialId ULID `json:"testimonial_id"`
+	Body          *AdminUpdateSiteTestimonialJSONRequestBody
+}
+
+type AdminUpdateSiteTestimonialResponseObject interface {
+	VisitAdminUpdateSiteTestimonialResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSiteTestimonial200JSONResponse AdminSiteTestimonial
+
+func (response AdminUpdateSiteTestimonial200JSONResponse) VisitAdminUpdateSiteTestimonialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteTestimonialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUpdateSiteTestimonialdefaultApplicationProblemPlusJSONResponse) VisitAdminUpdateSiteTestimonialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteUploadRequestObject struct {
+	Body *AdminCreateSiteUploadJSONRequestBody
+}
+
+type AdminCreateSiteUploadResponseObject interface {
+	VisitAdminCreateSiteUploadResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateSiteUpload201JSONResponse AdminSiteUpload
+
+func (response AdminCreateSiteUpload201JSONResponse) VisitAdminCreateSiteUploadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteUploaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateSiteUploaddefaultApplicationProblemPlusJSONResponse) VisitAdminCreateSiteUploadResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4232,9 +5146,39 @@ type StrictServerInterface interface {
 	// AdminUpdateSiteFAQ Rewrite a question
 	// (PUT /admin/v1/site/faqs/{faq_id})
 	AdminUpdateSiteFAQ(ctx context.Context, request AdminUpdateSiteFAQRequestObject) (AdminUpdateSiteFAQResponseObject, error)
+	// AdminRemoveSiteImage Remove the logo or the share image
+	// (DELETE /admin/v1/site/images/{image})
+	AdminRemoveSiteImage(ctx context.Context, request AdminRemoveSiteImageRequestObject) (AdminRemoveSiteImageResponseObject, error)
+	// AdminSetSiteImage Set the logo or the share image
+	// (PUT /admin/v1/site/images/{image})
+	AdminSetSiteImage(ctx context.Context, request AdminSetSiteImageRequestObject) (AdminSetSiteImageResponseObject, error)
+	// AdminCreateSitePerson Add a founder or a team member
+	// (POST /admin/v1/site/people)
+	AdminCreateSitePerson(ctx context.Context, request AdminCreateSitePersonRequestObject) (AdminCreateSitePersonResponseObject, error)
+	// AdminDeleteSitePerson Remove a person and their photo
+	// (DELETE /admin/v1/site/people/{person_id})
+	AdminDeleteSitePerson(ctx context.Context, request AdminDeleteSitePersonRequestObject) (AdminDeleteSitePersonResponseObject, error)
+	// AdminUpdateSitePerson Rewrite a person
+	// (PUT /admin/v1/site/people/{person_id})
+	AdminUpdateSitePerson(ctx context.Context, request AdminUpdateSitePersonRequestObject) (AdminUpdateSitePersonResponseObject, error)
 	// AdminSaveSiteSettings Save the site's contact details
 	// (PUT /admin/v1/site/settings)
 	AdminSaveSiteSettings(ctx context.Context, request AdminSaveSiteSettingsRequestObject) (AdminSaveSiteSettingsResponseObject, error)
+	// AdminSaveSiteStory Save the founding story and the video
+	// (PUT /admin/v1/site/story)
+	AdminSaveSiteStory(ctx context.Context, request AdminSaveSiteStoryRequestObject) (AdminSaveSiteStoryResponseObject, error)
+	// AdminCreateSiteTestimonial Add a merchant's real review
+	// (POST /admin/v1/site/testimonials)
+	AdminCreateSiteTestimonial(ctx context.Context, request AdminCreateSiteTestimonialRequestObject) (AdminCreateSiteTestimonialResponseObject, error)
+	// AdminDeleteSiteTestimonial Remove a review and its photo
+	// (DELETE /admin/v1/site/testimonials/{testimonial_id})
+	AdminDeleteSiteTestimonial(ctx context.Context, request AdminDeleteSiteTestimonialRequestObject) (AdminDeleteSiteTestimonialResponseObject, error)
+	// AdminUpdateSiteTestimonial Rewrite a review
+	// (PUT /admin/v1/site/testimonials/{testimonial_id})
+	AdminUpdateSiteTestimonial(ctx context.Context, request AdminUpdateSiteTestimonialRequestObject) (AdminUpdateSiteTestimonialResponseObject, error)
+	// AdminCreateSiteUpload Upload an image for the site
+	// (POST /admin/v1/site/uploads)
+	AdminCreateSiteUpload(ctx context.Context, request AdminCreateSiteUploadRequestObject) (AdminCreateSiteUploadResponseObject, error)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(ctx context.Context, request AdminListStoresRequestObject) (AdminListStoresResponseObject, error)
@@ -5051,6 +5995,157 @@ func (sh *strictHandler) AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// AdminRemoveSiteImage operation middleware
+func (sh *strictHandler) AdminRemoveSiteImage(w http.ResponseWriter, r *http.Request, image string, params AdminRemoveSiteImageParams) {
+	var request AdminRemoveSiteImageRequestObject
+
+	request.Image = image
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRemoveSiteImage(ctx, request.(AdminRemoveSiteImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRemoveSiteImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRemoveSiteImageResponseObject); ok {
+		if err := validResponse.VisitAdminRemoveSiteImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetSiteImage operation middleware
+func (sh *strictHandler) AdminSetSiteImage(w http.ResponseWriter, r *http.Request, image string) {
+	var request AdminSetSiteImageRequestObject
+
+	request.Image = image
+
+	var body AdminSetSiteImageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetSiteImage(ctx, request.(AdminSetSiteImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetSiteImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetSiteImageResponseObject); ok {
+		if err := validResponse.VisitAdminSetSiteImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateSitePerson operation middleware
+func (sh *strictHandler) AdminCreateSitePerson(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateSitePersonRequestObject
+
+	var body AdminCreateSitePersonJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateSitePerson(ctx, request.(AdminCreateSitePersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateSitePerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateSitePersonResponseObject); ok {
+		if err := validResponse.VisitAdminCreateSitePersonResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteSitePerson operation middleware
+func (sh *strictHandler) AdminDeleteSitePerson(w http.ResponseWriter, r *http.Request, personId ULID, params AdminDeleteSitePersonParams) {
+	var request AdminDeleteSitePersonRequestObject
+
+	request.PersonId = personId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteSitePerson(ctx, request.(AdminDeleteSitePersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteSitePerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteSitePersonResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteSitePersonResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSitePerson operation middleware
+func (sh *strictHandler) AdminUpdateSitePerson(w http.ResponseWriter, r *http.Request, personId ULID) {
+	var request AdminUpdateSitePersonRequestObject
+
+	request.PersonId = personId
+
+	var body AdminUpdateSitePersonJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSitePerson(ctx, request.(AdminUpdateSitePersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSitePerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSitePersonResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSitePersonResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminSaveSiteSettings operation middleware
 func (sh *strictHandler) AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request) {
 	var request AdminSaveSiteSettingsRequestObject
@@ -5075,6 +6170,159 @@ func (sh *strictHandler) AdminSaveSiteSettings(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSaveSiteSettingsResponseObject); ok {
 		if err := validResponse.VisitAdminSaveSiteSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveSiteStory operation middleware
+func (sh *strictHandler) AdminSaveSiteStory(w http.ResponseWriter, r *http.Request) {
+	var request AdminSaveSiteStoryRequestObject
+
+	var body AdminSaveSiteStoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveSiteStory(ctx, request.(AdminSaveSiteStoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveSiteStory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveSiteStoryResponseObject); ok {
+		if err := validResponse.VisitAdminSaveSiteStoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateSiteTestimonial operation middleware
+func (sh *strictHandler) AdminCreateSiteTestimonial(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateSiteTestimonialRequestObject
+
+	var body AdminCreateSiteTestimonialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateSiteTestimonial(ctx, request.(AdminCreateSiteTestimonialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateSiteTestimonial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateSiteTestimonialResponseObject); ok {
+		if err := validResponse.VisitAdminCreateSiteTestimonialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteSiteTestimonial operation middleware
+func (sh *strictHandler) AdminDeleteSiteTestimonial(w http.ResponseWriter, r *http.Request, testimonialId ULID, params AdminDeleteSiteTestimonialParams) {
+	var request AdminDeleteSiteTestimonialRequestObject
+
+	request.TestimonialId = testimonialId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteSiteTestimonial(ctx, request.(AdminDeleteSiteTestimonialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteSiteTestimonial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteSiteTestimonialResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteSiteTestimonialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSiteTestimonial operation middleware
+func (sh *strictHandler) AdminUpdateSiteTestimonial(w http.ResponseWriter, r *http.Request, testimonialId ULID) {
+	var request AdminUpdateSiteTestimonialRequestObject
+
+	request.TestimonialId = testimonialId
+
+	var body AdminUpdateSiteTestimonialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSiteTestimonial(ctx, request.(AdminUpdateSiteTestimonialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSiteTestimonial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSiteTestimonialResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSiteTestimonialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateSiteUpload operation middleware
+func (sh *strictHandler) AdminCreateSiteUpload(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateSiteUploadRequestObject
+
+	var body AdminCreateSiteUploadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateSiteUpload(ctx, request.(AdminCreateSiteUploadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateSiteUpload")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateSiteUploadResponseObject); ok {
+		if err := validResponse.VisitAdminCreateSiteUploadResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -16,10 +16,11 @@ func TestSiteFromTheConsole(t *testing.T) {
 	f := newFixture(t)
 	ctx, me := f.signedIn(t)
 
-	set, faqs, err := f.svc.SiteContent(ctx)
-	if err != nil || set.WhatsApp != "+201153450716" || len(faqs) != 10 {
-		t.Fatalf("content = %+v %d, %v", set, len(faqs), err)
+	c, err := f.svc.SiteContent(ctx)
+	if err != nil || c.Settings.WhatsApp != "+201153450716" || len(c.FAQs) != 10 {
+		t.Fatalf("content = %+v %d, %v", c.Settings, len(c.FAQs), err)
 	}
+	set := c.Settings
 	details := site.Settings{WhatsApp: "+201153450716", Email: "hello@iftahonline.com", Socials: map[site.Social]string{site.YouTube: "https://youtube.com/@iftahonline"}}
 	if _, err = f.svc.SaveSiteSettings(ctx, details, "x"); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("no reason: %v", err)
@@ -43,14 +44,56 @@ func TestSiteFromTheConsole(t *testing.T) {
 	if _, err = f.svc.UpdateSiteFAQ(ctx, added, "show it on the home page"); err != nil {
 		t.Fatal(err)
 	}
-	if _, faqs, _ = f.svc.SiteContent(ctx); len(faqs) != 11 || faqs[2].ID != added.ID || !faqs[2].OnHome {
-		t.Fatalf("after adding: %d, third = %+v", len(faqs), faqs[2])
+	if c, _ = f.svc.SiteContent(ctx); len(c.FAQs) != 11 || c.FAQs[2].ID != added.ID || !c.FAQs[2].OnHome {
+		t.Fatalf("after adding: %d, third = %+v", len(c.FAQs), c.FAQs[2])
 	}
 	if err = f.svc.DeleteSiteFAQ(ctx, added.ID, "answered elsewhere"); err != nil {
 		t.Fatal(err)
 	}
 	if err = f.svc.DeleteSiteFAQ(ctx, added.ID, "answered elsewhere"); !errs.Is(err, errs.KindNotFound) {
 		t.Fatalf("deleting twice: %v", err)
+	}
+
+	// The about page: the story, a founder, a review; uploads need the
+	// bucket (not wired here) and nothing is recorded for them.
+	if _, err = f.svc.SaveSiteStory(ctx, "قصتنا", "", "https://vimeo.com/1", "the story"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a Vimeo video: %v", err)
+	}
+	if st, stErr := f.svc.SaveSiteStory(ctx, "قصتنا", "", "https://youtu.be/dQw4w9WgXcQ", "the story"); stErr != nil || st.VideoID != "dQw4w9WgXcQ" {
+		t.Fatalf("story = %+v, %v", st, stErr)
+	}
+	if _, err = f.svc.SiteUpload(ctx, "image/png"); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("upload without a bucket: %v", err)
+	}
+	if _, err = f.svc.SetSiteImage(ctx, site.Logo, "platform/site/uploads/x", "the logo"); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("a logo without a bucket: %v", err)
+	}
+	if _, err = f.svc.CreateSitePerson(ctx, site.Person{Kind: site.Founder, NameAr: "أ", RoleAr: "المدير"}, "", "a founder"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a one-letter name: %v", err)
+	}
+	founder, err := f.svc.CreateSitePerson(ctx, site.Person{Kind: site.Founder, NameAr: "أحمد", RoleAr: "المدير التقني"}, "", "a founder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	founder.RoleEn = "CTO"
+	if _, err = f.svc.UpdateSitePerson(ctx, founder, "", false, "English role"); err != nil {
+		t.Fatal(err)
+	}
+	review, err := f.svc.CreateSiteTestimonial(ctx, site.Testimonial{Name: "منى", QuoteAr: "قلّت الطلبات الوهمية عندي."}, "", "a real review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.UpdateSiteTestimonial(ctx, review, "", false, "same review"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ = f.svc.SiteContent(ctx); len(c.People) != 1 || c.People[0].RoleEn != "CTO" || len(c.Testimonials) != 1 || c.Identity.Story.Ar != "قصتنا" {
+		t.Fatalf("about content = %+v", c)
+	}
+	if err = f.svc.DeleteSitePerson(ctx, founder.ID, "left"); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.svc.DeleteSiteTestimonial(ctx, review.ID, "withdrawn"); err != nil {
+		t.Fatal(err)
 	}
 
 	page, err := f.svc.Audit(ctx, "", 200)
@@ -64,15 +107,16 @@ func TestSiteFromTheConsole(t *testing.T) {
 		}
 	}
 	// Newest first; the second delete is recorded too (audit first).
-	want := "site.faq_deleted,site.faq_deleted,site.faq_updated,site.faq_created,site.settings_saved"
+	want := "site.testimonial_deleted,site.person_deleted,site.testimonial_updated,site.testimonial_created,site.person_updated,site.person_created," +
+		"site.story_saved,site.faq_deleted,site.faq_deleted,site.faq_updated,site.faq_created,site.settings_saved"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("admin log = %v", got)
 	}
 
-	if _, _, err = f.svc.SiteContent(t.Context()); !errs.Is(err, errs.KindUnauthenticated) {
+	if _, err = f.svc.SiteContent(t.Context()); !errs.Is(err, errs.KindUnauthenticated) {
 		t.Fatalf("not signed in: %v", err)
 	}
-	if _, _, err = f.cli.SiteContent(ctx); !errs.Is(err, errs.KindUnavailable) {
+	if _, err = f.cli.SiteContent(ctx); !errs.Is(err, errs.KindUnavailable) {
 		t.Fatalf("cli: %v", err)
 	}
 }

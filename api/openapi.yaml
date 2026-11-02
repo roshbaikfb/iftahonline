@@ -2459,6 +2459,217 @@ paths:
           description: Removed.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/site/story:
+    put:
+      tags: [admin]
+      operationId: adminSaveSiteStory
+      summary: Save the founding story and the video
+      description: Shown on the about page (the video on the home page too). Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteStoryInput" }
+      responses:
+        "200":
+          description: Saved, as the site shows it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteStory" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/uploads:
+    post:
+      tags: [admin]
+      operationId: adminCreateSiteUpload
+      summary: Upload an image for the site
+      description: |
+        A presigned POST of at most 4 MiB; pass `key` as `upload_key`.
+        The image is re-encoded on use (never SVG).
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteUploadRequest" }
+      responses:
+        "201":
+          description: Where to post the image.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteUpload" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/images/{image}:
+    parameters:
+      - name: image
+        in: path
+        required: true
+        schema: { type: string, enum: [logo, share] }
+    put:
+      tags: [admin]
+      operationId: adminSetSiteImage
+      summary: Set the logo or the share image
+      description: The old image is deleted. Recorded in the admin log once done.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteImageInput" }
+      responses:
+        "200":
+          description: Set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteImage" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      operationId: adminRemoveSiteImage
+      summary: Remove the logo or the share image
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: reason
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/people:
+    post:
+      tags: [admin]
+      operationId: adminCreateSitePerson
+      summary: Add a founder or a team member
+      description: At most 50 people. Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSitePersonInput" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSitePerson" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/people/{person_id}:
+    parameters:
+      - name: person_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    put:
+      tags: [admin]
+      operationId: adminUpdateSitePerson
+      summary: Rewrite a person
+      description: A new photo replaces the old one (deleted). Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSitePersonInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSitePerson" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      operationId: adminDeleteSitePerson
+      summary: Remove a person and their photo
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: reason
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/testimonials:
+    post:
+      tags: [admin]
+      operationId: adminCreateSiteTestimonial
+      summary: Add a merchant's real review
+      description: At most 50. Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteTestimonialInput" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteTestimonial" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/testimonials/{testimonial_id}:
+    parameters:
+      - name: testimonial_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    put:
+      tags: [admin]
+      operationId: adminUpdateSiteTestimonial
+      summary: Rewrite a review
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteTestimonialInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteTestimonial" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      operationId: adminDeleteSiteTestimonial
+      summary: Remove a review and its photo
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: reason
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/billing/duplicates:
     get:
       tags: [admin]
@@ -5151,12 +5362,122 @@ components:
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminSite:
       type: object
-      required: [settings, faqs]
+      required: [settings, faqs, story, images, people, testimonials]
       properties:
         settings: { $ref: "#/components/schemas/AdminSiteSettings" }
         faqs:
           type: array
           items: { $ref: "#/components/schemas/AdminSiteFAQ" }
+        story: { $ref: "#/components/schemas/AdminSiteStory" }
+        images: { $ref: "#/components/schemas/AdminSiteImages" }
+        people:
+          type: array
+          description: The founders, then the team, each in order.
+          items: { $ref: "#/components/schemas/AdminSitePerson" }
+        testimonials:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSiteTestimonial" }
+    AdminSiteStory:
+      type: object
+      required: [story_ar, story_en, video_id]
+      properties:
+        story_ar: { type: string, description: The founding story; blank lines split paragraphs. }
+        story_en: { type: string }
+        video_id: { type: string, description: The YouTube video's ID; empty shows none. }
+    AdminSiteStoryInput:
+      type: object
+      required: [story_ar, story_en, video_url, reason]
+      properties:
+        story_ar: { type: string, maxLength: 4000 }
+        story_en: { type: string, maxLength: 4000 }
+        video_url: { type: string, maxLength: 300, description: "A YouTube link (watch, youtu.be, shorts); empty removes the video." }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminSiteImages:
+      type: object
+      required: [logo_url, share_url]
+      properties:
+        logo_url: { type: string, description: A signed thumbnail; empty when none. }
+        share_url: { type: string, description: The image a shared link shows; empty when none. }
+    AdminSiteImage:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, description: A signed thumbnail; empty once removed. }
+    AdminSiteImageInput:
+      type: object
+      required: [upload_key, reason]
+      properties:
+        upload_key: { type: string, minLength: 1, maxLength: 200 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminSiteUploadRequest:
+      type: object
+      required: [content_type]
+      properties:
+        content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+    AdminSiteUpload:
+      type: object
+      required: [key, upload]
+      properties:
+        key: { type: string, description: Pass it as upload_key once the image is posted. }
+        upload: { $ref: "#/components/schemas/PresignedUpload" }
+    AdminSitePerson:
+      type: object
+      required: [id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_url, linkedin_url, x_url]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { type: string, enum: [founder, team] }
+        position: { type: integer }
+        name_ar: { type: string }
+        name_en: { type: string }
+        role_ar: { type: string }
+        role_en: { type: string }
+        bio_ar: { type: string }
+        bio_en: { type: string }
+        photo_url: { type: string, description: A signed thumbnail; empty shows the initials. }
+        linkedin_url: { type: string }
+        x_url: { type: string }
+    AdminSitePersonInput:
+      type: object
+      required: [kind, position, name_ar, role_ar, reason]
+      properties:
+        kind: { type: string, enum: [founder, team] }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        name_ar: { type: string, minLength: 2, maxLength: 80 }
+        name_en: { type: string, maxLength: 80 }
+        role_ar: { type: string, minLength: 2, maxLength: 80 }
+        role_en: { type: string, maxLength: 80 }
+        bio_ar: { type: string, maxLength: 600 }
+        bio_en: { type: string, maxLength: 600 }
+        linkedin_url: { type: string, maxLength: 300 }
+        x_url: { type: string, maxLength: 300 }
+        upload_key: { type: string, maxLength: 200, description: A new photo, posted first; absent keeps the current one. }
+        remove_photo: { type: boolean, description: Takes the photo off (on an update). }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminSiteTestimonial:
+      type: object
+      required: [id, position, name, store_name, store_url, quote_ar, quote_en, photo_url]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        position: { type: integer }
+        name: { type: string }
+        store_name: { type: string }
+        store_url: { type: string }
+        quote_ar: { type: string }
+        quote_en: { type: string, description: Empty leaves the review off the English site. }
+        photo_url: { type: string }
+    AdminSiteTestimonialInput:
+      type: object
+      required: [position, name, quote_ar, reason]
+      properties:
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        name: { type: string, minLength: 2, maxLength: 80 }
+        store_name: { type: string, maxLength: 80 }
+        store_url: { type: string, maxLength: 300 }
+        quote_ar: { type: string, minLength: 10, maxLength: 600 }
+        quote_en: { type: string, maxLength: 600 }
+        upload_key: { type: string, maxLength: 200 }
+        remove_photo: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminSiteSocials:
       type: object
       description: Each network's profile link; absent hides it.

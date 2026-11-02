@@ -721,6 +721,11 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 		if advErr != nil {
 			return nil, advErr
 		}
+		// The site's content (ADR-0073): its images in the same bucket.
+		siteConsole, siteErr := site.NewConsole(c.adminPool, &c.cfg.Media, c.ids, c.log)
+		if siteErr != nil {
+			return nil, siteErr
+		}
 		if console, err = admin.New(admin.Deps{
 			Ads:       adv.Console(),
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
@@ -728,7 +733,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
-			Site: site.NewConsole(c.adminPool, c.ids, c.log),
+			Site: siteConsole,
 		}); err != nil {
 			return nil, err
 		}
@@ -866,7 +871,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	}
 	go shop.Listen(ctx)
 	_, faces, preload := shop.BrandFont()
-	web, err := site.New(site.Deps{Pool: c.pool, Plans: billing.NewShowcase(c.pool), Font: site.Font{Faces: faces, Preload: preload},
+	web, err := site.New(site.Deps{Pool: c.pool, Media: &c.cfg.Media, Plans: billing.NewShowcase(c.pool), Font: site.Font{Faces: faces, Preload: preload},
 		Domain: c.cfg.Tenancy.BaseDomain, HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		DashboardURL: c.cfg.Mail.DashboardURL, WhatsApp: site.DefaultWhatsApp, Log: c.log})
 	if err != nil {

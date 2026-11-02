@@ -931,6 +931,23 @@ type SiteFaq struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
+type SitePerson struct {
+	ID          pgtype.UUID
+	Kind        string
+	Position    int32
+	NameAr      string
+	NameEn      string
+	RoleAr      string
+	RoleEn      string
+	BioAr       string
+	BioEn       string
+	PhotoKey    string
+	LinkedinUrl string
+	XUrl        string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type SiteSetting struct {
 	ID            int32
 	Whatsapp      string
@@ -939,6 +956,24 @@ type SiteSetting struct {
 	Socials       []byte
 	CompanyNumber string
 	UpdatedAt     pgtype.Timestamptz
+	StoryAr       string
+	StoryEn       string
+	VideoID       string
+	LogoKey       string
+	OgKey         string
+}
+
+type SiteTestimonial struct {
+	ID        pgtype.UUID
+	Position  int32
+	Name      string
+	StoreName string
+	StoreUrl  string
+	QuoteAr   string
+	QuoteEn   string
+	PhotoKey  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type SizeChart struct {

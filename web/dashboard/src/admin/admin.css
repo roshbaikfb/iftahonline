@@ -177,6 +177,63 @@ body {
 .table-card tr[aria-current='true'] td {
   background: #f0fdf4;
 }
+.site-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+.site-image {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+.site-image h3 {
+  margin: 0;
+}
+.site-image label {
+  display: grid;
+  gap: 0.2rem;
+}
+.site-image .preview {
+  max-inline-size: 100%;
+  max-block-size: 8rem;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: #f8fafc;
+}
+.site-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.site-people li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  border-block-start: 1px solid var(--line);
+}
+.site-people li > span:nth-child(2) {
+  display: grid;
+  min-inline-size: 0;
+}
+.site-people small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-people li[aria-current='true'] {
+  background: #f0fdf4;
+}
+.person-thumb {
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e2e8f0;
+}
 .support-card {
   background: #fffbeb;
   border-color: #fde68a;

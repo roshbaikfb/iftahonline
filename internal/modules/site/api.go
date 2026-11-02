@@ -25,6 +25,28 @@ type (
 	Social = domain.Social
 	// FAQ is one question, in Arabic and optionally English.
 	FAQ = domain.FAQ
+	// Content is everything the site shows from the console.
+	Content = domain.Content
+	// Story is the founding story and the video.
+	Story = domain.Story
+	// Image is one of the site's own images (the logo, the share image).
+	Image = domain.Image
+	// Person is a founder or a team member.
+	Person = domain.Person
+	// PersonKind is a founder or a team member.
+	PersonKind = domain.PersonKind
+	// Testimonial is a merchant's real review.
+	Testimonial = domain.Testimonial
+	// Upload is where the console's browser posts an image.
+	Upload = app.Upload
+)
+
+// The site's images and the kinds of people.
+const (
+	Logo       = domain.Logo
+	ShareImage = domain.ShareImage
+	Founder    = domain.Founder
+	Team       = domain.Team
 )
 
 // The networks.
@@ -36,6 +58,9 @@ const (
 	YouTube   = domain.YouTube
 	X         = domain.X
 )
+
+// ParseVideo reads a YouTube link (or a bare ID) into the video's ID.
+func ParseVideo(link string) (string, error) { return domain.ParseVideo(link) }
 
 // Socials lists every network, in the site's order.
 func Socials() []Social { return domain.Socials() }
@@ -55,6 +80,27 @@ type Console interface {
 	CreateFAQ(ctx context.Context, f FAQ) (FAQ, error)
 	UpdateFAQ(ctx context.Context, f FAQ) (FAQ, error)
 	DeleteFAQ(ctx context.Context, id ulid.ID) error
+
+	// All is everything the site shows, read now.
+	All(ctx context.Context) (Content, error)
+	// SaveStory writes the founding story and the video (a YouTube link
+	// or "").
+	SaveStory(ctx context.Context, ar, en, videoLink string) (Story, error)
+	// UploadURL is a presigned upload of an image (JPEG, PNG or WebP).
+	UploadURL(ctx context.Context, contentType string) (Upload, error)
+	// SetImage makes an upload the logo or the share image ("" removes
+	// it) and returns its key.
+	SetImage(ctx context.Context, which Image, uploadKey string) (string, error)
+	// CreatePerson and UpdatePerson take an uploaded photo ("" for none;
+	// on update, keep it unless removePhoto).
+	CreatePerson(ctx context.Context, p Person, uploadKey string) (Person, error)
+	UpdatePerson(ctx context.Context, p Person, uploadKey string, removePhoto bool) (Person, error)
+	DeletePerson(ctx context.Context, id ulid.ID) error
+	CreateTestimonial(ctx context.Context, t Testimonial, uploadKey string) (Testimonial, error)
+	UpdateTestimonial(ctx context.Context, t Testimonial, uploadKey string, removePhoto bool) (Testimonial, error)
+	DeleteTestimonial(ctx context.Context, id ulid.ID) error
+	// ImageURL is an image's signed URL for the console's thumbnails.
+	ImageURL(key string, size int, format string) string
 }
 
 var _ Console = (*app.Service)(nil)

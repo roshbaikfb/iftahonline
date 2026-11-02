@@ -4,14 +4,21 @@ import { api } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
-import { faqFromForm, nextPosition, socials, sortFAQs, type SiteFAQ, type SiteSettings, type Socials } from './site';
+import { faqFromForm, nextPosition, socials, sortFAQs, type SiteFAQ, type SiteImages, type SitePerson, type SiteReview, type SiteSettings, type SiteStory, type Socials } from './site';
+import { SiteIdentity } from './SiteIdentity';
+import { SitePeople } from './SitePeople';
+import { SiteReviews } from './SiteReviews';
+
+interface About { story: SiteStory; images: SiteImages; people: SitePerson[]; reviews: SiteReview[] }
 
 // SitePage edits what the platform's own site shows from the console
-// (S4a, ADR-0073): the contact details and the FAQ, in Arabic and
-// English. Changes reach the site within minutes.
+// (ADR-0073): the contact details and the FAQ (S4a); the logo, the
+// story, the video, the people and merchants' reviews (S4b-1). Changes
+// reach the site within minutes.
 export function SitePage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [faqs, setFaqs] = useState<SiteFAQ[]>([]);
+  const [about, setAbout] = useState<About | null>(null);
   const [editing, setEditing] = useState<SiteFAQ | null>(null);
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState('');
@@ -25,6 +32,7 @@ export function SitePage() {
       if (r.data) {
         setSettings(r.data.settings);
         setFaqs(sortFAQs(r.data.faqs));
+        setAbout({ story: r.data.story, images: r.data.images, people: r.data.people, reviews: r.data.testimonials });
         // The new question's position follows the questions read.
         setFormKey((k) => k + 1);
       } else setError(problemMessage(r.error));
@@ -105,6 +113,16 @@ export function SitePage() {
     setNotice('حُذف السؤال.');
   }
 
+  function say(msg: string) {
+    setError('');
+    setNotice(msg);
+  }
+
+  function fail(msg: string) {
+    setNotice('');
+    setError(msg);
+  }
+
   function edit(f: SiteFAQ) {
     setEditing(f);
     setFormKey((k) => k + 1);
@@ -173,6 +191,14 @@ export function SitePage() {
             </button>
           </div>
         </form>
+      )}
+
+      {about && (
+        <>
+          <SiteIdentity story={about.story} images={about.images} onNotice={say} onError={fail} />
+          <SitePeople people={about.people} onNotice={say} onError={fail} />
+          <SiteReviews reviews={about.reviews} onNotice={say} onError={fail} />
+        </>
       )}
 
       <section className="table-card" aria-labelledby="h-faqs">

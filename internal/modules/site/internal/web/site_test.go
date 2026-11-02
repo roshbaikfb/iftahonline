@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -62,7 +63,11 @@ type fixture struct {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	plans, content := &fakePlans{}, newFakeContent()
-	s, err := web.New(web.Deps{Plans: plans, Content: content, FontFaces: "@font-face{}", FontPreload: []string{"/assets/f.woff2"}, Host: "iftahonline.com", HTTPS: true,
+	s, err := web.New(web.Deps{Plans: plans, Content: content, ImagesOrigin: "https://img.iftahonline.com/",
+		Images: func(key string, size int, format string) string {
+			return fmt.Sprintf("https://img.iftahonline.com/sig/%d/%s.%s", size, key, format)
+		},
+		FontFaces: "@font-face{}", FontPreload: []string{"/assets/f.woff2"}, Host: "iftahonline.com", HTTPS: true,
 		DashboardURL: "https://app.iftahonline.com/", WhatsApp: "+201153450716", CountryHeader: "CF-IPCountry",
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
@@ -518,5 +523,63 @@ func TestContentDown(t *testing.T) {
 	full := f.get(t, "/llms-full.txt").Body.String()
 	if strings.Contains(full, "## أسئلة شائعة") || !strings.Contains(full, "## الباقات في مصر") {
 		t.Fatal("llms-full.txt with an FAQ it could not read")
+	}
+}
+
+// TestAboutContent: the console's story, founders, team, reviews, video
+// and logo show on the about page (and the home page for the reviews and
+// the video), in the page's language; images come from imgproxy, the
+// only image origin the policy adds with YouTube's thumbnails; without
+// any, the sections are absent.
+func TestAboutContent(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	empty := f.get(t, "/about").Body.String()
+	for _, absent := range []string{`id="h-founders"`, `id="h-team"`, `id="h-reviews"`, `id="h-video"`, `class="logo"`, "og:image"} {
+		if strings.Contains(empty, absent) {
+			t.Errorf("without content, the about page shows %s", absent)
+		}
+	}
+
+	f.content.set(func(c *domain.Content) {
+		c.Identity = domain.Identity{Story: domain.Story{Ar: "بدأنا من متجر صغير.\n\nثم بنينا المنصة.", En: "We started from a small store.", VideoID: "dQw4w9WgXcQ"},
+			LogoKey: "platform/site/LOGO.png", ShareKey: "platform/site/SHARE.jpeg"}
+		c.People = []domain.Person{
+			{Kind: domain.Founder, NameAr: "أحمد رشبيك", NameEn: "Ahmed Roshbaik", RoleAr: "المدير التقني", RoleEn: "CTO", BioAr: "بنى المنصة.",
+				PhotoKey: "platform/site/AHMED.jpeg", LinkedIn: "https://www.linkedin.com/in/ahmed"},
+			{Kind: domain.Founder, NameAr: "محمد علي", RoleAr: "المدير التنفيذي"},
+			{Kind: domain.Team, NameAr: "سارة", RoleAr: "الدعم", BioAr: "ترد على التجار."},
+		}
+		c.Testimonials = []domain.Testimonial{
+			{Name: "منى", StoreName: "متجر منى", StoreURL: "https://mona.example", QuoteAr: "قلّت الطلبات الوهمية عندي كثيرًا.", QuoteEn: "Fake orders dropped a lot."},
+			{Name: "خالد", QuoteAr: "التأكيد على واتساب وفّر وقتي."},
+		}
+	}, nil)
+
+	about := f.get(t, "/about")
+	body := about.Body.String()
+	wantContains(t, body, "<p>بدأنا من متجر صغير.</p><p>ثم بنينا المنصة.</p>", `id="h-founders"`, "أحمد رشبيك", "شريك مؤسس",
+		`src="https://img.iftahonline.com/sig/320/platform/site/AHMED.jpeg.webp"`, `href="https://www.linkedin.com/in/ahmed"`,
+		`<span class="avatar letters big" aria-hidden="true">مع</span>`, `id="h-team"`, "ترد على التجار.",
+		`id="h-reviews"`, "قلّت الطلبات الوهمية", `href="https://mona.example" rel="noopener nofollow"`, "التأكيد على واتساب",
+		`href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"`, `src="https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"`,
+		`<img class="logo" src="https://img.iftahonline.com/sig/160/platform/site/LOGO.png.webp" alt="افتح أونلاين"`,
+		`<meta property="og:image" content="https://img.iftahonline.com/sig/1200/platform/site/SHARE.jpeg.jpg">`, `content="summary_large_image"`)
+	if csp := about.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https://i.ytimg.com https://img.iftahonline.com;") {
+		t.Fatalf("CSP = %q", csp)
+	}
+	org := ld(t, body)["Organization"]
+	founders, _ := org["founder"].([]any)
+	if len(founders) != 2 || org["logo"] == nil || founders[0].(map[string]any)["jobTitle"] != "المدير التقني" {
+		t.Fatalf("Organization = %v", org)
+	}
+	wantContains(t, f.get(t, "/").Body.String(), `id="h-reviews"`, `id="h-video"`)
+
+	en := f.get(t, "/en/about").Body.String()
+	wantContains(t, en, "We started from a small store.", "Ahmed Roshbaik", "CTO", "Co-founder", "محمد علي", "Fake orders dropped a lot.")
+	for _, absent := range []string{"بدأنا من متجر", "التأكيد على واتساب", "المدير التنفيذي"} {
+		if strings.Contains(en, absent) {
+			t.Errorf("the English about page shows %q", absent)
+		}
 	}
 }

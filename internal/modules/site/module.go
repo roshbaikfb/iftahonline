@@ -9,6 +9,8 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/web"
+	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -16,6 +18,8 @@ import (
 type Deps struct {
 	// Pool reads the content the console edits (app_user).
 	Pool *pgxpool.Pool
+	// Media signs the URLs of the console's images; nil shows none.
+	Media *config.Media
 	// Plans reads the plans on sale (billing.NewShowcase).
 	Plans Plans
 	// Font is the brand typeface, served by the shop's assets.
@@ -49,8 +53,12 @@ func New(d Deps) (*Module, error) {
 	if d.CountryHeader == "" {
 		d.CountryHeader = DefaultCountryHeader
 	}
-	content := app.NewService(app.Deps{DB: d.Pool, Log: d.Log})
-	s, err := web.New(web.Deps{Plans: d.Plans, Content: content, FontFaces: d.Font.Faces, FontPreload: d.Font.Preload,
+	content := app.NewService(app.Deps{DB: d.Pool, Log: d.Log, Media: app.Media{Signer: signer(d.Media)}})
+	images := ""
+	if d.Media != nil {
+		images = d.Media.ImgproxyURL
+	}
+	s, err := web.New(web.Deps{Plans: d.Plans, Content: content, Images: content.ImageURL, ImagesOrigin: images, FontFaces: d.Font.Faces, FontPreload: d.Font.Preload,
 		Host: d.Domain, HTTPS: d.HTTPS, DashboardURL: d.DashboardURL, WhatsApp: d.WhatsApp, CountryHeader: d.CountryHeader, Log: d.Log})
 	if err != nil {
 		return nil, err
@@ -65,7 +73,23 @@ func (m *Module) Handler() http.Handler { return m.site }
 func (m *Module) Domain() string { return m.domain }
 
 // NewConsole is what the super-admin console edits (the api role): it
-// writes as app_admin.
-func NewConsole(adminPool *pgxpool.Pool, ids *ulid.Generator, log *slog.Logger) Console {
-	return app.NewService(app.Deps{DB: adminPool, Admin: adminPool, IDs: ids, Log: log})
+// writes as app_admin, and keeps images in m's bucket (nil refuses
+// uploads).
+func NewConsole(adminPool *pgxpool.Pool, m *config.Media, ids *ulid.Generator, log *slog.Logger) (Console, error) {
+	d := app.Deps{DB: adminPool, Admin: adminPool, IDs: ids, Log: log}
+	if m != nil {
+		objects, err := media.NewS3For(*m)
+		if err != nil {
+			return nil, err
+		}
+		d.Media = app.Media{Objects: objects, Limits: media.Limits{MaxBytes: m.MaxUploadBytes, MaxPixels: m.MaxImagePixels}, Signer: signer(m)}
+	}
+	return app.NewService(d), nil
+}
+
+func signer(m *config.Media) *media.Signer {
+	if m == nil || m.ImgproxyURL == "" {
+		return nil
+	}
+	return media.NewSigner(m.ImgproxyURL, m.S3Bucket, m.ImgproxyKey, m.ImgproxySalt)
 }

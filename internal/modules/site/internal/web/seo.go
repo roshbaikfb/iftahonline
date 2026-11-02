@@ -169,6 +169,32 @@ func (s *Site) organizationLD(p *pageCtx) any {
 	if len(profiles) > 0 {
 		org["sameAs"] = profiles
 	}
+	if p.logo != "" {
+		org["logo"] = p.logo
+	}
+	var founders []any
+	for _, f := range p.founders {
+		person := map[string]any{"@type": "Person", "name": f.name}
+		if f.role != "" {
+			person["jobTitle"] = f.role
+		}
+		if f.photo != "" {
+			person["image"] = f.photo
+		}
+		var links []string
+		for _, u := range []string{f.linkedIn, f.x} {
+			if u != "" {
+				links = append(links, u)
+			}
+		}
+		if len(links) > 0 {
+			person["sameAs"] = links
+		}
+		founders = append(founders, person)
+	}
+	if len(founders) > 0 {
+		org["founder"] = founders
+	}
 	if set.CompanyNumber != "" {
 		parent, _ := org["parentOrganization"].(map[string]any) //nolint:errcheck // built just above
 		parent["identifier"] = map[string]any{"@type": "PropertyValue", "propertyID": "Companies House", "value": set.CompanyNumber}
