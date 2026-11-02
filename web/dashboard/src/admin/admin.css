@@ -161,6 +161,22 @@ body {
   padding: 0.9rem 1rem;
   border-block-start: 1px solid var(--line);
 }
+.faq-form {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-block-start: 1px solid var(--line);
+}
+.faq-form h3 {
+  margin: 0;
+}
+.faq-form > label {
+  display: grid;
+  gap: 0.2rem;
+}
+.table-card tr[aria-current='true'] td {
+  background: #f0fdf4;
+}
 .support-card {
   background: #fffbeb;
   border-color: #fde68a;

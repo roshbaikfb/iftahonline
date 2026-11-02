@@ -9,6 +9,7 @@ import { AuditPage } from './AuditPage';
 import { Login } from './Login';
 import { Overview } from './Overview';
 import { PlansPage } from './PlansPage';
+import { SitePage } from './SitePage';
 import { AdminSessionContext, fetchAdmin, type Admin, type AdminState } from './session';
 import { StorePage } from './StorePage';
 
@@ -22,6 +23,7 @@ export function ConsoleRoutes() {
       <Route path="/agencies" element={<AgenciesPage />} />
       <Route path="/agencies/:agencyId" element={<AgencyPage />} />
       <Route path="/ads" element={<AdsPage />} />
+      <Route path="/site" element={<SitePage />} />
       <Route path="/audit" element={<AuditPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
