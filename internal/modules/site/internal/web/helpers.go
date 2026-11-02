@@ -79,6 +79,11 @@ func displayPhone(e164 string) string {
 	return e164
 }
 
+// favicon is the brand mark: the bag on navy.
+const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0f2e52"/>` +
+	`<g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" transform="translate(4 4)">` +
+	`<path d="M4 9h16l-1.5 10.5a1 1 0 0 1-1 .5H6.5a1 1 0 0 1-1-.5z"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/></g></svg>`
+
 // iconSVG is a stroke icon by name, decorative (the link or button around
 // it carries the label).
 func iconSVG(name string) string {
