@@ -55,6 +55,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/promotions"
 	"github.com/roshbaikfb/iftahonline/internal/modules/risk"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
@@ -863,7 +864,19 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 		return nil, err
 	}
 	go shop.Listen(ctx)
-	return server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets()), nil
+	_, faces, preload := shop.BrandFont()
+	web, err := site.New(site.Deps{Plans: billing.NewShowcase(c.pool), Font: site.Font{Faces: faces, Preload: preload},
+		Domain: c.cfg.Tenancy.BaseDomain, HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
+		DashboardURL: c.cfg.Mail.DashboardURL, WhatsApp: site.DefaultWhatsApp, Log: c.log})
+	if err != nil {
+		return nil, err
+	}
+	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())
+	platform := server.MountPlatformSite(web.Domain(), web.Handler(), storefront.AssetsPrefix, shop.Assets())
+	return func(rt server.Routes) {
+		stores(rt)
+		platform(rt)
+	}, nil
 }
 
 func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo, profile middleware.Profile, mountFor mountFunc) error {
