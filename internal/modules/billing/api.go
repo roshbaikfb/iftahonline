@@ -191,6 +191,13 @@ type (
 	Offer = app.Offer
 )
 
+// How a plan is paid for (Offer.Kind).
+const (
+	KindFree         = domain.KindFree
+	KindPays         = domain.KindPays
+	KindSubscription = domain.KindSubscription
+)
+
 // Showcase lists the plans on sale for the platform's site: no store.
 type Showcase interface {
 	// PublicOffers is every public plan on sale (not the agencies'),
