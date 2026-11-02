@@ -25,6 +25,10 @@ It owns no tables, emits no events and has no HTTP API of its own.
 | `/` | Home: hero, features, tools, steps, trust, store moving, plans in pounds, FAQ (5), CTA | `public, max-age=300, s-maxage=3600` |
 | `/pricing` | Plans in the visitor's currency, monthly/annual, comparison from the features catalog | `private`, `Vary: CF-IPCountry` |
 | `/faq` | Every answer (10) | public |
+| `/features` | The six features, each linking its page | public |
+| `/features/{slug}` | One feature: how it works, what the merchant controls, its questions, the other features. Slugs: `whatsapp-confirmation`, `fake-orders-protection`, `net-profit`, `shipping-cod`, `online-store`, `marketing` (copy in `features.go`) | public |
+| `/about` | Why we built it, values, the company card (UK flag, address), contact | public |
+| `/terms`, `/privacy` | Draft legal texts (`legal.go`); a lawyer reviews them before launch (go-live §13) | public |
 | `/robots.txt` | Allow all; the AI crawlers named; the sitemap | public |
 | `/sitemap.xml` | The pages, with `lastmod` (`updated` in `content.go`) | public |
 | `/llms.txt`, `/llms-full.txt` | Plain facts for AI assistants; the full one adds the plans in pounds and every answer | public |
@@ -41,7 +45,8 @@ It owns no tables, emits no events and has no HTTP API of its own.
 - **Plan cards:** the bullets come from each plan's grants (products,
   orders, messages, protection, profit, card payments, domain, staff).
   The first subscription plan is «موصى بها».
-- **Copy:** merchant benefits only, never how the platform is built.
+- **Copy:** merchant benefits only, never how the platform is built
+  (`TestEveryPage` rejects technical words on every page).
   Example screens are labelled «مثال توضيحي».
 - **Security:**
   - No script runs.
@@ -57,13 +62,17 @@ It owns no tables, emits no events and has no HTTP API of its own.
 | `/` | `Organization` (variants, support contact, parent Codezilo Ltd), `WebSite`, `SoftwareApplication` (offers), `FAQPage` |
 | `/pricing` | `SoftwareApplication`, `BreadcrumbList` |
 | `/faq` | `FAQPage`, `BreadcrumbList` |
+| `/features` | `BreadcrumbList` |
+| `/features/{slug}` | `BreadcrumbList` (home → features → it), `FAQPage` |
+| `/about` | `Organization`, `AboutPage`, `BreadcrumbList` |
+| `/terms`, `/privacy` | `BreadcrumbList` |
 
 ## Still to come
 
-- **S3:** feature pages, the about page (founders and team), legal
-  pages, the English site with `hreflang`.
-- **S4:** the console edits the FAQ, articles (guides), founders, team
-  and contact details.
+- **S3b:** the English site, with `hreflang`.
+- **S4:** the console edits the FAQ, articles (guides), founders, team,
+  the founding story, the company number and contact details. The about
+  page shows founders and team once they are set.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).
 - **The Open Graph image**, with the logo.

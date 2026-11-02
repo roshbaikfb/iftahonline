@@ -238,4 +238,12 @@ account, before merchants rely on it:
   - a cadence of guides (S4).
 - **Dollar prices:** visitors outside Egypt see «قريبًا» until billing
   sells in dollars (the Stripe work).
+- **Legal pages, before launch:** `/terms` and `/privacy` are drafts
+  written from what the platform does (`internal/modules/site/internal/web/legal.go`).
+  A lawyer must:
+  - review both;
+  - fill the `[bracketed]` placeholders: the retention periods, the
+    limitation of liability, and the governing law and courts;
+  - check them against UK GDPR, Egypt's data protection law (151/2020)
+    and the Gulf countries' laws.
 
