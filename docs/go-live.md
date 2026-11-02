@@ -245,6 +245,10 @@ account, before merchants rely on it:
   share image (1200×630), the founding story, the founders and the team.
   Add the video once it is recorded. Add merchants' reviews only when
   they are real and their authors agree.
+- **Founding merchants:** the program is off until you turn it on in the
+  console («التجار المؤسسون»). Check the seats (100) and the discount
+  (20%) first. Merchants who join keep their discount even if it is
+  changed later.
 - **Legal pages, before launch:** `/terms` and `/privacy` are drafts
   written from what the platform does (`internal/modules/site/internal/web/legal.go`).
   A lawyer must:
