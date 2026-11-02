@@ -132,3 +132,51 @@ func TestStoreHostSetsTenant(t *testing.T) {
 		t.Fatalf("tenant = %v, %v; want %v", got, gotErr, store)
 	}
 }
+
+// TestPlatformSiteHost (ADR-0071): the platform's domain serves its own
+// site and the shop's files, never a store; www goes there for good,
+// keeping the path and a port; every other host is a store's.
+func TestPlatformSiteHost(t *testing.T) {
+	t.Parallel()
+	store := tenant.StoreID{ID: ulid.NewGenerator().New()}
+	site := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := tenant.FromContext(r.Context()); err == nil {
+			http.Error(w, "a tenant on the platform's site", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte("platform site " + r.URL.Path))
+	})
+	mount := func(rt server.Routes) {
+		mountShop(fakeResolver{res: tenancy.Resolution{StoreID: store, Status: tenancy.StatusActive}})(rt)
+		server.MountPlatformSite("iftahonline.com", site, "/assets/", assetFile)(rt)
+	}
+	f := newFixture(t, middleware.ProfileStorefront, mount)
+	get := func(host, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+		r.Host = host
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, r)
+		return rec
+	}
+	for _, tt := range []struct{ host, path, want string }{
+		{"iftahonline.com", "/", "platform site /"},
+		{"iftahonline.com", "/pricing", "platform site /pricing"},
+		{"iftahonline.com:18081", "/faq", "platform site /faq"},
+		{"iftahonline.com", "/assets/f.woff2", "// asset"},
+		{"souq.iftahonline.com", "/", "store page " + strings.ToLower(store.String())},
+	} {
+		if rec := get(tt.host, tt.path); rec.Code != http.StatusOK || rec.Body.String() != tt.want && !strings.Contains(rec.Body.String(), tt.want) {
+			t.Errorf("%s%s: %d %q", tt.host, tt.path, rec.Code, rec.Body.String())
+		}
+	}
+	for _, tt := range []struct{ host, to string }{
+		{"www.iftahonline.com", "http://iftahonline.com/pricing?currency=USD"},
+		{"www.iftahonline.com:18081", "http://iftahonline.com:18081/pricing?currency=USD"},
+	} {
+		rec := get(tt.host, "/pricing?currency=USD")
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != tt.to {
+			t.Errorf("%s: %d %q", tt.host, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}

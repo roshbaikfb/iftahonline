@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"errors"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/a-h/templ"
 
@@ -28,6 +30,39 @@ func MountStorefront(resolver tenancy.HostResolver, pages http.Handler, assetsPr
 		rt.Mux.Handle("GET /", StoreHost(rt, resolver, pages))
 		rt.Mux.Handle("POST /", StoreHost(rt, resolver, pages)) // the cart's forms
 	}
+}
+
+// MountPlatformSite returns the Mount function of the platform's own
+// site (ADR-0071) on its domain: its pages and the shop's static files
+// (the brand typeface) on domain, and www.domain sent there for good.
+// Host patterns are more specific than the storefront's, so domain never
+// reaches store-host resolution; every other host does.
+func MountPlatformSite(domain string, site http.Handler, assetsPrefix string, assets http.Handler) func(Routes) {
+	return func(rt Routes) {
+		rt.Mux.Handle("GET "+domain+"/", site)
+		rt.Mux.Handle("GET "+domain+assetsPrefix, assets)
+		rt.Mux.Handle("GET www."+domain+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Always to the configured domain: only a numeric port (in
+			// development) comes from the request.
+			host := domain
+			if _, port, err := net.SplitHostPort(r.Host); err == nil && port != "" && strings.Trim(port, "0123456789") == "" {
+				host += ":" + port
+			}
+			scheme := "https://"
+			if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+				scheme = "http://"
+			}
+			http.Redirect(w, r, scheme+host+r.URL.EscapedPath()+query(r), http.StatusMovedPermanently) //nolint:gosec // the configured domain, not the request's
+		}))
+	}
+}
+
+// query is a request's query string with its "?", or "".
+func query(r *http.Request) string {
+	if r.URL.RawQuery == "" {
+		return ""
+	}
+	return "?" + r.URL.RawQuery
 }
 
 // StoreHost resolves r.Host and sets the tenant for next.
