@@ -154,18 +154,7 @@ func (a *Assets) themeCSS(t domain.ThemeSettings) string {
 	family := "system-ui"
 	if f, ok := fontFamilies[t.Font]; ok {
 		family = `"` + f.family + `"`
-		arabic := rangeArabic
-		if f.ascii {
-			arabic += rangeASCII
-		}
-		for _, w := range []string{"400", "700"} {
-			// Where ranges overlap the face declared last wins, so the
-			// Arabic face comes after the Latin one.
-			for _, sub := range []struct{ name, rng string }{{"latin", rangeLatin}, {"arabic", arabic}} {
-				fmt.Fprintf(&b, "@font-face{font-family:%q;font-style:normal;font-weight:%s;font-display:swap;src:url(%s) format(\"woff2\");unicode-range:%s}",
-					f.family, w, a.fonts[f.file+"-"+sub.name+"-"+w], sub.rng)
-			}
-		}
+		b.WriteString(a.fontFaces(t.Font))
 	}
 	radius := map[domain.Radius]string{domain.RadiusNone: "0", domain.RadiusSmall: ".25rem", domain.RadiusMedium: ".5rem", domain.RadiusLarge: "1rem"}[t.Radius]
 	if radius == "" {
@@ -176,6 +165,38 @@ func (a *Assets) themeCSS(t domain.ThemeSettings) string {
 		family, radius, c.Primary, c.Accent, c.Background, c.Text, domain.OnColor(c.Primary), domain.OnColor(c.Accent))
 	b.WriteString(a.baseCSS)
 	return b.String()
+}
+
+// fontFaces is font's @font-face rules: both weights, the Latin and the
+// Arabic subsets.
+func (a *Assets) fontFaces(font domain.Font) string {
+	f, ok := fontFamilies[font]
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	arabic := rangeArabic
+	if f.ascii {
+		arabic += rangeASCII
+	}
+	for _, w := range []string{"400", "700"} {
+		// Where ranges overlap the face declared last wins, so the
+		// Arabic face comes after the Latin one.
+		for _, sub := range []struct{ name, rng string }{{"latin", rangeLatin}, {"arabic", arabic}} {
+			fmt.Fprintf(&b, "@font-face{font-family:%q;font-style:normal;font-weight:%s;font-display:swap;src:url(%s) format(\"woff2\");unicode-range:%s}",
+				f.family, w, a.fonts[f.file+"-"+sub.name+"-"+w], sub.rng)
+		}
+	}
+	return b.String()
+}
+
+// BrandFont is the platform's own typeface, Iftah Sans Arabic (ADR-0032):
+// its family name, its @font-face rules (files served under
+// AssetsPrefix), and the two files an Arabic first paint needs. The
+// platform's site uses it, serving no fonts of its own.
+func (a *Assets) BrandFont() (family, faces string, preload []string) {
+	return fontFamilies[domain.FontPlexArabic].family, a.fontFaces(domain.FontPlexArabic),
+		a.fontPreload(domain.ThemeSettings{Font: domain.FontPlexArabic}, Arabic)
 }
 
 // fontPreload is the font files the first paint needs: both weights in
