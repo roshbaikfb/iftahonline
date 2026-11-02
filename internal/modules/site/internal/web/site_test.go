@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -256,5 +257,40 @@ func TestNewNeedsItsDependencies(t *testing.T) {
 	t.Parallel()
 	if _, err := web.New(web.Deps{}); err == nil {
 		t.Fatal("no dependencies accepted")
+	}
+}
+
+// TestCompressionAndIcon: pages and crawler files go gzipped to a client
+// that takes it (a phone's first paint waits for them), plain to one
+// that does not; the brand mark answers /favicon.ico; the policy lets the
+// page fetch its own origin (robots.txt checks) and nothing else.
+func TestCompressionAndIcon(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	for _, path := range []string{"/", "/robots.txt", "/llms-full.txt"} {
+		plain := f.get(t, path)
+		zipped := f.get(t, path, "Accept-Encoding", "gzip, br")
+		if plain.Header().Get("Content-Encoding") != "" || zipped.Header().Get("Content-Encoding") != "gzip" ||
+			!strings.Contains(zipped.Header().Get("Vary"), "Accept-Encoding") {
+			t.Fatalf("%s: plain %v, zipped %v", path, plain.Header(), zipped.Header())
+		}
+		zr, err := gzip.NewReader(zipped.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(zr)
+		if err != nil || string(got) != plain.Body.String() {
+			t.Fatalf("%s: unzipped differs (%v)", path, err)
+		}
+		if path == "/" && zipped.Body.Len() > plain.Body.Len()/3 {
+			t.Errorf("home zipped %d of %d bytes", zipped.Body.Len(), plain.Body.Len())
+		}
+	}
+	icon := f.get(t, "/favicon.ico")
+	if icon.Code != http.StatusOK || icon.Header().Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(icon.Body.String(), "<svg") {
+		t.Fatalf("favicon: %d %v", icon.Code, icon.Header())
+	}
+	if csp := f.get(t, "/").Header().Get("Content-Security-Policy"); !strings.Contains(csp, "connect-src 'self'") || strings.Contains(csp, "script-src") {
+		t.Fatalf("CSP = %q", csp)
 	}
 }

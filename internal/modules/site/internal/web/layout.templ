@@ -25,6 +25,7 @@ templ layout(p *pageCtx, body templ.Component) {
 				<meta name="twitter:card" content="summary"/>
 			}
 			<meta name="theme-color" content="#0f2e52"/>
+			<link rel="icon" href="/favicon.ico" type="image/svg+xml"/>
 			for _, f := range p.fontPreload {
 				<link rel="preload" href={ f } as="font" type="font/woff2" crossorigin/>
 			}

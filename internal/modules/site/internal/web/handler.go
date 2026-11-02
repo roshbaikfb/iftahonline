@@ -4,6 +4,7 @@ package web
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	_ "embed" // the stylesheet
@@ -60,7 +61,7 @@ func New(d Deps) (*Site, error) {
 	css := d.FontFaces + strings.TrimSpace(siteCSS)
 	sum := sha256.Sum256([]byte(css))
 	csp := "default-src 'none'; style-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; font-src 'self'; img-src 'self' data:; " +
-		"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, css: css, csp: csp}, nil
 }
 
@@ -80,14 +81,18 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/favicon.ico":
+		s.headers(w, "public, max-age=86400")
+		w.Header().Set("Content-Type", "image/svg+xml")
+		_, _ = w.Write([]byte(favicon)) //nolint:errcheck // the client went away
 	case "/robots.txt":
-		s.text(w, "text/plain; charset=utf-8", s.robots())
+		s.text(w, r, "text/plain; charset=utf-8", s.robots())
 	case "/sitemap.xml":
-		s.text(w, "application/xml; charset=utf-8", s.sitemap())
+		s.text(w, r, "application/xml; charset=utf-8", s.sitemap())
 	case "/llms.txt":
-		s.text(w, "text/markdown; charset=utf-8", s.llms(r.Context(), false))
+		s.text(w, r, "text/markdown; charset=utf-8", s.llms(r.Context(), false))
 	case "/llms-full.txt":
-		s.text(w, "text/markdown; charset=utf-8", s.llms(r.Context(), true))
+		s.text(w, r, "text/markdown; charset=utf-8", s.llms(r.Context(), true))
 	case "/":
 		s.home(w, r)
 	case "/pricing":
@@ -207,16 +212,36 @@ func (s *Site) write(w http.ResponseWriter, r *http.Request, status int, cacheCo
 	}
 	s.headers(w, cacheControl)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	out := compressed(w, r, buf.Bytes())
 	w.WriteHeader(status)
 	if r.Method != http.MethodHead {
-		_, _ = w.Write(buf.Bytes()) //nolint:errcheck // the client went away
+		_, _ = w.Write(out) //nolint:errcheck // the client went away
 	}
 }
 
-func (s *Site) text(w http.ResponseWriter, contentType, body string) {
+func (s *Site) text(w http.ResponseWriter, r *http.Request, contentType, body string) {
 	s.headers(w, cachePage)
 	w.Header().Set("Content-Type", contentType)
-	_, _ = w.Write([]byte(body)) //nolint:errcheck // the client went away
+	_, _ = w.Write(compressed(w, r, []byte(body))) //nolint:errcheck // the client went away
+}
+
+// compressed is body gzipped when the client takes it (a page is about
+// a fifth of its size: what a phone's first paint waits for), or body.
+func compressed(w http.ResponseWriter, r *http.Request, body []byte) []byte {
+	w.Header().Add("Vary", "Accept-Encoding")
+	if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		return body
+	}
+	var b bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	if err != nil {
+		return body
+	}
+	if _, err = zw.Write(body); err != nil || zw.Close() != nil {
+		return body
+	}
+	w.Header().Set("Content-Encoding", "gzip")
+	return b.Bytes()
 }
 
 func (s *Site) unavailable(w http.ResponseWriter, r *http.Request, err error) {
