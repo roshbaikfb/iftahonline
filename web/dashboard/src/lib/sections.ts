@@ -101,7 +101,7 @@ export function fieldLabel(key: string): string {
 const enumLabels: Record<string, Record<string, string>> = {
   align: { start: 'يمين', center: 'وسط' },
   source: { newest: 'الأحدث', bestsellers: 'الأكثر مبيعًا', category: 'من تصنيف', manual: 'أختارها بنفسي' },
-  layout: { grid: 'شبكة', carousel: 'شريط يتحرك' },
+  layout: { grid: 'شبكة', carousel: 'صف يُسحب أفقيًا' },
   tone: { amber: 'كهرماني', green: 'أخضر', blue: 'أزرق', primary: 'لون المتجر' },
   icon: { shipping: 'الشحن', cod: 'الدفع عند الاستلام', returns: 'الاسترجاع', secure: 'دفع آمن', support: 'الدعم', quality: 'الجودة' },
 };

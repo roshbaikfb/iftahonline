@@ -181,7 +181,11 @@ func TestNewSectionsRender(t *testing.T) {
 		`<a class="promo" data-tone="amber" href="/c/tshirts"><span>لفترة محدودة</span> <strong>خصم 20%</strong></a>`,
 		`<a class="promo" data-tone="green" href="https://example.com/x"><strong>جديد</strong></a>`,
 		"<h2>أقسامنا</h2>", `<a class="all" href="/">الكل</a>`, // not the home page: "All" is not current
-		`<div class="grid row">`, `<a href="/c/tshirts">عرض الكل</a>`,
+		`<div class="grid row" data-row>`, `<a href="/c/tshirts">عرض الكل</a>`,
+		// The arrows ship hidden; app.js shows them on a mouse when the
+		// row has more than fits (rows()).
+		`<button class="row-nav prev" type="button" data-step="-1" aria-label="المنتجات السابقة" hidden>`,
+		`<button class="row-nav next" type="button" data-step="1" aria-label="المنتجات التالية" hidden>`,
 		"<strong>اسألنا</strong>", "<p>نرد خلال دقائق</p>",
 	)
 	if strings.Contains(body, `id="s-none"`) {

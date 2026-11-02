@@ -214,11 +214,25 @@ templ grid(p *pageCtx, id string, g *gridView) {
 		if len(g.products) == 0 {
 			<p class="empty">{ p.l.T(MsgNoProducts) }</p>
 		} else {
-			<div class={ "grid", templ.KV("row", g.carousel) }>
-				for _, pr := range g.products {
-					@card(p, pr)
-				}
-			</div>
+			if g.carousel {
+				// A row the shopper swipes; on a mouse, app.js shows the
+				// arrows when there is more to see.
+				<div class="rowwrap">
+					<div class="grid row" data-row>
+						for _, pr := range g.products {
+							@card(p, pr)
+						}
+					</div>
+					<button class="row-nav prev" type="button" data-step="-1" aria-label={ p.l.T(MsgRowPrev) } hidden>@icon("back")</button>
+					<button class="row-nav next" type="button" data-step="1" aria-label={ p.l.T(MsgRowNext) } hidden>@icon("back")</button>
+				</div>
+			} else {
+				<div class="grid">
+					for _, pr := range g.products {
+						@card(p, pr)
+					}
+				</div>
+			}
 		}
 	</section>
 }
