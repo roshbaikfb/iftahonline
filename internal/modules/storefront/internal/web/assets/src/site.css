@@ -150,7 +150,9 @@ main { display: block; min-block-size: 50vh; }
 .tiles i { display: none; }
 @media (max-width: 47.99rem) { .tiles h2 { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); } }
 @media (min-width: 48rem) {
-  .tiles nav { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); overflow: visible; }
+  /* Columns keep their size: a store with few categories gets a few
+     tiles, not circles as wide as the page. */
+  .tiles nav { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 10rem)); justify-content: start; overflow: visible; }
   .tiles a { flex-direction: column; gap: .5rem; border: 0; padding: 0; border-radius: 0; font-size: 1rem; }
   .tiles a.all { display: none; }
   .tiles i { display: flex; align-items: center; justify-content: center; inline-size: 100%; aspect-ratio: 1; border-radius: 50%;

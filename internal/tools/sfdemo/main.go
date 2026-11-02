@@ -352,6 +352,7 @@ func seed(ctx context.Context, pool *pgxpool.Pool, ten *tenancy.Module, d demo, 
 	steps := []struct{ method, path, body string }{
 		{http.MethodPut, "/storefront/home", `{"title":"متجر العرض","description":"عطور وبخور أصلية بأسعار مميزة.","sections":[
 			{"type":"hero","settings":{"heading":"أهلًا بك في متجر العرض","subheading":"عطور وبخور أصلية، توصيل لكل المحافظات","button_label":"شاهد عرض الصيف","button_link":"/pages/summer"}},
+			{"type":"category_tiles","settings":{}},
 			{"type":"product_grid","settings":{"source":"newest","limit":8}},
 			{"type":"trust_badges","settings":{"items":[{"icon":"cod"},{"icon":"shipping"},{"icon":"returns"}]}}]}`},
 		{http.MethodPost, "/storefront/pages", `{"title":"عرض الصيف","slug":"summer","status":"published","sections":[
