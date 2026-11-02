@@ -16,7 +16,7 @@ type featurePage struct {
 	short              string // one line for the features index and related links
 }
 
-var featurePages = []featurePage{ //nolint:gochecknoglobals // constant copy
+var featurePages = []featurePage{ //nolint:gochecknoglobals,dupl // constant copy; content_en.go holds its English translation, the same shape by design
 	{
 		slug: "whatsapp-confirmation", name: "تأكيد الطلبات على واتساب", art: "confirm",
 		short:       "كل طلب يؤكده صاحبه على واتساب بضغطة، ورسالة نصية لمن ليس على واتساب.",
@@ -167,8 +167,8 @@ var featurePages = []featurePage{ //nolint:gochecknoglobals // constant copy
 }
 
 // featureBySlug finds a feature page.
-func featureBySlug(slug string) (featurePage, bool) {
-	for _, f := range featurePages {
+func (c *siteCopy) featureBySlug(slug string) (featurePage, bool) {
+	for _, f := range c.featurePages {
 		if f.slug == slug {
 			return f, true
 		}
@@ -177,9 +177,9 @@ func featureBySlug(slug string) (featurePage, bool) {
 }
 
 // related are the other feature pages, for a page's "more" links.
-func related(slug string) []featurePage {
+func (c *siteCopy) related(slug string) []featurePage {
 	var out []featurePage
-	for _, f := range featurePages {
+	for _, f := range c.featurePages {
 		if f.slug != slug {
 			out = append(out, f)
 		}

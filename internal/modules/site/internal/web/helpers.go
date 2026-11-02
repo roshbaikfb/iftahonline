@@ -1,6 +1,7 @@
 package web
 
 import (
+	"html"
 	"strconv"
 	"strings"
 
@@ -28,37 +29,38 @@ func teaserPlans(pr pricing) []planView {
 }
 
 // joinLines is a plan's first n bullets in one sentence.
-func joinLines(lines []string, n int) string {
+func joinLines(lines []string, n int, l *language) string {
 	if len(lines) > n {
 		lines = lines[:n]
+	}
+	if l == english {
+		return strings.Join(lines, ", ")
 	}
 	return strings.Join(lines, "، ")
 }
 
-// freePrice is nothing, in the page's currency.
-func freePrice(pl planView) string {
-	if strings.HasPrefix(pl.Monthly, "$") {
-		return "$0"
-	}
-	return "0 ج.م"
-}
-
 // planCTA is a plan card's button.
-func planCTA(pl planView) string {
+func planCTA(t *texts, pl planView) string {
 	switch {
 	case pl.Free:
-		return "ابدأ مجانًا"
+		return t.PlanFree
 	case pl.Pays:
-		return "ابدأ بلا اشتراك"
+		return t.PlanPays
 	case pl.TrialDays > 0:
-		return "جرّبها مجانًا"
+		return t.PlanTrial
 	default:
-		return "اشترك الآن"
+		return t.PlanSubscribe
 	}
 }
 
-// trialText is a trial's length in Arabic: "14 يومًا".
-func trialText(days int) string {
+// trialText is a trial's length: "14 يومًا", "14 days".
+func trialText(t *texts, days int) string {
+	if t == &enTexts {
+		if days == 1 {
+			return "1 day"
+		}
+		return strconv.Itoa(days) + " days"
+	}
 	switch {
 	case days == 1:
 		return "يومًا واحدًا"
@@ -113,8 +115,12 @@ func iconSVG(name string) string {
 	return `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + paths[name] + `</svg>`
 }
 
-// ukFlag is the Union Jack, for the company's card.
-const ukFlag = `<svg class="flag" viewBox="0 0 60 30" role="img" aria-label="علم المملكة المتحدة"><clipPath id="uk-s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>` +
+// flagSVG is the Union Jack, for the company's card, named label.
+func flagSVG(label string) string {
+	return `<svg class="flag" viewBox="0 0 60 30" role="img" aria-label="` + html.EscapeString(label) + `">` + ukFlag
+}
+
+const ukFlag = `<clipPath id="uk-s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>` +
 	`<clipPath id="uk-t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath><g clip-path="url(#uk-s)">` +
 	`<path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>` +
 	`<path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/>` +

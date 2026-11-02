@@ -7,26 +7,32 @@ import (
 	"strings"
 )
 
-// sitePage is an indexable page, for sitemap.xml and llms.txt.
+// sitePage is an indexable page, for sitemap.xml and llms.txt; path is
+// the page's path in its language (without /en).
 type sitePage struct{ path, name, about string }
 
-// sitePages are the site's indexable pages: the fixed ones, with each
-// feature's page after the features index.
-func sitePages() []sitePage {
-	out := []sitePage{
-		{"/", "الرئيسية", "ما هي افتح أونلاين ولمن، ومميزاتها، وخطوات البدء."},
-		{"/pricing", "الأسعار", "الباقات وأسعارها بالجنيه في مصر وبالدولار في باقي الدول."},
-		{"/features", "المميزات", "كل مميزات افتح أونلاين، ولكل ميزة صفحتها."},
+// sitePages are the site's indexable pages in language l: the fixed
+// ones, with each feature's page after the features index.
+func sitePages(l *language) []sitePage {
+	t, about := l.t, [...]string{
+		"ما هي افتح أونلاين ولمن، ومميزاتها، وخطوات البدء.", "الباقات وأسعارها بالجنيه في مصر وبالدولار في باقي الدول.",
+		"كل مميزات افتح أونلاين، ولكل ميزة صفحتها.", "إجابات عن البدء والتأكيد والحماية والأسعار ونقل المتاجر.",
+		"من نحن، وما نؤمن به، والشركة التي تدير المنصة.", "شروط استخدام المنصة والباقات والإلغاء.", "كيف نجمع البيانات ونستخدمها ونحميها.",
 	}
-	for _, f := range featurePages {
+	if l == english {
+		about = [...]string{
+			"What iftahonline is and who it's for, its features, and how to start.", "The plans and their prices, in pounds in Egypt and dollars elsewhere.",
+			"Every iftahonline feature, each with its own page.", "Answers about starting, confirmation, protection, prices and moving stores.",
+			"Who we are, what we believe, and the company that runs the platform.", "The terms for using the platform, its plans and cancellation.",
+			"How we collect, use and protect data.",
+		}
+	}
+	out := []sitePage{{"/", t.Home, about[0]}, {"/pricing", t.Pricing, about[1]}, {"/features", t.Features, about[2]}}
+	for _, f := range l.c.featurePages {
 		out = append(out, sitePage{"/features/" + f.slug, f.name, f.short})
 	}
-	return append(out,
-		sitePage{"/faq", "الأسئلة الشائعة", "إجابات عن البدء والتأكيد والحماية والأسعار ونقل المتاجر."},
-		sitePage{"/about", "عن افتح أونلاين", "من نحن، وما نؤمن به، والشركة التي تدير المنصة."},
-		sitePage{"/terms", "الشروط والأحكام", "شروط استخدام المنصة والباقات والإلغاء."},
-		sitePage{"/privacy", "سياسة الخصوصية", "كيف نجمع البيانات ونستخدمها ونحميها."},
-	)
+	return append(out, sitePage{"/faq", t.FAQ, about[3]}, sitePage{"/about", t.About, about[4]},
+		sitePage{"/terms", l.c.terms.name, about[5]}, sitePage{"/privacy", l.c.privacy.name, about[6]})
 }
 
 // aiCrawlers are the AI assistants' crawlers, allowed by name so the
@@ -47,9 +53,21 @@ func (s *Site) robots() string {
 
 func (s *Site) sitemap() string {
 	var b strings.Builder
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-	for _, p := range sitePages() {
-		fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod></url>\n", s.origin(), p.path, updated)
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" +
+		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")
+	// Each page in both languages, each naming the other (Google's
+	// hreflang in sitemaps).
+	for _, l := range []*language{arabic, english} {
+		for _, p := range sitePages(l) {
+			fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod>", s.origin(), l.at(p.path), updated)
+			for _, alt := range []struct {
+				code string
+				l    *language
+			}{{"ar", arabic}, {"en", english}, {"x-default", arabic}} {
+				fmt.Fprintf(&b, `<xhtml:link rel="alternate" hreflang="%s" href="%s%s"/>`, alt.code, s.origin(), alt.l.at(p.path))
+			}
+			b.WriteString("</url>\n")
+		}
 	}
 	b.WriteString("</urlset>\n")
 	return b.String()
@@ -69,14 +87,20 @@ func (s *Site) llms(ctx context.Context, full bool) string {
 	b.WriteString("- لوحة الربح الصافي بعد تكلفة المنتج والشحن والتحصيل والمرتجعات والإعلانات.\n")
 	b.WriteString("- الشحن والتحصيل، والدفع بالبطاقة عبر Paymob، وبكسلات الإعلانات، والكوبونات، وكتالوج المنتجات.\n\n")
 	b.WriteString("## الصفحات\n\n")
-	for _, p := range sitePages() {
+	for _, p := range sitePages(arabic) {
 		fmt.Fprintf(&b, "- [%s](%s%s): %s\n", p.name, s.origin(), p.path, p.about)
+	}
+	b.WriteString("\n## In English\n\n")
+	fmt.Fprintf(&b, "%s (also eftahonline, in Arabic %s) is an online store platform for merchants in Egypt and the Gulf who sell with cash on delivery: "+
+		"order confirmation on WhatsApp, fake-order protection, a net profit dashboard, shipping and collection, and a store in Arabic and English.\n\n", brandEN, brandAR)
+	for _, p := range sitePages(english) {
+		fmt.Fprintf(&b, "- [%s](%s%s): %s\n", p.name, s.origin(), english.at(p.path), p.about)
 	}
 	if !full {
 		fmt.Fprintf(&b, "\nالنسخة الكاملة: %s/llms-full.txt\n", s.origin())
 		return b.String()
 	}
-	if pr, err := s.pricing(ctx, currencyEGP); err == nil {
+	if pr, err := s.pricing(ctx, currencyEGP, arabic); err == nil {
 		b.WriteString("\n## الباقات في مصر\n\n")
 		for _, p := range pr.Plans {
 			switch {
@@ -105,11 +129,13 @@ func (s *Site) llms(ctx context.Context, full bool) string {
 
 // The schema.org data, as JSON-LD (https://schema.org).
 
-func (s *Site) organizationLD() any {
+// organizationLD is the platform's organization, named in l. Both
+// languages describe one organization (one @id).
+func (s *Site) organizationLD(l *language) any {
 	org := map[string]any{
 		"@context": "https://schema.org", "@type": "Organization", "@id": s.origin() + "/#organization",
-		"name": brandAR, "alternateName": strings.Split(brandVariants, "، "), "url": s.origin() + "/",
-		"description": tagline,
+		"name": l.c.brand, "alternateName": alternateNames(l), "url": s.origin() + l.at("/"),
+		"description": l.c.tagline,
 		"parentOrganization": map[string]any{
 			"@type": "Organization", "name": company.name,
 			"address": map[string]any{"@type": "PostalAddress", "streetAddress": company.street, "addressLocality": company.city,
@@ -123,16 +149,28 @@ func (s *Site) organizationLD() any {
 	return org
 }
 
-func (s *Site) websiteLD() any {
+func (s *Site) websiteLD(l *language) any {
 	return map[string]any{
 		"@context": "https://schema.org", "@type": "WebSite", "@id": s.origin() + "/#website", "url": s.origin() + "/",
-		"name": brandAR, "alternateName": brandLatin, "inLanguage": "ar", "publisher": map[string]any{"@id": s.origin() + "/#organization"},
+		"name": l.c.brand, "alternateName": alternateNames(l), "inLanguage": []string{"ar", "en"},
+		"publisher": map[string]any{"@id": s.origin() + "/#organization"},
 	}
+}
+
+// alternateNames are the brand's other spellings, besides its name in l.
+func alternateNames(l *language) []string {
+	var out []string
+	for _, n := range append([]string{brandAR}, strings.Split(brandVariants, "، ")...) {
+		if n != l.c.brand {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // applicationLD is the platform as software, with its plans as offers in
 // pr's currency (the ones priced in it).
-func (s *Site) applicationLD(pr pricing) any {
+func (s *Site) applicationLD(l *language, pr pricing) any {
 	var offers []any
 	for _, p := range pr.Plans {
 		switch {
@@ -145,9 +183,9 @@ func (s *Site) applicationLD(pr pricing) any {
 		}
 	}
 	app := map[string]any{
-		"@context": "https://schema.org", "@type": "SoftwareApplication", "name": brandAR, "alternateName": brandLatin,
+		"@context": "https://schema.org", "@type": "SoftwareApplication", "name": l.c.brand, "alternateName": alternateNames(l),
 		"applicationCategory": "BusinessApplication", "applicationSubCategory": "E-commerce platform", "operatingSystem": "Web",
-		"url": s.origin() + "/", "description": tagline, "inLanguage": "ar",
+		"url": s.origin() + l.at("/"), "description": l.c.tagline, "inLanguage": l.code,
 		"publisher": map[string]any{"@id": s.origin() + "/#organization"},
 	}
 	if len(offers) > 0 {
@@ -167,10 +205,10 @@ func (s *Site) faqLD(list []faq) any {
 // crumb is a step of a page's trail, after the home page.
 type crumb struct{ name, path string }
 
-func (s *Site) breadcrumbLD(trail ...crumb) any {
-	items := []any{map[string]any{"@type": "ListItem", "position": 1, "name": "الرئيسية", "item": s.origin() + "/"}}
+func (s *Site) breadcrumbLD(l *language, trail ...crumb) any {
+	items := []any{map[string]any{"@type": "ListItem", "position": 1, "name": l.t.Home, "item": s.origin() + l.at("/")}}
 	for i, c := range trail {
-		items = append(items, map[string]any{"@type": "ListItem", "position": i + 2, "name": c.name, "item": s.origin() + c.path})
+		items = append(items, map[string]any{"@type": "ListItem", "position": i + 2, "name": c.name, "item": s.origin() + l.at(c.path)})
 	}
 	return map[string]any{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": items}
 }
@@ -178,7 +216,7 @@ func (s *Site) breadcrumbLD(trail ...crumb) any {
 // aboutLD is the about page, about the organization.
 func (s *Site) aboutLD(p *pageCtx) any {
 	return map[string]any{
-		"@context": "https://schema.org", "@type": "AboutPage", "url": s.origin() + p.path, "name": p.title, "inLanguage": "ar",
+		"@context": "https://schema.org", "@type": "AboutPage", "url": p.url(p.l), "name": p.title, "inLanguage": p.l.code,
 		"mainEntity": map[string]any{"@id": s.origin() + "/#organization"},
 	}
 }

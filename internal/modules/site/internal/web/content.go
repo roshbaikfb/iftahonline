@@ -1,6 +1,6 @@
 package web
 
-// The site's copy, in Arabic (the English site comes with S3b). It speaks
+// The site's copy, in Arabic (the English is in content_en.go). It speaks
 // of what a merchant gains, never of how the platform is built (the
 // owner's rule). The console edits the FAQ and the contact details
 // later (S4); until then they live here.

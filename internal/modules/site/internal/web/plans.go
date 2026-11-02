@@ -78,6 +78,7 @@ type planView struct {
 	Annual      string
 	MonthlyAt   string // the monthly price as schema.org writes it: "299", "29.50"
 	Fee         string // pay as you sell: the rate, "2.5٪"
+	FreeText    string // nothing, in the currency: "0 ج.م", "$0"
 	TrialDays   int
 	Lines       []string
 	Grants      billing.Grants
@@ -100,20 +101,26 @@ type pricing struct {
 	AnyPrice bool // at least one paid plan is priced in Currency
 }
 
-// buildPricing turns billing's offers into what the pages show.
-func buildPricing(o billing.Offers) pricing {
+// buildPricing turns billing's offers into what the pages show, in
+// language l.
+func buildPricing(o billing.Offers, l *language) pricing {
 	p := pricing{Currency: o.Currency}
+	en := l == english
 	recommended := false
 	for _, of := range o.Plans {
-		v := planView{Name: of.NameAr, Free: of.Kind == billing.KindFree, Pays: of.Kind == billing.KindPays, TrialDays: int(of.TrialDays), Grants: of.Grants}
+		v := planView{Name: of.NameAr, Free: of.Kind == billing.KindFree, Pays: of.Kind == billing.KindPays, TrialDays: int(of.TrialDays), Grants: of.Grants,
+			FreeText: price(0, o.Currency, en)}
+		if en && of.NameEn != "" {
+			v.Name = of.NameEn
+		}
 		if of.Monthly != nil {
-			v.Monthly, v.MonthlyAt = price(*of.Monthly, o.Currency), amount(*of.Monthly)
+			v.Monthly, v.MonthlyAt = price(*of.Monthly, o.Currency, en), amount(*of.Monthly)
 		}
 		if of.Annual != nil {
-			v.Annual = price(*of.Annual, o.Currency)
+			v.Annual = price(*of.Annual, o.Currency, en)
 		}
 		if of.Fee != nil {
-			v.Fee = percent(of.Fee.RateBps)
+			v.Fee = percent(of.Fee.RateBps, en)
 		}
 		v.Priced = v.Free || v.Monthly != "" || v.Fee != ""
 		if v.Priced && !v.Free {
@@ -122,13 +129,16 @@ func buildPricing(o billing.Offers) pricing {
 		if of.Kind == billing.KindSubscription && !recommended {
 			v.Recommended, recommended = true, true
 		}
-		v.Lines = lines(of.Grants)
+		v.Lines = lines(of.Grants, l.t)
 		p.Plans = append(p.Plans, v)
 	}
 	for _, f := range o.Features {
 		r := row{Name: f.NameAr}
+		if en && f.NameEn != "" {
+			r.Name = f.NameEn
+		}
 		for _, pl := range p.Plans {
-			r.Cells = append(r.Cells, cell{Text: grantText(pl.Grants[f.Key], string(f.Kind))})
+			r.Cells = append(r.Cells, cell{Text: grantText(pl.Grants[f.Key], string(f.Kind), l.t)})
 		}
 		p.Rows = append(p.Rows, r)
 	}
@@ -136,51 +146,53 @@ func buildPricing(o billing.Offers) pricing {
 }
 
 // lines are a plan's card bullets, from its grants.
-func lines(g billing.Grants) []string {
+func lines(g billing.Grants, t *texts) []string {
 	var out []string
-	count := func(key, one, unlimited string) {
+	count := func(key, many, unlimited string) {
 		x, ok := g[key]
 		switch {
 		case !ok:
 		case x.Unlimited:
 			out = append(out, unlimited)
+		case x.Value == 1 && t.Singular[many] != "":
+			out = append(out, "1 "+t.Singular[many])
 		case x.Value > 0:
-			out = append(out, number(x.Value)+" "+one)
+			out = append(out, number(x.Value)+" "+many)
 		}
 	}
-	count("products", "منتج", "منتجات بلا حد")
-	count("orders_per_month", "طلب في الشهر", "طلبات بلا حد")
-	count("messages", "رسالة واتساب في الشهر", "رسائل واتساب بلا حد")
+	count("products", t.Products, t.ProductsAll)
+	count("orders_per_month", t.Orders, t.OrdersAll)
+	count("messages", t.Messages, t.MessagesAll)
 	on := func(key, text string) {
 		if x, ok := g[key]; ok && (x.Unlimited || x.Value > 0) {
 			out = append(out, text)
 		}
 	}
-	on("risk_rules", "الحماية من الطلبات الوهمية")
-	on("profit", "لوحة الربح الصافي")
-	on("card_payments", "الدفع بالبطاقة")
-	on("custom_domains", "دومين خاص بك")
-	count("staff", "من فريق العمل", "فريق عمل بلا حد")
+	on("risk_rules", t.Protection)
+	on("profit", t.Profit)
+	on("card_payments", t.Cards)
+	on("custom_domains", t.Domain)
+	count("staff", t.Staff, t.StaffAll)
 	return out
 }
 
 // grantText is one cell of the comparison table.
-func grantText(g billing.Grant, kind string) string {
+func grantText(g billing.Grant, kind string, t *texts) string {
 	switch {
 	case g.Unlimited:
-		return "بلا حد"
+		return t.Unlimited
 	case g.Value <= 0:
 		return "—"
 	case kind == "flag":
-		return "نعم"
+		return t.Yes
 	default:
 		return number(g.Value)
 	}
 }
 
-// price is an amount in minor units, as the site writes it: "299 ج.م",
-// "$29", "$29.50".
-func price(minor int64, currency string) string {
+// price is an amount in minor units, as the site writes it: "299 ج.م"
+// (in English "EGP 299"), "$29", "$29.50".
+func price(minor int64, currency string, en bool) string {
 	whole, cents := minor/100, minor%100
 	s := number(whole)
 	if cents != 0 {
@@ -188,6 +200,9 @@ func price(minor int64, currency string) string {
 	}
 	switch currency {
 	case currencyEGP:
+		if en {
+			return "EGP " + s
+		}
 		return s + " ج.م"
 	case currencyUSD:
 		return "$" + s
@@ -223,8 +238,12 @@ func number(n int64) string {
 	return b.String()
 }
 
-// percent writes basis points as a percentage: 250 → "2.5٪".
-func percent(bps int32) string {
+// percent writes basis points as a percentage: 250 → "2.5٪" ("2.5%"
+// in English).
+func percent(bps int32, en bool) string {
 	s := strconv.FormatFloat(float64(bps)/100, 'f', -1, 64)
+	if en {
+		return s + "%"
+	}
 	return s + "٪"
 }

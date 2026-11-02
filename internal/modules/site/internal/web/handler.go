@@ -80,78 +80,97 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
+	// The files crawlers read live at the root only.
 	switch r.URL.Path {
 	case "/favicon.ico":
 		s.headers(w, "public, max-age=86400")
 		w.Header().Set("Content-Type", "image/svg+xml")
 		_, _ = w.Write([]byte(favicon)) //nolint:errcheck // the client went away
+		return
 	case "/robots.txt":
 		s.text(w, r, "text/plain; charset=utf-8", s.robots())
+		return
 	case "/sitemap.xml":
 		s.text(w, r, "application/xml; charset=utf-8", s.sitemap())
+		return
 	case "/llms.txt":
 		s.text(w, r, "text/markdown; charset=utf-8", s.llms(r.Context(), false))
+		return
 	case "/llms-full.txt":
 		s.text(w, r, "text/markdown; charset=utf-8", s.llms(r.Context(), true))
+		return
+	}
+	l, path := languageOf(r.URL.Path)
+	switch path {
 	case "/":
-		s.home(w, r)
+		s.home(w, r, l)
 	case "/pricing":
-		s.pricingPage(w, r)
+		s.pricingPage(w, r, l)
 	case "/faq":
-		p := s.page("/faq", "الأسئلة الشائعة عن افتح أونلاين",
-			"إجابات واضحة عن افتح أونلاين: البدء مجانًا، وتأكيد الطلبات على واتساب، والحماية من الطلبات الوهمية، والأسعار بالجنيه والدولار، ونقل متجرك.")
-		p.jsonLD = []any{s.faqLD(faqs), s.breadcrumbLD(crumb{"الأسئلة الشائعة", p.path})}
-		s.write(w, r, http.StatusOK, cachePage, p, faqPage(p, faqs))
+		p := s.page(l, "/faq", l.t.FAQTitle, l.t.FAQDesc)
+		p.jsonLD = []any{s.faqLD(l.c.faqs), s.breadcrumbLD(l, crumb{l.t.FAQ, path})}
+		s.write(w, r, http.StatusOK, cachePage, p, faqPage(p, l.c.faqs))
 	case "/features":
-		p := s.page("/features", "مميزات افتح أونلاين | كل ما يحتاجه متجر الدفع عند الاستلام",
-			"مميزات افتح أونلاين: تأكيد الطلبات على واتساب، والحماية من الطلبات الوهمية، ولوحة الربح الصافي، والشحن والتحصيل، ومتجر احترافي، وأدوات التسويق.")
-		p.jsonLD = []any{s.breadcrumbLD(crumb{"المميزات", p.path})}
+		p := s.page(l, "/features", l.t.FeaturesTitle, l.t.FeaturesDesc)
+		p.jsonLD = []any{s.breadcrumbLD(l, crumb{l.t.Features, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, featuresIndexPage(p))
 	case "/about":
-		p := s.page("/about", "عن افتح أونلاين | من نحن",
-			"افتح أونلاين منصة متاجر إلكترونية لتجار الدفع عند الاستلام في مصر والخليج، علامة تجارية لشركة Codezilo Ltd المسجلة في المملكة المتحدة.")
-		p.jsonLD = []any{s.organizationLD(), s.aboutLD(p), s.breadcrumbLD(crumb{"عن افتح أونلاين", p.path})}
+		p := s.page(l, "/about", l.t.AboutTitle, l.t.AboutDesc)
+		p.jsonLD = []any{s.organizationLD(l), s.aboutLD(p), s.breadcrumbLD(l, crumb{l.t.About, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, aboutPage(p))
-	case privacy.path, terms.path:
-		lp := privacy
-		if r.URL.Path == terms.path {
-			lp = terms
+	case "/privacy", "/terms":
+		lp := l.c.privacy
+		if path == "/terms" {
+			lp = l.c.terms
 		}
-		p := s.page(lp.path, lp.title, lp.description)
-		p.jsonLD = []any{s.breadcrumbLD(crumb{lp.name, p.path})}
+		p := s.page(l, lp.path, lp.title, lp.description)
+		p.jsonLD = []any{s.breadcrumbLD(l, crumb{lp.name, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, legalPageView(p, lp))
 	default:
-		if f, ok := featureBySlug(strings.TrimPrefix(r.URL.Path, "/features/")); ok && strings.HasPrefix(r.URL.Path, "/features/") {
-			s.feature(w, r, f)
-			return
+		if slug, ok := strings.CutPrefix(path, "/features/"); ok {
+			if f, ok := l.c.featureBySlug(slug); ok {
+				s.feature(w, r, l, f)
+				return
+			}
 		}
-		p := s.page(r.URL.Path, "الصفحة غير موجودة | افتح أونلاين", "")
+		p := s.page(l, path, l.t.NotFoundTitle, "")
 		p.noindex = true
 		s.write(w, r, http.StatusNotFound, cachePage, p, notFoundPage(p))
 	}
 }
 
-func (s *Site) home(w http.ResponseWriter, r *http.Request) {
-	p := s.page("/", "افتح أونلاين | منصة متاجر إلكترونية للدفع عند الاستلام",
-		"أنشئ متجرك الإلكتروني مجانًا على افتح أونلاين: تأكيد الطلبات على واتساب، وحماية من الطلبات الوهمية، ولوحة للربح الصافي. لتجار مصر والخليج.")
+// languageOf is a request path's language, and the page's path in it:
+// "/en/pricing" is English's "/pricing"; anything else is Arabic's.
+func languageOf(path string) (*language, string) {
+	if path == english.base {
+		return english, "/"
+	}
+	if rest, ok := strings.CutPrefix(path, english.base+"/"); ok {
+		return english, "/" + rest
+	}
+	return arabic, path
+}
+
+func (s *Site) home(w http.ResponseWriter, r *http.Request, l *language) {
+	p := s.page(l, "/", l.t.HomeTitle, l.t.HomeDesc)
 	// The home page's prices are the main market's: the page stays the
 	// same for everyone, so the edge keeps it.
-	pr, err := s.pricing(r.Context(), currencyEGP)
+	pr, err := s.pricing(r.Context(), currencyEGP, l)
 	if err != nil {
 		s.unavailable(w, r, err)
 		return
 	}
 	var home []faq
-	for _, f := range faqs {
+	for _, f := range l.c.faqs {
 		if f.home {
 			home = append(home, f)
 		}
 	}
-	p.jsonLD = []any{s.organizationLD(), s.websiteLD(), s.applicationLD(pr), s.faqLD(home)}
+	p.jsonLD = []any{s.organizationLD(l), s.websiteLD(l), s.applicationLD(l, pr), s.faqLD(home)}
 	s.write(w, r, http.StatusOK, cachePage, p, homePage(p, pr, home))
 }
 
-func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request) {
+func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request, l *language) {
 	currency := currencyFor(r.Header.Get(s.d.CountryHeader))
 	switch strings.ToUpper(r.URL.Query().Get("currency")) {
 	case currencyEGP:
@@ -159,37 +178,40 @@ func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request) {
 	case currencyUSD:
 		currency = currencyUSD
 	}
-	pr, err := s.pricing(r.Context(), currency)
+	pr, err := s.pricing(r.Context(), currency, l)
 	if err != nil {
 		s.unavailable(w, r, err)
 		return
 	}
-	p := s.page("/pricing", "أسعار افتح أونلاين | ابدأ مجانًا",
-		"أسعار افتح أونلاين: باقة مجانية دائمًا، أو بلا اشتراك بنسبة من الطلبات المسلّمة، أو باقات شهرية وسنوية بتجربة 14 يومًا. بالجنيه في مصر وبالدولار في باقي الدول.")
-	p.jsonLD = []any{s.applicationLD(pr), s.breadcrumbLD(crumb{"الأسعار", p.path})}
+	p := s.page(l, "/pricing", l.t.PricingTitle, l.t.PricingDesc)
+	p.jsonLD = []any{s.applicationLD(l, pr), s.breadcrumbLD(l, crumb{l.t.Pricing, "/pricing"})}
 	w.Header().Set("Vary", s.d.CountryHeader)
 	s.write(w, r, http.StatusOK, cachePrivate, p, pricingPage(p, pr))
 }
 
-func (s *Site) feature(w http.ResponseWriter, r *http.Request, f featurePage) {
-	p := s.page("/features/"+f.slug, f.title, f.description)
-	p.jsonLD = []any{s.breadcrumbLD(crumb{"المميزات", "/features"}, crumb{f.name, p.path})}
+func (s *Site) feature(w http.ResponseWriter, r *http.Request, l *language, f featurePage) {
+	p := s.page(l, "/features/"+f.slug, f.title, f.description)
+	p.jsonLD = []any{s.breadcrumbLD(l, crumb{l.t.Features, "/features"}, crumb{f.name, p.path})}
 	if len(f.faqs) > 0 {
 		p.jsonLD = append(p.jsonLD, s.faqLD(f.faqs))
 	}
 	s.write(w, r, http.StatusOK, cachePage, p, featurePageView(p, f))
 }
 
-func (s *Site) pricing(ctx context.Context, currency string) (pricing, error) {
+func (s *Site) pricing(ctx context.Context, currency string, l *language) (pricing, error) {
 	o, err := s.plans.get(ctx, currency)
 	if err != nil {
 		return pricing{}, err
 	}
-	return buildPricing(o), nil
+	return buildPricing(o, l), nil
 }
 
-// pageCtx is what every page's frame needs.
+// pageCtx is what every page's frame needs. path is the page's path in
+// its language (without /en).
 type pageCtx struct {
+	l                      *language
+	t                      *texts
+	c                      *siteCopy
 	origin, path           string
 	title, description     string
 	css                    string
@@ -200,10 +222,15 @@ type pageCtx struct {
 	whatsApp, whatsDisplay string
 }
 
-func (s *Site) page(path, title, description string) *pageCtx {
-	return &pageCtx{origin: s.origin(), path: path, title: title, description: description, css: s.css, fontPreload: s.d.FontPreload,
+func (s *Site) page(l *language, path, title, description string) *pageCtx {
+	// English pages set in the system's fonts: the brand face is Arabic's.
+	preload := s.d.FontPreload
+	if l == english {
+		preload = nil
+	}
+	return &pageCtx{l: l, t: l.t, c: l.c, origin: s.origin(), path: path, title: title, description: description, css: s.css, fontPreload: preload,
 		signup: strings.TrimRight(s.d.DashboardURL, "/") + "/signup", login: strings.TrimRight(s.d.DashboardURL, "/") + "/login",
-		whatsApp: s.whatsAppLink(), whatsDisplay: displayPhone(s.d.WhatsApp)}
+		whatsApp: s.whatsAppLink(l), whatsDisplay: displayPhone(s.d.WhatsApp)}
 }
 
 // origin is the site's canonical origin: its own domain, never the Host
@@ -217,12 +244,23 @@ func (s *Site) origin() string {
 
 // whatsAppLink opens a chat with the platform's support number, with a
 // ready first message.
-func (s *Site) whatsAppLink() string {
+func (s *Site) whatsAppLink(l *language) string {
 	n := strings.TrimPrefix(s.d.WhatsApp, "+")
 	if n == "" {
 		return ""
 	}
-	return "https://wa.me/" + n + "?text=" + url.QueryEscape("مرحبًا، أريد الاستفسار عن افتح أونلاين")
+	return "https://wa.me/" + n + "?text=" + url.QueryEscape(l.t.WhatsAppHello)
+}
+
+// url is the page's full address in language l.
+func (p *pageCtx) url(l *language) string { return p.origin + l.at(p.path) }
+
+// other is the language the page is not in.
+func (p *pageCtx) other() *language {
+	if p.l == english {
+		return arabic
+	}
+	return english
 }
 
 func (s *Site) headers(w http.ResponseWriter, cacheControl string) {
