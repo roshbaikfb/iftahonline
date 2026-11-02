@@ -7,6 +7,7 @@ const nav = [
   { to: '/', label: 'الحالة والمتاجر', end: true },
   { to: '/plans', label: 'الباقات والمميزات', end: false },
   { to: '/agencies', label: 'الوكالات', end: false },
+  { to: '/founding', label: 'التجار المؤسسون', end: false },
   { to: '/ads', label: 'الإعلانات', end: false },
   { to: '/site', label: 'الموقع التعريفي', end: false },
   { to: '/audit', label: 'سجل الأدمن', end: false },

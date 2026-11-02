@@ -55,8 +55,10 @@ type Deps struct {
 	// Ads are free stores' ads (ADR-0062); nil refuses them.
 	Ads ads.Console
 	// Site is the platform site's content (ADR-0073); nil refuses it.
-	Site   site.Console
-	Limits *app.Limits // tests
+	Site site.Console
+	// Founding is the founding-merchants program; nil refuses it.
+	Founding billing.Founding
+	Limits   *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -87,7 +89,7 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site})
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding})
 	return &Module{svc: svc, deps: d}, nil
 }
 

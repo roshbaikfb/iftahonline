@@ -2230,6 +2230,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/founding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The founding-merchants program and its members
+         * @description The first paying merchants keep a discount for life and their
+         *     price while they stay subscribed (approved 2026-11-02). Seats are
+         *     taken when a first subscription invoice is paid and are never
+         *     given again.
+         */
+        get: operations["adminGetFounding"];
+        /**
+         * Save the program's settings
+         * @description A new discount reaches only merchants who join after it. Recorded
+         *     in the admin log first.
+         */
+        put: operations["adminSaveFounding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/duplicates": {
         parameters: {
             query?: never;
@@ -4721,6 +4749,49 @@ export interface components {
             answer_en?: string;
             /** @description Kept in the admin audit log. */
             reason: string;
+        };
+        AdminFounding: {
+            program: components["schemas"]["AdminFoundingProgram"];
+            members: components["schemas"]["AdminFoundingMember"][];
+        };
+        AdminFoundingProgram: {
+            enabled: boolean;
+            /** @description How many merchants can join; seats are never reused. */
+            seats: number;
+            /** @description The discount new members keep, in basis points (2000 = 20%). */
+            discount_bps: number;
+        };
+        AdminFoundingInput: {
+            enabled: boolean;
+            seats: number;
+            discount_bps: number;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminFoundingMember: {
+            store_id: components["schemas"]["ULID"];
+            seat: number;
+            /** @description Kept from the day it joined. */
+            discount_bps: number;
+            currency: string;
+            /** @description The plan its price is locked for. */
+            plan_code: string;
+            /** @enum {string} */
+            cycle: "monthly" | "annual";
+            /**
+             * Format: int64
+             * @description The most it pays for that plan and cycle
+             */
+            locked_minor: number;
+            /** Format: date-time */
+            joined_at: string;
+            /**
+             * Format: date-time
+             * @description Absent while a member.
+             */
+            lost_at?: string;
+            /** @enum {string} */
+            lost_reason?: "cancelled" | "unpaid";
         };
         AdminDuplicatePayment: {
             id: components["schemas"]["ULID"];
@@ -9991,6 +10062,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetFounding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings and every member, by seat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFounding"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveFounding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminFoundingInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFoundingProgram"];
+                };
             };
             default: components["responses"]["Problem"];
         };

@@ -189,6 +189,42 @@ func (e AdminFeatureKind) Valid() bool {
 	}
 }
 
+// Defines values for AdminFoundingMemberCycle.
+const (
+	AdminFoundingMemberCycleAnnual  AdminFoundingMemberCycle = "annual"
+	AdminFoundingMemberCycleMonthly AdminFoundingMemberCycle = "monthly"
+)
+
+// Valid indicates whether the value is a known member of the AdminFoundingMemberCycle enum.
+func (e AdminFoundingMemberCycle) Valid() bool {
+	switch e {
+	case AdminFoundingMemberCycleAnnual:
+		return true
+	case AdminFoundingMemberCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminFoundingMemberLostReason.
+const (
+	AdminFoundingMemberLostReasonCancelled AdminFoundingMemberLostReason = "cancelled"
+	AdminFoundingMemberLostReasonUnpaid    AdminFoundingMemberLostReason = "unpaid"
+)
+
+// Valid indicates whether the value is a known member of the AdminFoundingMemberLostReason enum.
+func (e AdminFoundingMemberLostReason) Valid() bool {
+	switch e {
+	case AdminFoundingMemberLostReasonCancelled:
+		return true
+	case AdminFoundingMemberLostReasonUnpaid:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminHealthErrors.
 const (
 	AdminHealthErrorsBilling  AdminHealthErrors = "billing"
@@ -929,6 +965,62 @@ type AdminFeatureKind string
 // AdminFeatureList defines model for AdminFeatureList.
 type AdminFeatureList struct {
 	Items []AdminFeature `json:"items"`
+}
+
+// AdminFounding defines model for AdminFounding.
+type AdminFounding struct {
+	Members []AdminFoundingMember `json:"members"`
+	Program AdminFoundingProgram  `json:"program"`
+}
+
+// AdminFoundingInput defines model for AdminFoundingInput.
+type AdminFoundingInput struct {
+	DiscountBps int  `json:"discount_bps"`
+	Enabled     bool `json:"enabled"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+	Seats  int    `json:"seats"`
+}
+
+// AdminFoundingMember defines model for AdminFoundingMember.
+type AdminFoundingMember struct {
+	Currency string                   `json:"currency"`
+	Cycle    AdminFoundingMemberCycle `json:"cycle"`
+
+	// DiscountBps Kept from the day it joined.
+	DiscountBps int       `json:"discount_bps"`
+	JoinedAt    time.Time `json:"joined_at"`
+
+	// LockedMinor The most it pays for that plan and cycle
+	LockedMinor int64 `json:"locked_minor"`
+
+	// LostAt Absent while a member.
+	LostAt     *time.Time                     `json:"lost_at,omitempty"`
+	LostReason *AdminFoundingMemberLostReason `json:"lost_reason,omitempty"`
+
+	// PlanCode The plan its price is locked for.
+	PlanCode string `json:"plan_code"`
+	Seat     int    `json:"seat"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId ULID `json:"store_id"`
+}
+
+// AdminFoundingMemberCycle defines model for AdminFoundingMember.Cycle.
+type AdminFoundingMemberCycle string
+
+// AdminFoundingMemberLostReason defines model for AdminFoundingMember.LostReason.
+type AdminFoundingMemberLostReason string
+
+// AdminFoundingProgram defines model for AdminFoundingProgram.
+type AdminFoundingProgram struct {
+	// DiscountBps The discount new members keep, in basis points (2000 = 20%).
+	DiscountBps int  `json:"discount_bps"`
+	Enabled     bool `json:"enabled"`
+
+	// Seats How many merchants can join; seats are never reused.
+	Seats int `json:"seats"`
 }
 
 // AdminHealth defines model for AdminHealth.
@@ -1721,6 +1813,9 @@ type AdminMarkDuplicateRefundedJSONRequestBody = AdminRefundInput
 // AdminSaveFeatureJSONRequestBody defines body for AdminSaveFeature for application/json ContentType.
 type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
 
+// AdminSaveFoundingJSONRequestBody defines body for AdminSaveFounding for application/json ContentType.
+type AdminSaveFoundingJSONRequestBody = AdminFoundingInput
+
 // AdminPublishPlanJSONRequestBody defines body for AdminPublishPlan for application/json ContentType.
 type AdminPublishPlanJSONRequestBody = AdminPlanInput
 
@@ -1828,6 +1923,12 @@ type ServerInterface interface {
 	// AdminSaveFeature Add a feature, or rename and reorder one
 	// (PUT /admin/v1/features/{key})
 	AdminSaveFeature(w http.ResponseWriter, r *http.Request, key string)
+	// AdminGetFounding The founding-merchants program and its members
+	// (GET /admin/v1/founding)
+	AdminGetFounding(w http.ResponseWriter, r *http.Request)
+	// AdminSaveFounding Save the program's settings
+	// (PUT /admin/v1/founding)
+	AdminSaveFounding(w http.ResponseWriter, r *http.Request)
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(w http.ResponseWriter, r *http.Request)
@@ -2280,6 +2381,34 @@ func (siw *ServerInterfaceWrapper) AdminSaveFeature(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSaveFeature(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetFounding operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetFounding(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetFounding(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveFounding operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveFounding(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveFounding(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3233,6 +3362,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/testimonials", wrapper.AdminCreateSiteTestimonial)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/testimonials/{testimonial_id}", wrapper.AdminDeleteSiteTestimonial)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/testimonials/{testimonial_id}", wrapper.AdminUpdateSiteTestimonial)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/founding", wrapper.AdminGetFounding)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/founding", wrapper.AdminSaveFounding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
@@ -3901,6 +4032,83 @@ type AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminSaveFeaturedefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFeatureResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetFoundingRequestObject struct {
+}
+
+type AdminGetFoundingResponseObject interface {
+	VisitAdminGetFoundingResponse(w http.ResponseWriter) error
+}
+
+type AdminGetFounding200JSONResponse AdminFounding
+
+func (response AdminGetFounding200JSONResponse) VisitAdminGetFoundingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetFoundingdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetFoundingdefaultApplicationProblemPlusJSONResponse) VisitAdminGetFoundingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFoundingRequestObject struct {
+	Body *AdminSaveFoundingJSONRequestBody
+}
+
+type AdminSaveFoundingResponseObject interface {
+	VisitAdminSaveFoundingResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveFounding200JSONResponse AdminFoundingProgram
+
+func (response AdminSaveFounding200JSONResponse) VisitAdminSaveFoundingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFoundingdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveFoundingdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFoundingResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5119,6 +5327,12 @@ type StrictServerInterface interface {
 	// AdminSaveFeature Add a feature, or rename and reorder one
 	// (PUT /admin/v1/features/{key})
 	AdminSaveFeature(ctx context.Context, request AdminSaveFeatureRequestObject) (AdminSaveFeatureResponseObject, error)
+	// AdminGetFounding The founding-merchants program and its members
+	// (GET /admin/v1/founding)
+	AdminGetFounding(ctx context.Context, request AdminGetFoundingRequestObject) (AdminGetFoundingResponseObject, error)
+	// AdminSaveFounding Save the program's settings
+	// (PUT /admin/v1/founding)
+	AdminSaveFounding(ctx context.Context, request AdminSaveFoundingRequestObject) (AdminSaveFoundingResponseObject, error)
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(ctx context.Context, request AdminHealthRequestObject) (AdminHealthResponseObject, error)
@@ -5737,6 +5951,61 @@ func (sh *strictHandler) AdminSaveFeature(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSaveFeatureResponseObject); ok {
 		if err := validResponse.VisitAdminSaveFeatureResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetFounding operation middleware
+func (sh *strictHandler) AdminGetFounding(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetFoundingRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetFounding(ctx, request.(AdminGetFoundingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetFounding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetFoundingResponseObject); ok {
+		if err := validResponse.VisitAdminGetFoundingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveFounding operation middleware
+func (sh *strictHandler) AdminSaveFounding(w http.ResponseWriter, r *http.Request) {
+	var request AdminSaveFoundingRequestObject
+
+	var body AdminSaveFoundingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveFounding(ctx, request.(AdminSaveFoundingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveFounding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveFoundingResponseObject); ok {
+		if err := validResponse.VisitAdminSaveFoundingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -2670,6 +2670,48 @@ paths:
           description: Removed.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/founding:
+    get:
+      tags: [admin]
+      operationId: adminGetFounding
+      summary: The founding-merchants program and its members
+      description: |
+        The first paying merchants keep a discount for life and their
+        price while they stay subscribed (approved 2026-11-02). Seats are
+        taken when a first subscription invoice is paid and are never
+        given again.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The settings and every member, by seat.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFounding" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [admin]
+      operationId: adminSaveFounding
+      summary: Save the program's settings
+      description: |
+        A new discount reaches only merchants who join after it. Recorded
+        in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminFoundingInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFoundingProgram" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/billing/duplicates:
     get:
       tags: [admin]
@@ -5529,6 +5571,43 @@ components:
         question_en: { type: string, maxLength: 200 }
         answer_en: { type: string, maxLength: 2000 }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminFounding:
+      type: object
+      required: [program, members]
+      properties:
+        program: { $ref: "#/components/schemas/AdminFoundingProgram" }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFoundingMember" }
+    AdminFoundingProgram:
+      type: object
+      required: [enabled, seats, discount_bps]
+      properties:
+        enabled: { type: boolean }
+        seats: { type: integer, description: How many merchants can join; seats are never reused. }
+        discount_bps: { type: integer, description: "The discount new members keep, in basis points (2000 = 20%)." }
+    AdminFoundingInput:
+      type: object
+      required: [enabled, seats, discount_bps, reason]
+      properties:
+        enabled: { type: boolean }
+        seats: { type: integer, minimum: 1, maximum: 10000 }
+        discount_bps: { type: integer, minimum: 100, maximum: 9000 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminFoundingMember:
+      type: object
+      required: [store_id, seat, discount_bps, currency, plan_code, cycle, locked_minor, joined_at]
+      properties:
+        store_id: { $ref: "#/components/schemas/ULID" }
+        seat: { type: integer }
+        discount_bps: { type: integer, description: Kept from the day it joined. }
+        currency: { type: string }
+        plan_code: { type: string, description: The plan its price is locked for. }
+        cycle: { type: string, enum: [monthly, annual] }
+        locked_minor: { type: integer, format: int64, description: The most it pays for that plan and cycle, before the discount. }
+        joined_at: { type: string, format: date-time }
+        lost_at: { type: string, format: date-time, description: Absent while a member. }
+        lost_reason: { type: string, enum: [cancelled, unpaid] }
     AdminDuplicatePayment:
       type: object
       required: [id, store_id, invoice_number, currency, amount_minor, gateway, reference, created_at]
