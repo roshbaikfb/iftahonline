@@ -15,7 +15,7 @@ ALTER TABLE site_settings
   -- A YouTube video's ID; '' shows none.
   ADD COLUMN video_id text NOT NULL DEFAULT '' CHECK (video_id = '' OR video_id ~ '^[A-Za-z0-9_-]{11}$'),
   ADD COLUMN logo_key text NOT NULL DEFAULT '' CHECK (logo_key = '' OR logo_key ~ '^platform/site/[0-9A-Z]{26}\.(jpeg|png)$'),
-  ADD COLUMN og_key   text NOT NULL DEFAULT '' CHECK (og_key = '' OR og_key ~ '^platform/site/[0-9A-Z]{26}\.(jpeg|png)$');
+  ADD COLUMN og_key   text NOT NULL DEFAULT '' CHECK (og_key = '' OR og_key ~ '^platform/site/[0-9A-Z]{26}\.(jpeg|png)$');  -- migsafe:allow site_settings has exactly one row (CHECK id = 1)
 
 CREATE TABLE site_people (
   id           uuid        PRIMARY KEY,
