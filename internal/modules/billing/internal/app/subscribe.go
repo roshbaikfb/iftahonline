@@ -97,33 +97,67 @@ func (s *Service) Offers(ctx context.Context) (Offers, error) {
 			return txErr
 		}
 		onPlan := v.sub.PlanApplies(s.now()) || v.sub.Kind == domain.KindFree
-		for _, p := range plans {
-			if !p.Active || !p.Public || p.Kind == domain.KindAgency {
-				continue
-			}
-			o := Offer{PlanVersion: p, Current: onPlan && p.Code == v.current.Code,
-				TrialAvailable: p.Kind.Paid() && p.TrialDays > 0 && !v.sub.TrialUsed && v.current.Kind == domain.KindFree}
-			for _, pr := range p.Prices {
-				if pr.Currency != info.Currency {
-					continue
-				}
-				amount := pr.AmountMinor
-				if pr.Cycle == domain.Monthly {
-					o.Monthly = &amount
-				} else {
-					o.Annual = &amount
-				}
-			}
-			for i := range p.Fees {
-				if p.Fees[i].Currency == info.Currency {
-					o.Fee = &p.Fees[i]
-				}
-			}
+		for _, o := range onSale(plans, info.Currency) {
+			o.Current = onPlan && o.Code == v.current.Code
+			o.TrialAvailable = o.Kind.Paid() && o.TrialDays > 0 && !v.sub.TrialUsed && v.current.Kind == domain.KindFree
 			out.Plans = append(out.Plans, o)
 		}
 		return nil
 	})
 	return out, err
+}
+
+// PublicOffers lists the public plans on sale priced in currency, for
+// the platform's own site: no store, so nothing is current and every
+// trial is offered. A plan not sold in currency has no price.
+func (s *Service) PublicOffers(ctx context.Context, currency string) (Offers, error) {
+	out := Offers{Currency: currency}
+	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
+		var err error
+		if out.Features, err = store.Features(ctx, tx); err != nil {
+			return err
+		}
+		plans, err := store.Plans(ctx, tx)
+		if err != nil {
+			return err
+		}
+		out.Plans = onSale(plans, currency)
+		for i := range out.Plans {
+			out.Plans[i].TrialAvailable = out.Plans[i].Kind.Paid() && out.Plans[i].TrialDays > 0
+		}
+		return nil
+	})
+	return out, err
+}
+
+// onSale is the public plans on sale to merchants (not the agencies'),
+// each with its prices and fee in currency.
+func onSale(plans []domain.PlanVersion, currency string) []Offer {
+	var out []Offer
+	for _, p := range plans {
+		if !p.Active || !p.Public || p.Kind == domain.KindAgency {
+			continue
+		}
+		o := Offer{PlanVersion: p}
+		for _, pr := range p.Prices {
+			if pr.Currency != currency {
+				continue
+			}
+			amount := pr.AmountMinor
+			if pr.Cycle == domain.Monthly {
+				o.Monthly = &amount
+			} else {
+				o.Annual = &amount
+			}
+		}
+		for i := range p.Fees {
+			if p.Fees[i].Currency == currency {
+				o.Fee = &p.Fees[i]
+			}
+		}
+		out = append(out, o)
+	}
+	return out
 }
 
 // activePublic is code's version on sale to merchants.
