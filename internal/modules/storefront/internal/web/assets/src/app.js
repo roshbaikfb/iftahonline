@@ -343,8 +343,8 @@ function visitSource() {
 }
 
 // rows gives a product row (a section shown as a row) its arrows, for a
-// mouse: shown only when the row has more than fits, each disabled at
-// its end. Touch screens swipe, so they get none. A step is the row's
+// mouse, in place of its scrollbar: shown only when the row has more
+// than fits, each disabled at its end. Touch screens swipe, so they get none. A step is the row's
 // visible width; the direction follows the page's (scrollLeft is
 // negative in right-to-left pages).
 function rows() {
@@ -355,6 +355,7 @@ function rows() {
     const next = wrap.querySelector(".row-nav.next");
     if (!prev || !next) continue;
     const rtl = getComputedStyle(row).direction === "rtl";
+    row.classList.add("nav"); // the arrows move it: no scrollbar
     const update = () => {
       const max = row.scrollWidth - row.clientWidth;
       const at = Math.abs(row.scrollLeft);
