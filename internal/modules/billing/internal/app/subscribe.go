@@ -271,6 +271,17 @@ func (s *Service) subscribeInvoiceTx(ctx context.Context, tx pgx.Tx, v view, p d
 	}
 	lines := []domain.Line{{Kind: domain.LineSubscription, StoreID: self.ID, Quantity: 1, AmountMinor: price,
 		Description: fmt.Sprintf("%s: باقة %s (%s)", info.Name, p.NameAr, cycleAr(cycle))}}
+	// A merchant who can still join the founding program pays its first
+	// period with the discount; it joins once this invoice is paid.
+	if p.Kind == domain.KindSubscription {
+		bps, openErr := s.foundingOpen(ctx, tx)
+		if openErr != nil {
+			return ulid.ID{}, openErr
+		}
+		if d := domain.Discount(price, bps); d > 0 {
+			lines = append(lines, domain.DiscountLine(self.ID, d, bps))
+		}
+	}
 	totals, ok := domain.Totals(lines, tax)
 	if !ok {
 		return ulid.ID{}, errNoPrice // a free price: nothing to pay

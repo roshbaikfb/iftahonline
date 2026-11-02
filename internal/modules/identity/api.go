@@ -60,6 +60,10 @@ func StaffEmails(db postgres.Beginner, roles ...authz.Role) func(ctx context.Con
 	}
 }
 
+// OwnerTx is the store-in-ctx's owner, read in its tenant transaction tx
+// (billing's founding program admits one store per owner).
+func OwnerTx(ctx context.Context, tx pgx.Tx) (ulid.ID, error) { return store.Owner(ctx, tx) }
+
 // CountStaff counts the store-in-ctx's team seats (members and pending
 // invitations) in its tenant transaction tx: the staff usage meter
 // (ADR-0061), the count the plan's limit admits against.

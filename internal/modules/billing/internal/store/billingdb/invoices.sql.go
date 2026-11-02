@@ -347,11 +347,11 @@ func (q *Queries) NextInvoiceNumber(ctx context.Context, year int32) (int64, err
 }
 
 const renewalDue = `-- name: RenewalDue :one
-SELECT t.id AS plan_id, t.kind, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
+SELECT t.id AS plan_id, t.kind, t.code, t.name_ar, coalesce(s.next_cycle, s.cycle)::text AS cycle, pp.amount_minor
 FROM subscriptions s
 JOIN plans cur ON cur.id = coalesce(s.next_plan_id, s.plan_id)
 CROSS JOIN LATERAL (
-  SELECT p.id, p.kind, p.name_ar
+  SELECT p.id, p.kind, p.code, p.name_ar
   FROM plans p
   JOIN plan_prices x ON x.plan_id = p.id AND x.currency = $1 AND x.cycle = coalesce(s.next_cycle, s.cycle)
   WHERE p.id = cur.id OR (p.code = cur.code AND p.kind = cur.kind AND p.status = 'active')
@@ -372,6 +372,7 @@ type RenewalDueParams struct {
 type RenewalDueRow struct {
 	PlanID      ulid.ID
 	Kind        string
+	Code        string
 	NameAr      string
 	Cycle       string
 	AmountMinor int64
@@ -388,6 +389,7 @@ func (q *Queries) RenewalDue(ctx context.Context, arg RenewalDueParams) (Renewal
 	err := row.Scan(
 		&i.PlanID,
 		&i.Kind,
+		&i.Code,
 		&i.NameAr,
 		&i.Cycle,
 		&i.AmountMinor,

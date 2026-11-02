@@ -217,8 +217,11 @@ func linesOf(ctx context.Context, tx pgx.Tx, acct domain.Account, period time.Ti
 		m.renewal = &r.PlanID
 		if r.Kind != domain.KindAgency || !*agencyBilled {
 			*agencyBilled = *agencyBilled || r.Kind == domain.KindAgency
-			lines = append(lines, domain.Line{Kind: domain.LineSubscription, StoreID: m.id, Quantity: 1, AmountMinor: r.AmountMinor,
-				Description: fmt.Sprintf("%s: باقة %s (%s)", m.name, r.PlanName, cycleAr(r.Cycle))})
+			renewal, rErr := foundingRenewal(sctx, tx, acct.Currency, m, r)
+			if rErr != nil {
+				return nil, rErr
+			}
+			lines = append(lines, renewal...)
 		}
 	}
 	sums, err := store.SumFees(sctx, tx, period, acct.Currency)
@@ -290,6 +293,7 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		func() error { return river.AddWorkerSafely(w, &CancelWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &NotifyWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &ProcessCallbackWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &FoundingSweepWorker{Svc: s}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("billing: workers: %w", err)

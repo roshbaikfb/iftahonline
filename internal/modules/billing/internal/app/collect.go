@@ -352,6 +352,11 @@ func (s *Service) startPaidTx(ctx context.Context, tx pgx.Tx, sub domain.Subscri
 	if err = s.hold(ctx, tx, false); err != nil {
 		return err
 	}
+	if p.Kind == domain.KindSubscription {
+		if err = s.foundingJoin(ctx, tx, p, paid.Cycle, inv.Currency); err != nil {
+			return err
+		}
+	}
 	return s.notifyTx(ctx, tx, Notice{Kind: domain.NoticePaid, Invoice: inv.Number, TotalMinor: inv.TotalMinor, Currency: inv.Currency})
 }
 

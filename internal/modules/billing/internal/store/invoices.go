@@ -132,6 +132,7 @@ func TaxRate(ctx context.Context, tx Tx, country string) (int32, error) {
 // Renewal is a paid period due to be billed.
 type Renewal struct {
 	PlanID      ulid.ID // the version it renews into
+	PlanCode    string  // its code (a founding member's lock follows codes)
 	Kind        domain.Kind
 	PlanName    string
 	Cycle       domain.Cycle
@@ -158,7 +159,7 @@ func RenewalDue(ctx context.Context, tx Tx, currency string, renewsBy time.Time)
 	if r.Cycle, err = domain.ParseCycle(row.Cycle); err != nil {
 		return r, false, err
 	}
-	r.PlanID, r.PlanName, r.AmountMinor = row.PlanID, row.NameAr, row.AmountMinor
+	r.PlanID, r.PlanCode, r.PlanName, r.AmountMinor = row.PlanID, row.Code, row.NameAr, row.AmountMinor
 	return r, true, nil
 }
 

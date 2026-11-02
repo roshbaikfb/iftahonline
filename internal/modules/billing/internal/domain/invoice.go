@@ -43,9 +43,10 @@ type LineKind string
 
 // Line kinds.
 const (
-	LineSubscription LineKind = "subscription" // a plan's next period
-	LineSellFees     LineKind = "sell_fees"    // a month's pay-as-you-sell fees
-	LineFeeCredit    LineKind = "fee_credit"   // fees of orders returned after they were invoiced
+	LineSubscription LineKind = "subscription"      // a plan's next period
+	LineSellFees     LineKind = "sell_fees"         // a month's pay-as-you-sell fees
+	LineFeeCredit    LineKind = "fee_credit"        // fees of orders returned after they were invoiced
+	LineFounding     LineKind = "founding_discount" // a founding merchant's discount (negative)
 )
 
 // Line is one line of an invoice.
