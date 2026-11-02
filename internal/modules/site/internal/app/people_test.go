@@ -202,3 +202,93 @@ func TestAboutEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestImagesAndLimits: the share image and a review's photo are set,
+// replaced and taken off like the logo; a file that is not an image is
+// refused (and nothing saved); the console signs images' URLs only with
+// a signer; uploads need the bucket; the people's limit holds.
+func TestImagesAndLimits(t *testing.T) {
+	ctx := t.Context()
+	adminPool := open(t, infra.AdminURL)
+	b := &bucket{objects: map[string][]byte{}}
+	ids := ulid.NewGenerator()
+	console := app.NewService(app.Deps{DB: adminPool, Admin: adminPool, IDs: ids,
+		Media: app.Media{Objects: b, Limits: media.Limits{MaxBytes: 10 << 20, MaxPixels: 40_000_000},
+			Signer: media.NewSigner("https://img.iftahonline.com", "media", []byte("key"), []byte("salt"))}})
+	noBucket := app.NewService(app.Deps{DB: adminPool, Admin: adminPool, IDs: ids})
+
+	if _, err := noBucket.UploadURL(ctx, "image/png"); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("an upload without a bucket: %v", err)
+	}
+	if _, err := noBucket.SetImage(ctx, domain.ShareImage, "platform/site/uploads/x"); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("an image without a bucket: %v", err)
+	}
+	if noBucket.ImageURL("platform/site/x.png", 320, "webp") != "" || console.ImageURL("", 320, "webp") != "" {
+		t.Fatal("a URL without a signer or a key")
+	}
+
+	share, err := console.SetImage(ctx, domain.ShareImage, b.upload(t, console))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := console.ImageURL(share, 1200, "jpg"); !strings.HasPrefix(u, "https://img.iftahonline.com/") || !strings.HasSuffix(u, ".jpg") {
+		t.Fatalf("share URL = %q", u)
+	}
+
+	// Not an image: refused, nothing saved, the upload kept for a retry.
+	up, err := console.UploadURL(ctx, "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Put(ctx, up.Key, "image/png", []byte("<svg xmlns='http://www.w3.org/2000/svg'/>")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = console.CreateTestimonial(ctx, domain.Testimonial{Name: "منى", QuoteAr: "قلّت الطلبات الوهمية عندي."}, up.Key); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("an SVG passed as a PNG: %v", err)
+	}
+	if c, _ := console.All(ctx); len(c.Testimonials) != 0 {
+		t.Fatalf("a refused review was saved: %+v", c.Testimonials)
+	}
+
+	// A review's photo: added, then taken off (and deleted).
+	review, err := console.CreateTestimonial(ctx, domain.Testimonial{Name: "منى", QuoteAr: "قلّت الطلبات الوهمية عندي."}, b.upload(t, console))
+	if err != nil || review.PhotoKey == "" {
+		t.Fatalf("review = %+v, %v", review, err)
+	}
+	photo := review.PhotoKey
+	if review, err = console.UpdateTestimonial(ctx, review, "", true); err != nil || review.PhotoKey != "" || slices.Contains(b.keys(), photo) {
+		t.Fatalf("photo removed = %+v (%v), %v", review, b.keys(), err)
+	}
+	if _, err = console.UpdateTestimonial(ctx, domain.Testimonial{ID: ids.New(), Name: "منى", QuoteAr: "قلّت الطلبات الوهمية عندي."}, "", false); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("updating none: %v", err)
+	}
+	if err = console.DeleteTestimonial(ctx, review.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = console.DeleteTestimonial(ctx, review.ID); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("deleting twice: %v", err)
+	}
+	if _, err = console.SetImage(ctx, domain.ShareImage, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// The people's limit.
+	var made []ulid.ID
+	t.Cleanup(func() {
+		for _, id := range made {
+			if delErr := console.DeletePerson(context.Background(), id); delErr != nil {
+				t.Error(delErr)
+			}
+		}
+	})
+	for range domain.MaxPeople {
+		p, addErr := console.CreatePerson(ctx, domain.Person{Kind: domain.Team, NameAr: "عضو", RoleAr: "الدعم", Position: 1000}, "")
+		if addErr != nil {
+			t.Fatal(addErr)
+		}
+		made = append(made, p.ID)
+	}
+	if _, err = console.CreatePerson(ctx, domain.Person{Kind: domain.Team, NameAr: "زائد", RoleAr: "الدعم"}, ""); !errs.Is(err, errs.KindConflict) {
+		t.Fatalf("one too many: %v", err)
+	}
+}
