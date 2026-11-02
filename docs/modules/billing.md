@@ -150,6 +150,19 @@ large as the charges, no invoice is written and the credits wait.
 - **Listing:** `app.agency_accounts()` lists agencies for the console
   (names and counts).
 
+## Founding merchants (ADR-0074)
+
+| Piece | What |
+|---|---|
+| `founding_program` | One row: on, seats (100), discount (2000 bps). The console writes it through `NewFounding(adminPool)` |
+| `founding_members` | A store's membership (RLS): owner, seat, discount kept, locked plan, cycle and price, lost and why |
+| First period | While seats are left and the owner never joined, the subscribe invoice carries a `founding_discount` line; paying it takes the next seat (`app.founding_join`) |
+| Renewals | Same plan and cycle: the lower of the lock and the current price, then the discount. Another plan or cycle: its price, locked again |
+| `billing.founding_sweep` | Daily: ends memberships of stores off a subscription or closed (`cancelled`), or with a renewal open 30 days past due (`unpaid`) |
+
+Seats are never reused, and an owner joins once (`owner_id` is unique).
+Identity's `OwnerTx` gives billing the owner through `Deps.Owner`.
+
 ## Collection and dunning (ADR-0051)
 
 | Job | Does |

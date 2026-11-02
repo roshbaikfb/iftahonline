@@ -79,3 +79,4 @@ supersedes it.
 | [0071](0071-platform-site-on-the-platform-domain.md) | The platform's own site on the platform's domain | Accepted |
 | [0072](0072-site-languages-under-one-set-of-templates.md) | The site's English under /en, from one set of templates | Accepted |
 | [0073](0073-site-content-from-the-console.md) | The site's content from the console | Accepted |
+| [0074](0074-founding-merchants-in-billing.md) | The founding-merchants program, in billing | Accepted |
