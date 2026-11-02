@@ -105,7 +105,7 @@ func buildPricing(o billing.Offers) pricing {
 	p := pricing{Currency: o.Currency}
 	recommended := false
 	for _, of := range o.Plans {
-		v := planView{Name: of.NameAr, Free: of.Kind == "free", Pays: of.Kind == "pays", TrialDays: int(of.TrialDays), Grants: of.Grants}
+		v := planView{Name: of.NameAr, Free: of.Kind == billing.KindFree, Pays: of.Kind == billing.KindPays, TrialDays: int(of.TrialDays), Grants: of.Grants}
 		if of.Monthly != nil {
 			v.Monthly, v.MonthlyAt = price(*of.Monthly, o.Currency), amount(*of.Monthly)
 		}
@@ -119,7 +119,7 @@ func buildPricing(o billing.Offers) pricing {
 		if v.Priced && !v.Free {
 			p.AnyPrice = true
 		}
-		if of.Kind == "subscription" && !recommended {
+		if of.Kind == billing.KindSubscription && !recommended {
 			v.Recommended, recommended = true, true
 		}
 		v.Lines = lines(of.Grants)
