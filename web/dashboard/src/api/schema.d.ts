@@ -6588,6 +6588,16 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @description A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one. */
+        BillingFounding: {
+            /** @example 7 */
+            seat: number;
+            /**
+             * @description 2000 = 20%.
+             * @example 2000
+             */
+            discount_bps: number;
+        };
         Billing: {
             plan_name_ar: string;
             plan_name_en: string;
@@ -6610,6 +6620,7 @@ export interface components {
              * @example MasterCard •••• 2346
              */
             card?: string;
+            founding?: components["schemas"]["BillingFounding"];
             /** @description The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation. */
             next_plan_name_ar?: string;
             next_plan_name_en?: string;

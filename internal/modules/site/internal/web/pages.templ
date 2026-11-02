@@ -136,6 +136,7 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 		<p class="center muted small">{ p.t.NoHidden }</p>
 		<p class="center"><a class="more" href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.CompareAll } { p.t.Arrow }</a></p>
 	</section>
+	@foundingSection(p)
 	<section class="soft" aria-labelledby="h-faq">
 		<div class="wrap section faq-wrap">
 			<div class="faq-side">
@@ -224,6 +225,7 @@ templ pricingPage(p *pageCtx, pr pricing) {
 			<div class="card"><h3>{ p.t.ExtraNoContract }</h3><p>{ p.t.ExtraNoContractBody }</p></div>
 		</div>
 	</section>
+	@foundingSection(p)
 	if len(pr.Rows) > 0 {
 		<section class="wrap section tight" aria-labelledby="h-compare">
 			<h2 id="h-compare">{ p.t.CompareH2 }</h2>

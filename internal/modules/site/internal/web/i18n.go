@@ -61,6 +61,8 @@ type texts struct {
 	WhatsAppIntl, Email, FollowUs, CompanyNo                                                     string
 	OurStory, FoundersEyebrow, FoundersH2, CoFounder, TeamEyebrow, TeamH2                        string
 	ReviewsEyebrow, ReviewsH2, WatchVideo, VideoLead                                             string
+	FoundingTag, FoundingH2, FoundingLead, FoundingJoin, FoundingFine, SeatsLeft, SeatsOf        string
+	FoundingTerms                                                                                [5]string
 
 	HomeTitle, HomeDesc, PricingTitle, PricingDesc, FAQTitle, FAQDesc string
 	FeaturesTitle, FeaturesDesc, AboutTitle, AboutDesc, NotFoundTitle string
@@ -112,6 +114,12 @@ var arTexts = texts{ //nolint:gochecknoglobals // constant copy
 	OurStory: "قصتنا", FoundersEyebrow: "المؤسسون", FoundersH2: "من أسّس افتح أونلاين", CoFounder: "شريك مؤسس",
 	TeamEyebrow: "فريق العمل", TeamH2: "فريق افتح أونلاين", ReviewsEyebrow: "آراء التجار", ReviewsH2: "ماذا يقول التجار عن افتح أونلاين",
 	WatchVideo: "شاهد كيف تعمل افتح أونلاين", VideoLead: "جولة سريعة في المنصة، من إنشاء المتجر إلى أول طلب مؤكد.",
+	FoundingTag: "برنامج التجار المؤسسين", FoundingH2: "كن من أول %d تاجر، واحتفظ بخصم %s مدى الحياة",
+	FoundingLead: "للتجار الذين يشتركون الآن في باقة شهرية أو سنوية. المقاعد محدودة، ولا تعود لأحد بعد حجزها.",
+	FoundingJoin: "انضم الآن", SeatsLeft: "مقعد متبقٍ", SeatsOf: "من %d مقعد",
+	FoundingFine: "يُحجز المقعد عند دفع أول اشتراك. تنتهي المزايا إذا ألغيت اشتراكك أو تأخرت عن دفع التجديد أكثر من 30 يومًا. لا يشمل باقة «ادفع حسب مبيعاتك».",
+	FoundingTerms: [5]string{"خصم %s على اشتراكك الشهري أو السنوي، مدى الحياة", "سعرك ثابت: لو رفعنا الأسعار لا يتغير سعرك ما دمت مشتركًا",
+		"ننقل متجرك من أي منصة مجانًا", "أولوية في الدعم على واتساب، وتجربة المميزات الجديدة قبل غيرك", "متجر واحد لكل تاجر، والمزايا مستمرة ما دام اشتراكك مستمرًا"},
 
 	HomeTitle:     "افتح أونلاين | منصة متاجر إلكترونية للدفع عند الاستلام",
 	HomeDesc:      "أنشئ متجرك الإلكتروني مجانًا على افتح أونلاين: تأكيد الطلبات على واتساب، وحماية من الطلبات الوهمية، ولوحة للربح الصافي. لتجار مصر والخليج.",

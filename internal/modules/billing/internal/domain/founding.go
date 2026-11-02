@@ -36,6 +36,20 @@ func (p Program) Validate() error {
 	return nil
 }
 
+// Seats are the program as the site shows it: its settings and the
+// seats taken (lost ones stay taken).
+type Seats struct {
+	Program
+	Taken int
+}
+
+// Left are the seats a new merchant can still take.
+func (s Seats) Left() int { return max(0, s.Seats-s.Taken) }
+
+// Open says whether the site invites merchants to join: on, with seats
+// left.
+func (s Seats) Open() bool { return s.Enabled && s.Left() > 0 }
+
 // Lost is why a member lost the program.
 type Lost string
 

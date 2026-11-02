@@ -162,8 +162,8 @@ func (s *Service) FoundingMembers(ctx context.Context) ([]domain.Member, error) 
 }
 
 // FoundingSeats are the program as the site shows it.
-func (s *Service) FoundingSeats(ctx context.Context) (store.Seats, error) {
-	var out store.Seats
+func (s *Service) FoundingSeats(ctx context.Context) (domain.Seats, error) {
+	var out domain.Seats
 	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
 		out, txErr = store.FoundingSeats(ctx, tx)
 		return txErr

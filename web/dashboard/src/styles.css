@@ -4941,6 +4941,15 @@ button.prov[aria-pressed='true'] {
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 1.25rem;
 }
+.founding-badge {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #14532d;
+  font-size: 0.9rem;
+}
 .bill-plan {
   display: flex;
   align-items: baseline;

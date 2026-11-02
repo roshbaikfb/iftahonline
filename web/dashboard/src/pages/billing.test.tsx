@@ -151,6 +151,20 @@ describe('Billing', () => {
     expect(screen.queryByRole('button', { name: 'إلغاء التجديد' })).not.toBeInTheDocument();
   });
 
+  it('shows a founding merchant their seat and discount, and nobody else', async () => {
+    routes({ ...activeBilling, founding: { seat: 7, discount_bps: 2000 } });
+    renderAt(`/stores/${store}/billing`);
+    expect(await screen.findByText(/المقعد رقم 7 · خصم 20% مدى الحياة/)).toBeInTheDocument();
+    expect(screen.getByText('تاجر مؤسس')).toBeInTheDocument();
+  });
+
+  it('shows no founding badge to a store outside the program', async () => {
+    routes(activeBilling);
+    renderAt(`/stores/${store}/billing`);
+    expect(await screen.findByText('باقتك')).toBeInTheDocument();
+    expect(screen.queryByText('تاجر مؤسس')).not.toBeInTheDocument();
+  });
+
   it('pays an open invoice on Paymob, switches to annual, cancels and takes it back', async () => {
     const goTo = vi.spyOn(leave, 'goTo').mockImplementation(() => undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);

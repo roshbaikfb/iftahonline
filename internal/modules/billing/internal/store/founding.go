@@ -108,19 +108,13 @@ func SaveFoundingProgram(ctx context.Context, tx Tx, p domain.Program) error {
 	return nil
 }
 
-// Seats is the program as the site shows it.
-type Seats struct {
-	domain.Program
-	Taken int
-}
-
 // FoundingSeats are the program's seats and how many are taken.
-func FoundingSeats(ctx context.Context, tx Tx) (Seats, error) {
+func FoundingSeats(ctx context.Context, tx Tx) (domain.Seats, error) {
 	r, err := billingdb.New(tx).FoundingSeats(ctx)
 	if err != nil {
-		return Seats{}, fmt.Errorf("billing store: founding seats: %w", err)
+		return domain.Seats{}, fmt.Errorf("billing store: founding seats: %w", err)
 	}
-	return Seats{Program: domain.Program{Enabled: r.Enabled, Seats: int(r.Seats), DiscountBps: r.DiscountBps}, Taken: int(r.Taken)}, nil
+	return domain.Seats{Program: domain.Program{Enabled: r.Enabled, Seats: int(r.Seats), DiscountBps: r.DiscountBps}, Taken: int(r.Taken)}, nil
 }
 
 // FoundingList is every member, by seat, for the console.

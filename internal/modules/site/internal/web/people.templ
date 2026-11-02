@@ -1,5 +1,10 @@
 package web
 
+import (
+	"fmt"
+	"strconv"
+)
+
 // The about page's people, merchants' reviews and the video (S4b-1).
 // Every section shows only once the console has set its content.
 
@@ -128,6 +133,41 @@ templ videoSection(p *pageCtx) {
 				<img src={ videoThumb(p.videoID) } alt={ p.t.WatchVideo } loading="lazy" width="480" height="360"/>
 				<span class="play" aria-hidden="true"></span>
 			</a>
+		</section>
+	}
+}
+
+// foundingSection invites merchants to the founding program while it is
+// on with seats left: its terms and the live count of seats (ADR-0074).
+templ foundingSection(p *pageCtx) {
+	if f := p.founding; f != nil {
+		<section id="founding" class="wrap section tight" aria-labelledby="h-founding">
+			<div class="founding">
+				<div class="founding-text">
+					<span class="tag green">{ p.t.FoundingTag }</span>
+					<h2 id="h-founding">{ fmt.Sprintf(p.t.FoundingH2, f.seats, f.percent) }</h2>
+					<p class="muted">{ p.t.FoundingLead }</p>
+					<ul class="ticks">
+						for i, term := range p.t.FoundingTerms {
+							<li>
+								@icon("check")
+								if i == 0 {
+									{ fmt.Sprintf(term, f.percent) }
+								} else {
+									{ term }
+								}
+							</li>
+						}
+					</ul>
+					<a class="btn primary big" href={ templ.SafeURL(p.signup) }>{ p.t.FoundingJoin }</a>
+					<p class="muted small">{ p.t.FoundingFine }</p>
+				</div>
+				<div class="seats" role="group" aria-label={ p.t.FoundingTag }>
+					<strong>{ number(int64(f.left)) }</strong>
+					<span>{ p.t.SeatsLeft } { fmt.Sprintf(p.t.SeatsOf, f.seats) }</span>
+					<progress max={ strconv.Itoa(f.seats) } value={ strconv.Itoa(f.taken) }>{ strconv.Itoa(f.taken) }</progress>
+				</div>
+			</div>
 		</section>
 	}
 }

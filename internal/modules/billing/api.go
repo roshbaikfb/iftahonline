@@ -203,6 +203,9 @@ type Showcase interface {
 	// PublicOffers is every public plan on sale (not the agencies'),
 	// priced in currency.
 	PublicOffers(ctx context.Context, currency string) (Offers, error)
+	// FoundingSeats are the founding-merchants program's seats, for its
+	// live counter (ADR-0074).
+	FoundingSeats(ctx context.Context) (FoundingSeats, error)
 }
 
 var _ Showcase = (*app.Service)(nil)
@@ -215,6 +218,8 @@ type (
 	FoundingMember = domain.Member
 	// FoundingLost is why a member lost the program.
 	FoundingLost = domain.Lost
+	// FoundingSeats are the program and its seats taken.
+	FoundingSeats = domain.Seats
 )
 
 // Why a member lost the program.

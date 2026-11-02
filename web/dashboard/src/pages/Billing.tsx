@@ -183,6 +183,11 @@ export function Billing() {
               <h2 id="h-plan">باقتك</h2>
               <span className={`status bill-${billing.status}`}>{statusLabel[billing.status]}</span>
             </div>
+            {billing.founding && (
+              <p className="founding-badge">
+                <strong>تاجر مؤسس</strong> · المقعد رقم {billing.founding.seat} · خصم {billing.founding.discount_bps / 100}% مدى الحياة وسعرك ثابت ما دمت مشتركًا
+              </p>
+            )}
             <div className="bill-plan">
               <strong>{billing.plan_name_ar}</strong>
               {current?.monthly_minor !== undefined && billing.cycle && (

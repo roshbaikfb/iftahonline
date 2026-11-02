@@ -54,6 +54,10 @@ type Summary struct {
 	NextCycle                      domain.Cycle
 	Card                           string // the card on file's label; "" without one
 	OpenInvoices                   []store.OpenInvoiceRow
+	// FoundingSeat and FoundingBps are a founding merchant's seat and
+	// discount (ADR-0074); 0 when the store is not (or no longer) one.
+	FoundingSeat int
+	FoundingBps  int32
 }
 
 func (s *Service) checkout() (CheckoutGateway, bool) {
@@ -96,6 +100,13 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 			if out.NextPlanNameAr, out.NextPlanNameEn, err = store.PlanNames(ctx, tx, sub.NextPlanID); err != nil {
 				return err
 			}
+		}
+		fm, isMember, err := store.FoundingMember(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if isMember && fm.Active() {
+			out.FoundingSeat, out.FoundingBps = fm.Seat, fm.DiscountBps
 		}
 		account, has, err := accountOf(ctx, tx)
 		if err != nil || !has {
