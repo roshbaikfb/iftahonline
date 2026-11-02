@@ -186,6 +186,10 @@ main { display: block; min-block-size: 50vh; }
 .grid.row { display: flex; overflow-x: auto; padding-block-end: .25rem; scroll-snap-type: x mandatory; scroll-behavior: smooth; overscroll-behavior-x: contain; }
 .grid.row .card { flex: none; inline-size: 9.4rem; scroll-snap-align: start; }
 .rowwrap { position: relative; }
+/* With its arrows (a mouse, the script on), the row needs no scrollbar
+   under the cards' buttons. */
+.grid.row.nav { scrollbar-width: none; }
+.grid.row.nav::-webkit-scrollbar { display: none; }
 .row-nav { position: absolute; inset-block-start: 38%; display: flex; align-items: center; justify-content: center; inline-size: 2.5rem; block-size: 2.5rem;
   padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--c-bg, #fff); color: var(--c-text); box-shadow: 0 2px 8px rgb(0 0 0 / .12); cursor: pointer; }
 .row-nav[hidden] { display: none; }
