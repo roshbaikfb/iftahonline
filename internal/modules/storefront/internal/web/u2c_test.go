@@ -154,3 +154,27 @@ func TestCheckoutScript(t *testing.T) {
 		t.Fatalf("checkout.js: %d %v", rec.Code, rec.Header())
 	}
 }
+
+// TestBrandFont: the platform's site gets the brand typeface's faces,
+// served by the shop's assets, and the Arabic files to preload.
+func TestBrandFont(t *testing.T) {
+	t.Parallel()
+	a, err := web.LoadAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	family, faces, preload := a.BrandFont()
+	if family != "Iftah Sans Arabic" || strings.Count(faces, "@font-face") != 4 || len(preload) != 2 {
+		t.Fatalf("family %q, %d faces, preload %v", family, strings.Count(faces, "@font-face"), preload)
+	}
+	for _, u := range preload {
+		if !strings.HasPrefix(u, web.AssetsPrefix+"iftah-sans-arabic-arabic-") || !strings.Contains(faces, u) {
+			t.Errorf("preload %q", u)
+		}
+		rec := httptest.NewRecorder()
+		a.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, u, nil))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/woff2" {
+			t.Errorf("%s: %d %s", u, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+}

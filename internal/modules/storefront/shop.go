@@ -221,6 +221,10 @@ func (s *Shop) Pages() http.Handler { return s.shop }
 // Assets serves the static files, the same for every store.
 func (s *Shop) Assets() http.Handler { return s.assets }
 
+// BrandFont is the platform's typeface for its own site: its family, its
+// @font-face rules (files served by Assets) and the files to preload.
+func (s *Shop) BrandFont() (family, faces string, preload []string) { return s.assets.BrandFont() }
+
 // Invalidate drops a store's cached pages on this instance.
 func (s *Shop) Invalidate(store tenant.StoreID) { s.shop.Invalidate(store) }
 
