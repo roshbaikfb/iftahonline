@@ -33,11 +33,13 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/catalog"
 	"github.com/roshbaikfb/iftahonline/internal/modules/customers"
 	"github.com/roshbaikfb/iftahonline/internal/modules/marketing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/shipping"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 	"github.com/roshbaikfb/iftahonline/internal/modules/storefront"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -122,10 +124,22 @@ func run(addr string, load bool) error {
 		// behind Cloudflare in production.
 		httpCfg.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")}
 	}
+	// The platform's own site, on the demo's domain (ADR-0071): http://localhost:<port>/.
+	_, faces, preload := shop.BrandFont()
+	platform, err := site.New(site.Deps{Plans: billing.NewShowcase(pool), Font: site.Font{Faces: faces, Preload: preload}, Domain: "localhost",
+		DashboardURL: "http://localhost:5173", WhatsApp: site.DefaultWhatsApp, Log: log})
+	if err != nil {
+		return err
+	}
+	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())
+	siteMount := server.MountPlatformSite(platform.Domain(), platform.Handler(), storefront.AssetsPrefix, shop.Assets())
 	handler := server.NewHandler(server.Deps{
 		Log: log, IDs: ulid.NewGenerator(), Telemetry: tel, HTTP: httpCfg, Profile: middleware.ProfileStorefront,
 		Health: server.NewHealth(log, server.BuildInfo{Version: "demo", Role: "storefront"}),
-		Mount:  server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets()),
+		Mount: func(rt server.Routes) {
+			stores(rt)
+			siteMount(rt)
+		},
 	})
 	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", addr)
 	if err != nil {
