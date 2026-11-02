@@ -238,6 +238,9 @@ account, before merchants rely on it:
   - a cadence of guides (S4).
 - **Dollar prices:** visitors outside Egypt see «قريبًا» until billing
   sells in dollars (the Stripe work).
+- **Contact details:** fill them in the console, under «الموقع التعريفي»
+  (`/console/site`): the international WhatsApp, the email, the social
+  profiles and the Companies House number. Empty fields stay hidden.
 - **Legal pages, before launch:** `/terms` and `/privacy` are drafts
   written from what the platform does (`internal/modules/site/internal/web/legal.go`).
   A lawyer must:

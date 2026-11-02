@@ -36,6 +36,23 @@ It owns no tables, emits no events and has no HTTP API of its own.
 | `/en`, `/en/…` | The same pages in English (ADR-0072); crawler files stay at the root | as the Arabic page |
 | `www.{domain}/…` | 301 to `{domain}/…` | — |
 
+## Content from the console (ADR-0073)
+
+- **Tables:** `site_settings` (one row) and `site_faqs`. They are
+  platform data: the console writes as `app_admin`, and the storefront
+  reads as `app_user`.
+- **Console screen:** «الموقع التعريفي» (`/console/site`). It edits the
+  contact details and the FAQ. Every change needs a reason and goes in
+  the admin log.
+- **API:**
+  - `GET /admin/v1/site`;
+  - `PUT /admin/v1/site/settings`;
+  - `POST /admin/v1/site/faqs`;
+  - `PUT` and `DELETE /admin/v1/site/faqs/{id}` (`DELETE` takes
+    `?reason=`).
+- **Caching:** the site keeps a one-minute cache and keeps the last read
+  when a read fails. Pages stay 10 minutes at the edge.
+
 ## Rules
 
 - **Languages (ADR-0072):**
@@ -79,9 +96,9 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S4:** the console edits the FAQ, articles (guides), founders, team,
-  the founding story, the company number and contact details. The about
-  page shows founders and team once they are set.
+- **S4b:** founders, team, the founding story, merchants' reviews, the
+  video, the logo, and the founding-merchants program.
+- **S4c:** the guides (articles) and their editor.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).
 - **The Open Graph image**, with the logo.
