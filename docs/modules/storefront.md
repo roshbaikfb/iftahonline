@@ -348,7 +348,7 @@ type they do not know. A new type adds its exact oasdiff findings to
 | Type | Settings |
 |---|---|
 | `hero` | `badge`, `heading`, `subheading`, `button_label` + `button_link` (a link alone shows "Shop now"), `image_product_id`, `align` |
-| `product_grid` | `title`, `source` (newest / bestsellers / category + `category_id` / manual + `product_ids` ≤ 24), `limit` ≤ 24, `layout` (grid / carousel). Bestsellers show once 4 products for sale have sold in confirmed orders over 30 days; until then the newest, titled "وصل حديثاً" ([ADR-0033](../adr/0033-shop-search-and-bestsellers.md)) |
+| `product_grid` | `title`, `source` (newest / bestsellers / category + `category_id` / manual + `product_ids` ≤ 24), `limit` ≤ 24, `layout` (grid / carousel: one row the shopper swipes, snapping to each card; on a mouse, arrows show when it has more than fits, never auto-playing; «صف يُسحب أفقيًا» in the dashboard). Bestsellers show once 4 products for sale have sold in confirmed orders over 30 days; until then the newest, titled "وصل حديثاً" ([ADR-0033](../adr/0033-shop-search-and-bestsellers.md)) |
 | `product_landing` | `product_id`, `headline`, `highlights` (≤ 6), `show_description`, `cta_label` |
 | `reviews` | `title`, `items` (1–20 of `name`, `location`, `rating` 1–5, `text`) |
 | `faq` | `title`, `items` (1–30 of `question`, `answer`) |

@@ -342,7 +342,40 @@ function visitSource() {
   document.cookie = `ift_src=${encodeURIComponent(keep.toString())}; Max-Age=2592000; Path=/; SameSite=Lax${secure}`;
 }
 
+// rows gives a product row (a section shown as a row) its arrows, for a
+// mouse: shown only when the row has more than fits, each disabled at
+// its end. Touch screens swipe, so they get none. A step is the row's
+// visible width; the direction follows the page's (scrollLeft is
+// negative in right-to-left pages).
+function rows() {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  for (const row of document.querySelectorAll("[data-row]")) {
+    const wrap = row.parentElement;
+    const prev = wrap.querySelector(".row-nav.prev");
+    const next = wrap.querySelector(".row-nav.next");
+    if (!prev || !next) continue;
+    const rtl = getComputedStyle(row).direction === "rtl";
+    const update = () => {
+      const max = row.scrollWidth - row.clientWidth;
+      const at = Math.abs(row.scrollLeft);
+      prev.hidden = next.hidden = max <= 1;
+      prev.disabled = at <= 1;
+      next.disabled = at >= max - 1;
+    };
+    for (const b of [prev, next]) {
+      b.addEventListener("click", () => {
+        const step = Number(b.dataset.step) * row.clientWidth * 0.9;
+        row.scrollBy({ left: rtl ? -step : step });
+      });
+    }
+    row.addEventListener("scroll", update, { passive: true });
+    new ResizeObserver(update).observe(row);
+    update();
+  }
+}
+
 visitSource();
+rows();
 countdowns();
 variantPickers();
 cartBadge();

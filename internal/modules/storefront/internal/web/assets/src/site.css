@@ -183,8 +183,19 @@ main { display: block; min-block-size: 50vh; }
 
 /* Product cards */
 .grid { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.grid.row { display: flex; overflow-x: auto; padding-block-end: .25rem; }
-.grid.row .card { flex: none; inline-size: 9.4rem; }
+.grid.row { display: flex; overflow-x: auto; padding-block-end: .25rem; scroll-snap-type: x mandatory; scroll-behavior: smooth; overscroll-behavior-x: contain; }
+.grid.row .card { flex: none; inline-size: 9.4rem; scroll-snap-align: start; }
+.rowwrap { position: relative; }
+.row-nav { position: absolute; inset-block-start: 38%; display: flex; align-items: center; justify-content: center; inline-size: 2.5rem; block-size: 2.5rem;
+  padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--c-bg, #fff); color: var(--c-text); box-shadow: 0 2px 8px rgb(0 0 0 / .12); cursor: pointer; }
+.row-nav[hidden] { display: none; }
+.row-nav:disabled { opacity: .35; cursor: default; }
+.row-nav.prev { inset-inline-start: -.75rem; }
+.row-nav.next { inset-inline-end: -.75rem; }
+.row-nav svg { inline-size: 1.25rem; block-size: 1.25rem; }
+/* The icon points right: the start side in Arabic, the end side in English. */
+[dir="ltr"] .row-nav.prev svg, [dir="rtl"] .row-nav.next svg { transform: scaleX(-1); }
+@media (prefers-reduced-motion: reduce) { .grid.row { scroll-behavior: auto; } }
 .grid.row .ph { aspect-ratio: 3 / 4; }
 @media (min-width: 48rem) {
   .grid { gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(13.75rem, 1fr)); }

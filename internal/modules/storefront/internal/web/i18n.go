@@ -153,6 +153,8 @@ const (
 	MsgSampleProduct
 	MsgSampleNote
 	MsgViewAll
+	MsgRowPrev
+	MsgRowNext
 	MsgHelp
 	MsgContactUs
 	MsgPaymentMethods
@@ -381,6 +383,8 @@ var messages = [msgCount]struct{ ar, en string }{ //nolint:gochecknoglobals // c
 	MsgSampleProduct:         {"منتج تجريبي", "Sample product"},
 	MsgSampleNote:            {"منتج تجريبي من قالب المتجر، غير متاح للطلب.", "A sample from the store's template; it cannot be ordered."},
 	MsgViewAll:               {"عرض الكل", "View all"},
+	MsgRowPrev:               {"المنتجات السابقة", "Previous products"},
+	MsgRowNext:               {"المنتجات التالية", "Next products"},
 	MsgHelp:                  {"المساعدة", "Help"},
 	MsgContactUs:             {"تواصل معنا", "Contact us"},
 	MsgPaymentMethods:        {"طرق الدفع", "Payment methods"},
