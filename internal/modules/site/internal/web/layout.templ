@@ -1,0 +1,128 @@
+package web
+
+// layout is every page's frame: the head search engines and assistants
+// read, the header, the page, the footer and the WhatsApp button.
+templ layout(p *pageCtx, body templ.Component) {
+	<!DOCTYPE html>
+	<html lang="ar" dir="rtl">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ p.title }</title>
+			if p.description != "" {
+				<meta name="description" content={ p.description }/>
+			}
+			if p.noindex {
+				<meta name="robots" content="noindex"/>
+			} else {
+				<link rel="canonical" href={ p.origin + p.path }/>
+				<meta property="og:type" content="website"/>
+				<meta property="og:site_name" content="افتح أونلاين"/>
+				<meta property="og:locale" content="ar_EG"/>
+				<meta property="og:title" content={ p.title }/>
+				<meta property="og:description" content={ p.description }/>
+				<meta property="og:url" content={ p.origin + p.path }/>
+				<meta name="twitter:card" content="summary"/>
+			}
+			<meta name="theme-color" content="#0f2e52"/>
+			for _, f := range p.fontPreload {
+				<link rel="preload" href={ f } as="font" type="font/woff2" crossorigin/>
+			}
+			@templ.Raw("<style>" + p.css + "</style>")
+			for _, ld := range p.jsonLD {
+				@templ.Raw(ldScript(ld))
+			}
+		</head>
+		<body>
+			<a class="skip" href="#main">انتقل إلى المحتوى</a>
+			@siteHeader(p)
+			<main id="main">
+				@body
+			</main>
+			@siteFooter(p)
+			if p.whatsApp != "" {
+				<a class="wa-float" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label="تواصل معنا على واتساب">
+					@icon("chat")
+				</a>
+			}
+			<div class="mobile-cta">
+				<a class="btn primary" href={ templ.SafeURL(p.signup) }>ابدأ مجانًا</a>
+				if p.whatsApp != "" {
+					<a class="btn ghost square" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label="تواصل معنا على واتساب">
+						@icon("chat")
+					</a>
+				}
+			</div>
+		</body>
+	</html>
+}
+
+templ brand() {
+	<a class="brand" href="/">
+		<span class="mark" aria-hidden="true">
+			@icon("bag")
+		</span>
+		<span class="name">افتح أونلاين</span>
+	</a>
+}
+
+templ siteHeader(p *pageCtx) {
+	<header class="top">
+		<div class="wrap bar">
+			@brand()
+			<nav class="nav" aria-label="القائمة الرئيسية">
+				<a href="/#features">المميزات</a>
+				<a href="/pricing" aria-current?={ p.path == "/pricing" }>الأسعار</a>
+				<a href="/faq" aria-current?={ p.path == "/faq" }>الأسئلة الشائعة</a>
+			</nav>
+			<div class="actions">
+				<a class="signin" href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
+				<a class="btn primary small" href={ templ.SafeURL(p.signup) }>ابدأ مجانًا</a>
+			</div>
+			<details class="menu">
+				<summary aria-label="القائمة">
+					@icon("menu")
+				</summary>
+				<nav aria-label="القائمة">
+					<a href="/#features">المميزات</a>
+					<a href="/pricing">الأسعار</a>
+					<a href="/faq">الأسئلة الشائعة</a>
+					<a href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
+				</nav>
+			</details>
+		</div>
+	</header>
+}
+
+templ siteFooter(p *pageCtx) {
+	<footer class="foot">
+		<div class="wrap cols">
+			<div class="about">
+				@brand()
+				<p>منصة متاجر إلكترونية للدفع عند الاستلام، لتجار مصر والخليج.</p>
+			</div>
+			<nav aria-label="المنصة">
+				<strong>المنصة</strong>
+				<a href="/#features">المميزات</a>
+				<a href="/pricing">الأسعار</a>
+			</nav>
+			<nav aria-label="المعرفة">
+				<strong>المعرفة</strong>
+				<a href="/faq">الأسئلة الشائعة</a>
+			</nav>
+			<div>
+				<strong>تواصل معنا</strong>
+				if p.whatsApp != "" {
+					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">واتساب <bdi dir="ltr">{ p.whatsDisplay }</bdi></a>
+				}
+			</div>
+		</div>
+		<div class="wrap legal">
+			<span>© 2026 افتح أونلاين. جميع الحقوق محفوظة.</span>
+		</div>
+	</footer>
+}
+
+templ icon(name string) {
+	@templ.Raw(iconSVG(name))
+}
