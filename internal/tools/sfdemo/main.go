@@ -126,7 +126,7 @@ func run(addr string, load bool) error {
 	}
 	// The platform's own site, on the demo's domain (ADR-0071): http://localhost:<port>/.
 	_, faces, preload := shop.BrandFont()
-	platform, err := site.New(site.Deps{Plans: billing.NewShowcase(pool), Font: site.Font{Faces: faces, Preload: preload}, Domain: "localhost",
+	platform, err := site.New(site.Deps{Pool: pool, Plans: billing.NewShowcase(pool), Font: site.Font{Faces: faces, Preload: preload}, Domain: "localhost",
 		DashboardURL: "http://localhost:5173", WhatsApp: site.DefaultWhatsApp, Log: log})
 	if err != nil {
 		return err

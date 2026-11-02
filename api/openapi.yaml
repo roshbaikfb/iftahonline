@@ -2351,6 +2351,114 @@ paths:
           description: Done.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/site:
+    get:
+      tags: [admin]
+      operationId: adminGetSite
+      summary: The platform site's contact details and FAQ
+      description: |
+        What the platform's own site shows from the console (ADR-0073).
+        Changes reach the site within a minute, then the edge's cache
+        lifetime (10 minutes).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The settings and the FAQ in order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSite" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/settings:
+    put:
+      tags: [admin]
+      operationId: adminSaveSiteSettings
+      summary: Save the site's contact details
+      description: |
+        Both WhatsApp numbers are international (E.164); profiles are https
+        links on each network's own site. Every field may be empty, which
+        hides it. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteSettingsInput" }
+      responses:
+        "200":
+          description: Saved, as the site shows it (trimmed).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/faqs:
+    post:
+      tags: [admin]
+      operationId: adminCreateSiteFAQ
+      summary: Add a question to the site's FAQ
+      description: At most 100 questions. Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteFAQInput" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteFAQ" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/faqs/{faq_id}:
+    parameters:
+      - name: faq_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    put:
+      tags: [admin]
+      operationId: adminUpdateSiteFAQ
+      summary: Rewrite a question
+      description: Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteFAQInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteFAQ" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      operationId: adminDeleteSiteFAQ
+      summary: Remove a question
+      description: Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: reason
+          in: query
+          required: true
+          description: Kept in the admin audit log.
+          schema: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/billing/duplicates:
     get:
       tags: [admin]
@@ -5040,6 +5148,65 @@ components:
       required: [active, reason]
       properties:
         active: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminSite:
+      type: object
+      required: [settings, faqs]
+      properties:
+        settings: { $ref: "#/components/schemas/AdminSiteSettings" }
+        faqs:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSiteFAQ" }
+    AdminSiteSocials:
+      type: object
+      description: Each network's profile link; absent hides it.
+      properties:
+        facebook: { type: string, maxLength: 300 }
+        instagram: { type: string, maxLength: 300 }
+        tiktok: { type: string, maxLength: 300 }
+        linkedin: { type: string, maxLength: 300 }
+        youtube: { type: string, maxLength: 300 }
+        x: { type: string, maxLength: 300 }
+    AdminSiteSettings:
+      type: object
+      required: [whatsapp, whatsapp_intl, email, socials, company_number]
+      properties:
+        whatsapp: { type: string, example: "+201153450716", description: E.164; empty hides it. }
+        whatsapp_intl: { type: string, example: "+447700900123", description: The international number, E.164; empty hides it. }
+        email: { type: string, example: hello@iftahonline.com }
+        socials: { $ref: "#/components/schemas/AdminSiteSocials" }
+        company_number: { type: string, example: "12345678", description: Companies House's number; the about page links its public record. }
+    AdminSiteSettingsInput:
+      type: object
+      required: [whatsapp, whatsapp_intl, email, socials, company_number, reason]
+      properties:
+        whatsapp: { type: string, maxLength: 20 }
+        whatsapp_intl: { type: string, maxLength: 20 }
+        email: { type: string, maxLength: 254 }
+        socials: { $ref: "#/components/schemas/AdminSiteSocials" }
+        company_number: { type: string, maxLength: 12 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminSiteFAQ:
+      type: object
+      required: [id, position, on_home, question_ar, answer_ar, question_en, answer_en]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        position: { type: integer, description: The order, smallest first. }
+        on_home: { type: boolean, description: Shown on the home page too. }
+        question_ar: { type: string }
+        answer_ar: { type: string }
+        question_en: { type: string, description: Empty leaves the question off the English site. }
+        answer_en: { type: string }
+    AdminSiteFAQInput:
+      type: object
+      required: [position, on_home, question_ar, answer_ar, reason]
+      properties:
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        on_home: { type: boolean }
+        question_ar: { type: string, minLength: 3, maxLength: 200 }
+        answer_ar: { type: string, minLength: 3, maxLength: 2000 }
+        question_en: { type: string, maxLength: 200 }
+        answer_en: { type: string, maxLength: 2000 }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminDuplicatePayment:
       type: object

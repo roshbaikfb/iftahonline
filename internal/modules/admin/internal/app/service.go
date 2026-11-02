@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 
 	"github.com/redis/go-redis/v9"
 
@@ -82,6 +83,8 @@ type Deps struct {
 	Agencies billing.Agencies
 	// Ads are free stores' ads (ADR-0062); nil for the CLI.
 	Ads ads.Console
+	// Site is the platform site's content (ADR-0073); nil for the CLI.
+	Site site.Console
 }
 
 // Service implements the console.

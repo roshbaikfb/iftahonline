@@ -120,18 +120,23 @@ func (s *Site) llms(ctx context.Context, full bool) string {
 		}
 		b.WriteString("\nخارج مصر تُسعَّر الباقات بالدولار الأمريكي.\n")
 	}
-	b.WriteString("\n## أسئلة شائعة\n\n")
-	for _, f := range faqs {
-		fmt.Fprintf(&b, "### %s\n\n%s\n\n", f.q, f.a)
+	// The FAQ is the console's: left out while it cannot be read.
+	if ct, err := s.d.Content.Content(ctx); err == nil && len(ct.FAQs) > 0 {
+		b.WriteString("\n## أسئلة شائعة\n\n")
+		for _, f := range faqsIn(arabic, ct.FAQs) {
+			fmt.Fprintf(&b, "### %s\n\n%s\n\n", f.q, f.a)
+		}
 	}
 	return b.String()
 }
 
 // The schema.org data, as JSON-LD (https://schema.org).
 
-// organizationLD is the platform's organization, named in l. Both
+// organizationLD is the platform's organization, named in the page's
+// language, with the console's contact details and profiles. Both
 // languages describe one organization (one @id).
-func (s *Site) organizationLD(l *language) any {
+func (s *Site) organizationLD(p *pageCtx) any {
+	l, set := p.l, p.settings
 	org := map[string]any{
 		"@context": "https://schema.org", "@type": "Organization", "@id": s.origin() + "/#organization",
 		"name": l.c.brand, "alternateName": alternateNames(l), "url": s.origin() + l.at("/"),
@@ -142,9 +147,32 @@ func (s *Site) organizationLD(l *language) any {
 				"postalCode": company.postcode, "addressCountry": company.country},
 		},
 	}
-	if s.d.WhatsApp != "" {
-		org["contactPoint"] = map[string]any{"@type": "ContactPoint", "telephone": s.d.WhatsApp, "contactType": "customer support",
-			"availableLanguage": []string{"ar", "en"}}
+	var points []any
+	for _, n := range []string{set.WhatsApp, set.WhatsAppIntl} {
+		if n != "" {
+			points = append(points, map[string]any{"@type": "ContactPoint", "telephone": n, "contactType": "customer support",
+				"availableLanguage": []string{"ar", "en"}})
+		}
+	}
+	if set.Email != "" {
+		org["email"] = set.Email
+		points = append(points, map[string]any{"@type": "ContactPoint", "email": set.Email, "contactType": "customer support",
+			"availableLanguage": []string{"ar", "en"}})
+	}
+	if len(points) > 0 {
+		org["contactPoint"] = points
+	}
+	var profiles []string
+	for _, sl := range p.socials {
+		profiles = append(profiles, sl.url)
+	}
+	if len(profiles) > 0 {
+		org["sameAs"] = profiles
+	}
+	if set.CompanyNumber != "" {
+		parent, _ := org["parentOrganization"].(map[string]any) //nolint:errcheck // built just above
+		parent["identifier"] = map[string]any{"@type": "PropertyValue", "propertyID": "Companies House", "value": set.CompanyNumber}
+		parent["url"] = set.CompanyHouseURL()
 	}
 	return org
 }

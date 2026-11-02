@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/web"
 )
 
@@ -53,20 +54,21 @@ func (f *fakePlans) PublicOffers(_ context.Context, currency string) (billing.Of
 }
 
 type fixture struct {
-	site  *web.Site
-	plans *fakePlans
+	site    *web.Site
+	plans   *fakePlans
+	content *fakeContent
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	plans := &fakePlans{}
-	s, err := web.New(web.Deps{Plans: plans, FontFaces: "@font-face{}", FontPreload: []string{"/assets/f.woff2"}, Host: "iftahonline.com", HTTPS: true,
+	plans, content := &fakePlans{}, newFakeContent()
+	s, err := web.New(web.Deps{Plans: plans, Content: content, FontFaces: "@font-face{}", FontPreload: []string{"/assets/f.woff2"}, Host: "iftahonline.com", HTTPS: true,
 		DashboardURL: "https://app.iftahonline.com/", WhatsApp: "+201153450716", CountryHeader: "CF-IPCountry",
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fixture{site: s, plans: plans}
+	return fixture{site: s, plans: plans, content: content}
 }
 
 func (f fixture) get(t *testing.T, path string, headers ...string) *httptest.ResponseRecorder {
@@ -113,7 +115,7 @@ func TestHome(t *testing.T) {
 	f := newFixture(t)
 	rec := f.get(t, "/")
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=300, s-maxage=3600" {
+	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=300, s-maxage=600" {
 		t.Fatalf("home: %d %v", rec.Code, rec.Header())
 	}
 	wantContains(t, body, `<html lang="ar" dir="rtl">`, `<title>افتح أونلاين | منصة متاجر إلكترونية للدفع عند الاستلام</title>`,
@@ -358,7 +360,7 @@ func TestFeaturePages(t *testing.T) {
 		}
 		rec := f.get(t, "/features/"+slug)
 		body := rec.Body.String()
-		if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=300, s-maxage=3600" {
+		if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=300, s-maxage=600" {
 			t.Fatalf("%s: %d %v", slug, rec.Code, rec.Header())
 		}
 		wantContains(t, body, `<a href="/features" aria-current="true">المميزات</a>`, `<a href="/features">المميزات</a> / <span>`)
@@ -458,4 +460,63 @@ func TestEnglish(t *testing.T) {
 	wantContains(t, sitemap, `xmlns:xhtml="http://www.w3.org/1999/xhtml"`,
 		`<loc>https://iftahonline.com/en/pricing</loc><lastmod>`+"2026-11-02"+`</lastmod><xhtml:link rel="alternate" hreflang="ar" href="https://iftahonline.com/pricing"/>`)
 	wantContains(t, f.get(t, "/llms.txt").Body.String(), "## In English", "[Pricing](https://iftahonline.com/en/pricing)")
+}
+
+// TestConsoleContent: what the console sets shows on the site: both
+// WhatsApp numbers, the email and the profiles in every page's footer
+// and in the schema.org data, the company's number linked to its public
+// record, and the FAQ as edited (an Arabic-only question stays off the
+// English site).
+func TestConsoleContent(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.content.set(func(c *domain.Content) {
+		c.Settings = domain.Settings{WhatsApp: "+201153450716", WhatsAppIntl: "+447700900123", Email: "hello@iftahonline.com", CompanyNumber: "12345678",
+			Socials: map[domain.Social]string{domain.Instagram: "https://instagram.com/iftahonline", domain.Facebook: "https://facebook.com/iftahonline"}}
+		c.FAQs = append(c.FAQs, domain.FAQ{QuestionAr: "سؤال بالعربية فقط؟", AnswerAr: "إجابته."})
+	}, nil)
+
+	for _, path := range []string{"/features", "/en/pricing"} {
+		wantContains(t, f.get(t, path).Body.String(), `href="https://wa.me/447700900123?text=`, "+447700900123", `href="mailto:hello@iftahonline.com"`,
+			`<a href="https://facebook.com/iftahonline" rel="noopener me" target="_blank">Facebook</a><a href="https://instagram.com/iftahonline"`)
+	}
+	about := f.get(t, "/about").Body.String()
+	wantContains(t, about, `href="https://find-and-update.company-information.service.gov.uk/company/12345678"`, "12345678")
+	org := ld(t, about)["Organization"]
+	if org["email"] != "hello@iftahonline.com" || len(org["contactPoint"].([]any)) != 3 || len(org["sameAs"].([]any)) != 2 {
+		t.Fatalf("Organization = %v", org)
+	}
+	if id := org["parentOrganization"].(map[string]any)["identifier"].(map[string]any); id["value"] != "12345678" {
+		t.Fatalf("company number = %v", id)
+	}
+
+	if n := len(ld(t, f.get(t, "/faq").Body.String())["FAQPage"]["mainEntity"].([]any)); n != 11 {
+		t.Fatalf("Arabic FAQ has %d questions, want 11", n)
+	}
+	en := f.get(t, "/en/faq").Body.String()
+	if n := len(ld(t, en)["FAQPage"]["mainEntity"].([]any)); n != 10 || strings.Contains(en, "سؤال بالعربية فقط") {
+		t.Fatalf("English FAQ has %d questions, want 10 in English", n)
+	}
+}
+
+// TestContentDown: with the console's content never read, the pages
+// built on its FAQ say so plainly (and are not cached); the others still
+// work with the default number; llms.txt leaves the FAQ out.
+func TestContentDown(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.content.set(nil, errors.New("db down"))
+	for _, path := range []string{"/", "/faq", "/en/faq"} {
+		if rec := f.get(t, path); rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: %d %v", path, rec.Code, rec.Header())
+		}
+	}
+	about := f.get(t, "/about")
+	if about.Code != http.StatusOK || !strings.Contains(about.Body.String(), `href="https://wa.me/201153450716?text=`) {
+		t.Fatalf("about: %d", about.Code)
+	}
+	full := f.get(t, "/llms-full.txt").Body.String()
+	if strings.Contains(full, "## أسئلة شائعة") || !strings.Contains(full, "## الباقات في مصر") {
+		t.Fatal("llms-full.txt with an FAQ it could not read")
+	}
 }

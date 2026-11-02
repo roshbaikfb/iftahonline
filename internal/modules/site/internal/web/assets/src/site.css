@@ -215,6 +215,8 @@ address { font-style: normal; color: var(--muted); text-align: left; align-self:
 .prose h2 { font-size: 24px; letter-spacing: 0; margin-top: 40px; }
 .prose h2:first-child { margin-top: 0; }
 .prose p { margin-top: 12px; font-size: 17px; color: #334155; }
+.foot .socials { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+.contact-more { display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
 .foot .legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 .foot .legal nav { flex-direction: row; gap: 20px; }
 

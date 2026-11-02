@@ -1993,6 +1993,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The platform site's contact details and FAQ
+         * @description What the platform's own site shows from the console (ADR-0073).
+         *     Changes reach the site within a minute, then the edge's cache
+         *     lifetime (10 minutes).
+         */
+        get: operations["adminGetSite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the site's contact details
+         * @description Both WhatsApp numbers are international (E.164); profiles are https
+         *     links on each network's own site. Every field may be empty, which
+         *     hides it. Recorded in the admin log first.
+         */
+        put: operations["adminSaveSiteSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a question to the site's FAQ
+         * @description At most 100 questions. Recorded in the admin log once saved.
+         */
+        post: operations["adminCreateSiteFAQ"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/faqs/{faq_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                faq_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rewrite a question
+         * @description Recorded in the admin log first.
+         */
+        put: operations["adminUpdateSiteFAQ"];
+        post?: never;
+        /**
+         * Remove a question
+         * @description Recorded in the admin log first.
+         */
+        delete: operations["adminDeleteSiteFAQ"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/duplicates": {
         parameters: {
             query?: never;
@@ -4316,6 +4406,70 @@ export interface components {
         };
         AdminAdBannerActive: {
             active: boolean;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminSite: {
+            settings: components["schemas"]["AdminSiteSettings"];
+            faqs: components["schemas"]["AdminSiteFAQ"][];
+        };
+        /** @description Each network's profile link; absent hides it. */
+        AdminSiteSocials: {
+            facebook?: string;
+            instagram?: string;
+            tiktok?: string;
+            linkedin?: string;
+            youtube?: string;
+            x?: string;
+        };
+        AdminSiteSettings: {
+            /**
+             * @description E.164; empty hides it.
+             * @example +201153450716
+             */
+            whatsapp: string;
+            /**
+             * @description The international number
+             * @example +447700900123
+             */
+            whatsapp_intl: string;
+            /** @example hello@iftahonline.com */
+            email: string;
+            socials: components["schemas"]["AdminSiteSocials"];
+            /**
+             * @description Companies House's number; the about page links its public record.
+             * @example 12345678
+             */
+            company_number: string;
+        };
+        AdminSiteSettingsInput: {
+            whatsapp: string;
+            whatsapp_intl: string;
+            email: string;
+            socials: components["schemas"]["AdminSiteSocials"];
+            company_number: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminSiteFAQ: {
+            id: components["schemas"]["ULID"];
+            /** @description The order */
+            position: number;
+            /** @description Shown on the home page too. */
+            on_home: boolean;
+            question_ar: string;
+            answer_ar: string;
+            /** @description Empty leaves the question off the English site. */
+            question_en: string;
+            answer_en: string;
+        };
+        AdminSiteFAQInput: {
+            position: number;
+            on_home: boolean;
+            question_ar: string;
+            answer_ar: string;
+            question_en?: string;
+            answer_en?: string;
             /** @description Kept in the admin audit log. */
             reason: string;
         };
@@ -9211,6 +9365,128 @@ export interface operations {
         };
         responses: {
             /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetSite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings and the FAQ in order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSite"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveSiteSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Saved, as the site shows it (trimmed). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateSiteFAQ: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteFAQInput"];
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteFAQ"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateSiteFAQ: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                faq_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteFAQInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteFAQ"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteSiteFAQ: {
+        parameters: {
+            query: {
+                /** @description Kept in the admin audit log. */
+                reason: string;
+            };
+            header?: never;
+            path: {
+                faq_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
             204: {
                 headers: {
                     [name: string]: unknown;

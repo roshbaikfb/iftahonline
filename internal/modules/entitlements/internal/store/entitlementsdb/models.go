@@ -921,6 +921,28 @@ type ShippingZoneArea struct {
 	Area    string
 }
 
+type SiteFaq struct {
+	ID         ulid.ID
+	Position   int32
+	OnHome     bool
+	QuestionAr string
+	AnswerAr   string
+	QuestionEn string
+	AnswerEn   string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
+type SiteSetting struct {
+	ID            int32
+	Whatsapp      string
+	WhatsappIntl  string
+	Email         string
+	Socials       []byte
+	CompanyNumber string
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type SizeChart struct {
 	ID        ulid.ID
 	StoreID   ulid.ID

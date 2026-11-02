@@ -17,14 +17,23 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+
+	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
 )
 
 //go:embed assets/dist/site.css
 var siteCSS string
 
+// Content is the content the console edits, kept a minute in memory
+// (site/internal/app).
+type Content interface {
+	Content(ctx context.Context) (domain.Content, error)
+}
+
 // Deps are the site's dependencies.
 type Deps struct {
-	Plans Plans
+	Plans   Plans
+	Content Content
 	// FontFaces and FontPreload are the brand typeface the shop serves.
 	FontFaces   string
 	FontPreload []string
@@ -34,7 +43,8 @@ type Deps struct {
 	HTTPS bool
 	// DashboardURL is where merchants sign up and sign in.
 	DashboardURL string
-	// WhatsApp is the platform's support number in E.164 (+20…).
+	// WhatsApp is the support number in E.164 (+20…) shown while the
+	// console's settings cannot be read.
 	WhatsApp string
 	// CountryHeader names the CDN's visitor country header.
 	CountryHeader string
@@ -52,7 +62,7 @@ type Site struct {
 
 // New builds the site.
 func New(d Deps) (*Site, error) {
-	if d.Plans == nil || d.Host == "" || d.DashboardURL == "" || d.Log == nil {
+	if d.Plans == nil || d.Content == nil || d.Host == "" || d.DashboardURL == "" || d.Log == nil {
 		return nil, errors.New("site: missing dependency")
 	}
 	if d.Now == nil {
@@ -65,11 +75,12 @@ func New(d Deps) (*Site, error) {
 	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, css: css, csp: csp}, nil
 }
 
-// Cache lifetimes: pages change when the copy or the plans do; the
-// pricing page depends on the visitor's country, so the edge never
-// keeps it.
+// Cache lifetimes: pages change when the copy, the console's content or
+// the plans do (the edge keeps them 10 minutes, approved for S4); the
+// pricing page depends on the visitor's country, so the edge never keeps
+// it.
 const (
-	cachePage    = "public, max-age=300, s-maxage=3600"
+	cachePage    = "public, max-age=300, s-maxage=600"
 	cachePrivate = "private, max-age=0, must-revalidate"
 )
 
@@ -107,23 +118,27 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/pricing":
 		s.pricingPage(w, r, l)
 	case "/faq":
-		p := s.page(l, "/faq", l.t.FAQTitle, l.t.FAQDesc)
-		p.jsonLD = []any{s.faqLD(l.c.faqs), s.breadcrumbLD(l, crumb{l.t.FAQ, path})}
-		s.write(w, r, http.StatusOK, cachePage, p, faqPage(p, l.c.faqs))
+		p := s.page(r.Context(), l, "/faq", l.t.FAQTitle, l.t.FAQDesc)
+		if !p.contentOK {
+			s.unavailable(w, r, errNoContent)
+			return
+		}
+		p.jsonLD = []any{s.faqLD(p.faqs), s.breadcrumbLD(l, crumb{l.t.FAQ, path})}
+		s.write(w, r, http.StatusOK, cachePage, p, faqPage(p, p.faqs))
 	case "/features":
-		p := s.page(l, "/features", l.t.FeaturesTitle, l.t.FeaturesDesc)
+		p := s.page(r.Context(), l, "/features", l.t.FeaturesTitle, l.t.FeaturesDesc)
 		p.jsonLD = []any{s.breadcrumbLD(l, crumb{l.t.Features, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, featuresIndexPage(p))
 	case "/about":
-		p := s.page(l, "/about", l.t.AboutTitle, l.t.AboutDesc)
-		p.jsonLD = []any{s.organizationLD(l), s.aboutLD(p), s.breadcrumbLD(l, crumb{l.t.About, path})}
+		p := s.page(r.Context(), l, "/about", l.t.AboutTitle, l.t.AboutDesc)
+		p.jsonLD = []any{s.organizationLD(p), s.aboutLD(p), s.breadcrumbLD(l, crumb{l.t.About, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, aboutPage(p))
 	case "/privacy", "/terms":
 		lp := l.c.privacy
 		if path == "/terms" {
 			lp = l.c.terms
 		}
-		p := s.page(l, lp.path, lp.title, lp.description)
+		p := s.page(r.Context(), l, lp.path, lp.title, lp.description)
 		p.jsonLD = []any{s.breadcrumbLD(l, crumb{lp.name, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, legalPageView(p, lp))
 	default:
@@ -133,7 +148,7 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		p := s.page(l, path, l.t.NotFoundTitle, "")
+		p := s.page(r.Context(), l, path, l.t.NotFoundTitle, "")
 		p.noindex = true
 		s.write(w, r, http.StatusNotFound, cachePage, p, notFoundPage(p))
 	}
@@ -152,7 +167,11 @@ func languageOf(path string) (*language, string) {
 }
 
 func (s *Site) home(w http.ResponseWriter, r *http.Request, l *language) {
-	p := s.page(l, "/", l.t.HomeTitle, l.t.HomeDesc)
+	p := s.page(r.Context(), l, "/", l.t.HomeTitle, l.t.HomeDesc)
+	if !p.contentOK {
+		s.unavailable(w, r, errNoContent)
+		return
+	}
 	// The home page's prices are the main market's: the page stays the
 	// same for everyone, so the edge keeps it.
 	pr, err := s.pricing(r.Context(), currencyEGP, l)
@@ -161,12 +180,15 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, l *language) {
 		return
 	}
 	var home []faq
-	for _, f := range l.c.faqs {
+	for _, f := range p.faqs {
 		if f.home {
 			home = append(home, f)
 		}
 	}
-	p.jsonLD = []any{s.organizationLD(l), s.websiteLD(l), s.applicationLD(l, pr), s.faqLD(home)}
+	p.jsonLD = []any{s.organizationLD(p), s.websiteLD(l), s.applicationLD(l, pr)}
+	if len(home) > 0 {
+		p.jsonLD = append(p.jsonLD, s.faqLD(home))
+	}
 	s.write(w, r, http.StatusOK, cachePage, p, homePage(p, pr, home))
 }
 
@@ -183,14 +205,14 @@ func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request, l *language) 
 		s.unavailable(w, r, err)
 		return
 	}
-	p := s.page(l, "/pricing", l.t.PricingTitle, l.t.PricingDesc)
+	p := s.page(r.Context(), l, "/pricing", l.t.PricingTitle, l.t.PricingDesc)
 	p.jsonLD = []any{s.applicationLD(l, pr), s.breadcrumbLD(l, crumb{l.t.Pricing, "/pricing"})}
 	w.Header().Set("Vary", s.d.CountryHeader)
 	s.write(w, r, http.StatusOK, cachePrivate, p, pricingPage(p, pr))
 }
 
 func (s *Site) feature(w http.ResponseWriter, r *http.Request, l *language, f featurePage) {
-	p := s.page(l, "/features/"+f.slug, f.title, f.description)
+	p := s.page(r.Context(), l, "/features/"+f.slug, f.title, f.description)
 	p.jsonLD = []any{s.breadcrumbLD(l, crumb{l.t.Features, "/features"}, crumb{f.name, p.path})}
 	if len(f.faqs) > 0 {
 		p.jsonLD = append(p.jsonLD, s.faqLD(f.faqs))
@@ -220,17 +242,65 @@ type pageCtx struct {
 	jsonLD                 []any
 	signup, login          string
 	whatsApp, whatsDisplay string
+	// What the console sets: contentOK is false when it could not be
+	// read (the frame then shows the default number, and no FAQ).
+	contentOK         bool
+	settings          domain.Settings
+	intl, intlDisplay string // the international WhatsApp's link
+	socials           []socialLink
+	faqs              []faq // in the page's language
 }
 
-func (s *Site) page(l *language, path, title, description string) *pageCtx {
+// socialLink is a network the site links to, by its own name.
+type socialLink struct{ name, url string }
+
+var errNoContent = errors.New("site: the console's content cannot be read")
+
+func (s *Site) page(ctx context.Context, l *language, path, title, description string) *pageCtx {
 	// English pages set in the system's fonts: the brand face is Arabic's.
 	preload := s.d.FontPreload
 	if l == english {
 		preload = nil
 	}
-	return &pageCtx{l: l, t: l.t, c: l.c, origin: s.origin(), path: path, title: title, description: description, css: s.css, fontPreload: preload,
+	ct, err := s.d.Content.Content(ctx)
+	ok := err == nil
+	if !ok {
+		s.d.Log.ErrorContext(ctx, "site: content unavailable", "err", err)
+		ct = domain.Content{Settings: domain.Settings{WhatsApp: s.d.WhatsApp}}
+	}
+	set := ct.Settings
+	p := &pageCtx{l: l, t: l.t, c: l.c, origin: s.origin(), path: path, title: title, description: description, css: s.css, fontPreload: preload,
 		signup: strings.TrimRight(s.d.DashboardURL, "/") + "/signup", login: strings.TrimRight(s.d.DashboardURL, "/") + "/login",
-		whatsApp: s.whatsAppLink(l), whatsDisplay: displayPhone(s.d.WhatsApp)}
+		whatsApp: whatsAppLink(l, set.WhatsApp), whatsDisplay: displayPhone(set.WhatsApp),
+		intl: whatsAppLink(l, set.WhatsAppIntl), intlDisplay: displayPhone(set.WhatsAppIntl),
+		contentOK: ok, settings: set, faqs: faqsIn(l, ct.FAQs)}
+	for _, k := range domain.Socials() {
+		if u := set.Socials[k]; u != "" {
+			p.socials = append(p.socials, socialLink{socialNames[k], u})
+		}
+	}
+	return p
+}
+
+// socialNames are the networks as they write themselves.
+var socialNames = map[domain.Social]string{ //nolint:gochecknoglobals // constant table
+	domain.Facebook: "Facebook", domain.Instagram: "Instagram", domain.TikTok: "TikTok",
+	domain.LinkedIn: "LinkedIn", domain.YouTube: "YouTube", domain.X: "X",
+}
+
+// faqsIn are the questions in l: English ones only where the console
+// wrote them.
+func faqsIn(l *language, list []domain.FAQ) []faq {
+	var out []faq
+	for _, f := range list {
+		switch {
+		case l == english && f.QuestionEn != "":
+			out = append(out, faq{q: f.QuestionEn, a: f.AnswerEn, home: f.OnHome})
+		case l != english:
+			out = append(out, faq{q: f.QuestionAr, a: f.AnswerAr, home: f.OnHome})
+		}
+	}
+	return out
 }
 
 // origin is the site's canonical origin: its own domain, never the Host
@@ -242,10 +312,10 @@ func (s *Site) origin() string {
 	return "http://" + s.d.Host
 }
 
-// whatsAppLink opens a chat with the platform's support number, with a
-// ready first message.
-func (s *Site) whatsAppLink(l *language) string {
-	n := strings.TrimPrefix(s.d.WhatsApp, "+")
+// whatsAppLink opens a chat with number (E.164), with a ready first
+// message in l; "" without a number.
+func whatsAppLink(l *language, number string) string {
+	n := strings.TrimPrefix(number, "+")
 	if n == "" {
 		return ""
 	}

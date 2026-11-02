@@ -25,6 +25,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
@@ -103,6 +104,7 @@ func newFixture(t *testing.T) fixture {
 		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
+		Site:    site.NewConsole(adminPool, ids, log),
 		Hashing: config.Identity{Argon2MemoryKiB: 8 * 1024, Argon2Time: 1, Argon2Threads: 1, HashConcurrency: 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -626,5 +628,75 @@ func TestConsoleDuplicatePayments(t *testing.T) {
 		if got := f.do(t, http.MethodPost, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
 			t.Errorf("POST %s = %d %v; want %d", bad.path, got.status, got.body, bad.status)
 		}
+	}
+}
+
+// TestConsoleSite: the platform site's contact details and FAQ, from the
+// console (ADR-0073). The only test of the package on the site's tables.
+func TestConsoleSite(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/site", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/site", "", withCookie(sess))
+	if faqs, _ := r.body["faqs"].([]any); r.status != http.StatusOK || len(faqs) != 10 || r.body["settings"].(map[string]any)["whatsapp"] != "+201153450716" {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+
+	save := `{"whatsapp":"+201153450716","whatsapp_intl":"+447700900123","email":"hello@iftahonline.com","company_number":"12345678",
+		"socials":{"instagram":"https://instagram.com/iftahonline","x":""},"reason":"contact details"}`
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/site/settings", save, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r = f.do(t, http.MethodPut, adminHost, "/admin/v1/site/settings", save, withCookie(sess), sameOrigin)
+	if so := r.body["socials"].(map[string]any); r.status != http.StatusOK || so["instagram"] != "https://instagram.com/iftahonline" || so["x"] != nil ||
+		r.body["whatsapp_intl"] != "+447700900123" {
+		t.Fatalf("save = %d %v", r.status, r.body)
+	}
+
+	add := `{"position":15,"on_home":false,"question_ar":"هل تدعمون فودافون كاش؟","answer_ar":"قريبًا.","reason":"a common question"}`
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/site/faqs", add, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["question_en"] != "" {
+		t.Fatalf("add = %d %v", r.status, r.body)
+	}
+	one := "/admin/v1/site/faqs/" + r.body["id"].(string)
+	edit := `{"position":15,"on_home":true,"question_ar":"هل تدعمون فودافون كاش؟","answer_ar":"قريبًا.","question_en":"Vodafone Cash?","answer_en":"Soon.","reason":"English too"}`
+	if r = f.do(t, http.MethodPut, adminHost, one, edit, withCookie(sess), sameOrigin); r.status != http.StatusOK || r.body["on_home"] != true || r.body["answer_en"] != "Soon." {
+		t.Fatalf("edit = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=answered+elsewhere", "", withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site delete = %d", r.status)
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=answered+elsewhere", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("delete = %d %v", r.status, r.body)
+	}
+
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, "/admin/v1/site/settings", `{"whatsapp":"0115","whatsapp_intl":"","email":"","company_number":"","socials":{},"reason":"bad number"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/site/settings", `{"whatsapp":"","whatsapp_intl":"","email":"","company_number":"","socials":{"facebook":"https://evil.example"},"reason":"bad link"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/site/settings", `{"whatsapp":"","whatsapp_intl":"","email":"","company_number":"","socials":{},"reason":"x"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/site/settings", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/site/faqs", `{"position":0,"on_home":false,"question_ar":"؟","answer_ar":"لا","reason":"too short"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/faqs", `{"position":0,"on_home":false,"question_ar":"سؤال كامل؟","answer_ar":"إجابة","question_en":"Only a question?","reason":"half English"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/faqs", ``, http.StatusBadRequest},
+		{http.MethodPut, one, edit, http.StatusNotFound},
+		{http.MethodPut, "/admin/v1/site/faqs/junk", edit, http.StatusNotFound},
+		{http.MethodPut, one, ``, http.StatusBadRequest},
+		{http.MethodDelete, one + "?reason=again+please", "", http.StatusNotFound},
+		{http.MethodDelete, "/admin/v1/site/faqs/junk?reason=again+please", "", http.StatusNotFound},
+		{http.MethodDelete, one, "", http.StatusBadRequest},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site", "", withCookie(sess)); len(r.body["faqs"].([]any)) != 10 {
+		t.Fatalf("after all = %v", r.body)
 	}
 }

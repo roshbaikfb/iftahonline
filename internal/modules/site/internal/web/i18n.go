@@ -40,7 +40,6 @@ type siteCopy struct {
 	tools        []tool
 	steps        []step
 	trust        []trust
-	faqs         []faq
 	worksWith    []string
 	featurePages []featurePage
 	values       []step
@@ -50,7 +49,7 @@ type siteCopy struct {
 }
 
 var arCopy = siteCopy{ //nolint:gochecknoglobals // constant copy
-	brand: brandAR, tagline: tagline, features: features, tools: tools, steps: steps, trust: trustItems, faqs: faqs,
+	brand: brandAR, tagline: tagline, features: features, tools: tools, steps: steps, trust: trustItems,
 	worksWith: worksWith, featurePages: featurePages, values: values, privacy: privacy, terms: terms, legalUpdated: legalUpdated,
 }
 
@@ -59,6 +58,7 @@ type texts struct {
 	Skip, ChatUs, StartFree, SignIn, Menu, MainMenu, Features, Pricing, FAQ, About, Home, Crumbs string
 	FooterTagline, Platform, Contact, WhatsApp, Rights, Legal, OtherLang, OtherLangName          string
 	Arrow, WhatsAppHello                                                                         string
+	WhatsAppIntl, Email, FollowUs, CompanyNo                                                     string
 
 	HomeTitle, HomeDesc, PricingTitle, PricingDesc, FAQTitle, FAQDesc string
 	FeaturesTitle, FeaturesDesc, AboutTitle, AboutDesc, NotFoundTitle string
@@ -106,6 +106,7 @@ var arTexts = texts{ //nolint:gochecknoglobals // constant copy
 	FooterTagline: "منصة متاجر إلكترونية للدفع عند الاستلام، لتجار مصر والخليج.", Platform: "المنصة", Contact: "تواصل معنا",
 	WhatsApp: "واتساب", Rights: "© 2026 افتح أونلاين. جميع الحقوق محفوظة.", Legal: "الصفحات القانونية",
 	OtherLang: "en", OtherLangName: "English", Arrow: "←", WhatsAppHello: "مرحبًا، أريد الاستفسار عن افتح أونلاين",
+	WhatsAppIntl: "واتساب (دولي)", Email: "البريد", FollowUs: "تابعنا", CompanyNo: "رقم التسجيل في Companies House:",
 
 	HomeTitle:     "افتح أونلاين | منصة متاجر إلكترونية للدفع عند الاستلام",
 	HomeDesc:      "أنشئ متجرك الإلكتروني مجانًا على افتح أونلاين: تأكيد الطلبات على واتساب، وحماية من الطلبات الوهمية، ولوحة للربح الصافي. لتجار مصر والخليج.",
