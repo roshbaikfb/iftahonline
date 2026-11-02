@@ -61,6 +61,7 @@ type Deps struct {
 type Site struct {
 	d     Deps
 	plans *planCache
+	seats *seatsCache
 	css   string // the inline stylesheet: the brand faces, then site.css
 	csp   string
 }
@@ -83,7 +84,8 @@ func New(d Deps) (*Site, error) {
 	}
 	csp := "default-src 'none'; style-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; font-src 'self'; img-src " + img + "; " +
 		"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, css: css, csp: csp}, nil
+	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, seats: &seatsCache{src: d.Plans, now: d.Now},
+		css: css, csp: csp}, nil
 }
 
 // youTubeThumbs serves the video's thumbnail.
@@ -208,6 +210,7 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, l *language) {
 			home = append(home, f)
 		}
 	}
+	p.founding = s.foundingFor(r.Context(), l)
 	p.jsonLD = []any{s.organizationLD(p), s.websiteLD(l), s.applicationLD(l, pr)}
 	if len(home) > 0 {
 		p.jsonLD = append(p.jsonLD, s.faqLD(home))
@@ -229,6 +232,7 @@ func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request, l *language) 
 		return
 	}
 	p := s.page(r.Context(), l, "/pricing", l.t.PricingTitle, l.t.PricingDesc)
+	p.founding = s.foundingFor(r.Context(), l)
 	p.jsonLD = []any{s.applicationLD(l, pr), s.breadcrumbLD(l, crumb{l.t.Pricing, "/pricing"})}
 	w.Header().Set("Vary", s.d.CountryHeader)
 	s.write(w, r, http.StatusOK, cachePrivate, p, pricingPage(p, pr))
@@ -272,12 +276,38 @@ type pageCtx struct {
 	intl, intlDisplay string // the international WhatsApp's link
 	socials           []socialLink
 	faqs              []faq // in the page's language
+	// founding is the founding-merchants program while it invites
+	// merchants (home and pricing); nil hides its section.
+	founding *foundingView
 	// The about page's and the identity's, in the page's language.
 	story          []string // paragraphs
 	videoID        string
 	logo, share    string // signed URLs; "" shows none
 	founders, team []personView
 	reviews        []reviewView
+}
+
+// foundingView is the founding program's section: its discount and
+// seats.
+type foundingView struct {
+	percent     string // "20٪"
+	seats, left int
+	taken       int
+}
+
+// foundingFor is the program's section while it is on with seats left;
+// nil otherwise, or when its seats cannot be read (the page shows
+// without it).
+func (s *Site) foundingFor(ctx context.Context, l *language) *foundingView {
+	seats, err := s.seats.get(ctx)
+	if err != nil {
+		s.d.Log.WarnContext(ctx, "site: founding seats", "err", err)
+		return nil
+	}
+	if !seats.Open() {
+		return nil
+	}
+	return &foundingView{percent: percent(seats.DiscountBps, l == english), seats: seats.Seats, left: seats.Left(), taken: seats.Taken}
 }
 
 // socialLink is a network the site links to, by its own name.

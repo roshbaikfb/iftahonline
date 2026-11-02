@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -25,8 +26,19 @@ func i64(v int64) *int64 { return &v }
 // fakePlans sells in pounds only, as the platform does until dollar
 // prices are set; calls counts the reads.
 type fakePlans struct {
-	calls atomic.Int64
-	err   error
+	calls    atomic.Int64
+	err      error
+	mu       sync.Mutex
+	seats    billing.FoundingSeats
+	seatsErr error
+}
+
+// FoundingSeats are the founding program's seats: off unless a test
+// sets them.
+func (f *fakePlans) FoundingSeats(context.Context) (billing.FoundingSeats, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.seats, f.seatsErr
 }
 
 func (f *fakePlans) PublicOffers(_ context.Context, currency string) (billing.Offers, error) {
@@ -581,5 +593,45 @@ func TestAboutContent(t *testing.T) {
 		if strings.Contains(en, absent) {
 			t.Errorf("the English about page shows %q", absent)
 		}
+	}
+}
+
+// TestFoundingSection: the founding program's section shows on the home
+// and pricing pages only while it is on with seats left, with its
+// discount, its terms and the live count of seats, in the page's
+// language; when its seats cannot be read, the pages show without it.
+func TestFoundingSection(t *testing.T) {
+	t.Parallel()
+	off := newFixture(t)
+	for _, path := range []string{"/", "/pricing"} {
+		if strings.Contains(off.get(t, path).Body.String(), `id="founding"`) {
+			t.Errorf("%s: the section with the program off", path)
+		}
+	}
+
+	f := newFixture(t)
+	f.plans.mu.Lock()
+	f.plans.seats = billing.FoundingSeats{Program: billing.FoundingProgram{Enabled: true, Seats: 100, DiscountBps: 2000}, Taken: 37}
+	f.plans.mu.Unlock()
+	home := f.get(t, "/").Body.String()
+	wantContains(t, home, `id="founding"`, "كن من أول 100 تاجر، واحتفظ بخصم 20٪ مدى الحياة", "خصم 20٪ على اشتراكك الشهري أو السنوي، مدى الحياة",
+		"<strong>63</strong>", "مقعد متبقٍ من 100 مقعد", `<progress max="100" value="37">`, `href="https://app.iftahonline.com/signup">انضم الآن`)
+	wantContains(t, f.get(t, "/pricing", "CF-IPCountry", "EG").Body.String(), `id="founding"`, "<strong>63</strong>")
+	wantContains(t, f.get(t, "/en").Body.String(), "Be one of the first 100 merchants, and keep 20% off for life", "seats left of 100")
+
+	full := newFixture(t)
+	full.plans.mu.Lock()
+	full.plans.seats = billing.FoundingSeats{Program: billing.FoundingProgram{Enabled: true, Seats: 100, DiscountBps: 2000}, Taken: 100}
+	full.plans.mu.Unlock()
+	if strings.Contains(full.get(t, "/").Body.String(), `id="founding"`) {
+		t.Error("the section with every seat taken")
+	}
+
+	down := newFixture(t)
+	down.plans.mu.Lock()
+	down.plans.seatsErr = errors.New("db down")
+	down.plans.mu.Unlock()
+	if rec := down.get(t, "/"); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `id="founding"`) {
+		t.Fatalf("seats unreadable: %d", rec.Code)
 	}
 }

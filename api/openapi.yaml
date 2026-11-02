@@ -7438,6 +7438,13 @@ components:
             order is still pending (ADR-0066). Absent otherwise.
         read: { type: boolean }
         created_at: { type: string, format: date-time }
+    BillingFounding:
+      type: object
+      description: A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
+      required: [seat, discount_bps]
+      properties:
+        seat: { type: integer, example: 7 }
+        discount_bps: { type: integer, example: 2000, description: "2000 = 20%." }
     Billing:
       type: object
       required: [plan_name_ar, plan_name_en, status, open_invoices]
@@ -7451,6 +7458,7 @@ components:
         grace_until: { type: string, format: date-time, description: "Past due: when the store closes unpaid." }
         cancel_at_period_end: { type: boolean }
         card: { type: string, example: "MasterCard •••• 2346", description: The card on file; absent without one. }
+        founding: { $ref: "#/components/schemas/BillingFounding" }
         next_plan_name_ar: { type: string, description: "The plan the store moves to when the period ends (ADR-0060); absent for none, or for the free plan after a cancellation." }
         next_plan_name_en: { type: string }
         next_cycle: { type: string, enum: [monthly, annual], description: The cycle of the next renewal when it changes. }

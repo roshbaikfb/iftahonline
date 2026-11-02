@@ -111,6 +111,10 @@ func TestFoundingMerchants(t *testing.T) {
 		t.Fatalf("members = %+v, %v", members, err)
 	}
 
+	if sum, sumErr := d.svc.Summary(a); sumErr != nil || sum.FoundingSeat != 1 || sum.FoundingBps != 2000 {
+		t.Fatalf("A's summary = %+v, %v", sum, sumErr)
+	}
+
 	// The same owner's second store: no discount, no seat.
 	a2 := d.store(t)
 	who.set(a2, ulid.ID{1})
@@ -202,6 +206,12 @@ func TestFoundingMerchants(t *testing.T) {
 	if members, _ = console.FoundingMembers(t.Context()); members[1].LostReason != domain.LostUnpaid || members[1].Active() {
 		t.Fatalf("after 40 days = %+v", members)
 	}
+	if sum, sumErr := d.svc.Summary(b); sumErr != nil || sum.FoundingSeat != 0 {
+		t.Fatalf("B's summary after leaving = %+v, %v", sum, sumErr)
+	}
+	if sum, _ := d.svc.Summary(a2); sum.FoundingSeat != 0 {
+		t.Fatalf("the owner's second store shows a seat: %+v", sum)
+	}
 	// Lost seats stay taken: a new merchant pays the full price.
 	e := d.store(t)
 	who.set(e, ulid.ID{5})
@@ -211,7 +221,7 @@ func TestFoundingMerchants(t *testing.T) {
 	if p, progErr := console.FoundingProgram(t.Context()); progErr != nil || !p.Enabled || p.Seats != 2 {
 		t.Fatalf("program = %+v, %v", p, progErr)
 	}
-	if seats, seatsErr := console.FoundingSeats(t.Context()); seatsErr != nil || seats.Taken != 2 {
+	if seats, seatsErr := console.FoundingSeats(t.Context()); seatsErr != nil || seats.Taken != 2 || seats.Left() != 0 || seats.Open() {
 		t.Fatalf("seats = %+v, %v", seats, seatsErr)
 	}
 	if app.FoundingSweepPeriodic() == nil || (app.FoundingSweepArgs{}).Kind() != "billing.founding_sweep" {

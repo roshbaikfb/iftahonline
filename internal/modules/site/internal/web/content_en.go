@@ -18,6 +18,12 @@ var enTexts = texts{ //nolint:gochecknoglobals // constant copy
 	OurStory: "Our story", FoundersEyebrow: "Founders", FoundersH2: "Who founded iftahonline", CoFounder: "Co-founder",
 	TeamEyebrow: "The team", TeamH2: "The iftahonline team", ReviewsEyebrow: "Merchants' reviews", ReviewsH2: "What merchants say about iftahonline",
 	WatchVideo: "See how iftahonline works", VideoLead: "A quick tour of the platform, from creating a store to the first confirmed order.",
+	FoundingTag: "Founding merchants", FoundingH2: "Be one of the first %d merchants, and keep %s off for life",
+	FoundingLead: "For merchants who subscribe now to a monthly or annual plan. Seats are limited, and a seat taken is never given again.",
+	FoundingJoin: "Join now", SeatsLeft: "seats left", SeatsOf: "of %d",
+	FoundingFine: "A seat is taken when the first subscription is paid. The benefits end if you cancel or leave a renewal unpaid more than 30 days. Pay as you sell is not included.",
+	FoundingTerms: [5]string{"%s off your monthly or annual plan, for life", "Your price is locked: if prices rise, yours stays while you're subscribed",
+		"We move your store from any platform, free", "Priority support on WhatsApp, and new features before everyone else", "One store per merchant; the benefits last as long as your subscription"},
 
 	HomeTitle:     "iftahonline | The online store platform for cash on delivery",
 	HomeDesc:      "Create your online store free on iftahonline: order confirmation on WhatsApp, protection from fake orders, and a net profit dashboard. For merchants in Egypt and the Gulf.",

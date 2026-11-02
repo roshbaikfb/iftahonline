@@ -91,6 +91,9 @@ func toBilling(s app.Summary) Billing {
 	if s.Card != "" {
 		out.Card = &s.Card
 	}
+	if s.FoundingSeat > 0 {
+		out.Founding = &BillingFounding{Seat: s.FoundingSeat, DiscountBps: int(s.FoundingBps)}
+	}
 	if s.NextPlanNameAr != "" {
 		out.NextPlanNameAr, out.NextPlanNameEn = &s.NextPlanNameAr, &s.NextPlanNameEn
 	}

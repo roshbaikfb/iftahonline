@@ -249,6 +249,18 @@ address { font-style: normal; color: var(--muted); text-align: left; align-self:
 [dir="rtl"] .video .play::after { transform: translateX(-4px) scaleX(-1); }
 .story .eyebrow { align-self: flex-start; }
 
+/* The founding program (ADR-0074) */
+.founding { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; padding: 44px; border-radius: 26px; border: 2px solid var(--green); background: linear-gradient(135deg, #f0fdf4, #fff 60%); }
+.founding-text { flex: 1 1 420px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.founding-text h2 { font-size: 34px; line-height: 1.3; }
+.seats { flex: 0 1 260px; margin-inline: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px; border-radius: 22px; background: var(--navy); color: #fff; text-align: center; }
+.seats strong { font-size: 64px; line-height: 1; }
+.seats span { color: var(--night-text); }
+.seats progress { width: 100%; height: 10px; margin-top: 10px; appearance: none; border: 0; border-radius: 6px; background: var(--night-line); overflow: hidden; }
+.seats progress::-webkit-progress-bar { background: var(--night-line); }
+.seats progress::-webkit-progress-value { background: #4ade80; }
+.seats progress::-moz-progress-bar { background: #4ade80; }
+
 /* Tools, steps, trust */
 .bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .tile { padding: 28px; border-radius: 20px; background: var(--soft); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
@@ -369,6 +381,8 @@ tbody th { font-weight: 500; }
   .grid4, .grid3, .grid2, .bento, .teaser, .steps { grid-template-columns: minmax(0, 1fr); }
   .feature-text h2, .story h2 { font-size: 26px; }
   .founder { flex-direction: column; padding: 22px; }
+  .founding { padding: 24px 18px; }
+  .founding-text h2 { font-size: 26px; }
   .tile.wide { grid-column: auto; }
   .move { padding: 24px 18px; }
   .move h2, .faq-side h2 { font-size: 26px; }

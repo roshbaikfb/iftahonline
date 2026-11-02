@@ -1496,6 +1496,9 @@ type Billing struct {
 	Card  *string       `json:"card,omitempty"`
 	Cycle *BillingCycle `json:"cycle,omitempty"`
 
+	// Founding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
+	Founding *BillingFounding `json:"founding,omitempty"`
+
 	// GraceUntil Past due: when the store closes unpaid.
 	GraceUntil *time.Time `json:"grace_until,omitempty"`
 
@@ -1521,6 +1524,17 @@ type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingFounding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
+type BillingFounding struct {
+	// DiscountBps 2000 = 20%.
+	//
+	// Example: 2000
+	DiscountBps int `json:"discount_bps"`
+
+	// Seat Example: 7
+	Seat int `json:"seat"`
+}
 
 // DnsRecord defines model for DnsRecord.
 type DnsRecord struct {

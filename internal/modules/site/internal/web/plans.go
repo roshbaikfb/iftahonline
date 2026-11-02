@@ -45,9 +45,39 @@ type cachedOffers struct {
 	at     time.Time
 }
 
-// Plans is billing's read of the plans on sale.
+// Plans is billing's read of the plans on sale, and of the founding
+// program's seats.
 type Plans interface {
 	PublicOffers(ctx context.Context, currency string) (billing.Offers, error)
+	FoundingSeats(ctx context.Context) (billing.FoundingSeats, error)
+}
+
+// seatsCache keeps the founding program's seats a minute (the counter is
+// the edge's lifetime behind anyway).
+type seatsCache struct {
+	src   Plans
+	now   func() time.Time
+	mu    sync.Mutex
+	got   billing.FoundingSeats
+	until time.Time
+}
+
+func (c *seatsCache) get(ctx context.Context) (billing.FoundingSeats, error) {
+	c.mu.Lock()
+	if c.now().Before(c.until) {
+		got := c.got
+		c.mu.Unlock()
+		return got, nil
+	}
+	c.mu.Unlock()
+	s, err := c.src.FoundingSeats(ctx)
+	if err != nil {
+		return billing.FoundingSeats{}, fmt.Errorf("site: founding seats: %w", err)
+	}
+	c.mu.Lock()
+	c.got, c.until = s, c.now().Add(time.Minute)
+	c.mu.Unlock()
+	return s, nil
 }
 
 func (c *planCache) get(ctx context.Context, currency string) (billing.Offers, error) {
