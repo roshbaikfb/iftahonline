@@ -181,45 +181,50 @@ func (s *Service) SetSiteImage(ctx context.Context, which site.Image, uploadKey,
 	return key, nil
 }
 
-// CreateSitePerson adds a founder or a team member, recorded once saved.
-func (s *Service) CreateSitePerson(ctx context.Context, p site.Person, uploadKey, rawReason string) (site.Person, error) {
+// recorded runs a change that saves an entry of the about page, then
+// records it with its ID: a refused change leaves nothing to record.
+func recorded[T any](ctx context.Context, s *Service, rawReason, action, targetType string,
+	save func(site.Console) (T, error), target func(T) (id string, meta map[string]any)) (T, error) {
+	var zero T
 	who, c, err := s.site(ctx)
 	if err != nil {
-		return site.Person{}, err
+		return zero, err
 	}
 	reason, err := domain.ValidateReason(rawReason)
 	if err != nil {
-		return site.Person{}, err
+		return zero, err
 	}
-	if p, err = c.CreatePerson(ctx, p, uploadKey); err != nil {
-		return site.Person{}, err
+	v, err := save(c)
+	if err != nil {
+		return zero, err
 	}
-	if err = s.audit(ctx, &who.AdminID, "site.person_created", "site_person", p.ID.String(),
-		map[string]any{"reason": reason, "name": p.NameAr, "kind": string(p.Kind)}); err != nil {
-		return site.Person{}, err
+	id, meta := target(v)
+	meta["reason"] = reason
+	if err = s.audit(ctx, &who.AdminID, action, targetType, id, meta); err != nil {
+		return zero, err
 	}
-	return p, nil
+	return v, nil
+}
+
+func personTarget(p site.Person) (string, map[string]any) {
+	return p.ID.String(), map[string]any{"name": p.NameAr, "kind": string(p.Kind)}
+}
+
+func reviewTarget(t site.Testimonial) (string, map[string]any) {
+	return t.ID.String(), map[string]any{"name": t.Name}
+}
+
+// CreateSitePerson adds a founder or a team member, recorded once saved.
+func (s *Service) CreateSitePerson(ctx context.Context, p site.Person, uploadKey, rawReason string) (site.Person, error) {
+	return recorded(ctx, s, rawReason, "site.person_created", "site_person",
+		func(c site.Console) (site.Person, error) { return c.CreatePerson(ctx, p, uploadKey) }, personTarget)
 }
 
 // UpdateSitePerson rewrites a person, recorded once saved (a new photo
 // is ingested by the save itself).
 func (s *Service) UpdateSitePerson(ctx context.Context, p site.Person, uploadKey string, removePhoto bool, rawReason string) (site.Person, error) {
-	who, c, err := s.site(ctx)
-	if err != nil {
-		return site.Person{}, err
-	}
-	reason, err := domain.ValidateReason(rawReason)
-	if err != nil {
-		return site.Person{}, err
-	}
-	if p, err = c.UpdatePerson(ctx, p, uploadKey, removePhoto); err != nil {
-		return site.Person{}, err
-	}
-	if err = s.audit(ctx, &who.AdminID, "site.person_updated", "site_person", p.ID.String(),
-		map[string]any{"reason": reason, "name": p.NameAr}); err != nil {
-		return site.Person{}, err
-	}
-	return p, nil
+	return recorded(ctx, s, rawReason, "site.person_updated", "site_person",
+		func(c site.Console) (site.Person, error) { return c.UpdatePerson(ctx, p, uploadKey, removePhoto) }, personTarget)
 }
 
 // DeleteSitePerson removes a person, recorded first.
@@ -240,42 +245,16 @@ func (s *Service) DeleteSitePerson(ctx context.Context, id ulid.ID, rawReason st
 
 // CreateSiteTestimonial adds a merchant's review, recorded once saved.
 func (s *Service) CreateSiteTestimonial(ctx context.Context, t site.Testimonial, uploadKey, rawReason string) (site.Testimonial, error) {
-	who, c, err := s.site(ctx)
-	if err != nil {
-		return site.Testimonial{}, err
-	}
-	reason, err := domain.ValidateReason(rawReason)
-	if err != nil {
-		return site.Testimonial{}, err
-	}
-	if t, err = c.CreateTestimonial(ctx, t, uploadKey); err != nil {
-		return site.Testimonial{}, err
-	}
-	if err = s.audit(ctx, &who.AdminID, "site.testimonial_created", "site_testimonial", t.ID.String(),
-		map[string]any{"reason": reason, "name": t.Name}); err != nil {
-		return site.Testimonial{}, err
-	}
-	return t, nil
+	return recorded(ctx, s, rawReason, "site.testimonial_created", "site_testimonial",
+		func(c site.Console) (site.Testimonial, error) { return c.CreateTestimonial(ctx, t, uploadKey) }, reviewTarget)
 }
 
 // UpdateSiteTestimonial rewrites a review, recorded once saved.
 func (s *Service) UpdateSiteTestimonial(ctx context.Context, t site.Testimonial, uploadKey string, removePhoto bool, rawReason string) (site.Testimonial, error) {
-	who, c, err := s.site(ctx)
-	if err != nil {
-		return site.Testimonial{}, err
-	}
-	reason, err := domain.ValidateReason(rawReason)
-	if err != nil {
-		return site.Testimonial{}, err
-	}
-	if t, err = c.UpdateTestimonial(ctx, t, uploadKey, removePhoto); err != nil {
-		return site.Testimonial{}, err
-	}
-	if err = s.audit(ctx, &who.AdminID, "site.testimonial_updated", "site_testimonial", t.ID.String(),
-		map[string]any{"reason": reason, "name": t.Name}); err != nil {
-		return site.Testimonial{}, err
-	}
-	return t, nil
+	return recorded(ctx, s, rawReason, "site.testimonial_updated", "site_testimonial",
+		func(c site.Console) (site.Testimonial, error) {
+			return c.UpdateTestimonial(ctx, t, uploadKey, removePhoto)
+		}, reviewTarget)
 }
 
 // DeleteSiteTestimonial removes a review, recorded first.
