@@ -41,6 +41,9 @@ templ aboutPage(p *pageCtx) {
 				</div>
 				<p>{ p.t.BrandOf }</p>
 				<address dir="ltr">5c New Quebec Street<br/>London W1H 7RG<br/>United Kingdom</address>
+				if p.settings.CompanyNumber != "" {
+					<p class="small">{ p.t.CompanyNo } <a href={ templ.SafeURL(p.settings.CompanyHouseURL()) } rel="noopener" target="_blank"><bdi dir="ltr">{ p.settings.CompanyNumber }</bdi></a></p>
+				}
 			</div>
 			<div class="card">
 				<h3>{ p.t.Contact }</h3>
@@ -50,6 +53,16 @@ templ aboutPage(p *pageCtx) {
 						@icon("chat")
 						{ p.t.WhatsApp } <bdi dir="ltr">{ p.whatsDisplay }</bdi>
 					</a>
+				}
+				if p.intl != "" || p.settings.Email != "" {
+					<div class="contact-more">
+						if p.intl != "" {
+							<a href={ templ.SafeURL(p.intl) } rel="noopener" target="_blank">{ p.t.WhatsAppIntl } <bdi dir="ltr">{ p.intlDisplay }</bdi></a>
+						}
+						if p.settings.Email != "" {
+							<a href={ templ.SafeURL("mailto:" + p.settings.Email) }>{ p.t.Email } <bdi dir="ltr">{ p.settings.Email }</bdi></a>
+						}
+					</div>
 				}
 			</div>
 		</div>

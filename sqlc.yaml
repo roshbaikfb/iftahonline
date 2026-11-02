@@ -446,6 +446,26 @@ sql:
 
   - engine: postgresql
     schema: db/migrations
+    queries: db/queries/site
+    database:
+      uri: ${SQLC_VET_DATABASE_URL}
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+      - no-unbounded-delete
+    gen:
+      go:
+        package: sitedb
+        out: internal/modules/site/internal/store/sitedb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/roshbaikfb/iftahonline/internal/platform/ulid.ID
+
+  - engine: postgresql
+    schema: db/migrations
     queries: db/queries/billing
     database:
       uri: ${SQLC_VET_DATABASE_URL}

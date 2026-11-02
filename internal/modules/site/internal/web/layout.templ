@@ -128,8 +128,13 @@ templ siteFooter(p *pageCtx) {
 			</nav>
 			<div>
 				<strong>{ p.t.Contact }</strong>
-				if p.whatsApp != "" {
-					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.WhatsApp } <bdi dir="ltr">{ p.whatsDisplay }</bdi></a>
+				@contactLinks(p)
+				if len(p.socials) > 0 {
+					<nav class="socials" aria-label={ p.t.FollowUs }>
+						for _, sl := range p.socials {
+							<a href={ templ.SafeURL(sl.url) } rel="noopener me" target="_blank">{ sl.name }</a>
+						}
+					</nav>
 				}
 				@langSwitch(p)
 			</div>
@@ -142,6 +147,19 @@ templ siteFooter(p *pageCtx) {
 			</nav>
 		</div>
 	</footer>
+}
+
+// contactLinks are the ways to reach us the console set.
+templ contactLinks(p *pageCtx) {
+	if p.whatsApp != "" {
+		<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.WhatsApp } <bdi dir="ltr">{ p.whatsDisplay }</bdi></a>
+	}
+	if p.intl != "" {
+		<a href={ templ.SafeURL(p.intl) } rel="noopener" target="_blank">{ p.t.WhatsAppIntl } <bdi dir="ltr">{ p.intlDisplay }</bdi></a>
+	}
+	if p.settings.Email != "" {
+		<a href={ templ.SafeURL("mailto:" + p.settings.Email) }>{ p.t.Email } <bdi dir="ltr">{ p.settings.Email }</bdi></a>
+	}
 }
 
 templ icon(name string) {

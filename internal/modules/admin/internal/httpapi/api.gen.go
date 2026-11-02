@@ -1072,6 +1072,92 @@ type AdminSettleInput struct {
 	Reference string `json:"reference"`
 }
 
+// AdminSite defines model for AdminSite.
+type AdminSite struct {
+	Faqs     []AdminSiteFAQ    `json:"faqs"`
+	Settings AdminSiteSettings `json:"settings"`
+}
+
+// AdminSiteFAQ defines model for AdminSiteFAQ.
+type AdminSiteFAQ struct {
+	AnswerAr string `json:"answer_ar"`
+	AnswerEn string `json:"answer_en"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// OnHome Shown on the home page too.
+	OnHome bool `json:"on_home"`
+
+	// Position The order
+	Position   int    `json:"position"`
+	QuestionAr string `json:"question_ar"`
+
+	// QuestionEn Empty leaves the question off the English site.
+	QuestionEn string `json:"question_en"`
+}
+
+// AdminSiteFAQInput defines model for AdminSiteFAQInput.
+type AdminSiteFAQInput struct {
+	AnswerAr   string  `json:"answer_ar"`
+	AnswerEn   *string `json:"answer_en,omitempty"`
+	OnHome     bool    `json:"on_home"`
+	Position   int     `json:"position"`
+	QuestionAr string  `json:"question_ar"`
+	QuestionEn *string `json:"question_en,omitempty"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
+// AdminSiteSettings defines model for AdminSiteSettings.
+type AdminSiteSettings struct {
+	// CompanyNumber Companies House's number; the about page links its public record.
+	//
+	// Example: 12345678
+	CompanyNumber string `json:"company_number"`
+
+	// Email Example: hello@iftahonline.com
+	Email string `json:"email"`
+
+	// Socials Each network's profile link; absent hides it.
+	Socials AdminSiteSocials `json:"socials"`
+
+	// Whatsapp E.164; empty hides it.
+	//
+	// Example: +201153450716
+	Whatsapp string `json:"whatsapp"`
+
+	// WhatsappIntl The international number
+	//
+	// Example: +447700900123
+	WhatsappIntl string `json:"whatsapp_intl"`
+}
+
+// AdminSiteSettingsInput defines model for AdminSiteSettingsInput.
+type AdminSiteSettingsInput struct {
+	CompanyNumber string `json:"company_number"`
+	Email         string `json:"email"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Socials Each network's profile link; absent hides it.
+	Socials      AdminSiteSocials `json:"socials"`
+	Whatsapp     string           `json:"whatsapp"`
+	WhatsappIntl string           `json:"whatsapp_intl"`
+}
+
+// AdminSiteSocials Each network's profile link; absent hides it.
+type AdminSiteSocials struct {
+	Facebook  *string `json:"facebook,omitempty"`
+	Instagram *string `json:"instagram,omitempty"`
+	Linkedin  *string `json:"linkedin,omitempty"`
+	Tiktok    *string `json:"tiktok,omitempty"`
+	X         *string `json:"x,omitempty"`
+	Youtube   *string `json:"youtube,omitempty"`
+}
+
 // AdminStoreCounts defines model for AdminStoreCounts.
 type AdminStoreCounts struct {
 	Active int64 `json:"active"`
@@ -1372,6 +1458,12 @@ type AdminAuditLogParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// AdminDeleteSiteFAQParams defines parameters for AdminDeleteSiteFAQ.
+type AdminDeleteSiteFAQParams struct {
+	// Reason Kept in the admin audit log.
+	Reason string `form:"reason" json:"reason"`
+}
+
 // AdminListStoresParams defines parameters for AdminListStores.
 type AdminListStoresParams struct {
 	// Query Slug prefix or name substring.
@@ -1419,6 +1511,15 @@ type AdminPublishPlanJSONRequestBody = AdminPlanInput
 
 // AdminRetirePlanJSONRequestBody defines body for AdminRetirePlan for application/json ContentType.
 type AdminRetirePlanJSONRequestBody = AdminReason
+
+// AdminCreateSiteFAQJSONRequestBody defines body for AdminCreateSiteFAQ for application/json ContentType.
+type AdminCreateSiteFAQJSONRequestBody = AdminSiteFAQInput
+
+// AdminUpdateSiteFAQJSONRequestBody defines body for AdminUpdateSiteFAQ for application/json ContentType.
+type AdminUpdateSiteFAQJSONRequestBody = AdminSiteFAQInput
+
+// AdminSaveSiteSettingsJSONRequestBody defines body for AdminSaveSiteSettings for application/json ContentType.
+type AdminSaveSiteSettingsJSONRequestBody = AdminSiteSettingsInput
 
 // AdminSetStoreOverrideJSONRequestBody defines body for AdminSetStoreOverride for application/json ContentType.
 type AdminSetStoreOverrideJSONRequestBody = AdminOverrideInput
@@ -1506,6 +1607,21 @@ type ServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(w http.ResponseWriter, r *http.Request, code string)
+	// AdminGetSite The platform site's contact details and FAQ
+	// (GET /admin/v1/site)
+	AdminGetSite(w http.ResponseWriter, r *http.Request)
+	// AdminCreateSiteFAQ Add a question to the site's FAQ
+	// (POST /admin/v1/site/faqs)
+	AdminCreateSiteFAQ(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteSiteFAQ Remove a question
+	// (DELETE /admin/v1/site/faqs/{faq_id})
+	AdminDeleteSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID, params AdminDeleteSiteFAQParams)
+	// AdminUpdateSiteFAQ Rewrite a question
+	// (PUT /admin/v1/site/faqs/{faq_id})
+	AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID)
+	// AdminSaveSiteSettings Save the site's contact details
+	// (PUT /admin/v1/site/settings)
+	AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(w http.ResponseWriter, r *http.Request, params AdminListStoresParams)
@@ -1980,6 +2096,116 @@ func (siw *ServerInterfaceWrapper) AdminRetirePlan(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRetirePlan(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetSite operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetSite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetSite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateSiteFAQ operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateSiteFAQ(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateSiteFAQ(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteSiteFAQ operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteSiteFAQ(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "faq_id" -------------
+	var faqId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "faq_id", r.PathValue("faq_id"), &faqId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "faq_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminDeleteSiteFAQParams
+
+	// ------------- Required query parameter "reason" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reason", r.URL.Query(), &params.Reason, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reason"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteSiteFAQ(w, r, faqId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateSiteFAQ operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "faq_id" -------------
+	var faqId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "faq_id", r.PathValue("faq_id"), &faqId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "faq_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSiteFAQ(w, r, faqId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveSiteSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveSiteSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2466,6 +2692,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/uploads", wrapper.AdminCreateAdUpload)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/ads/banners", wrapper.AdminCreateAdBanner)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/ads/banners/{banner_id}/active", wrapper.AdminSetAdBannerActive)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/site", wrapper.AdminGetSite)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/settings", wrapper.AdminSaveSiteSettings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/faqs", wrapper.AdminCreateSiteFAQ)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/faqs/{faq_id}", wrapper.AdminDeleteSiteFAQ)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/faqs/{faq_id}", wrapper.AdminUpdateSiteFAQ)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
@@ -3332,6 +3563,196 @@ func (response AdminRetirePlandefaultApplicationProblemPlusJSONResponse) VisitAd
 	return err
 }
 
+type AdminGetSiteRequestObject struct {
+}
+
+type AdminGetSiteResponseObject interface {
+	VisitAdminGetSiteResponse(w http.ResponseWriter) error
+}
+
+type AdminGetSite200JSONResponse AdminSite
+
+func (response AdminGetSite200JSONResponse) VisitAdminGetSiteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetSitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetSitedefaultApplicationProblemPlusJSONResponse) VisitAdminGetSiteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteFAQRequestObject struct {
+	Body *AdminCreateSiteFAQJSONRequestBody
+}
+
+type AdminCreateSiteFAQResponseObject interface {
+	VisitAdminCreateSiteFAQResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateSiteFAQ201JSONResponse AdminSiteFAQ
+
+func (response AdminCreateSiteFAQ201JSONResponse) VisitAdminCreateSiteFAQResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteFAQdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateSiteFAQdefaultApplicationProblemPlusJSONResponse) VisitAdminCreateSiteFAQResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteSiteFAQRequestObject struct {
+	FaqId  ULID `json:"faq_id"`
+	Params AdminDeleteSiteFAQParams
+}
+
+type AdminDeleteSiteFAQResponseObject interface {
+	VisitAdminDeleteSiteFAQResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteSiteFAQ204Response struct {
+}
+
+func (response AdminDeleteSiteFAQ204Response) VisitAdminDeleteSiteFAQResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteSiteFAQdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDeleteSiteFAQdefaultApplicationProblemPlusJSONResponse) VisitAdminDeleteSiteFAQResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteFAQRequestObject struct {
+	FaqId ULID `json:"faq_id"`
+	Body  *AdminUpdateSiteFAQJSONRequestBody
+}
+
+type AdminUpdateSiteFAQResponseObject interface {
+	VisitAdminUpdateSiteFAQResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSiteFAQ200JSONResponse AdminSiteFAQ
+
+func (response AdminUpdateSiteFAQ200JSONResponse) VisitAdminUpdateSiteFAQResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteFAQdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUpdateSiteFAQdefaultApplicationProblemPlusJSONResponse) VisitAdminUpdateSiteFAQResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveSiteSettingsRequestObject struct {
+	Body *AdminSaveSiteSettingsJSONRequestBody
+}
+
+type AdminSaveSiteSettingsResponseObject interface {
+	VisitAdminSaveSiteSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveSiteSettings200JSONResponse AdminSiteSettings
+
+func (response AdminSaveSiteSettings200JSONResponse) VisitAdminSaveSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveSiteSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveSiteSettingsdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminListStoresRequestObject struct {
 	Params AdminListStoresParams
 }
@@ -3799,6 +4220,21 @@ type StrictServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(ctx context.Context, request AdminRetirePlanRequestObject) (AdminRetirePlanResponseObject, error)
+	// AdminGetSite The platform site's contact details and FAQ
+	// (GET /admin/v1/site)
+	AdminGetSite(ctx context.Context, request AdminGetSiteRequestObject) (AdminGetSiteResponseObject, error)
+	// AdminCreateSiteFAQ Add a question to the site's FAQ
+	// (POST /admin/v1/site/faqs)
+	AdminCreateSiteFAQ(ctx context.Context, request AdminCreateSiteFAQRequestObject) (AdminCreateSiteFAQResponseObject, error)
+	// AdminDeleteSiteFAQ Remove a question
+	// (DELETE /admin/v1/site/faqs/{faq_id})
+	AdminDeleteSiteFAQ(ctx context.Context, request AdminDeleteSiteFAQRequestObject) (AdminDeleteSiteFAQResponseObject, error)
+	// AdminUpdateSiteFAQ Rewrite a question
+	// (PUT /admin/v1/site/faqs/{faq_id})
+	AdminUpdateSiteFAQ(ctx context.Context, request AdminUpdateSiteFAQRequestObject) (AdminUpdateSiteFAQResponseObject, error)
+	// AdminSaveSiteSettings Save the site's contact details
+	// (PUT /admin/v1/site/settings)
+	AdminSaveSiteSettings(ctx context.Context, request AdminSaveSiteSettingsRequestObject) (AdminSaveSiteSettingsResponseObject, error)
 	// AdminListStores Search every store
 	// (GET /admin/v1/stores)
 	AdminListStores(ctx context.Context, request AdminListStoresRequestObject) (AdminListStoresResponseObject, error)
@@ -4493,6 +4929,152 @@ func (sh *strictHandler) AdminRetirePlan(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRetirePlanResponseObject); ok {
 		if err := validResponse.VisitAdminRetirePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetSite operation middleware
+func (sh *strictHandler) AdminGetSite(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetSiteRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetSite(ctx, request.(AdminGetSiteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetSite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetSiteResponseObject); ok {
+		if err := validResponse.VisitAdminGetSiteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateSiteFAQ operation middleware
+func (sh *strictHandler) AdminCreateSiteFAQ(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateSiteFAQRequestObject
+
+	var body AdminCreateSiteFAQJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateSiteFAQ(ctx, request.(AdminCreateSiteFAQRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateSiteFAQ")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateSiteFAQResponseObject); ok {
+		if err := validResponse.VisitAdminCreateSiteFAQResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteSiteFAQ operation middleware
+func (sh *strictHandler) AdminDeleteSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID, params AdminDeleteSiteFAQParams) {
+	var request AdminDeleteSiteFAQRequestObject
+
+	request.FaqId = faqId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteSiteFAQ(ctx, request.(AdminDeleteSiteFAQRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteSiteFAQ")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteSiteFAQResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteSiteFAQResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSiteFAQ operation middleware
+func (sh *strictHandler) AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID) {
+	var request AdminUpdateSiteFAQRequestObject
+
+	request.FaqId = faqId
+
+	var body AdminUpdateSiteFAQJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSiteFAQ(ctx, request.(AdminUpdateSiteFAQRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSiteFAQ")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSiteFAQResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSiteFAQResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveSiteSettings operation middleware
+func (sh *strictHandler) AdminSaveSiteSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminSaveSiteSettingsRequestObject
+
+	var body AdminSaveSiteSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveSiteSettings(ctx, request.(AdminSaveSiteSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveSiteSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveSiteSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminSaveSiteSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

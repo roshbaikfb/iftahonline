@@ -728,6 +728,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
+			Site: site.NewConsole(c.adminPool, c.ids, c.log),
 		}); err != nil {
 			return nil, err
 		}
@@ -865,7 +866,7 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	}
 	go shop.Listen(ctx)
 	_, faces, preload := shop.BrandFont()
-	web, err := site.New(site.Deps{Plans: billing.NewShowcase(c.pool), Font: site.Font{Faces: faces, Preload: preload},
+	web, err := site.New(site.Deps{Pool: c.pool, Plans: billing.NewShowcase(c.pool), Font: site.Font{Faces: faces, Preload: preload},
 		Domain: c.cfg.Tenancy.BaseDomain, HTTPS: c.cfg.Env == config.EnvProduction || c.cfg.Env == config.EnvStaging,
 		DashboardURL: c.cfg.Mail.DashboardURL, WhatsApp: site.DefaultWhatsApp, Log: c.log})
 	if err != nil {

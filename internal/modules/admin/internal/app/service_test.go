@@ -21,6 +21,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -111,9 +112,10 @@ func newFixture(t *testing.T) fixture {
 	}
 	d.Billing, d.Redis, d.Agencies = bill.Console(), rdb, bill.Agencies()
 	d.Ads = &fakeAds{}
+	d.Site = site.NewConsole(adminPool, ids, log)
 	cli := d
 	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis, cli.Agencies = nil, nil, nil, nil, nil, nil, nil, nil, nil
-	cli.Ads = nil
+	cli.Ads, cli.Site = nil, nil
 	return fixture{svc: app.NewService(d), cli: app.NewService(cli), owner: owner, app: appPool, ten: ten, ids: ids, imp: imp, deps: d}
 }
 

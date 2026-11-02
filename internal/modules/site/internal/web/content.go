@@ -2,8 +2,8 @@ package web
 
 // The site's copy, in Arabic (the English is in content_en.go). It speaks
 // of what a merchant gains, never of how the platform is built (the
-// owner's rule). The console edits the FAQ and the contact details
-// later (S4); until then they live here.
+// owner's rule). The FAQ and the contact details are the console's
+// (S4a, ADR-0073).
 
 // brand is how the platform is named. Its spelling variants are said
 // once, naturally (the FAQ and llms.txt), never stuffed.
@@ -89,23 +89,11 @@ var trustItems = []trust{ //nolint:gochecknoglobals // constant copy
 }
 
 // faq is one question and its answer. home marks the ones the home page
-// shows; the FAQ page shows all.
+// shows; the FAQ page shows all. The site's FAQ is the console's (S4a);
+// the feature pages keep their own questions here.
 type faq struct {
 	q, a string
 	home bool
-}
-
-var faqs = []faq{ //nolint:gochecknoglobals // constant copy
-	{"ما هي منصة افتح أونلاين؟", "افتح أونلاين (وتُكتب أيضًا افتح اونلاين، وبالإنجليزية iftahonline) منصة لإنشاء المتاجر الإلكترونية، صُممت لتجار مصر والخليج الذين يبيعون بالدفع عند الاستلام: متجر جاهز، وتأكيد الطلبات على واتساب، وحماية من الطلبات الوهمية، ولوحة للربح الصافي.", true},
-	{"هل يمكنني البدء مجانًا؟", "نعم. الباقة المجانية دائمة، ولا تطلب بطاقة بنكية. حدودها في صفحة الأسعار.", true},
-	{"كيف يؤكد العميل طلبه على واتساب؟", "تصله رسالة فيها تفاصيل طلبه وزرّا «تأكيد الطلب» و«إلغاء الطلب». بضغطة يتأكد الطلب في لوحتك، ومن ليس على واتساب تصله رسالة نصية برابط للتأكيد.", true},
-	{"بأي عملة أدفع الاشتراك؟", "بالجنيه المصري إن كان متجرك في مصر، وبالدولار الأمريكي في باقي الدول.", true},
-	{"هل أستطيع ربط دومين خاص بي؟", "نعم في الباقات المدفوعة، ويبقى لمتجرك أيضًا رابط مجاني على افتح أونلاين.", true},
-	{"كيف تحمي المنصة من الطلبات الوهمية؟", "كل طلب يحصل على تقييم من نتائج توصيل رقم العميل في متاجر افتح أونلاين كلها. لا يرى أي متجر بيانات متجر آخر، فقط مستوى التقييم، وأنت تختار ما يحدث للطلبات عالية المخاطر: إيقاف للمراجعة، أو تأكيد بالهاتف، أو دفع التوصيل مقدمًا.", false},
-	{"هل تعمل المنصة في الخليج؟", "نعم. المتجر يعرض الأسعار بعملته، ويعمل بالعربية والإنجليزية.", false},
-	{"عندي متجر في منصة أخرى، هل يمكن نقله؟", "نعم. مع أي باقة مدفوعة ننقل منتجاتك وصورها وتصنيفاتها إلى متجرك الجديد مجانًا، ويمكنك أيضًا استيرادها بنفسك من ملف.", false},
-	{"هل توجد رسوم أخرى غير الاشتراك؟", "لا رسوم مخفية. رسوم Paymob على الدفع بالبطاقة، وأسعار شركة الشحن، تدفعها لهم مباشرة بأسعارهم، ولا نأخذ منها شيئًا.", false},
-	{"هل أستطيع إلغاء اشتراكي؟", "نعم، بلا عقد، في أي وقت من لوحة التاجر. وبعد نهاية المدة المدفوعة يعود متجرك إلى الباقة المجانية وتبقى بياناته كما هي.", false},
 }
 
 // worksWith are the tools the platform works with, as their makers spell
