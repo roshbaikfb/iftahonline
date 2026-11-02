@@ -37,6 +37,16 @@ function q(over: Partial<SiteFAQ> = {}): SiteFAQ {
 
 const settings = { whatsapp: '+201153450716', whatsapp_intl: '', email: '', company_number: '', socials: {} };
 
+// row is the table's i-th row (0 is the head).
+function row(i: number): HTMLElement {
+  const r = screen.getAllByRole('row')[i];
+  if (!r) throw new Error(`no row ${String(i)}`);
+  return r;
+}
+
+// cell is a row's i-th cell's text.
+const cell = (r: HTMLElement, i: number) => within(r).getAllByRole('cell')[i]?.textContent;
+
 const body = (calls: Call[], method: string, path: string) => calls.find((c) => c.method === method && c.path === path)?.body;
 
 afterEach(() => {
@@ -90,8 +100,8 @@ describe('the site in the console', () => {
 
     // In the site's order, with what each shows.
     const rows = (await screen.findAllByRole('row')).slice(1);
-    expect(rows.map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual(['ما هي منصة افتح أونلاين؟', 'هل يمكنني البدء مجانًا؟']);
-    expect(within(rows[1]).getAllByRole('cell')[2]).toHaveTextContent('—');
+    expect(rows.map((r) => cell(r, 1))).toEqual(['ما هي منصة افتح أونلاين؟', 'هل يمكنني البدء مجانًا؟']);
+    expect(cell(row(2), 2)).toBe('—');
 
     // A new question goes last.
     const add = screen.getByRole('form', { name: 'سؤال جديد' });
@@ -111,7 +121,7 @@ describe('the site in the console', () => {
     expect(screen.getAllByRole('row')).toHaveLength(4);
 
     // Editing fills the form with the question.
-    await user.click(within(screen.getAllByRole('row')[1]).getByRole('button', { name: 'تعديل' }));
+    await user.click(within(row(1)).getByRole('button', { name: 'تعديل' }));
     const edit = screen.getByRole('form', { name: 'تعديل السؤال' });
     expect(within(edit).getByLabelText('السؤال بالعربية')).toHaveValue('ما هي منصة افتح أونلاين؟');
     await user.click(within(edit).getByLabelText('يظهر في الصفحة الرئيسية'));
@@ -121,7 +131,7 @@ describe('the site in the console', () => {
     expect(body(calls, 'PUT', `/admin/v1/site/faqs/${first.id}`)).toMatchObject({ on_home: false, question_en: 'What is iftahonline?' });
     expect(screen.getByRole('form', { name: 'سؤال جديد' })).toBeInTheDocument();
 
-    await user.click(within(screen.getAllByRole('row')[2]).getByRole('button', { name: 'حذف' }));
+    await user.click(within(row(2)).getByRole('button', { name: 'حذف' }));
     expect(await screen.findByRole('status')).toHaveTextContent('حُذف السؤال.');
     expect(calls.find((c) => c.method === 'DELETE')?.path).toBe(`/admin/v1/site/faqs/${second.id}`);
     expect(screen.queryByText('هل يمكنني البدء مجانًا؟')).not.toBeInTheDocument();
