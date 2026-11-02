@@ -113,7 +113,7 @@ h2 { font-size: 44px; letter-spacing: -.5px; }
 .feature-text h3 { font-size: 34px; line-height: 1.3; }
 .feature-text p { font-size: 18px; color: var(--muted); }
 .feature-art { flex: 1 1 0; border-radius: 24px; padding: 40px; display: flex; justify-content: center; }
-.feature-art.confirm, .feature-art.profit { background: var(--soft); border: 1px solid var(--line); }
+.feature-art.confirm, .feature-art.profit, .feature-art.shipping, .feature-art.store, .feature-art.marketing { background: var(--soft); border: 1px solid var(--line); }
 .feature-art.protect { background: var(--ink); }
 .tag { align-self: flex-start; padding: 5px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
 .tag.green { background: var(--mint); color: var(--green-dark); }
@@ -154,6 +154,65 @@ h2 { font-size: 44px; letter-spacing: -.5px; }
 .profit-list div { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); color: var(--muted); }
 .profit-list div:first-child { border-top: 0; color: var(--ink); font-weight: 600; }
 .profit-list dd { margin: 0; }
+
+.feature-text .more { align-self: flex-start; }
+.profit-head .plain { font-size: 15px; color: var(--ink); }
+.track { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14px; color: var(--muted); }
+.track li { display: flex; align-items: center; gap: 10px; }
+.track li::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); background: #fff; }
+.track .done { color: var(--ink); }
+.track .done::before { background: var(--green); border-color: var(--green); }
+.track .now { color: var(--navy); font-weight: 700; }
+.track .now::before { border-color: var(--navy); box-shadow: 0 0 0 4px var(--sky); }
+.profit-list em { font-style: normal; font-size: 12px; padding: 2px 7px; border-radius: 6px; background: #f1f5f9; font-weight: 500; }
+.phone { width: 280px; max-width: 100%; background: #fff; border: 1px solid var(--line-2); border-radius: 28px; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; box-shadow: 0 20px 40px rgba(11,27,51,.12); }
+.phone-img { height: 150px; border-radius: 18px; background: linear-gradient(135deg, #fde68a, #fca5a5 60%, #c4b5fd); }
+.phone strong { font-size: 16px; }
+.phone-price { font-weight: 700; color: var(--green); }
+.phone-price s { color: var(--muted); font-weight: 400; font-size: 13px; }
+.sizes { display: flex; gap: 6px; }
+.sizes span { min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line-2); text-align: center; font-size: 13px; }
+.sizes .on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.field { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-2); color: #8a99ad; font-size: 13px; }
+.phone-btn { margin-top: 4px; padding: 11px; border-radius: 12px; background: var(--green); color: #fff; font-weight: 700; text-align: center; }
+.pixels { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.pixels li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-weight: 700; }
+.pixels li:first-child { border-top: 0; }
+.coupon { display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 16px; border: 2px dashed #86efac; background: #fff; }
+.coupon strong { font-size: 22px; color: var(--green); letter-spacing: 1px; text-align: left; }
+.coupon span { font-size: 14px; color: var(--muted); }
+
+/* Feature, about and legal pages */
+.page-head .tag { align-self: center; }
+.how { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 22px; }
+.how li { display: flex; gap: 16px; align-items: flex-start; }
+.how li > span { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.how h3 { font-size: 19px; margin-bottom: 4px; }
+.how p { color: var(--muted); }
+.feature-text h2 { font-size: 34px; }
+.control { margin-top: 36px; }
+.faq-page > h2, .section > h2.center { margin-bottom: 32px; }
+.links { margin-top: 8px; }
+.card.link { color: var(--ink); transition: border-color .15s, box-shadow .15s; }
+.card.link:hover { border-color: var(--green); box-shadow: 0 16px 32px rgba(11,27,51,.08); color: var(--ink); }
+.card.link h2 { font-size: 22px; letter-spacing: 0; }
+.card.link .tag { margin-bottom: 2px; }
+.card.link .more { margin-top: auto; font-size: 15px; }
+.story { max-width: 880px; display: flex; flex-direction: column; gap: 16px; }
+.story h2 { font-size: 34px; }
+.story p { font-size: 18px; color: #334155; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.company .card { padding: 32px; gap: 14px; align-items: flex-start; }
+.company-head { display: flex; gap: 16px; align-items: center; }
+.company-head p { color: var(--muted); font-size: 15px; }
+.flag { width: 48px; height: 24px; border-radius: 4px; box-shadow: 0 0 0 1px var(--line-2); flex: none; }
+address { font-style: normal; color: var(--muted); text-align: left; align-self: stretch; padding: 14px 16px; border-radius: 12px; background: var(--soft); }
+.prose { max-width: 880px; }
+.prose h2 { font-size: 24px; letter-spacing: 0; margin-top: 40px; }
+.prose h2:first-child { margin-top: 0; }
+.prose p { margin-top: 12px; font-size: 17px; color: #334155; }
+.foot .legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.foot .legal nav { flex-direction: row; gap: 20px; }
 
 /* Tools, steps, trust */
 .bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
@@ -272,7 +331,8 @@ tbody th { font-weight: 500; }
   .works-in { gap: 12px 22px; font-size: 16px; }
   .feature-text h3 { font-size: 24px; }
   .feature-art { padding: 20px; }
-  .grid4, .grid3, .bento, .teaser, .steps { grid-template-columns: minmax(0, 1fr); }
+  .grid4, .grid3, .grid2, .bento, .teaser, .steps { grid-template-columns: minmax(0, 1fr); }
+  .feature-text h2, .story h2 { font-size: 26px; }
   .tile.wide { grid-column: auto; }
   .move { padding: 24px 18px; }
   .move h2, .faq-side h2 { font-size: 26px; }

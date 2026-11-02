@@ -4,7 +4,7 @@
       "startServerCommand": "../../bin/sfdemo -addr 127.0.0.1:18192",
       "startServerReadyPattern": "sfdemo: ready",
       "startServerReadyTimeout": 180000,
-      "url": ["http://souq.localhost:18192/p/royal-oud", "http://souq.localhost:18192/pages/summer", "http://localhost:18192/", "http://localhost:18192/pricing"],
+      "url": ["http://souq.localhost:18192/p/royal-oud", "http://souq.localhost:18192/pages/summer", "http://localhost:18192/", "http://localhost:18192/pricing", "http://localhost:18192/features/whatsapp-confirmation"],
       "numberOfRuns": 3,
       "settings": {
         "formFactor": "mobile",

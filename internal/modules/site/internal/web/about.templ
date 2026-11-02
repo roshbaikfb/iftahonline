@@ -1,0 +1,77 @@
+package web
+
+// aboutPage is who we are. The founders, the team and the founding
+// story come with the console (S4) and show once they are set.
+templ aboutPage(p *pageCtx) {
+	<section class="dots">
+		<div class="wrap page-head">
+			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <span>عن افتح أونلاين</span></nav>
+			<h1>عن افتح أونلاين</h1>
+			<p class="lead">نبني الأدوات التي يحتاجها تاجر الدفع عند الاستلام في مصر والخليج، ليبيع أكثر ويخسر أقل.</p>
+		</div>
+	</section>
+	<section class="wrap section tight story" aria-labelledby="h-story">
+		<h2 id="h-story">لماذا افتح أونلاين؟</h2>
+		<p>في مصر والخليج يدفع كثير من العملاء عند الاستلام. لكن أغلب منصات المتاجر صُممت لمن يدفع بالبطاقة: لا تؤكد الطلب مع العميل، ولا تنبهك إلى من يرفض الاستلام، ولا تريك ما يضيع من ربحك بين الشحن والمرتجعات والإعلانات.</p>
+		<p>بنينا افتح أونلاين لتسد هذه الفجوة: متجر بالعربية جاهز في دقائق، وكل طلب يؤكده صاحبه على واتساب، وتقييم لكل طلب قبل أن تشحنه، ولوحة تريك ربحك الصافي الحقيقي.</p>
+	</section>
+	<section class="soft" aria-labelledby="h-values">
+		<div class="wrap section tight">
+			<h2 id="h-values" class="center">ما نؤمن به</h2>
+			<div class="grid3 control">
+				for _, v := range values {
+					<div class="card">
+						<h3>{ v.title }</h3>
+						<p>{ v.body }</p>
+					</div>
+				}
+			</div>
+		</div>
+	</section>
+	<section class="wrap section tight" aria-labelledby="h-company">
+		<h2 id="h-company" class="center">الشركة</h2>
+		<div class="grid2 company">
+			<div class="card">
+				<div class="company-head">
+					@templ.Raw(ukFlag)
+					<div>
+						<h3 dir="ltr">Codezilo Ltd</h3>
+						<p>شركة مسجلة في المملكة المتحدة</p>
+					</div>
+				</div>
+				<p>افتح أونلاين علامة تجارية تملكها وتديرها شركة Codezilo Ltd.</p>
+				<address dir="ltr">5c New Quebec Street<br/>London W1H 7RG<br/>United Kingdom</address>
+			</div>
+			<div class="card">
+				<h3>تواصل معنا</h3>
+				<p>فريقنا يرد عليك بالعربية، من أول يوم.</p>
+				if p.whatsApp != "" {
+					<a class="btn primary" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">
+						@icon("chat")
+						واتساب <bdi dir="ltr">{ p.whatsDisplay }</bdi>
+					</a>
+				}
+			</div>
+		</div>
+	</section>
+	@finalCTA(p)
+}
+
+templ legalPageView(p *pageCtx, lp legalPage) {
+	<section class="dots">
+		<div class="wrap page-head">
+			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <span>{ lp.name }</span></nav>
+			<h1>{ lp.h1 }</h1>
+			<p class="lead">{ lp.lead }</p>
+			<p class="muted small">آخر تحديث: { legalUpdated }</p>
+		</div>
+	</section>
+	<article class="wrap section tight prose">
+		for _, sec := range lp.sections {
+			<h2>{ sec.h }</h2>
+			for _, para := range sec.paras {
+				<p>{ para }</p>
+			}
+		}
+	</article>
+}

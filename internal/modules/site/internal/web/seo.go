@@ -7,11 +7,26 @@ import (
 	"strings"
 )
 
-// pages are the site's indexable pages, for sitemap.xml and llms.txt.
-var pages = []struct{ path, name, about string }{ //nolint:gochecknoglobals // constant copy
-	{"/", "الرئيسية", "ما هي افتح أونلاين ولمن، ومميزاتها، وخطوات البدء."},
-	{"/pricing", "الأسعار", "الباقات وأسعارها بالجنيه في مصر وبالدولار في باقي الدول."},
-	{"/faq", "الأسئلة الشائعة", "إجابات عن البدء والتأكيد والحماية والأسعار ونقل المتاجر."},
+// sitePage is an indexable page, for sitemap.xml and llms.txt.
+type sitePage struct{ path, name, about string }
+
+// sitePages are the site's indexable pages: the fixed ones, with each
+// feature's page after the features index.
+func sitePages() []sitePage {
+	out := []sitePage{
+		{"/", "الرئيسية", "ما هي افتح أونلاين ولمن، ومميزاتها، وخطوات البدء."},
+		{"/pricing", "الأسعار", "الباقات وأسعارها بالجنيه في مصر وبالدولار في باقي الدول."},
+		{"/features", "المميزات", "كل مميزات افتح أونلاين، ولكل ميزة صفحتها."},
+	}
+	for _, f := range featurePages {
+		out = append(out, sitePage{"/features/" + f.slug, f.name, f.short})
+	}
+	return append(out,
+		sitePage{"/faq", "الأسئلة الشائعة", "إجابات عن البدء والتأكيد والحماية والأسعار ونقل المتاجر."},
+		sitePage{"/about", "عن افتح أونلاين", "من نحن، وما نؤمن به، والشركة التي تدير المنصة."},
+		sitePage{"/terms", "الشروط والأحكام", "شروط استخدام المنصة والباقات والإلغاء."},
+		sitePage{"/privacy", "سياسة الخصوصية", "كيف نجمع البيانات ونستخدمها ونحميها."},
+	)
 }
 
 // aiCrawlers are the AI assistants' crawlers, allowed by name so the
@@ -33,7 +48,7 @@ func (s *Site) robots() string {
 func (s *Site) sitemap() string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-	for _, p := range pages {
+	for _, p := range sitePages() {
 		fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod></url>\n", s.origin(), p.path, updated)
 	}
 	b.WriteString("</urlset>\n")
@@ -54,7 +69,7 @@ func (s *Site) llms(ctx context.Context, full bool) string {
 	b.WriteString("- لوحة الربح الصافي بعد تكلفة المنتج والشحن والتحصيل والمرتجعات والإعلانات.\n")
 	b.WriteString("- الشحن والتحصيل، والدفع بالبطاقة عبر Paymob، وبكسلات الإعلانات، والكوبونات، وكتالوج المنتجات.\n\n")
 	b.WriteString("## الصفحات\n\n")
-	for _, p := range pages {
+	for _, p := range sitePages() {
 		fmt.Fprintf(&b, "- [%s](%s%s): %s\n", p.name, s.origin(), p.path, p.about)
 	}
 	if !full {
@@ -149,12 +164,22 @@ func (s *Site) faqLD(list []faq) any {
 	return map[string]any{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": items}
 }
 
-func (s *Site) breadcrumbLD(p *pageCtx, name string) any {
+// crumb is a step of a page's trail, after the home page.
+type crumb struct{ name, path string }
+
+func (s *Site) breadcrumbLD(trail ...crumb) any {
+	items := []any{map[string]any{"@type": "ListItem", "position": 1, "name": "الرئيسية", "item": s.origin() + "/"}}
+	for i, c := range trail {
+		items = append(items, map[string]any{"@type": "ListItem", "position": i + 2, "name": c.name, "item": s.origin() + c.path})
+	}
+	return map[string]any{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": items}
+}
+
+// aboutLD is the about page, about the organization.
+func (s *Site) aboutLD(p *pageCtx) any {
 	return map[string]any{
-		"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": []any{
-			map[string]any{"@type": "ListItem", "position": 1, "name": "الرئيسية", "item": s.origin() + "/"},
-			map[string]any{"@type": "ListItem", "position": 2, "name": name, "item": s.origin() + p.path},
-		},
+		"@context": "https://schema.org", "@type": "AboutPage", "url": s.origin() + p.path, "name": p.title, "inLanguage": "ar",
+		"mainEntity": map[string]any{"@id": s.origin() + "/#organization"},
 	}
 }
 

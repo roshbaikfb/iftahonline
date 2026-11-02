@@ -3,6 +3,8 @@ package web
 import (
 	"strconv"
 	"strings"
+
+	"github.com/a-h/templ"
 )
 
 // stepNumber is a step's number, from 1.
@@ -69,6 +71,18 @@ func trialText(days int) string {
 	}
 }
 
+// current marks the header's link to the page shown ("page"), or to
+// the section it is in ("true").
+func current(path, section string) templ.Attributes {
+	switch {
+	case path == section:
+		return templ.Attributes{"aria-current": "page"}
+	case strings.HasPrefix(path, section+"/"):
+		return templ.Attributes{"aria-current": "true"}
+	}
+	return templ.Attributes{}
+}
+
 // displayPhone writes an E.164 number for people: +201153450716 →
 // "+20 115 345 0716".
 func displayPhone(e164 string) string {
@@ -98,3 +112,10 @@ func iconSVG(name string) string {
 	}
 	return `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + paths[name] + `</svg>`
 }
+
+// ukFlag is the Union Jack, for the company's card.
+const ukFlag = `<svg class="flag" viewBox="0 0 60 30" role="img" aria-label="علم المملكة المتحدة"><clipPath id="uk-s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>` +
+	`<clipPath id="uk-t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath><g clip-path="url(#uk-s)">` +
+	`<path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>` +
+	`<path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/>` +
+	`<path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg>`
