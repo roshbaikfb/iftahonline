@@ -294,3 +294,112 @@ func TestCompressionAndIcon(t *testing.T) {
 		t.Fatalf("CSP = %q", csp)
 	}
 }
+
+// allPages are every indexable page, as the sitemap lists them.
+func allPages(t *testing.T, f fixture) []string {
+	t.Helper()
+	var out []string
+	for _, m := range regexp.MustCompile(`<loc>https://iftahonline.com([^<]*)</loc>`).FindAllStringSubmatch(f.get(t, "/sitemap.xml").Body.String(), -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// TestEveryPage: each page the sitemap lists answers, names its own
+// canonical URL and a description, keeps to the policy (no script, no
+// style attribute), and speaks of what a merchant gains, never of how
+// the platform is built (the owner's rule).
+func TestEveryPage(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	paths := allPages(t, f)
+	if len(paths) != 13 {
+		t.Fatalf("sitemap lists %d pages: %v", len(paths), paths)
+	}
+	for _, path := range paths {
+		rec := f.get(t, path)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: %d", path, rec.Code)
+			continue
+		}
+		wantContains(t, body, `<link rel="canonical" href="https://iftahonline.com`+path+`">`, `<meta name="description" content="`, "<h1>")
+		if strings.Contains(body, "<script>") || strings.Contains(body, ` style="`) {
+			t.Errorf("%s: inline script or style attribute", path)
+		}
+		for _, word := range []string{"معزول", "عزل", "قاعدة بيانات", "قواعد البيانات", "سيرفر", "خادم", "برمجة متقدمة"} {
+			if strings.Contains(body, word) {
+				t.Errorf("%s: technical wording %q", path, word)
+			}
+		}
+		if path != "/" && ld(t, body)["BreadcrumbList"] == nil {
+			t.Errorf("%s: no BreadcrumbList", path)
+		}
+	}
+}
+
+// TestFeaturePages: each feature has its page, reached from the
+// features index, the home page and the footer; its trail is home →
+// features → it, its questions are FAQ data, and it links the others.
+func TestFeaturePages(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	index := f.get(t, "/features").Body.String()
+	home := f.get(t, "/").Body.String()
+	for _, slug := range []string{"whatsapp-confirmation", "fake-orders-protection", "net-profit", "shipping-cod", "online-store", "marketing"} {
+		link := `href="/features/` + slug + `"`
+		if !strings.Contains(index, link) {
+			t.Errorf("index: no link to %s", slug)
+		}
+		rec := f.get(t, "/features/"+slug)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=300, s-maxage=3600" {
+			t.Fatalf("%s: %d %v", slug, rec.Code, rec.Header())
+		}
+		wantContains(t, body, `<a href="/features" aria-current="true">المميزات</a>`, `<a href="/features">المميزات</a> / <span>`)
+		if n := strings.Count(body, `class="card link" href="/features/`); n != 5 {
+			t.Errorf("%s: %d related links, want 5", slug, n)
+		}
+		if strings.Contains(body, `class="card link" `+link) {
+			t.Errorf("%s: links itself", slug)
+		}
+		data := ld(t, body)
+		trail, _ := data["BreadcrumbList"]["itemListElement"].([]any)
+		if len(trail) != 3 || trail[2].(map[string]any)["item"] != "https://iftahonline.com/features/"+slug {
+			t.Errorf("%s: trail %v", slug, trail)
+		}
+		if data["FAQPage"] == nil {
+			t.Errorf("%s: no FAQPage", slug)
+		}
+	}
+	for _, slug := range []string{"whatsapp-confirmation", "fake-orders-protection", "net-profit"} {
+		if !strings.Contains(home, `class="more" href="/features/`+slug+`"`) {
+			t.Errorf("home: no link to %s", slug)
+		}
+	}
+	wantContains(t, f.get(t, "/features/net-profit").Body.String(), "في الباقات المدفوعة")
+	if rec := f.get(t, "/features/nope"); rec.Code != http.StatusNotFound {
+		t.Fatalf("an unknown feature: %d", rec.Code)
+	}
+	if rec := f.get(t, "/featuresmarketing"); rec.Code != http.StatusNotFound {
+		t.Fatalf("a path that only ends like a feature: %d", rec.Code)
+	}
+}
+
+// TestAboutAndLegal: the about page names the company, its address and
+// its country, as schema.org data too; the terms and the privacy policy
+// are reached from every page's footer.
+func TestAboutAndLegal(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	body := f.get(t, "/about").Body.String()
+	wantContains(t, body, "Codezilo Ltd", "5c New Quebec Street", "W1H 7RG", `aria-label="علم المملكة المتحدة"`, `<a href="/about" aria-current="page">`)
+	data := ld(t, body)
+	if data["AboutPage"] == nil || data["Organization"] == nil {
+		t.Fatalf("about: %v", data)
+	}
+	home := f.get(t, "/").Body.String()
+	wantContains(t, home, `<a href="/terms">الشروط والأحكام</a>`, `<a href="/privacy">سياسة الخصوصية</a>`)
+	wantContains(t, f.get(t, "/privacy").Body.String(), "<h1>سياسة الخصوصية</h1>", "Paymob", "لا نبيع البيانات لأحد")
+	wantContains(t, f.get(t, "/terms").Body.String(), "<h1>الشروط والأحكام</h1>", "Codezilo Ltd")
+}

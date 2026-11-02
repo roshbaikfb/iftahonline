@@ -100,9 +100,31 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/faq":
 		p := s.page("/faq", "الأسئلة الشائعة عن افتح أونلاين",
 			"إجابات واضحة عن افتح أونلاين: البدء مجانًا، وتأكيد الطلبات على واتساب، والحماية من الطلبات الوهمية، والأسعار بالجنيه والدولار، ونقل متجرك.")
-		p.jsonLD = []any{s.faqLD(faqs), s.breadcrumbLD(p, "الأسئلة الشائعة")}
+		p.jsonLD = []any{s.faqLD(faqs), s.breadcrumbLD(crumb{"الأسئلة الشائعة", p.path})}
 		s.write(w, r, http.StatusOK, cachePage, p, faqPage(p, faqs))
+	case "/features":
+		p := s.page("/features", "مميزات افتح أونلاين | كل ما يحتاجه متجر الدفع عند الاستلام",
+			"مميزات افتح أونلاين: تأكيد الطلبات على واتساب، والحماية من الطلبات الوهمية، ولوحة الربح الصافي، والشحن والتحصيل، ومتجر احترافي، وأدوات التسويق.")
+		p.jsonLD = []any{s.breadcrumbLD(crumb{"المميزات", p.path})}
+		s.write(w, r, http.StatusOK, cachePage, p, featuresIndexPage(p))
+	case "/about":
+		p := s.page("/about", "عن افتح أونلاين | من نحن",
+			"افتح أونلاين منصة متاجر إلكترونية لتجار الدفع عند الاستلام في مصر والخليج، علامة تجارية لشركة Codezilo Ltd المسجلة في المملكة المتحدة.")
+		p.jsonLD = []any{s.organizationLD(), s.aboutLD(p), s.breadcrumbLD(crumb{"عن افتح أونلاين", p.path})}
+		s.write(w, r, http.StatusOK, cachePage, p, aboutPage(p))
+	case privacy.path, terms.path:
+		lp := privacy
+		if r.URL.Path == terms.path {
+			lp = terms
+		}
+		p := s.page(lp.path, lp.title, lp.description)
+		p.jsonLD = []any{s.breadcrumbLD(crumb{lp.name, p.path})}
+		s.write(w, r, http.StatusOK, cachePage, p, legalPageView(p, lp))
 	default:
+		if f, ok := featureBySlug(strings.TrimPrefix(r.URL.Path, "/features/")); ok && strings.HasPrefix(r.URL.Path, "/features/") {
+			s.feature(w, r, f)
+			return
+		}
 		p := s.page(r.URL.Path, "الصفحة غير موجودة | افتح أونلاين", "")
 		p.noindex = true
 		s.write(w, r, http.StatusNotFound, cachePage, p, notFoundPage(p))
@@ -144,9 +166,18 @@ func (s *Site) pricingPage(w http.ResponseWriter, r *http.Request) {
 	}
 	p := s.page("/pricing", "أسعار افتح أونلاين | ابدأ مجانًا",
 		"أسعار افتح أونلاين: باقة مجانية دائمًا، أو بلا اشتراك بنسبة من الطلبات المسلّمة، أو باقات شهرية وسنوية بتجربة 14 يومًا. بالجنيه في مصر وبالدولار في باقي الدول.")
-	p.jsonLD = []any{s.applicationLD(pr), s.breadcrumbLD(p, "الأسعار")}
+	p.jsonLD = []any{s.applicationLD(pr), s.breadcrumbLD(crumb{"الأسعار", p.path})}
 	w.Header().Set("Vary", s.d.CountryHeader)
 	s.write(w, r, http.StatusOK, cachePrivate, p, pricingPage(p, pr))
+}
+
+func (s *Site) feature(w http.ResponseWriter, r *http.Request, f featurePage) {
+	p := s.page("/features/"+f.slug, f.title, f.description)
+	p.jsonLD = []any{s.breadcrumbLD(crumb{"المميزات", "/features"}, crumb{f.name, p.path})}
+	if len(f.faqs) > 0 {
+		p.jsonLD = append(p.jsonLD, s.faqLD(f.faqs))
+	}
+	s.write(w, r, http.StatusOK, cachePage, p, featurePageView(p, f))
 }
 
 func (s *Site) pricing(ctx context.Context, currency string) (pricing, error) {

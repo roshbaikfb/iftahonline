@@ -1,6 +1,6 @@
 package web
 
-// The site's copy, in Arabic (the English site comes with S3). It speaks
+// The site's copy, in Arabic (the English site comes with S3b). It speaks
 // of what a merchant gains, never of how the platform is built (the
 // owner's rule). The console edits the FAQ and the contact details
 // later (S4); until then they live here.
@@ -26,11 +26,12 @@ var company = struct{ name, street, city, postcode, country string }{ //nolint:g
 type feature struct {
 	id, tag, tagClass, title, body string
 	points                         []string
+	more                           string // the feature's own page
 }
 
 var features = []feature{ //nolint:gochecknoglobals // constant copy
 	{
-		id: "confirm", tag: "تأكيد الطلبات", tagClass: "green",
+		id: "confirm", tag: "تأكيد الطلبات", tagClass: "green", more: "/features/whatsapp-confirmation",
 		title: "كل طلب يؤكده صاحبه على واتساب، دون أن تتصل",
 		body:  "يصل العميلَ طلبُه برسالة واتساب باسم متجرك وزرّي «تأكيد» و«إلغاء». ومن ليس على واتساب تصله رسالة نصية برابط. وما لم يُرد عليه يُلغى في المهلة التي تحددها.",
 		points: []string{
@@ -40,12 +41,12 @@ var features = []feature{ //nolint:gochecknoglobals // constant copy
 		},
 	},
 	{
-		id: "protect", tag: "الحماية من الطلبات الوهمية", tagClass: "amber",
+		id: "protect", tag: "الحماية من الطلبات الوهمية", tagClass: "amber", more: "/features/fake-orders-protection",
 		title: "اعرف من يرفض الاستلام قبل أن تشحن له",
 		body:  "كل طلب يحصل على تقييم من نتائج التوصيل في متاجر افتح أونلاين كلها: سُلّم، رُفض، لم يرد. وأنت تختار ما يحدث لكل مستوى: إيقاف للمراجعة، أو تأكيد بالهاتف، أو دفع التوصيل مقدمًا. لا يرى أي متجر بيانات متجر آخر، فقط مستوى التقييم.",
 	},
 	{
-		id: "profit", tag: "الربح الصافي", tagClass: "blue",
+		id: "profit", tag: "الربح الصافي", tagClass: "blue", more: "/features/net-profit",
 		title: "المبيعات ليست ربحًا. نريك ما بقي لك فعلًا",
 		body:  "نطرح من مبيعاتك تكلفة المنتج، والشحن، ورسوم التحصيل، والمرتجعات، والإعلانات، ونريك الربح لكل منتج وحملة إعلانية ومحافظة.",
 	},

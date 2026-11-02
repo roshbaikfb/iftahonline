@@ -72,9 +72,10 @@ templ siteHeader(p *pageCtx) {
 		<div class="wrap bar">
 			@brand()
 			<nav class="nav" aria-label="القائمة الرئيسية">
-				<a href="/#features">المميزات</a>
-				<a href="/pricing" aria-current?={ p.path == "/pricing" }>الأسعار</a>
-				<a href="/faq" aria-current?={ p.path == "/faq" }>الأسئلة الشائعة</a>
+				<a href="/features" { current(p.path, "/features")... }>المميزات</a>
+				<a href="/pricing" { current(p.path, "/pricing")... }>الأسعار</a>
+				<a href="/faq" { current(p.path, "/faq")... }>الأسئلة الشائعة</a>
+				<a href="/about" { current(p.path, "/about")... }>عن افتح أونلاين</a>
 			</nav>
 			<div class="actions">
 				<a class="signin" href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
@@ -85,9 +86,10 @@ templ siteHeader(p *pageCtx) {
 					@icon("menu")
 				</summary>
 				<nav aria-label="القائمة">
-					<a href="/#features">المميزات</a>
+					<a href="/features">المميزات</a>
 					<a href="/pricing">الأسعار</a>
 					<a href="/faq">الأسئلة الشائعة</a>
+					<a href="/about">عن افتح أونلاين</a>
 					<a href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
 				</nav>
 			</details>
@@ -102,14 +104,17 @@ templ siteFooter(p *pageCtx) {
 				@brand()
 				<p>منصة متاجر إلكترونية للدفع عند الاستلام، لتجار مصر والخليج.</p>
 			</div>
+			<nav aria-label="المميزات">
+				<strong>المميزات</strong>
+				for _, f := range featurePages {
+					<a href={ templ.SafeURL("/features/" + f.slug) }>{ f.name }</a>
+				}
+			</nav>
 			<nav aria-label="المنصة">
 				<strong>المنصة</strong>
-				<a href="/#features">المميزات</a>
 				<a href="/pricing">الأسعار</a>
-			</nav>
-			<nav aria-label="المعرفة">
-				<strong>المعرفة</strong>
 				<a href="/faq">الأسئلة الشائعة</a>
+				<a href="/about">عن افتح أونلاين</a>
 			</nav>
 			<div>
 				<strong>تواصل معنا</strong>
@@ -120,6 +125,10 @@ templ siteFooter(p *pageCtx) {
 		</div>
 		<div class="wrap legal">
 			<span>© 2026 افتح أونلاين. جميع الحقوق محفوظة.</span>
+			<nav aria-label="الصفحات القانونية">
+				<a href="/terms">الشروط والأحكام</a>
+				<a href="/privacy">سياسة الخصوصية</a>
+			</nav>
 		</div>
 	</footer>
 }

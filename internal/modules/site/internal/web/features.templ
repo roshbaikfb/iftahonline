@@ -1,0 +1,167 @@
+package web
+
+templ featuresIndexPage(p *pageCtx) {
+	<section class="dots">
+		<div class="wrap page-head">
+			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <span>المميزات</span></nav>
+			<h1>كل ما يحتاجه متجر الدفع عند الاستلام</h1>
+			<p class="lead">من أول طلب حتى الربح الصافي: أدوات صُممت لما يواجهه تاجر الدفع عند الاستلام في مصر والخليج كل يوم.</p>
+		</div>
+	</section>
+	<section class="wrap section tight" aria-label="المميزات">
+		<div class="grid3 links">
+			for _, f := range featurePages {
+				<a class="card link" href={ templ.SafeURL("/features/" + f.slug) }>
+					if f.paid {
+						<span class="tag blue">في الباقات المدفوعة</span>
+					}
+					<h2>{ f.name }</h2>
+					<p>{ f.short }</p>
+					<span class="more">اقرأ المزيد ←</span>
+				</a>
+			}
+		</div>
+	</section>
+	@finalCTA(p)
+}
+
+templ featurePageView(p *pageCtx, f featurePage) {
+	<section class="dots">
+		<div class="wrap page-head">
+			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <a href="/features">المميزات</a> / <span>{ f.name }</span></nav>
+			if f.paid {
+				<span class="tag blue">في الباقات المدفوعة</span>
+			}
+			<h1>{ f.h1 }</h1>
+			<p class="lead">{ f.lead }</p>
+			<div class="cta-row">
+				<a class="btn primary big" href={ templ.SafeURL(p.signup) }>أنشئ متجرك مجانًا</a>
+				<a class="btn ghost big" href="/pricing">شاهد الأسعار</a>
+			</div>
+		</div>
+	</section>
+	<section class="wrap section tight" aria-labelledby="h-how">
+		<div class="feature">
+			<div class="feature-text">
+				<h2 id="h-how">{ f.howTitle }</h2>
+				<ol class="how">
+					for i, st := range f.how {
+						<li>
+							<span>{ stepNumber(i) }</span>
+							<div>
+								<h3>{ st.title }</h3>
+								<p>{ st.body }</p>
+							</div>
+						</li>
+					}
+				</ol>
+			</div>
+			<div class={ "feature-art", f.art } aria-hidden="true">
+				@art(f.art)
+			</div>
+		</div>
+	</section>
+	if len(f.control) > 0 {
+		<section class="soft" aria-labelledby="h-control">
+			<div class="wrap section tight">
+				<h2 id="h-control" class="center">{ f.controlTitle }</h2>
+				<div class="grid3 control">
+					for _, c := range f.control {
+						<div class="card">
+							<h3>{ c.title }</h3>
+							<p>{ c.body }</p>
+						</div>
+					}
+				</div>
+			</div>
+		</section>
+	}
+	if len(f.faqs) > 0 {
+		<section class="wrap section tight faq-page" aria-labelledby="h-ffaq">
+			<h2 id="h-ffaq" class="center">أسئلة عن { f.name }</h2>
+			@faqList(f.faqs)
+		</section>
+	}
+	<section class="wrap section tight" aria-labelledby="h-related">
+		<h2 id="h-related" class="center">مميزات أخرى في افتح أونلاين</h2>
+		<div class="grid3 links">
+			for _, o := range related(f.slug) {
+				<a class="card link" href={ templ.SafeURL("/features/" + o.slug) }>
+					<h3>{ o.name }</h3>
+					<p>{ o.short }</p>
+				</a>
+			}
+		</div>
+	</section>
+	@finalCTA(p)
+}
+
+// art is a feature's illustration, by name.
+templ art(name string) {
+	switch name {
+		case "confirm":
+			@chatArt()
+		case "protect":
+			@riskArt()
+		case "profit":
+			@profitArt()
+		case "shipping":
+			@shipArt()
+		case "store":
+			@storeArt()
+		case "marketing":
+			@marketingArt()
+	}
+}
+
+templ shipArt() {
+	<div class="profit">
+		<div class="profit-card">
+			<div class="profit-head"><strong class="plain">شحنة الطلب <bdi dir="ltr">#K8M2Q4ZX</bdi></strong><span class="chip info">في الطريق</span></div>
+			<ol class="track">
+				<li class="done">تأكد الطلب على واتساب</li>
+				<li class="done">استلمته شركة الشحن</li>
+				<li class="now">في الطريق إلى الجيزة</li>
+				<li>التسليم وتحصيل 320 ج.م</li>
+			</ol>
+		</div>
+		<dl class="profit-list">
+			<div><dt>أسعار الشحن · <em>مثال توضيحي</em></dt><dd></dd></div>
+			<div><dt>القاهرة والجيزة</dt><dd>60 ج.م</dd></div>
+			<div><dt>الإسكندرية والدلتا</dt><dd>70 ج.م</dd></div>
+			<div><dt>الصعيد</dt><dd>85 ج.م</dd></div>
+			<div><dt>فوق 1,000 ج.م</dt><dd>شحن مجاني</dd></div>
+		</dl>
+	</div>
+}
+
+templ storeArt() {
+	<div class="phone">
+		<div class="phone-img"></div>
+		<strong>فستان صيفي قطن</strong>
+		<p class="phone-price">450 ج.م <s>600 ج.م</s></p>
+		<div class="sizes"><span>S</span><span class="on">M</span><span>L</span><span>XL</span></div>
+		<span class="field">الاسم</span>
+		<span class="field">رقم الهاتف</span>
+		<span class="field">المحافظة والمدينة</span>
+		<span class="phone-btn">اطلب الآن، والدفع عند الاستلام</span>
+	</div>
+}
+
+templ marketingArt() {
+	<div class="profit">
+		<div class="profit-card">
+			<div class="profit-head"><strong class="plain">بكسلات الإعلانات</strong></div>
+			<ul class="pixels">
+				<li>Meta<span class="chip ok">متصل</span></li>
+				<li>TikTok<span class="chip ok">متصل</span></li>
+				<li>Snapchat<span class="chip">غير متصل</span></li>
+				<li>Google<span class="chip ok">متصل</span></li>
+			</ul>
+		</div>
+		<div class="coupon">
+			<strong dir="ltr">SUMMER20</strong>
+			<span>خصم 20٪ على الطلبات فوق 500 ج.م، حتى نهاية الشهر</span>
+		</div>
+	</div>
+}

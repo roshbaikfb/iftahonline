@@ -43,16 +43,10 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 							}
 						</ul>
 					}
+					<a class="more" href={ templ.SafeURL(f.more) }>اعرف المزيد عن { f.tag } ←</a>
 				</div>
 				<div class={ "feature-art", f.id } aria-hidden="true">
-					switch f.id {
-						case "confirm":
-							@chatArt()
-						case "protect":
-							@riskArt()
-						default:
-							@profitArt()
-					}
+					@art(f.id)
 				</div>
 			</div>
 		}
@@ -182,7 +176,8 @@ templ pricingPage(p *pageCtx, pr pricing) {
 			<label for="cycle-a">سنوي</label>
 		</div>
 		if !pr.AnyPrice {
-			<p class="notice">الأسعار بالدولار قريبًا. لمعرفة أسعار بلدك الآن،
+			<p class="notice">
+				الأسعار بالدولار قريبًا. لمعرفة أسعار بلدك الآن،
 				if p.whatsApp != "" {
 					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">تواصل معنا على واتساب</a>.
 				}
@@ -247,7 +242,7 @@ templ pricingPage(p *pageCtx, pr pricing) {
 }
 
 templ planPrice(pl planView, cycles bool) {
-	switch {
+	switch  {
 		case pl.Free:
 			<p class="price">{ freePrice(pl) }<span>دائمًا</span></p>
 		case pl.Pays && pl.Fee != "":
@@ -316,7 +311,6 @@ templ notFoundPage(p *pageCtx) {
 }
 
 // The home page's illustrations: example screens, drawn in HTML.
-
 templ heroShot() {
 	<div class="shot" aria-label="مثال من لوحة التاجر" role="img">
 		<div class="window">

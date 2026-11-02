@@ -31,4 +31,18 @@ test.describe('the platform site, on a desktop', () => {
     await expect(annual).toBeVisible();
     expect(errors).toEqual([]);
   });
+
+  test('features → a feature → about → privacy, from the links a visitor sees', async ({ page }) => {
+    await page.goto(`${site}/`);
+    await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'المميزات' }).click();
+    await expect(page).toHaveURL(`${site}/features`);
+    await page.getByRole('link', { name: /الشحن والتحصيل/ }).first().click();
+    await expect(page).toHaveURL(`${site}/features/shipping-cod`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('الشحن والدفع عند الاستلام، من لوحة واحدة');
+    await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'عن افتح أونلاين' }).click();
+    await expect(page.getByRole('img', { name: 'علم المملكة المتحدة' })).toBeVisible();
+    await expect(page.getByText('Codezilo Ltd').first()).toBeVisible();
+    await page.getByRole('link', { name: 'سياسة الخصوصية' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('سياسة الخصوصية');
+  });
 });
