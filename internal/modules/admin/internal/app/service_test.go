@@ -112,7 +112,11 @@ func newFixture(t *testing.T) fixture {
 	}
 	d.Billing, d.Redis, d.Agencies = bill.Console(), rdb, bill.Agencies()
 	d.Ads = &fakeAds{}
-	d.Site = site.NewConsole(adminPool, ids, log)
+	siteConsole, err := site.NewConsole(adminPool, nil, ids, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Site = siteConsole
 	cli := d
 	cli.Limiter, cli.Directory, cli.Stores, cli.Impersonate, cli.Plans, cli.Overrides, cli.Billing, cli.Redis, cli.Agencies = nil, nil, nil, nil, nil, nil, nil, nil, nil
 	cli.Ads, cli.Site = nil, nil

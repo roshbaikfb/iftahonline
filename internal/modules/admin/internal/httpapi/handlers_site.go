@@ -8,17 +8,36 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-var errFAQNotFound = errs.NotFound("faq_not_found", "question not found")
+var (
+	errFAQNotFound    = errs.NotFound("faq_not_found", "question not found")
+	errPersonNotFound = errs.NotFound("person_not_found", "person not found")
+	errReviewNotFound = errs.NotFound("testimonial_not_found", "review not found")
+)
+
+// thumbSize is the console's thumbnails' side.
+const thumbSize = 320
+
+func (h *Handlers) thumb(key string) string { return h.svc.SiteImageURL(key, thumbSize) }
 
 // AdminGetSite implements StrictServerInterface.
 func (h *Handlers) AdminGetSite(ctx context.Context, _ AdminGetSiteRequestObject) (AdminGetSiteResponseObject, error) {
-	set, faqs, err := h.svc.SiteContent(ctx)
+	c, err := h.svc.SiteContent(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := AdminGetSite200JSONResponse{Settings: toSiteSettings(set), Faqs: make([]AdminSiteFAQ, len(faqs))}
-	for i, f := range faqs {
+	st := c.Identity.Story
+	out := AdminGetSite200JSONResponse{Settings: toSiteSettings(c.Settings), Faqs: make([]AdminSiteFAQ, len(c.FAQs)),
+		Story:  AdminSiteStory{StoryAr: st.Ar, StoryEn: st.En, VideoId: st.VideoID},
+		Images: AdminSiteImages{LogoUrl: h.thumb(c.Identity.LogoKey), ShareUrl: h.thumb(c.Identity.ShareKey)},
+		People: make([]AdminSitePerson, len(c.People)), Testimonials: make([]AdminSiteTestimonial, len(c.Testimonials))}
+	for i, f := range c.FAQs {
 		out.Faqs[i] = toSiteFAQ(f)
+	}
+	for i, p := range c.People {
+		out.People[i] = h.toSitePerson(p)
+	}
+	for i, t := range c.Testimonials {
+		out.Testimonials[i] = h.toSiteTestimonial(t)
 	}
 	return out, nil
 }
@@ -113,4 +132,160 @@ func fromSiteFAQ(id ulid.ID, in AdminSiteFAQInput) site.FAQ {
 func toSiteFAQ(f site.FAQ) AdminSiteFAQ {
 	return AdminSiteFAQ{Id: f.ID.String(), Position: f.Position, OnHome: f.OnHome, QuestionAr: f.QuestionAr, AnswerAr: f.AnswerAr,
 		QuestionEn: f.QuestionEn, AnswerEn: f.AnswerEn}
+}
+
+// AdminSaveSiteStory implements StrictServerInterface.
+func (h *Handlers) AdminSaveSiteStory(ctx context.Context, req AdminSaveSiteStoryRequestObject) (AdminSaveSiteStoryResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	b := req.Body
+	st, err := h.svc.SaveSiteStory(ctx, b.StoryAr, b.StoryEn, b.VideoUrl, b.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminSaveSiteStory200JSONResponse{StoryAr: st.Ar, StoryEn: st.En, VideoId: st.VideoID}, nil
+}
+
+// AdminCreateSiteUpload implements StrictServerInterface.
+func (h *Handlers) AdminCreateSiteUpload(ctx context.Context, req AdminCreateSiteUploadRequestObject) (AdminCreateSiteUploadResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	up, err := h.svc.SiteUpload(ctx, string(req.Body.ContentType))
+	if err != nil {
+		return nil, err
+	}
+	return AdminCreateSiteUpload201JSONResponse{Key: up.Key,
+		Upload: PresignedUpload{Url: up.URL, Fields: up.Fields, ExpiresAt: up.ExpiresAt, MaxBytes: up.MaxBytes}}, nil
+}
+
+// AdminSetSiteImage implements StrictServerInterface.
+func (h *Handlers) AdminSetSiteImage(ctx context.Context, req AdminSetSiteImageRequestObject) (AdminSetSiteImageResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	key, err := h.svc.SetSiteImage(ctx, site.Image(req.Image), req.Body.UploadKey, req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminSetSiteImage200JSONResponse{Url: h.thumb(key)}, nil
+}
+
+// AdminRemoveSiteImage implements StrictServerInterface.
+func (h *Handlers) AdminRemoveSiteImage(ctx context.Context, req AdminRemoveSiteImageRequestObject) (AdminRemoveSiteImageResponseObject, error) {
+	if _, err := h.svc.SetSiteImage(ctx, site.Image(req.Image), "", req.Params.Reason); err != nil {
+		return nil, err
+	}
+	return AdminRemoveSiteImage204Response{}, nil
+}
+
+// AdminCreateSitePerson implements StrictServerInterface.
+func (h *Handlers) AdminCreateSitePerson(ctx context.Context, req AdminCreateSitePersonRequestObject) (AdminCreateSitePersonResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	p, err := h.svc.CreateSitePerson(ctx, fromSitePerson(ulid.ID{}, *req.Body), str(req.Body.UploadKey), req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminCreateSitePerson201JSONResponse(h.toSitePerson(p)), nil
+}
+
+// AdminUpdateSitePerson implements StrictServerInterface.
+func (h *Handlers) AdminUpdateSitePerson(ctx context.Context, req AdminUpdateSitePersonRequestObject) (AdminUpdateSitePersonResponseObject, error) {
+	id, err := ulid.Parse(req.PersonId)
+	if err != nil {
+		return nil, errPersonNotFound
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	b := req.Body
+	p, err := h.svc.UpdateSitePerson(ctx, fromSitePerson(id, *b), str(b.UploadKey), b.RemovePhoto != nil && *b.RemovePhoto, b.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminUpdateSitePerson200JSONResponse(h.toSitePerson(p)), nil
+}
+
+// AdminDeleteSitePerson implements StrictServerInterface.
+func (h *Handlers) AdminDeleteSitePerson(ctx context.Context, req AdminDeleteSitePersonRequestObject) (AdminDeleteSitePersonResponseObject, error) {
+	id, err := ulid.Parse(req.PersonId)
+	if err != nil {
+		return nil, errPersonNotFound
+	}
+	if err = h.svc.DeleteSitePerson(ctx, id, req.Params.Reason); err != nil {
+		return nil, err
+	}
+	return AdminDeleteSitePerson204Response{}, nil
+}
+
+// AdminCreateSiteTestimonial implements StrictServerInterface.
+func (h *Handlers) AdminCreateSiteTestimonial(ctx context.Context, req AdminCreateSiteTestimonialRequestObject) (AdminCreateSiteTestimonialResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	t, err := h.svc.CreateSiteTestimonial(ctx, fromSiteTestimonial(ulid.ID{}, *req.Body), str(req.Body.UploadKey), req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminCreateSiteTestimonial201JSONResponse(h.toSiteTestimonial(t)), nil
+}
+
+// AdminUpdateSiteTestimonial implements StrictServerInterface.
+func (h *Handlers) AdminUpdateSiteTestimonial(ctx context.Context, req AdminUpdateSiteTestimonialRequestObject) (AdminUpdateSiteTestimonialResponseObject, error) {
+	id, err := ulid.Parse(req.TestimonialId)
+	if err != nil {
+		return nil, errReviewNotFound
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	b := req.Body
+	t, err := h.svc.UpdateSiteTestimonial(ctx, fromSiteTestimonial(id, *b), str(b.UploadKey), b.RemovePhoto != nil && *b.RemovePhoto, b.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminUpdateSiteTestimonial200JSONResponse(h.toSiteTestimonial(t)), nil
+}
+
+// AdminDeleteSiteTestimonial implements StrictServerInterface.
+func (h *Handlers) AdminDeleteSiteTestimonial(ctx context.Context, req AdminDeleteSiteTestimonialRequestObject) (AdminDeleteSiteTestimonialResponseObject, error) {
+	id, err := ulid.Parse(req.TestimonialId)
+	if err != nil {
+		return nil, errReviewNotFound
+	}
+	if err = h.svc.DeleteSiteTestimonial(ctx, id, req.Params.Reason); err != nil {
+		return nil, err
+	}
+	return AdminDeleteSiteTestimonial204Response{}, nil
+}
+
+// str is an optional text, "" when absent.
+func str(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func fromSitePerson(id ulid.ID, in AdminSitePersonInput) site.Person {
+	return site.Person{ID: id, Kind: site.PersonKind(in.Kind), Position: in.Position, NameAr: in.NameAr, NameEn: str(in.NameEn),
+		RoleAr: in.RoleAr, RoleEn: str(in.RoleEn), BioAr: str(in.BioAr), BioEn: str(in.BioEn), LinkedIn: str(in.LinkedinUrl), X: str(in.XUrl)}
+}
+
+func (h *Handlers) toSitePerson(p site.Person) AdminSitePerson {
+	return AdminSitePerson{Id: p.ID.String(), Kind: AdminSitePersonKind(p.Kind), Position: p.Position, NameAr: p.NameAr, NameEn: p.NameEn,
+		RoleAr: p.RoleAr, RoleEn: p.RoleEn, BioAr: p.BioAr, BioEn: p.BioEn, PhotoUrl: h.thumb(p.PhotoKey), LinkedinUrl: p.LinkedIn, XUrl: p.X}
+}
+
+func fromSiteTestimonial(id ulid.ID, in AdminSiteTestimonialInput) site.Testimonial {
+	return site.Testimonial{ID: id, Position: in.Position, Name: in.Name, StoreName: str(in.StoreName), StoreURL: str(in.StoreUrl),
+		QuoteAr: in.QuoteAr, QuoteEn: str(in.QuoteEn)}
+}
+
+func (h *Handlers) toSiteTestimonial(t site.Testimonial) AdminSiteTestimonial {
+	return AdminSiteTestimonial{Id: t.ID.String(), Position: t.Position, Name: t.Name, StoreName: t.StoreName, StoreUrl: t.StoreURL,
+		QuoteAr: t.QuoteAr, QuoteEn: t.QuoteEn, PhotoUrl: h.thumb(t.PhotoKey)}
 }

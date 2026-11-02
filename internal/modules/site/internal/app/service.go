@@ -15,6 +15,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/media"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -31,10 +32,19 @@ var (
 	errTooMany     = errs.Conflict("too_many_faqs", "the FAQ holds at most 100 questions")
 )
 
+// Media is the bucket the site's images are kept in, and the signer of
+// their URLs.
+type Media struct {
+	Objects media.Objects
+	Limits  media.Limits
+	Signer  *media.Signer
+}
+
 // Deps are the service's dependencies.
 type Deps struct {
 	DB    store.Tx // app_user: the site reads
 	Admin store.Tx // app_admin: the console writes; nil outside the api role
+	Media Media    // the console's uploads; zero refuses them
 	IDs   *ulid.Generator
 	Log   *slog.Logger
 	Now   func() time.Time
@@ -76,15 +86,10 @@ func (s *Service) Content(ctx context.Context) (domain.Content, error) {
 		// Shared by every waiting page: one leaving does not cancel it.
 		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
 		defer cancel()
-		settings, err := store.Settings(lctx, s.d.DB)
+		c, err := s.read(lctx, s.d.DB)
 		if err != nil {
 			return nil, err
 		}
-		faqs, err := store.FAQs(lctx, s.d.DB)
-		if err != nil {
-			return nil, err
-		}
-		c := domain.Content{Settings: settings, FAQs: faqs}
 		s.mu.Lock()
 		s.got, s.until, s.ok = c, now.Add(CacheTTL), true
 		s.mu.Unlock()
@@ -99,6 +104,36 @@ func (s *Service) Content(ctx context.Context) (domain.Content, error) {
 	}
 	c, _ := v.(domain.Content) //nolint:errcheck // the loader returns only Content
 	return c, nil
+}
+
+// read is everything the site shows, in four reads.
+func (s *Service) read(ctx context.Context, db store.Tx) (domain.Content, error) {
+	settings, identity, err := store.SettingsAndIdentity(ctx, db)
+	if err != nil {
+		return domain.Content{}, err
+	}
+	faqs, err := store.FAQs(ctx, db)
+	if err != nil {
+		return domain.Content{}, err
+	}
+	people, err := store.People(ctx, db)
+	if err != nil {
+		return domain.Content{}, err
+	}
+	reviews, err := store.Testimonials(ctx, db)
+	if err != nil {
+		return domain.Content{}, err
+	}
+	return domain.Content{Settings: settings, Identity: identity, FAQs: faqs, People: people, Testimonials: reviews}, nil
+}
+
+// All is everything the site shows, as the console edits it (uncached).
+func (s *Service) All(ctx context.Context) (domain.Content, error) {
+	db, err := s.admin()
+	if err != nil {
+		return domain.Content{}, err
+	}
+	return s.read(ctx, db)
 }
 
 func (s *Service) admin() (store.Tx, error) {

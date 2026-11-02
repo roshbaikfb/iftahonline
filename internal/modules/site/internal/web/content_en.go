@@ -15,6 +15,9 @@ var enTexts = texts{ //nolint:gochecknoglobals // constant copy
 	Rights: "© 2026 iftahonline. All rights reserved.", Legal: "Legal", OtherLang: "ar", OtherLangName: "العربية",
 	Arrow: "→", WhatsAppHello: "Hello, I'd like to ask about iftahonline",
 	WhatsAppIntl: "WhatsApp (international)", Email: "Email", FollowUs: "Follow us", CompanyNo: "Companies House number:",
+	OurStory: "Our story", FoundersEyebrow: "Founders", FoundersH2: "Who founded iftahonline", CoFounder: "Co-founder",
+	TeamEyebrow: "The team", TeamH2: "The iftahonline team", ReviewsEyebrow: "Merchants' reviews", ReviewsH2: "What merchants say about iftahonline",
+	WatchVideo: "See how iftahonline works", VideoLead: "A quick tour of the platform, from creating a store to the first confirmed order.",
 
 	HomeTitle:     "iftahonline | The online store platform for cash on delivery",
 	HomeDesc:      "Create your online store free on iftahonline: order confirmation on WhatsApp, protection from fake orders, and a net profit dashboard. For merchants in Egypt and the Gulf.",

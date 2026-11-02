@@ -99,6 +99,10 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	siteConsole, err := site.NewConsole(adminPool, nil, ids, log) // no bucket: uploads are refused
+	if err != nil {
+		t.Fatal(err)
+	}
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
 		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
@@ -106,7 +110,7 @@ func newFixture(t *testing.T) fixture {
 		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
-		Site: site.NewConsole(adminPool, ids, log),
+		Site: siteConsole,
 		// The package's tests all sign in from one address: room for all
 		// of them (the per-IP limit itself is tested in app).
 		Limits:  &app.Limits{LoginPerIP: ratelimit.Limit{Burst: 50, Period: time.Hour}, LoginFailPerKey: ratelimit.Limit{Burst: 5, Period: 30 * time.Minute}},
@@ -703,5 +707,86 @@ func TestConsoleSite(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site", "", withCookie(sess)); len(r.body["faqs"].([]any)) != 10 {
 		t.Fatalf("after all = %v", r.body)
+	}
+}
+
+// TestConsoleSiteAbout: the founding story, the people and the reviews
+// from the console (S4b-1). Images need the bucket, not wired here.
+func TestConsoleSiteAbout(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+
+	story := `{"story_ar":"بدأنا من متجر صغير.","story_en":"","video_url":"https://youtu.be/dQw4w9WgXcQ","reason":"the story"}`
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/site/story", story, sameOrigin); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/site/story", story, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	if r := f.do(t, http.MethodPut, adminHost, "/admin/v1/site/story", story, withCookie(sess), sameOrigin); r.status != http.StatusOK || r.body["video_id"] != "dQw4w9WgXcQ" {
+		t.Fatalf("story = %d %v", r.status, r.body)
+	}
+
+	person := `{"kind":"founder","position":0,"name_ar":"أحمد","role_ar":"المدير التقني","linkedin_url":"https://www.linkedin.com/in/ahmed","reason":"a founder"}`
+	r := f.do(t, http.MethodPost, adminHost, "/admin/v1/site/people", person, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["photo_url"] != "" || r.body["kind"] != "founder" {
+		t.Fatalf("add person = %d %v", r.status, r.body)
+	}
+	one := "/admin/v1/site/people/" + r.body["id"].(string)
+	edit := `{"kind":"founder","position":0,"name_ar":"أحمد","name_en":"Ahmed","role_ar":"المدير التقني","role_en":"CTO","reason":"English"}`
+	if r = f.do(t, http.MethodPut, adminHost, one, edit, withCookie(sess), sameOrigin); r.status != http.StatusOK || r.body["role_en"] != "CTO" || r.body["linkedin_url"] != "" {
+		t.Fatalf("edit person = %d %v", r.status, r.body)
+	}
+
+	review := `{"position":0,"name":"منى","store_name":"متجر منى","quote_ar":"قلّت الطلبات الوهمية عندي.","reason":"a real review"}`
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/site/testimonials", review, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["quote_en"] != "" {
+		t.Fatalf("add review = %d %v", r.status, r.body)
+	}
+	oneReview := "/admin/v1/site/testimonials/" + r.body["id"].(string)
+
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site", "", withCookie(sess))
+	if people, _ := r.body["people"].([]any); r.status != http.StatusOK || len(people) != 1 || len(r.body["testimonials"].([]any)) != 1 ||
+		r.body["story"].(map[string]any)["story_ar"] != "بدأنا من متجر صغير." || r.body["images"].(map[string]any)["logo_url"] != "" {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, "/admin/v1/site/story", `{"story_ar":"","story_en":"","video_url":"https://vimeo.com/1","reason":"a video"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/site/story", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/site/uploads", `{"content_type":"image/png"}`, http.StatusServiceUnavailable},
+		{http.MethodPost, "/admin/v1/site/uploads", ``, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/site/images/logo", `{"upload_key":"platform/site/uploads/x","reason":"the logo"}`, http.StatusServiceUnavailable},
+		{http.MethodPut, "/admin/v1/site/images/favicon", `{"upload_key":"platform/site/uploads/x","reason":"the icon"}`, http.StatusNotFound},
+		{http.MethodDelete, "/admin/v1/site/images/logo", "", http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/site/people", `{"kind":"investor","position":0,"name_ar":"أحمد","role_ar":"شريك","reason":"no"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/people", `{"kind":"team","position":0,"name_ar":"أحمد","role_ar":"دعم","x_url":"https://evil.example","reason":"bad link"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/people", ``, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/site/people/junk", edit, http.StatusNotFound},
+		{http.MethodPut, "/admin/v1/site/people/" + f.ids.New().String(), edit, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/site/testimonials", `{"position":0,"name":"منى","quote_ar":"ممتاز","reason":"too short"}`, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/site/testimonials/junk", review, http.StatusNotFound},
+		{http.MethodDelete, oneReview, "", http.StatusBadRequest},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+
+	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=left+the+team", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("delete person = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=left+the+team", "", withCookie(sess), sameOrigin); r.status != http.StatusNotFound {
+		t.Fatalf("delete twice = %d", r.status)
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, oneReview+"?reason=withdrawn", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("delete review = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, "/admin/v1/site/images/logo?reason=no+logo", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("remove logo = %d %v", r.status, r.body)
 	}
 }

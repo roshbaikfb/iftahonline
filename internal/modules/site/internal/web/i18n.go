@@ -59,6 +59,8 @@ type texts struct {
 	FooterTagline, Platform, Contact, WhatsApp, Rights, Legal, OtherLang, OtherLangName          string
 	Arrow, WhatsAppHello                                                                         string
 	WhatsAppIntl, Email, FollowUs, CompanyNo                                                     string
+	OurStory, FoundersEyebrow, FoundersH2, CoFounder, TeamEyebrow, TeamH2                        string
+	ReviewsEyebrow, ReviewsH2, WatchVideo, VideoLead                                             string
 
 	HomeTitle, HomeDesc, PricingTitle, PricingDesc, FAQTitle, FAQDesc string
 	FeaturesTitle, FeaturesDesc, AboutTitle, AboutDesc, NotFoundTitle string
@@ -107,6 +109,9 @@ var arTexts = texts{ //nolint:gochecknoglobals // constant copy
 	WhatsApp: "واتساب", Rights: "© 2026 افتح أونلاين. جميع الحقوق محفوظة.", Legal: "الصفحات القانونية",
 	OtherLang: "en", OtherLangName: "English", Arrow: "←", WhatsAppHello: "مرحبًا، أريد الاستفسار عن افتح أونلاين",
 	WhatsAppIntl: "واتساب (دولي)", Email: "البريد", FollowUs: "تابعنا", CompanyNo: "رقم التسجيل في Companies House:",
+	OurStory: "قصتنا", FoundersEyebrow: "المؤسسون", FoundersH2: "من أسّس افتح أونلاين", CoFounder: "شريك مؤسس",
+	TeamEyebrow: "فريق العمل", TeamH2: "فريق افتح أونلاين", ReviewsEyebrow: "آراء التجار", ReviewsH2: "ماذا يقول التجار عن افتح أونلاين",
+	WatchVideo: "شاهد كيف تعمل افتح أونلاين", VideoLead: "جولة سريعة في المنصة، من إنشاء المتجر إلى أول طلب مؤكد.",
 
 	HomeTitle:     "افتح أونلاين | منصة متاجر إلكترونية للدفع عند الاستلام",
 	HomeDesc:      "أنشئ متجرك الإلكتروني مجانًا على افتح أونلاين: تأكيد الطلبات على واتساب، وحماية من الطلبات الوهمية، ولوحة للربح الصافي. لتجار مصر والخليج.",

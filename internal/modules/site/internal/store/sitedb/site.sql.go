@@ -23,9 +23,73 @@ func (q *Queries) DeleteFAQ(ctx context.Context, id ulid.ID) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deletePerson = `-- name: DeletePerson :execrows
+DELETE FROM site_people WHERE id = $1
+`
+
+func (q *Queries) DeletePerson(ctx context.Context, id ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePerson, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteTestimonial = `-- name: DeleteTestimonial :execrows
+DELETE FROM site_testimonials WHERE id = $1
+`
+
+func (q *Queries) DeleteTestimonial(ctx context.Context, id ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTestimonial, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getPerson = `-- name: GetPerson :one
+SELECT id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_key, linkedin_url, x_url
+FROM site_people WHERE id = $1
+`
+
+type GetPersonRow struct {
+	ID          ulid.ID
+	Kind        string
+	Position    int32
+	NameAr      string
+	NameEn      string
+	RoleAr      string
+	RoleEn      string
+	BioAr       string
+	BioEn       string
+	PhotoKey    string
+	LinkedinUrl string
+	XUrl        string
+}
+
+func (q *Queries) GetPerson(ctx context.Context, id ulid.ID) (GetPersonRow, error) {
+	row := q.db.QueryRow(ctx, getPerson, id)
+	var i GetPersonRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Position,
+		&i.NameAr,
+		&i.NameEn,
+		&i.RoleAr,
+		&i.RoleEn,
+		&i.BioAr,
+		&i.BioEn,
+		&i.PhotoKey,
+		&i.LinkedinUrl,
+		&i.XUrl,
+	)
+	return i, err
+}
+
 const getSettings = `-- name: GetSettings :one
 
-SELECT whatsapp, whatsapp_intl, email, socials, company_number FROM site_settings WHERE id = 1
+SELECT whatsapp, whatsapp_intl, email, socials, company_number, story_ar, story_en, video_id, logo_key, og_key FROM site_settings WHERE id = 1
 `
 
 type GetSettingsRow struct {
@@ -34,6 +98,11 @@ type GetSettingsRow struct {
 	Email         string
 	Socials       []byte
 	CompanyNumber string
+	StoryAr       string
+	StoryEn       string
+	VideoID       string
+	LogoKey       string
+	OgKey         string
 }
 
 // The platform site's content (S4a, ADR-0073).
@@ -46,6 +115,42 @@ func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 		&i.Email,
 		&i.Socials,
 		&i.CompanyNumber,
+		&i.StoryAr,
+		&i.StoryEn,
+		&i.VideoID,
+		&i.LogoKey,
+		&i.OgKey,
+	)
+	return i, err
+}
+
+const getTestimonial = `-- name: GetTestimonial :one
+SELECT id, position, name, store_name, store_url, quote_ar, quote_en, photo_key FROM site_testimonials WHERE id = $1
+`
+
+type GetTestimonialRow struct {
+	ID        ulid.ID
+	Position  int32
+	Name      string
+	StoreName string
+	StoreUrl  string
+	QuoteAr   string
+	QuoteEn   string
+	PhotoKey  string
+}
+
+func (q *Queries) GetTestimonial(ctx context.Context, id ulid.ID) (GetTestimonialRow, error) {
+	row := q.db.QueryRow(ctx, getTestimonial, id)
+	var i GetTestimonialRow
+	err := row.Scan(
+		&i.ID,
+		&i.Position,
+		&i.Name,
+		&i.StoreName,
+		&i.StoreUrl,
+		&i.QuoteAr,
+		&i.QuoteEn,
+		&i.PhotoKey,
 	)
 	return i, err
 }
@@ -74,6 +179,74 @@ func (q *Queries) InsertFAQ(ctx context.Context, arg InsertFAQParams) error {
 		arg.AnswerAr,
 		arg.QuestionEn,
 		arg.AnswerEn,
+	)
+	return err
+}
+
+const insertPerson = `-- name: InsertPerson :exec
+INSERT INTO site_people (id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_key, linkedin_url, x_url)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+`
+
+type InsertPersonParams struct {
+	ID          ulid.ID
+	Kind        string
+	Position    int32
+	NameAr      string
+	NameEn      string
+	RoleAr      string
+	RoleEn      string
+	BioAr       string
+	BioEn       string
+	PhotoKey    string
+	LinkedinUrl string
+	XUrl        string
+}
+
+func (q *Queries) InsertPerson(ctx context.Context, arg InsertPersonParams) error {
+	_, err := q.db.Exec(ctx, insertPerson,
+		arg.ID,
+		arg.Kind,
+		arg.Position,
+		arg.NameAr,
+		arg.NameEn,
+		arg.RoleAr,
+		arg.RoleEn,
+		arg.BioAr,
+		arg.BioEn,
+		arg.PhotoKey,
+		arg.LinkedinUrl,
+		arg.XUrl,
+	)
+	return err
+}
+
+const insertTestimonial = `-- name: InsertTestimonial :exec
+INSERT INTO site_testimonials (id, position, name, store_name, store_url, quote_ar, quote_en, photo_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertTestimonialParams struct {
+	ID        ulid.ID
+	Position  int32
+	Name      string
+	StoreName string
+	StoreUrl  string
+	QuoteAr   string
+	QuoteEn   string
+	PhotoKey  string
+}
+
+func (q *Queries) InsertTestimonial(ctx context.Context, arg InsertTestimonialParams) error {
+	_, err := q.db.Exec(ctx, insertTestimonial,
+		arg.ID,
+		arg.Position,
+		arg.Name,
+		arg.StoreName,
+		arg.StoreUrl,
+		arg.QuoteAr,
+		arg.QuoteEn,
+		arg.PhotoKey,
 	)
 	return err
 }
@@ -123,6 +296,108 @@ func (q *Queries) ListFAQs(ctx context.Context) ([]ListFAQsRow, error) {
 	return items, nil
 }
 
+const listPeople = `-- name: ListPeople :many
+SELECT id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_key, linkedin_url, x_url
+FROM site_people
+ORDER BY kind, position, created_at
+LIMIT 200
+`
+
+type ListPeopleRow struct {
+	ID          ulid.ID
+	Kind        string
+	Position    int32
+	NameAr      string
+	NameEn      string
+	RoleAr      string
+	RoleEn      string
+	BioAr       string
+	BioEn       string
+	PhotoKey    string
+	LinkedinUrl string
+	XUrl        string
+}
+
+func (q *Queries) ListPeople(ctx context.Context) ([]ListPeopleRow, error) {
+	rows, err := q.db.Query(ctx, listPeople)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPeopleRow{}
+	for rows.Next() {
+		var i ListPeopleRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Position,
+			&i.NameAr,
+			&i.NameEn,
+			&i.RoleAr,
+			&i.RoleEn,
+			&i.BioAr,
+			&i.BioEn,
+			&i.PhotoKey,
+			&i.LinkedinUrl,
+			&i.XUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTestimonials = `-- name: ListTestimonials :many
+SELECT id, position, name, store_name, store_url, quote_ar, quote_en, photo_key
+FROM site_testimonials
+ORDER BY position, created_at
+LIMIT 200
+`
+
+type ListTestimonialsRow struct {
+	ID        ulid.ID
+	Position  int32
+	Name      string
+	StoreName string
+	StoreUrl  string
+	QuoteAr   string
+	QuoteEn   string
+	PhotoKey  string
+}
+
+func (q *Queries) ListTestimonials(ctx context.Context) ([]ListTestimonialsRow, error) {
+	rows, err := q.db.Query(ctx, listTestimonials)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTestimonialsRow{}
+	for rows.Next() {
+		var i ListTestimonialsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Position,
+			&i.Name,
+			&i.StoreName,
+			&i.StoreUrl,
+			&i.QuoteAr,
+			&i.QuoteEn,
+			&i.PhotoKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveSettings = `-- name: SaveSettings :exec
 UPDATE site_settings
 SET whatsapp = $1, whatsapp_intl = $2, email = $3, socials = $4, company_number = $5, updated_at = now()
@@ -145,6 +420,39 @@ func (q *Queries) SaveSettings(ctx context.Context, arg SaveSettingsParams) erro
 		arg.Socials,
 		arg.CompanyNumber,
 	)
+	return err
+}
+
+const saveStory = `-- name: SaveStory :exec
+UPDATE site_settings SET story_ar = $1, story_en = $2, video_id = $3, updated_at = now() WHERE id = 1
+`
+
+type SaveStoryParams struct {
+	StoryAr string
+	StoryEn string
+	VideoID string
+}
+
+func (q *Queries) SaveStory(ctx context.Context, arg SaveStoryParams) error {
+	_, err := q.db.Exec(ctx, saveStory, arg.StoryAr, arg.StoryEn, arg.VideoID)
+	return err
+}
+
+const setLogo = `-- name: SetLogo :exec
+UPDATE site_settings SET logo_key = $1, updated_at = now() WHERE id = 1
+`
+
+func (q *Queries) SetLogo(ctx context.Context, logoKey string) error {
+	_, err := q.db.Exec(ctx, setLogo, logoKey)
+	return err
+}
+
+const setShareImage = `-- name: SetShareImage :exec
+UPDATE site_settings SET og_key = $1, updated_at = now() WHERE id = 1
+`
+
+func (q *Queries) SetShareImage(ctx context.Context, ogKey string) error {
+	_, err := q.db.Exec(ctx, setShareImage, ogKey)
 	return err
 }
 
@@ -173,6 +481,84 @@ func (q *Queries) UpdateFAQ(ctx context.Context, arg UpdateFAQParams) (int64, er
 		arg.AnswerAr,
 		arg.QuestionEn,
 		arg.AnswerEn,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updatePerson = `-- name: UpdatePerson :execrows
+UPDATE site_people
+SET kind = $1, position = $2, name_ar = $3, name_en = $4, role_ar = $5, role_en = $6,
+    bio_ar = $7, bio_en = $8, photo_key = $9, linkedin_url = $10, x_url = $11, updated_at = now()
+WHERE id = $12
+`
+
+type UpdatePersonParams struct {
+	Kind        string
+	Position    int32
+	NameAr      string
+	NameEn      string
+	RoleAr      string
+	RoleEn      string
+	BioAr       string
+	BioEn       string
+	PhotoKey    string
+	LinkedinUrl string
+	XUrl        string
+	ID          ulid.ID
+}
+
+func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePerson,
+		arg.Kind,
+		arg.Position,
+		arg.NameAr,
+		arg.NameEn,
+		arg.RoleAr,
+		arg.RoleEn,
+		arg.BioAr,
+		arg.BioEn,
+		arg.PhotoKey,
+		arg.LinkedinUrl,
+		arg.XUrl,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateTestimonial = `-- name: UpdateTestimonial :execrows
+UPDATE site_testimonials
+SET position = $1, name = $2, store_name = $3, store_url = $4, quote_ar = $5, quote_en = $6,
+    photo_key = $7, updated_at = now()
+WHERE id = $8
+`
+
+type UpdateTestimonialParams struct {
+	Position  int32
+	Name      string
+	StoreName string
+	StoreUrl  string
+	QuoteAr   string
+	QuoteEn   string
+	PhotoKey  string
+	ID        ulid.ID
+}
+
+func (q *Queries) UpdateTestimonial(ctx context.Context, arg UpdateTestimonialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateTestimonial,
+		arg.Position,
+		arg.Name,
+		arg.StoreName,
+		arg.StoreUrl,
+		arg.QuoteAr,
+		arg.QuoteEn,
+		arg.PhotoKey,
 		arg.ID,
 	)
 	if err != nil {

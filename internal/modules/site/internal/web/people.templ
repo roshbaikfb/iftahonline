@@ -1,0 +1,133 @@
+package web
+
+// The about page's people, merchants' reviews and the video (S4b-1).
+// Every section shows only once the console has set its content.
+
+templ foundersSection(p *pageCtx) {
+	if len(p.founders) > 0 {
+		<section class="wrap section tight" aria-labelledby="h-founders">
+			<div class="head">
+				<span class="eyebrow">{ p.t.FoundersEyebrow }</span>
+				<h2 id="h-founders">{ p.t.FoundersH2 }</h2>
+			</div>
+			<div class="founders">
+				for _, f := range p.founders {
+					<article class="founder">
+						@avatar(f.photo, f.initials, "big")
+						<div class="founder-text">
+							<span class="tag green">{ p.t.CoFounder }</span>
+							<h3>{ f.name }</h3>
+							if f.role != "" {
+								<span class="role">{ f.role }</span>
+							}
+							if f.bio != "" {
+								<p>{ f.bio }</p>
+							}
+							@profiles(f)
+						</div>
+					</article>
+				}
+			</div>
+		</section>
+	}
+}
+
+templ teamSection(p *pageCtx) {
+	if len(p.team) > 0 {
+		<section class="wrap section tight" aria-labelledby="h-team">
+			<div class="head">
+				<span class="eyebrow">{ p.t.TeamEyebrow }</span>
+				<h2 id="h-team">{ p.t.TeamH2 }</h2>
+			</div>
+			<div class="team">
+				for _, m := range p.team {
+					<div class="member">
+						@avatar(m.photo, m.initials, "")
+						<div>
+							<strong>{ m.name }</strong>
+							if m.role != "" {
+								<span class="role">{ m.role }</span>
+							}
+							if m.bio != "" {
+								<span class="muted small">{ m.bio }</span>
+							}
+							@profiles(m)
+						</div>
+					</div>
+				}
+			</div>
+		</section>
+	}
+}
+
+templ profiles(v personView) {
+	if v.linkedIn != "" || v.x != "" {
+		<div class="profiles">
+			if v.linkedIn != "" {
+				<a href={ templ.SafeURL(v.linkedIn) } rel="noopener" target="_blank">LinkedIn</a>
+			}
+			if v.x != "" {
+				<a href={ templ.SafeURL(v.x) } rel="noopener" target="_blank">X</a>
+			}
+		</div>
+	}
+}
+
+// avatar is a photo, or the initials in its place.
+templ avatar(photo, letters, size string) {
+	if photo != "" {
+		<img class={ "avatar", size } src={ photo } alt="" loading="lazy" width="160" height="160"/>
+	} else {
+		<span class={ "avatar", "letters", size } aria-hidden="true">{ letters }</span>
+	}
+}
+
+templ reviewsSection(p *pageCtx) {
+	if len(p.reviews) > 0 {
+		<section class="soft" aria-labelledby="h-reviews">
+			<div class="wrap section tight">
+				<div class="head">
+					<span class="eyebrow">{ p.t.ReviewsEyebrow }</span>
+					<h2 id="h-reviews">{ p.t.ReviewsH2 }</h2>
+				</div>
+				<div class="reviews">
+					for _, r := range p.reviews {
+						<figure class="review">
+							<blockquote><p>{ r.quote }</p></blockquote>
+							<figcaption>
+								@avatar(r.photo, r.initials, "")
+								<span>
+									<strong>{ r.name }</strong>
+									if r.store != "" {
+										if r.storeURL != "" {
+											<a href={ templ.SafeURL(r.storeURL) } rel="noopener nofollow" target="_blank">{ r.store }</a>
+										} else {
+											<span class="muted">{ r.store }</span>
+										}
+									}
+								</span>
+							</figcaption>
+						</figure>
+					}
+				</div>
+			</div>
+		</section>
+	}
+}
+
+// videoSection opens the video on YouTube: nothing of YouTube's loads
+// until the visitor asks (only its thumbnail).
+templ videoSection(p *pageCtx) {
+	if p.videoID != "" {
+		<section class="wrap section tight" aria-labelledby="h-video">
+			<div class="head">
+				<h2 id="h-video">{ p.t.WatchVideo }</h2>
+				<p>{ p.t.VideoLead }</p>
+			</div>
+			<a class="video" href={ templ.SafeURL(videoLink(p.videoID)) } rel="noopener" target="_blank">
+				<img src={ videoThumb(p.videoID) } alt={ p.t.WatchVideo } loading="lazy" width="480" height="360"/>
+				<span class="play" aria-hidden="true"></span>
+			</a>
+		</section>
+	}
+}

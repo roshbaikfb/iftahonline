@@ -21,6 +21,7 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 			}
 		</div>
 	</section>
+	@videoSection(p)
 	<section id="features" class="wrap section" aria-labelledby="h-why">
 		<div class="head">
 			<span class="eyebrow">{ p.t.WhyEyebrow }</span>
@@ -111,6 +112,7 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 			</ol>
 		</div>
 	</section>
+	@reviewsSection(p)
 	<section class="wrap section" aria-labelledby="h-pricing">
 		<div class="head">
 			<span class="eyebrow">{ p.t.PricingEyebrow }</span>

@@ -25,7 +25,12 @@ templ layout(p *pageCtx, body templ.Component) {
 				<meta property="og:title" content={ p.title }/>
 				<meta property="og:description" content={ p.description }/>
 				<meta property="og:url" content={ p.url(p.l) }/>
-				<meta name="twitter:card" content="summary"/>
+				if p.share != "" {
+					<meta property="og:image" content={ p.share }/>
+					<meta name="twitter:card" content="summary_large_image"/>
+				} else {
+					<meta name="twitter:card" content="summary"/>
+				}
 			}
 			<meta name="theme-color" content="#0f2e52"/>
 			<link rel="icon" href="/favicon.ico" type="image/svg+xml"/>
@@ -61,12 +66,17 @@ templ layout(p *pageCtx, body templ.Component) {
 	</html>
 }
 
+// brand is the console's logo when set, else the bag mark and the name.
 templ brand(p *pageCtx) {
 	<a class="brand" href={ templ.SafeURL(p.l.at("/")) }>
-		<span class="mark" aria-hidden="true">
-			@icon("bag")
-		</span>
-		<span class="name">{ p.c.brand }</span>
+		if p.logo != "" {
+			<img class="logo" src={ p.logo } alt={ p.c.brand } height="40"/>
+		} else {
+			<span class="mark" aria-hidden="true">
+				@icon("bag")
+			</span>
+			<span class="name">{ p.c.brand }</span>
+		}
 	</a>
 }
 
