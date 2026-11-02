@@ -472,6 +472,12 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		if c.Payments.CheckoutURL == "" {
 			c.Payments.CheckoutURL = "https://app." + c.Tenancy.BaseDomain
 		}
+		// The platform's site (ADR-0071) sends merchants to the dashboard
+		// to sign up and sign in.
+		c.Mail.DashboardURL = r.url("DASHBOARD_URL", false, "http", "https")
+		if c.Mail.DashboardURL == "" {
+			c.Mail.DashboardURL = "https://app." + c.Tenancy.BaseDomain
+		}
 		// Shoppers' search: Meilisearch with a key limited to searching the
 		// index; without MEILI_SEARCH_KEY the storefront offers no search.
 		if key := r.secretOptional("MEILI_SEARCH_KEY"); key != "" {

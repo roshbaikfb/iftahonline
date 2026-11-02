@@ -186,6 +186,14 @@ func TestPayments(t *testing.T) {
 	if _, err = config.Load(config.RoleStorefront, env(with("CHECKOUT_URL", "ftp://app"))); err == nil {
 		t.Fatal("ftp checkout URL accepted")
 	}
+	// The platform's site links to the dashboard (ADR-0071).
+	if c, err = config.Load(config.RoleStorefront, env(base())); err != nil || c.Mail.DashboardURL != "https://app.iftahonline.com" {
+		t.Fatalf("storefront dashboard default: %q %v", c.Mail.DashboardURL, err)
+	}
+	if c, err = config.Load(config.RoleStorefront, env(with("DASHBOARD_URL", "http://localhost:5173"))); err != nil ||
+		c.Mail.DashboardURL != "http://localhost:5173" {
+		t.Fatalf("storefront dashboard set: %q %v", c.Mail.DashboardURL, err)
+	}
 }
 
 func TestBilling(t *testing.T) {
