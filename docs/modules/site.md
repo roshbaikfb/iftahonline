@@ -62,6 +62,11 @@ It owns no tables, emits no events and has no HTTP API of its own.
   - `PUT` and `DELETE /admin/v1/site/images/{logo|share}`;
   - `POST /admin/v1/site/people`, then `PUT` and `DELETE /{id}`;
   - `POST /admin/v1/site/testimonials`, then `PUT` and `DELETE /{id}`.
+- **The founding program (ADR-0074):**
+  - The home and pricing pages show its section only while it is on
+    with seats left.
+  - The section has the terms and the live seat count from billing's
+    `Showcase.FoundingSeats`, kept a minute.
 - **Caching:** the site keeps a one-minute cache and keeps the last read
   when a read fails. Pages stay 10 minutes at the edge.
 
@@ -108,7 +113,6 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S4b-2:** the founding-merchants program, with its billing discount.
 - **S4c:** the guides (articles) and their editor.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).

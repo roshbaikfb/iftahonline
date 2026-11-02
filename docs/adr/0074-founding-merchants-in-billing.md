@@ -83,5 +83,12 @@ Two parts of billing did not support this:
   correctly, because the sweep runs well before invoices are due.
 - **Changing the program's discount** affects only merchants who join
   after it.
-- **Coming in S4b-2b:** the site's section with the live seat counter,
-  and the badge in the merchant's dashboard.
+- **S4b-2b, where merchants see it:**
+  - **The site:** the home and pricing pages show the program while it
+    is on with seats left. The section has its terms and a live count
+    of seats left (`Showcase.FoundingSeats`, kept a minute, then the
+    edge's 10 minutes). When the seats can't be read, the pages show
+    without the section.
+  - **The merchant:** a member sees «تاجر مؤسس», its seat and its
+    discount on its billing page (`Billing.founding`). The badge goes
+    when the membership ends, and stores never show it.
