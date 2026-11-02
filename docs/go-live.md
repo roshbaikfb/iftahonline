@@ -215,3 +215,27 @@ account, before merchants rely on it:
   cookie, so GA4 may see a buyer's server-side purchase as another user.
 - Google Ads has no server-side conversions yet (browser tag only).
 - The message log's status tabs show no counts.
+
+## 13. The platform's site (ADR-0071)
+
+- **DNS:** point the domain (`iftahonline.com`) and `www` at the edge,
+  like the stores' hosts. The storefront role serves both; `www`
+  redirects to the domain.
+- **The CDN's country header:** the pricing page prices by
+  `CF-IPCountry` (Cloudflare adds it). Behind another CDN, or none,
+  every visitor gets pounds until the header is set.
+- **`DASHBOARD_URL`** is now read by the storefront role too: the site's
+  «ابدأ مجانًا» and «تسجيل الدخول» go there (default
+  `https://app.{domain}`).
+- **Search engines:**
+  - add the domain to Google Search Console and Bing Webmaster Tools
+    (DNS verification) and submit `https://iftahonline.com/sitemap.xml`;
+  - check `https://iftahonline.com/robots.txt` and `/llms.txt` answer.
+- **Outside the code** (no ranking can be promised):
+  - the brand's social profiles, linked from the site (S4);
+  - a Google Business Profile for the company;
+  - mentions on other sites;
+  - a cadence of guides (S4).
+- **Dollar prices:** visitors outside Egypt see «قريبًا» until billing
+  sells in dollars (the Stripe work).
+

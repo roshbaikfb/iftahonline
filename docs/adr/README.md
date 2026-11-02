@@ -76,3 +76,4 @@ supersedes it.
 | [0068](0068-product-costs-and-carrier-charges.md) | Product costs and carrier charges, for profit | Accepted |
 | [0069](0069-profit-dashboard-facts-and-rollups.md) | The profit dashboard: its own facts, daily rollups, the read pool | Accepted |
 | [0070](0070-risk-actions-invisible-to-whoever-orders.md) | What the risk rules do never shows to whoever places the order | Accepted |
+| [0071](0071-platform-site-on-the-platform-domain.md) | The platform's own site on the platform's domain | Accepted |
