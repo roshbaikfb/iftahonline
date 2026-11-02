@@ -33,9 +33,19 @@ It owns no tables, emits no events and has no HTTP API of its own.
 | `/sitemap.xml` | The pages, with `lastmod` (`updated` in `content.go`) | public |
 | `/llms.txt`, `/llms-full.txt` | Plain facts for AI assistants; the full one adds the plans in pounds and every answer | public |
 | anything else | 404 page, `noindex` | public |
+| `/en`, `/en/…` | The same pages in English (ADR-0072); crawler files stay at the root | as the Arabic page |
 | `www.{domain}/…` | 301 to `{domain}/…` | — |
 
 ## Rules
+
+- **Languages (ADR-0072):**
+  - Arabic is at the root and English is under `/en/`, with the same
+    paths.
+  - Each page links its twin with `hreflang`, and `x-default` is the
+    Arabic page.
+  - Words live in `i18n.go` (Arabic) and `content_en.go` (English);
+    the templates hold none.
+  - English plan and feature names come from billing's `NameEn`.
 
 - **Currency:** pounds for Egypt and for an unknown country, dollars for
   any other. `?currency=EGP|USD` overrides it; the canonical URL stays
@@ -69,7 +79,6 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S3b:** the English site, with `hreflang`.
 - **S4:** the console edits the FAQ, articles (guides), founders, team,
   the founding story, the company number and contact details. The about
   page shows founders and team once they are set.
