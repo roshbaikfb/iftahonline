@@ -165,6 +165,12 @@ func (p Person) Validate() error {
 	return nil
 }
 
+// Check normalizes, then validates.
+func (p *Person) Check() error { p.Normalize(); return p.Validate() }
+
+// Keys are where the person's ID and photo are kept.
+func (p *Person) Keys() (id *ulid.ID, photo *string) { return &p.ID, &p.PhotoKey }
+
 // Testimonial is a merchant's own words about the platform. The console
 // adds only real ones (the owner's decision, and the UK's rules on fake
 // reviews); the site shows none until one exists.
@@ -210,6 +216,12 @@ func (t Testimonial) Validate() error {
 	}
 	return nil
 }
+
+// Check normalizes, then validates.
+func (t *Testimonial) Check() error { t.Normalize(); return t.Validate() }
+
+// Keys are where the review's ID and photo are kept.
+func (t *Testimonial) Keys() (id *ulid.ID, photo *string) { return &t.ID, &t.PhotoKey }
 
 // field is a text and the lengths it may have.
 type field struct {

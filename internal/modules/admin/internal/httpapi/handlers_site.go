@@ -182,10 +182,9 @@ func (h *Handlers) AdminRemoveSiteImage(ctx context.Context, req AdminRemoveSite
 
 // AdminCreateSitePerson implements StrictServerInterface.
 func (h *Handlers) AdminCreateSitePerson(ctx context.Context, req AdminCreateSitePersonRequestObject) (AdminCreateSitePersonResponseObject, error) {
-	if req.Body == nil {
-		return nil, errBody
-	}
-	p, err := h.svc.CreateSitePerson(ctx, fromSitePerson(ulid.ID{}, *req.Body), str(req.Body.UploadKey), req.Body.Reason)
+	p, err := withBody(req.Body, func(b AdminSitePersonInput) (site.Person, error) {
+		return h.svc.CreateSitePerson(ctx, fromSitePerson(ulid.ID{}, b), str(b.UploadKey), b.Reason)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -194,15 +193,7 @@ func (h *Handlers) AdminCreateSitePerson(ctx context.Context, req AdminCreateSit
 
 // AdminUpdateSitePerson implements StrictServerInterface.
 func (h *Handlers) AdminUpdateSitePerson(ctx context.Context, req AdminUpdateSitePersonRequestObject) (AdminUpdateSitePersonResponseObject, error) {
-	id, err := ulid.Parse(req.PersonId)
-	if err != nil {
-		return nil, errPersonNotFound
-	}
-	if req.Body == nil {
-		return nil, errBody
-	}
-	b := req.Body
-	p, err := h.svc.UpdateSitePerson(ctx, fromSitePerson(id, *b), str(b.UploadKey), b.RemovePhoto != nil && *b.RemovePhoto, b.Reason)
+	p, err := updateEntry(req.PersonId, errPersonNotFound, req.Body, h.updatePerson(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -211,11 +202,9 @@ func (h *Handlers) AdminUpdateSitePerson(ctx context.Context, req AdminUpdateSit
 
 // AdminDeleteSitePerson implements StrictServerInterface.
 func (h *Handlers) AdminDeleteSitePerson(ctx context.Context, req AdminDeleteSitePersonRequestObject) (AdminDeleteSitePersonResponseObject, error) {
-	id, err := ulid.Parse(req.PersonId)
-	if err != nil {
-		return nil, errPersonNotFound
-	}
-	if err = h.svc.DeleteSitePerson(ctx, id, req.Params.Reason); err != nil {
+	if err := deleteEntry(req.PersonId, errPersonNotFound, func(id ulid.ID) error {
+		return h.svc.DeleteSitePerson(ctx, id, req.Params.Reason)
+	}); err != nil {
 		return nil, err
 	}
 	return AdminDeleteSitePerson204Response{}, nil
@@ -223,10 +212,9 @@ func (h *Handlers) AdminDeleteSitePerson(ctx context.Context, req AdminDeleteSit
 
 // AdminCreateSiteTestimonial implements StrictServerInterface.
 func (h *Handlers) AdminCreateSiteTestimonial(ctx context.Context, req AdminCreateSiteTestimonialRequestObject) (AdminCreateSiteTestimonialResponseObject, error) {
-	if req.Body == nil {
-		return nil, errBody
-	}
-	t, err := h.svc.CreateSiteTestimonial(ctx, fromSiteTestimonial(ulid.ID{}, *req.Body), str(req.Body.UploadKey), req.Body.Reason)
+	t, err := withBody(req.Body, func(b AdminSiteTestimonialInput) (site.Testimonial, error) {
+		return h.svc.CreateSiteTestimonial(ctx, fromSiteTestimonial(ulid.ID{}, b), str(b.UploadKey), b.Reason)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -235,15 +223,7 @@ func (h *Handlers) AdminCreateSiteTestimonial(ctx context.Context, req AdminCrea
 
 // AdminUpdateSiteTestimonial implements StrictServerInterface.
 func (h *Handlers) AdminUpdateSiteTestimonial(ctx context.Context, req AdminUpdateSiteTestimonialRequestObject) (AdminUpdateSiteTestimonialResponseObject, error) {
-	id, err := ulid.Parse(req.TestimonialId)
-	if err != nil {
-		return nil, errReviewNotFound
-	}
-	if req.Body == nil {
-		return nil, errBody
-	}
-	b := req.Body
-	t, err := h.svc.UpdateSiteTestimonial(ctx, fromSiteTestimonial(id, *b), str(b.UploadKey), b.RemovePhoto != nil && *b.RemovePhoto, b.Reason)
+	t, err := updateEntry(req.TestimonialId, errReviewNotFound, req.Body, h.updateReview(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -252,14 +232,59 @@ func (h *Handlers) AdminUpdateSiteTestimonial(ctx context.Context, req AdminUpda
 
 // AdminDeleteSiteTestimonial implements StrictServerInterface.
 func (h *Handlers) AdminDeleteSiteTestimonial(ctx context.Context, req AdminDeleteSiteTestimonialRequestObject) (AdminDeleteSiteTestimonialResponseObject, error) {
-	id, err := ulid.Parse(req.TestimonialId)
-	if err != nil {
-		return nil, errReviewNotFound
-	}
-	if err = h.svc.DeleteSiteTestimonial(ctx, id, req.Params.Reason); err != nil {
+	if err := deleteEntry(req.TestimonialId, errReviewNotFound, func(id ulid.ID) error {
+		return h.svc.DeleteSiteTestimonial(ctx, id, req.Params.Reason)
+	}); err != nil {
 		return nil, err
 	}
 	return AdminDeleteSiteTestimonial204Response{}, nil
+}
+
+// updateEntry parses an entry's ID (notFound when malformed) and its
+// body, then runs the update.
+func updateEntry[B, T any](rawID string, notFound error, body *B, run func(ulid.ID, B) (T, error)) (T, error) {
+	id, err := ulid.Parse(rawID)
+	if err != nil {
+		var zero T
+		return zero, notFound
+	}
+	return withBody(body, func(b B) (T, error) { return run(id, b) })
+}
+
+// updatePerson saves a person's body under its ID.
+func (h *Handlers) updatePerson(ctx context.Context) func(ulid.ID, AdminSitePersonInput) (site.Person, error) {
+	return func(id ulid.ID, b AdminSitePersonInput) (site.Person, error) {
+		return h.svc.UpdateSitePerson(ctx, fromSitePerson(id, b), str(b.UploadKey), flag(b.RemovePhoto), b.Reason)
+	}
+}
+
+// updateReview saves a review's body under its ID.
+func (h *Handlers) updateReview(ctx context.Context) func(ulid.ID, AdminSiteTestimonialInput) (site.Testimonial, error) {
+	return func(id ulid.ID, b AdminSiteTestimonialInput) (site.Testimonial, error) {
+		return h.svc.UpdateSiteTestimonial(ctx, fromSiteTestimonial(id, b), str(b.UploadKey), flag(b.RemovePhoto), b.Reason)
+	}
+}
+
+// flag is an optional switch, false when absent.
+func flag(b *bool) bool { return b != nil && *b }
+
+// deleteEntry parses an entry's ID (notFound when malformed) and runs
+// the deletion.
+func deleteEntry(rawID string, notFound error, run func(ulid.ID) error) error {
+	id, err := ulid.Parse(rawID)
+	if err != nil {
+		return notFound
+	}
+	return run(id)
+}
+
+// withBody runs with the request's body, refused when it has none.
+func withBody[B, T any](body *B, run func(B) (T, error)) (T, error) {
+	if body == nil {
+		var zero T
+		return zero, errBody
+	}
+	return run(*body)
 }
 
 // str is an optional text, "" when absent.

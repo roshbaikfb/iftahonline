@@ -173,170 +173,153 @@ func (s *Service) photo(ctx context.Context, had, uploadKey string, remove bool)
 	}
 }
 
+// entry is a person or a review: what it checks, and where its ID and
+// photo are.
+type entry[T any] interface {
+	*T
+	Check() error
+	Keys() (id *ulid.ID, photo *string)
+}
+
+// items are the about page's lists the console edits one entry at a
+// time: the people and the reviews. Both keep a photo, ingested on save
+// and deleted with the entry or when replaced.
+type items[T any] struct {
+	max               int
+	tooMany, notFound error
+	list              func(context.Context, store.Tx) ([]T, error)
+	get               func(context.Context, store.Tx, ulid.ID) (T, bool, error)
+	insert            func(context.Context, store.Tx, T) error
+	update            func(context.Context, store.Tx, T) (bool, error)
+	remove            func(context.Context, store.Tx, ulid.ID) (bool, error)
+}
+
+func peopleItems() items[domain.Person] {
+	return items[domain.Person]{domain.MaxPeople, errTooManyPeople, errPersonNotFound,
+		store.People, store.Person, store.InsertPerson, store.UpdatePerson, store.DeletePerson}
+}
+
+func reviewItems() items[domain.Testimonial] {
+	return items[domain.Testimonial]{domain.MaxTestimonials, errTooManyReviews, errReviewNotFound,
+		store.Testimonials, store.Testimonial, store.InsertTestimonial, store.UpdateTestimonial, store.DeleteTestimonial}
+}
+
+// create adds an entry with a new ID, with an uploaded photo or none.
+func create[T any, P entry[T]](ctx context.Context, s *Service, it items[T], v T, uploadKey string) (T, error) {
+	var zero T
+	db, err := s.admin()
+	if err != nil {
+		return zero, err
+	}
+	if err = P(&v).Check(); err != nil {
+		return zero, err
+	}
+	all, err := it.list(ctx, db)
+	if err != nil {
+		return zero, err
+	}
+	if len(all) >= it.max {
+		return zero, it.tooMany
+	}
+	id, photo := P(&v).Keys()
+	if *photo, err = s.photo(ctx, "", uploadKey, false); err != nil {
+		return zero, err
+	}
+	*id = s.d.IDs.New()
+	if err = it.insert(ctx, db, v); err != nil {
+		s.drop(ctx, *photo)
+		return zero, err
+	}
+	return v, nil
+}
+
+// edit rewrites an entry: a new photo replaces the old one (deleted),
+// removePhoto takes it off, neither keeps it.
+func edit[T any, P entry[T]](ctx context.Context, s *Service, it items[T], v T, uploadKey string, removePhoto bool) (T, error) {
+	var zero T
+	db, err := s.admin()
+	if err != nil {
+		return zero, err
+	}
+	if err = P(&v).Check(); err != nil {
+		return zero, err
+	}
+	id, photo := P(&v).Keys()
+	had, found, err := it.get(ctx, db, *id)
+	if err != nil {
+		return zero, err
+	}
+	if !found {
+		return zero, it.notFound
+	}
+	_, old := P(&had).Keys()
+	if *photo, err = s.photo(ctx, *old, uploadKey, removePhoto); err != nil {
+		return zero, err
+	}
+	if _, err = it.update(ctx, db, v); err != nil {
+		if *photo != *old {
+			s.drop(ctx, *photo)
+		}
+		return zero, err
+	}
+	if *photo != *old {
+		s.drop(ctx, *old)
+	}
+	return v, nil
+}
+
+// remove deletes an entry and its photo.
+func remove[T any, P entry[T]](ctx context.Context, s *Service, it items[T], id ulid.ID) error {
+	db, err := s.admin()
+	if err != nil {
+		return err
+	}
+	had, found, err := it.get(ctx, db, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return it.notFound
+	}
+	if found, err = it.remove(ctx, db, id); err != nil {
+		return err
+	}
+	if !found {
+		return it.notFound
+	}
+	_, photo := P(&had).Keys()
+	s.drop(ctx, *photo)
+	return nil
+}
+
 // CreatePerson adds a founder or a team member, with an uploaded photo
 // or none.
 func (s *Service) CreatePerson(ctx context.Context, p domain.Person, uploadKey string) (domain.Person, error) {
-	db, err := s.admin()
-	if err != nil {
-		return domain.Person{}, err
-	}
-	p.Normalize()
-	if err = p.Validate(); err != nil {
-		return domain.Person{}, err
-	}
-	all, err := store.People(ctx, db)
-	if err != nil {
-		return domain.Person{}, err
-	}
-	if len(all) >= domain.MaxPeople {
-		return domain.Person{}, errTooManyPeople
-	}
-	if p.PhotoKey, err = s.photo(ctx, "", uploadKey, false); err != nil {
-		return domain.Person{}, err
-	}
-	p.ID = s.d.IDs.New()
-	if err = store.InsertPerson(ctx, db, p); err != nil {
-		s.drop(ctx, p.PhotoKey)
-		return domain.Person{}, err
-	}
-	return p, nil
+	return create[domain.Person, *domain.Person](ctx, s, peopleItems(), p, uploadKey)
 }
 
 // UpdatePerson rewrites a person: a new photo replaces the old one,
 // removePhoto takes it off, neither keeps it.
 func (s *Service) UpdatePerson(ctx context.Context, p domain.Person, uploadKey string, removePhoto bool) (domain.Person, error) {
-	db, err := s.admin()
-	if err != nil {
-		return domain.Person{}, err
-	}
-	p.Normalize()
-	if err = p.Validate(); err != nil {
-		return domain.Person{}, err
-	}
-	had, found, err := store.Person(ctx, db, p.ID)
-	if err != nil {
-		return domain.Person{}, err
-	}
-	if !found {
-		return domain.Person{}, errPersonNotFound
-	}
-	if p.PhotoKey, err = s.photo(ctx, had.PhotoKey, uploadKey, removePhoto); err != nil {
-		return domain.Person{}, err
-	}
-	if _, err = store.UpdatePerson(ctx, db, p); err != nil {
-		if p.PhotoKey != had.PhotoKey {
-			s.drop(ctx, p.PhotoKey)
-		}
-		return domain.Person{}, err
-	}
-	if p.PhotoKey != had.PhotoKey {
-		s.drop(ctx, had.PhotoKey)
-	}
-	return p, nil
+	return edit[domain.Person, *domain.Person](ctx, s, peopleItems(), p, uploadKey, removePhoto)
 }
 
 // DeletePerson removes a person and their photo.
 func (s *Service) DeletePerson(ctx context.Context, id ulid.ID) error {
-	db, err := s.admin()
-	if err != nil {
-		return err
-	}
-	had, found, err := store.Person(ctx, db, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return errPersonNotFound
-	}
-	if found, err = store.DeletePerson(ctx, db, id); err != nil {
-		return err
-	}
-	if !found {
-		return errPersonNotFound
-	}
-	s.drop(ctx, had.PhotoKey)
-	return nil
+	return remove[domain.Person, *domain.Person](ctx, s, peopleItems(), id)
 }
 
 // CreateTestimonial adds a merchant's review.
 func (s *Service) CreateTestimonial(ctx context.Context, t domain.Testimonial, uploadKey string) (domain.Testimonial, error) {
-	db, err := s.admin()
-	if err != nil {
-		return domain.Testimonial{}, err
-	}
-	t.Normalize()
-	if err = t.Validate(); err != nil {
-		return domain.Testimonial{}, err
-	}
-	all, err := store.Testimonials(ctx, db)
-	if err != nil {
-		return domain.Testimonial{}, err
-	}
-	if len(all) >= domain.MaxTestimonials {
-		return domain.Testimonial{}, errTooManyReviews
-	}
-	if t.PhotoKey, err = s.photo(ctx, "", uploadKey, false); err != nil {
-		return domain.Testimonial{}, err
-	}
-	t.ID = s.d.IDs.New()
-	if err = store.InsertTestimonial(ctx, db, t); err != nil {
-		s.drop(ctx, t.PhotoKey)
-		return domain.Testimonial{}, err
-	}
-	return t, nil
+	return create[domain.Testimonial, *domain.Testimonial](ctx, s, reviewItems(), t, uploadKey)
 }
 
 // UpdateTestimonial rewrites a review, its photo as UpdatePerson.
 func (s *Service) UpdateTestimonial(ctx context.Context, t domain.Testimonial, uploadKey string, removePhoto bool) (domain.Testimonial, error) {
-	db, err := s.admin()
-	if err != nil {
-		return domain.Testimonial{}, err
-	}
-	t.Normalize()
-	if err = t.Validate(); err != nil {
-		return domain.Testimonial{}, err
-	}
-	had, found, err := store.Testimonial(ctx, db, t.ID)
-	if err != nil {
-		return domain.Testimonial{}, err
-	}
-	if !found {
-		return domain.Testimonial{}, errReviewNotFound
-	}
-	if t.PhotoKey, err = s.photo(ctx, had.PhotoKey, uploadKey, removePhoto); err != nil {
-		return domain.Testimonial{}, err
-	}
-	if _, err = store.UpdateTestimonial(ctx, db, t); err != nil {
-		if t.PhotoKey != had.PhotoKey {
-			s.drop(ctx, t.PhotoKey)
-		}
-		return domain.Testimonial{}, err
-	}
-	if t.PhotoKey != had.PhotoKey {
-		s.drop(ctx, had.PhotoKey)
-	}
-	return t, nil
+	return edit[domain.Testimonial, *domain.Testimonial](ctx, s, reviewItems(), t, uploadKey, removePhoto)
 }
 
 // DeleteTestimonial removes a review and its photo.
 func (s *Service) DeleteTestimonial(ctx context.Context, id ulid.ID) error {
-	db, err := s.admin()
-	if err != nil {
-		return err
-	}
-	had, found, err := store.Testimonial(ctx, db, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return errReviewNotFound
-	}
-	if found, err = store.DeleteTestimonial(ctx, db, id); err != nil {
-		return err
-	}
-	if !found {
-		return errReviewNotFound
-	}
-	s.drop(ctx, had.PhotoKey)
-	return nil
+	return remove[domain.Testimonial, *domain.Testimonial](ctx, s, reviewItems(), id)
 }
