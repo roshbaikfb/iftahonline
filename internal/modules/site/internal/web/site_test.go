@@ -32,16 +32,17 @@ func (f *fakePlans) PublicOffers(_ context.Context, currency string) (billing.Of
 	if f.err != nil {
 		return billing.Offers{}, f.err
 	}
-	o := billing.Offers{Currency: currency, Features: []billing.Feature{{Key: "products", Kind: "limit", NameAr: "المنتجات"}, {Key: "profit", Kind: "flag", NameAr: "لوحة الربح الصافي"}}}
-	plan := func(code, kind, name string, trial int32, grants billing.Grants) billing.Offer {
+	o := billing.Offers{Currency: currency, Features: []billing.Feature{{Key: "products", Kind: "limit", NameAr: "المنتجات", NameEn: "Products"},
+		{Key: "profit", Kind: "flag", NameAr: "لوحة الربح الصافي", NameEn: "Net profit dashboard"}}}
+	plan := func(code, kind, name, nameEn string, trial int32, grants billing.Grants) billing.Offer {
 		of := billing.Offer{}
-		of.Code, of.Kind, of.NameAr, of.TrialDays, of.Grants = code, billing.Kind(kind), name, trial, grants
+		of.Code, of.Kind, of.NameAr, of.NameEn, of.TrialDays, of.Grants = code, billing.Kind(kind), name, nameEn, trial, grants
 		return of
 	}
-	free := plan("free", "free", "مجانية", 0, billing.Grants{"products": {Value: 50}})
-	pays := plan("pays", "pays", "ادفع حسب مبيعاتك", 0, billing.Grants{"products": {Value: 1000}, "profit": {Value: 1}})
-	merchant := plan("merchant", "subscription", "تاجر", 14, billing.Grants{"products": {Value: 500}, "profit": {Value: 1}})
-	brand := plan("brand", "subscription", "براند", 14, billing.Grants{"products": {Unlimited: true}, "profit": {Value: 1}})
+	free := plan("free", "free", "مجانية", "Free", 0, billing.Grants{"products": {Value: 50}, "staff": {Value: 1}})
+	pays := plan("pays", "pays", "ادفع حسب مبيعاتك", "Pay as you sell", 0, billing.Grants{"products": {Value: 1000}, "profit": {Value: 1}})
+	merchant := plan("merchant", "subscription", "تاجر", "Merchant", 14, billing.Grants{"products": {Value: 500}, "profit": {Value: 1}})
+	brand := plan("brand", "subscription", "براند", "Brand", 14, billing.Grants{"products": {Unlimited: true}, "profit": {Value: 1}})
 	if currency == "EGP" {
 		pays.Fee = &billing.CurrencyFee{Currency: "EGP", FeeRule: billing.FeeRule{RateBps: 250}}
 		merchant.Monthly, merchant.Annual = i64(29900), i64(299000)
@@ -305,15 +306,16 @@ func allPages(t *testing.T, f fixture) []string {
 	return out
 }
 
-// TestEveryPage: each page the sitemap lists answers, names its own
-// canonical URL and a description, keeps to the policy (no script, no
-// style attribute), and speaks of what a merchant gains, never of how
-// the platform is built (the owner's rule).
+// TestEveryPage: each page the sitemap lists, in Arabic and in English,
+// answers, names its own canonical URL, its other language and a
+// description, keeps to the policy (no script, no style attribute), and
+// speaks of what a merchant gains, never of how the platform is built
+// (the owner's rule).
 func TestEveryPage(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	paths := allPages(t, f)
-	if len(paths) != 13 {
+	if len(paths) != 26 { // 13 pages in each language
 		t.Fatalf("sitemap lists %d pages: %v", len(paths), paths)
 	}
 	for _, path := range paths {
@@ -323,16 +325,19 @@ func TestEveryPage(t *testing.T) {
 			t.Errorf("%s: %d", path, rec.Code)
 			continue
 		}
-		wantContains(t, body, `<link rel="canonical" href="https://iftahonline.com`+path+`">`, `<meta name="description" content="`, "<h1>")
+		wantContains(t, body, `<link rel="canonical" href="https://iftahonline.com`+path+`">`, `<meta name="description" content="`, "<h1>",
+			`<link rel="alternate" hreflang="ar" href="https://iftahonline.com`, `<link rel="alternate" hreflang="en" href="https://iftahonline.com/en`,
+			`<link rel="alternate" hreflang="x-default" href="https://iftahonline.com`)
 		if strings.Contains(body, "<script>") || strings.Contains(body, ` style="`) {
 			t.Errorf("%s: inline script or style attribute", path)
 		}
-		for _, word := range []string{"معزول", "عزل", "قاعدة بيانات", "قواعد البيانات", "سيرفر", "خادم", "برمجة متقدمة"} {
+		for _, word := range []string{"معزول", "عزل", "قاعدة بيانات", "قواعد البيانات", "سيرفر", "خادم", "برمجة متقدمة",
+			"isolat", "database", "server", "Postgres", "tenant"} {
 			if strings.Contains(body, word) {
 				t.Errorf("%s: technical wording %q", path, word)
 			}
 		}
-		if path != "/" && ld(t, body)["BreadcrumbList"] == nil {
+		if path != "/" && path != "/en" && ld(t, body)["BreadcrumbList"] == nil {
 			t.Errorf("%s: no BreadcrumbList", path)
 		}
 	}
@@ -402,4 +407,55 @@ func TestAboutAndLegal(t *testing.T) {
 	wantContains(t, home, `<a href="/terms">الشروط والأحكام</a>`, `<a href="/privacy">سياسة الخصوصية</a>`)
 	wantContains(t, f.get(t, "/privacy").Body.String(), "<h1>سياسة الخصوصية</h1>", "Paymob", "لا نبيع البيانات لأحد")
 	wantContains(t, f.get(t, "/terms").Body.String(), "<h1>الشروط والأحكام</h1>", "Codezilo Ltd")
+}
+
+// TestEnglish: the English site lives under /en with the same pages: in
+// English and left to right, with plans named and priced in English, its
+// links staying in English, and each page linking its Arabic twin.
+func TestEnglish(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	home := f.get(t, "/en").Body.String()
+	wantContains(t, home, `<html lang="en" dir="ltr">`, "<title>iftahonline | The online store platform for cash on delivery</title>",
+		`<link rel="canonical" href="https://iftahonline.com/en">`, `<meta property="og:locale" content="en_US">`,
+		`href="/en/pricing"`, `href="/en/features/whatsapp-confirmation"`, `href="/" hreflang="ar" lang="ar">العربية</a>`,
+		"EGP 299", "2.5%", "Merchant", "Recommended", "Example", "text=Hello%2C")
+	for _, arabicWord := range []string{"ج.م", "موصى بها", "الأسعار"} {
+		if strings.Contains(home, arabicWord) {
+			t.Errorf("English home shows %q", arabicWord)
+		}
+	}
+	data := ld(t, home)
+	if org := data["Organization"]; org == nil || org["name"] != "iftahonline" || org["@id"] != "https://iftahonline.com/#organization" {
+		t.Fatalf("Organization = %v", org)
+	}
+	if app := data["SoftwareApplication"]; app["inLanguage"] != "en" {
+		t.Fatalf("SoftwareApplication = %v", app)
+	}
+
+	pricing := f.get(t, "/en/pricing", "CF-IPCountry", "SA").Body.String()
+	wantContains(t, pricing, "<strong>US dollars</strong>", `href="/en/pricing?currency=EGP"`, "Dollar prices are coming soon", "$0")
+	pricing = f.get(t, "/en/pricing", "CF-IPCountry", "EG").Body.String()
+	wantContains(t, pricing, "EGP 2,990", "Free trial: 14 days", "Unlimited", "Net profit dashboard")
+	wantContains(t, pricing, "1 team member<")
+
+	feature := f.get(t, "/en/features/net-profit")
+	trail := ld(t, feature.Body.String())["BreadcrumbList"]["itemListElement"].([]any)
+	if feature.Code != http.StatusOK || trail[1].(map[string]any)["item"] != "https://iftahonline.com/en/features" {
+		t.Fatalf("English feature: %d %v", feature.Code, trail)
+	}
+	wantContains(t, feature.Body.String(), "On paid plans", `<a href="/en/features" aria-current="true">Features</a>`)
+	wantContains(t, f.get(t, "/en/privacy").Body.String(), "<h1>Privacy policy</h1>", "We never sell data")
+	wantContains(t, f.get(t, "/en/about").Body.String(), `aria-label="Flag of the United Kingdom"`, "Codezilo Ltd")
+	wantContains(t, f.get(t, "/pricing").Body.String(), `href="/en/pricing" hreflang="en" lang="en">English</a>`)
+
+	for _, path := range []string{"/en/nope", "/en/features/nope", "/en/robots.txt", "/english"} {
+		if rec := f.get(t, path); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: %d", path, rec.Code)
+		}
+	}
+	sitemap := f.get(t, "/sitemap.xml").Body.String()
+	wantContains(t, sitemap, `xmlns:xhtml="http://www.w3.org/1999/xhtml"`,
+		`<loc>https://iftahonline.com/en/pricing</loc><lastmod>`+"2026-11-02"+`</lastmod><xhtml:link rel="alternate" hreflang="ar" href="https://iftahonline.com/pricing"/>`)
+	wantContains(t, f.get(t, "/llms.txt").Body.String(), "## In English", "[Pricing](https://iftahonline.com/en/pricing)")
 }

@@ -4,7 +4,7 @@ package web
 // read, the header, the page, the footer and the WhatsApp button.
 templ layout(p *pageCtx, body templ.Component) {
 	<!DOCTYPE html>
-	<html lang="ar" dir="rtl">
+	<html lang={ p.l.code } dir={ p.l.dir }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -15,13 +15,16 @@ templ layout(p *pageCtx, body templ.Component) {
 			if p.noindex {
 				<meta name="robots" content="noindex"/>
 			} else {
-				<link rel="canonical" href={ p.origin + p.path }/>
+				<link rel="canonical" href={ p.url(p.l) }/>
+				<link rel="alternate" hreflang="ar" href={ p.url(arabic) }/>
+				<link rel="alternate" hreflang="en" href={ p.url(english) }/>
+				<link rel="alternate" hreflang="x-default" href={ p.url(arabic) }/>
 				<meta property="og:type" content="website"/>
-				<meta property="og:site_name" content="افتح أونلاين"/>
-				<meta property="og:locale" content="ar_EG"/>
+				<meta property="og:site_name" content={ p.c.brand }/>
+				<meta property="og:locale" content={ p.l.locale }/>
 				<meta property="og:title" content={ p.title }/>
 				<meta property="og:description" content={ p.description }/>
-				<meta property="og:url" content={ p.origin + p.path }/>
+				<meta property="og:url" content={ p.url(p.l) }/>
 				<meta name="twitter:card" content="summary"/>
 			}
 			<meta name="theme-color" content="#0f2e52"/>
@@ -35,21 +38,21 @@ templ layout(p *pageCtx, body templ.Component) {
 			}
 		</head>
 		<body>
-			<a class="skip" href="#main">انتقل إلى المحتوى</a>
+			<a class="skip" href="#main">{ p.t.Skip }</a>
 			@siteHeader(p)
 			<main id="main">
 				@body
 			</main>
 			@siteFooter(p)
 			if p.whatsApp != "" {
-				<a class="wa-float" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label="تواصل معنا على واتساب">
+				<a class="wa-float" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label={ p.t.ChatUs }>
 					@icon("chat")
 				</a>
 			}
 			<div class="mobile-cta">
-				<a class="btn primary" href={ templ.SafeURL(p.signup) }>ابدأ مجانًا</a>
+				<a class="btn primary" href={ templ.SafeURL(p.signup) }>{ p.t.StartFree }</a>
 				if p.whatsApp != "" {
-					<a class="btn ghost square" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label="تواصل معنا على واتساب">
+					<a class="btn ghost square" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank" aria-label={ p.t.ChatUs }>
 						@icon("chat")
 					</a>
 				}
@@ -58,39 +61,46 @@ templ layout(p *pageCtx, body templ.Component) {
 	</html>
 }
 
-templ brand() {
-	<a class="brand" href="/">
+templ brand(p *pageCtx) {
+	<a class="brand" href={ templ.SafeURL(p.l.at("/")) }>
 		<span class="mark" aria-hidden="true">
 			@icon("bag")
 		</span>
-		<span class="name">افتح أونلاين</span>
+		<span class="name">{ p.c.brand }</span>
 	</a>
+}
+
+// langSwitch links the same page in the other language.
+templ langSwitch(p *pageCtx) {
+	<a class="lang" href={ templ.SafeURL(p.other().at(p.path)) } hreflang={ p.t.OtherLang } lang={ p.t.OtherLang }>{ p.t.OtherLangName }</a>
 }
 
 templ siteHeader(p *pageCtx) {
 	<header class="top">
 		<div class="wrap bar">
-			@brand()
-			<nav class="nav" aria-label="القائمة الرئيسية">
-				<a href="/features" { current(p.path, "/features")... }>المميزات</a>
-				<a href="/pricing" { current(p.path, "/pricing")... }>الأسعار</a>
-				<a href="/faq" { current(p.path, "/faq")... }>الأسئلة الشائعة</a>
-				<a href="/about" { current(p.path, "/about")... }>عن افتح أونلاين</a>
+			@brand(p)
+			<nav class="nav" aria-label={ p.t.MainMenu }>
+				<a href={ templ.SafeURL(p.l.at("/features")) } { current(p.path, "/features")... }>{ p.t.Features }</a>
+				<a href={ templ.SafeURL(p.l.at("/pricing")) } { current(p.path, "/pricing")... }>{ p.t.Pricing }</a>
+				<a href={ templ.SafeURL(p.l.at("/faq")) } { current(p.path, "/faq")... }>{ p.t.FAQ }</a>
+				<a href={ templ.SafeURL(p.l.at("/about")) } { current(p.path, "/about")... }>{ p.t.About }</a>
 			</nav>
 			<div class="actions">
-				<a class="signin" href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
-				<a class="btn primary small" href={ templ.SafeURL(p.signup) }>ابدأ مجانًا</a>
+				@langSwitch(p)
+				<a class="signin" href={ templ.SafeURL(p.login) }>{ p.t.SignIn }</a>
+				<a class="btn primary small" href={ templ.SafeURL(p.signup) }>{ p.t.StartFree }</a>
 			</div>
 			<details class="menu">
-				<summary aria-label="القائمة">
+				<summary aria-label={ p.t.Menu }>
 					@icon("menu")
 				</summary>
-				<nav aria-label="القائمة">
-					<a href="/features">المميزات</a>
-					<a href="/pricing">الأسعار</a>
-					<a href="/faq">الأسئلة الشائعة</a>
-					<a href="/about">عن افتح أونلاين</a>
-					<a href={ templ.SafeURL(p.login) }>تسجيل الدخول</a>
+				<nav aria-label={ p.t.Menu }>
+					<a href={ templ.SafeURL(p.l.at("/features")) }>{ p.t.Features }</a>
+					<a href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.Pricing }</a>
+					<a href={ templ.SafeURL(p.l.at("/faq")) }>{ p.t.FAQ }</a>
+					<a href={ templ.SafeURL(p.l.at("/about")) }>{ p.t.About }</a>
+					<a href={ templ.SafeURL(p.login) }>{ p.t.SignIn }</a>
+					@langSwitch(p)
 				</nav>
 			</details>
 		</div>
@@ -101,33 +111,34 @@ templ siteFooter(p *pageCtx) {
 	<footer class="foot">
 		<div class="wrap cols">
 			<div class="about">
-				@brand()
-				<p>منصة متاجر إلكترونية للدفع عند الاستلام، لتجار مصر والخليج.</p>
+				@brand(p)
+				<p>{ p.t.FooterTagline }</p>
 			</div>
-			<nav aria-label="المميزات">
-				<strong>المميزات</strong>
-				for _, f := range featurePages {
-					<a href={ templ.SafeURL("/features/" + f.slug) }>{ f.name }</a>
+			<nav aria-label={ p.t.Features }>
+				<strong>{ p.t.Features }</strong>
+				for _, f := range p.c.featurePages {
+					<a href={ templ.SafeURL(p.l.at("/features/" + f.slug)) }>{ f.name }</a>
 				}
 			</nav>
-			<nav aria-label="المنصة">
-				<strong>المنصة</strong>
-				<a href="/pricing">الأسعار</a>
-				<a href="/faq">الأسئلة الشائعة</a>
-				<a href="/about">عن افتح أونلاين</a>
+			<nav aria-label={ p.t.Platform }>
+				<strong>{ p.t.Platform }</strong>
+				<a href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.Pricing }</a>
+				<a href={ templ.SafeURL(p.l.at("/faq")) }>{ p.t.FAQ }</a>
+				<a href={ templ.SafeURL(p.l.at("/about")) }>{ p.t.About }</a>
 			</nav>
 			<div>
-				<strong>تواصل معنا</strong>
+				<strong>{ p.t.Contact }</strong>
 				if p.whatsApp != "" {
-					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">واتساب <bdi dir="ltr">{ p.whatsDisplay }</bdi></a>
+					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.WhatsApp } <bdi dir="ltr">{ p.whatsDisplay }</bdi></a>
 				}
+				@langSwitch(p)
 			</div>
 		</div>
 		<div class="wrap legal">
-			<span>© 2026 افتح أونلاين. جميع الحقوق محفوظة.</span>
-			<nav aria-label="الصفحات القانونية">
-				<a href="/terms">الشروط والأحكام</a>
-				<a href="/privacy">سياسة الخصوصية</a>
+			<span>{ p.t.Rights }</span>
+			<nav aria-label={ p.t.Legal }>
+				<a href={ templ.SafeURL(p.l.at("/terms")) }>{ p.c.terms.name }</a>
+				<a href={ templ.SafeURL(p.l.at("/privacy")) }>{ p.c.privacy.name }</a>
 			</nav>
 		</div>
 	</footer>

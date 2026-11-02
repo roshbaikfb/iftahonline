@@ -45,4 +45,17 @@ test.describe('the platform site, on a desktop', () => {
     await page.getByRole('link', { name: 'سياسة الخصوصية' }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('سياسة الخصوصية');
   });
+
+  test('the English site, and back to Arabic', async ({ page }) => {
+    await page.goto(`${site}/pricing`);
+    await page.getByRole('link', { name: 'English' }).first().click();
+    await expect(page).toHaveURL(`${site}/en/pricing`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Clear prices, starting at zero');
+    await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Features' }).click();
+    await expect(page).toHaveURL(`${site}/en/features`);
+    await page.getByRole('link', { name: 'العربية' }).first().click();
+    await expect(page).toHaveURL(`${site}/features`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  });
 });

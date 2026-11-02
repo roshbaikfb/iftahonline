@@ -3,31 +3,31 @@ package web
 templ homePage(p *pageCtx, pr pricing, home []faq) {
 	<section class="hero dots">
 		<div class="wrap hero-in">
-			<h1>المنصة التي تبني متجرك الإلكتروني <span class="accent">للدفع عند الاستلام</span></h1>
-			<p class="lead">أنشئ متجرك في دقائق، وأكّد كل طلب على واتساب، واعرف العميل الذي يرفض الاستلام قبل أن تشحن له، وتابع ربحك الصافي الحقيقي. افتح أونلاين لتجار مصر والخليج.</p>
+			<h1>{ p.t.HeroH1 } <span class="accent">{ p.t.HeroAccent }</span></h1>
+			<p class="lead">{ p.t.HeroLead }</p>
 			<div class="cta-row">
-				<a class="btn primary big" href={ templ.SafeURL(p.signup) }>أنشئ متجرك مجانًا</a>
-				<a class="btn ghost big" href="/pricing">شاهد الأسعار</a>
+				<a class="btn primary big" href={ templ.SafeURL(p.signup) }>{ p.t.CreateFree }</a>
+				<a class="btn ghost big" href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.SeePrices }</a>
 			</div>
-			<p class="fine">التسجيل في دقيقة · باقة مجانية دائمًا · بدون بطاقة بنكية · بلا عقد</p>
-			@heroShot()
+			<p class="fine">{ p.t.HeroFine }</p>
+			@heroShot(p.t)
 		</div>
 	</section>
-	<section class="works" aria-label="يعمل مع">
+	<section class="works" aria-label={ p.t.WorksWith }>
 		<div class="wrap works-in">
-			<span class="works-label">يعمل مع أدوات تعرفها</span>
-			for _, w := range worksWith {
+			<span class="works-label">{ p.t.WorksWith }</span>
+			for _, w := range p.c.worksWith {
 				<span class="works-name">{ w }</span>
 			}
 		</div>
 	</section>
 	<section id="features" class="wrap section" aria-labelledby="h-why">
 		<div class="head">
-			<span class="eyebrow">لماذا افتح أونلاين</span>
-			<h2 id="h-why">صُممت حول ما يخسّر تاجر الدفع عند الاستلام</h2>
-			<p>الطلبات التي لا تُؤكَّد، والطرود التي ترجع، والربح الذي لا تراه. كل أداة هنا بُنيت لواحدة منها.</p>
+			<span class="eyebrow">{ p.t.WhyEyebrow }</span>
+			<h2 id="h-why">{ p.t.WhyH2 }</h2>
+			<p>{ p.t.WhyLead }</p>
 		</div>
-		for i, f := range features {
+		for i, f := range p.c.features {
 			<div class={ "feature", templ.KV("flip", i%2 == 1) } id={ f.id }>
 				<div class="feature-text">
 					<span class={ "tag", f.tagClass }>{ f.tag }</span>
@@ -43,21 +43,21 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 							}
 						</ul>
 					}
-					<a class="more" href={ templ.SafeURL(f.more) }>اعرف المزيد عن { f.tag } ←</a>
+					<a class="more" href={ templ.SafeURL(p.l.at(f.more)) }>{ p.t.LearnMore } { f.tag } { p.t.Arrow }</a>
 				</div>
 				<div class={ "feature-art", f.id } aria-hidden="true">
-					@art(f.id)
+					@art(f.id, p.t)
 				</div>
 			</div>
 		}
 	</section>
 	<section class="wrap section" aria-labelledby="h-tools">
 		<div class="head">
-			<span class="eyebrow">كل الأدوات</span>
-			<h2 id="h-tools">كل ما يحتاجه متجرك، في مكان واحد</h2>
+			<span class="eyebrow">{ p.t.ToolsEyebrow }</span>
+			<h2 id="h-tools">{ p.t.ToolsH2 }</h2>
 		</div>
 		<div class="bento">
-			for _, t := range tools {
+			for _, t := range p.c.tools {
 				<div class={ "tile", templ.KV("wide", t.wide) }>
 					<h3>{ t.title }</h3>
 					<p>{ t.body }</p>
@@ -67,11 +67,11 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 	</section>
 	<section class="dark" aria-labelledby="h-steps">
 		<div class="wrap section">
-			<h2 id="h-steps" class="center">من التسجيل إلى أول طلب، في نفس اليوم</h2>
+			<h2 id="h-steps" class="center">{ p.t.StepsH2 }</h2>
 			<ol class="steps">
-				for i, st := range steps {
+				for i, st := range p.c.steps {
 					<li class={ templ.KV("first", i == 0) }>
-						<span class="step-n">الخطوة { stepNumber(i) }</span>
+						<span class="step-n">{ p.t.Step } { stepNumber(i) }</span>
 						<h3>{ st.title }</h3>
 						<p>{ st.body }</p>
 					</li>
@@ -81,11 +81,11 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 	</section>
 	<section class="wrap section" aria-labelledby="h-trust">
 		<div class="head">
-			<span class="eyebrow">الأمان والثقة</span>
-			<h2 id="h-trust">متجرك وبياناتك في أمان</h2>
+			<span class="eyebrow">{ p.t.TrustEyebrow }</span>
+			<h2 id="h-trust">{ p.t.TrustH2 }</h2>
 		</div>
 		<div class="grid4">
-			for _, t := range trustItems {
+			for _, t := range p.c.trust {
 				<div class="card">
 					@icon(t.icon)
 					<h3>{ t.title }</h3>
@@ -97,52 +97,52 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 	<section class="wrap section" aria-labelledby="h-move">
 		<div class="move">
 			<div>
-				<span class="tag green">مجانًا مع الاشتراك</span>
-				<h2 id="h-move">عندك متجر في منصة أخرى؟ ننقله لك مجانًا</h2>
-				<p>اشترك في أي باقة مدفوعة، وفريقنا ينقل منتجاتك وصورها وتصنيفاتها إلى متجرك الجديد، دون أن تتوقف مبيعاتك.</p>
+				<span class="tag green">{ p.t.MoveTag }</span>
+				<h2 id="h-move">{ p.t.MoveH2 }</h2>
+				<p>{ p.t.MoveLead }</p>
 				if p.whatsApp != "" {
-					<a class="btn navy" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">اطلب نقل متجرك</a>
+					<a class="btn navy" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.MoveCTA }</a>
 				}
 			</div>
 			<ol class="move-steps">
-				<li><span>1</span>أرسل لنا رابط متجرك الحالي</li>
-				<li><span>2</span>ننقل المنتجات والصور والتصنيفات</li>
-				<li><span>3</span>تراجع متجرك الجديد وتبدأ البيع</li>
+				for i, st := range p.t.MoveSteps {
+					<li><span>{ stepNumber(i) }</span>{ st }</li>
+				}
 			</ol>
 		</div>
 	</section>
 	<section class="wrap section" aria-labelledby="h-pricing">
 		<div class="head">
-			<span class="eyebrow">الأسعار</span>
-			<h2 id="h-pricing">ابدأ مجانًا، وادفع حين تكبر</h2>
-			<p>الأسعار بعملة بلدك: بالجنيه في مصر، وبالدولار في باقي الدول. كل الباقات المدفوعة تبدأ بتجربة مجانية.</p>
+			<span class="eyebrow">{ p.t.PricingEyebrow }</span>
+			<h2 id="h-pricing">{ p.t.PricingH2 }</h2>
+			<p>{ p.t.PricingLead }</p>
 		</div>
 		<div class="teaser">
 			for _, pl := range teaserPlans(pr) {
 				<div class={ "plan", templ.KV("hi", pl.Recommended) }>
 					if pl.Recommended {
-						<span class="badge">موصى بها</span>
+						<span class="badge">{ p.t.Recommended }</span>
 					}
 					<h3>{ pl.Name }</h3>
-					@planPrice(pl, false)
+					@planPrice(p.t, pl, false)
 					if len(pl.Lines) > 0 {
-						<p class="muted">{ joinLines(pl.Lines, 3) }</p>
+						<p class="muted">{ joinLines(pl.Lines, 3, p.l) }</p>
 					}
 				</div>
 			}
 		</div>
-		<p class="center muted small">لا رسوم مخفية: رسوم Paymob وشركة الشحن تدفعها لهم مباشرة بأسعارهم، ولا نأخذ منها شيئًا.</p>
-		<p class="center"><a class="more" href="/pricing">قارن كل الباقات ←</a></p>
+		<p class="center muted small">{ p.t.NoHidden }</p>
+		<p class="center"><a class="more" href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.CompareAll } { p.t.Arrow }</a></p>
 	</section>
 	<section class="soft" aria-labelledby="h-faq">
 		<div class="wrap section faq-wrap">
 			<div class="faq-side">
-				<span class="eyebrow">الأسئلة الشائعة</span>
-				<h2 id="h-faq">كل ما تريد معرفته عن افتح أونلاين</h2>
+				<span class="eyebrow">{ p.t.FAQEyebrow }</span>
+				<h2 id="h-faq">{ p.t.FAQH2 }</h2>
 				<p class="muted">
-					لم تجد إجابتك؟
+					{ p.t.NoAnswer }
 					if p.whatsApp != "" {
-						<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">كلّمنا على واتساب</a>
+						<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.TalkWhatsApp }</a>
 					}
 				</p>
 			</div>
@@ -152,34 +152,45 @@ templ homePage(p *pageCtx, pr pricing, home []faq) {
 	@finalCTA(p)
 }
 
+// crumbs is a page's trail: home, then the steps between, then the page.
+templ crumbs(p *pageCtx, name string, between ...crumb) {
+	<nav class="crumbs" aria-label={ p.t.Crumbs }>
+		<a href={ templ.SafeURL(p.l.at("/")) }>{ p.t.Home }</a> /
+		for _, c := range between {
+			<a href={ templ.SafeURL(p.l.at(c.path)) }>{ c.name }</a> /
+		}
+		<span>{ name }</span>
+	</nav>
+}
+
 templ pricingPage(p *pageCtx, pr pricing) {
 	<section class="dots">
 		<div class="wrap page-head">
-			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <span>الأسعار</span></nav>
-			<h1>أسعار واضحة، تبدأ من الصفر</h1>
-			<p class="lead">ابدأ بالباقة المجانية، أو بلا اشتراك وادفع نسبة مما يُسلَّم فقط، أو اختر باقة شهرية أو سنوية. كل الباقات المدفوعة تبدأ بتجربة مجانية.</p>
+			@crumbs(p, p.t.Pricing)
+			<h1>{ p.t.PricingH1 }</h1>
+			<p class="lead">{ p.t.PricingLead2 }</p>
 			<p class="currency">
-				الأسعار بـ
+				{ p.t.PricesIn }
 				if pr.Currency == currencyEGP {
-					<strong>الجنيه المصري</strong> · <a href="/pricing?currency=USD" rel="nofollow">اعرضها بالدولار</a>
+					<strong>{ p.t.CurrencyEGP }</strong> · <a href={ templ.SafeURL(p.l.at("/pricing") + "?currency=USD") } rel="nofollow">{ p.t.ShowUSD }</a>
 				} else {
-					<strong>الدولار الأمريكي</strong> · <a href="/pricing?currency=EGP" rel="nofollow">اعرضها بالجنيه</a>
+					<strong>{ p.t.CurrencyUSD }</strong> · <a href={ templ.SafeURL(p.l.at("/pricing") + "?currency=EGP") } rel="nofollow">{ p.t.ShowEGP }</a>
 				}
 			</p>
 		</div>
 	</section>
-	<section class="wrap section tight" aria-label="الباقات">
+	<section class="wrap section tight" aria-label={ p.t.Plans }>
 		<input class="cycle-in" type="radio" name="cycle" id="cycle-m" checked/>
 		<input class="cycle-in" type="radio" name="cycle" id="cycle-a"/>
-		<div class="cycle" role="group" aria-label="مدة الاشتراك">
-			<label for="cycle-m">شهري</label>
-			<label for="cycle-a">سنوي</label>
+		<div class="cycle" role="group" aria-label={ p.t.Cycle }>
+			<label for="cycle-m">{ p.t.Monthly }</label>
+			<label for="cycle-a">{ p.t.Annual }</label>
 		</div>
 		if !pr.AnyPrice {
 			<p class="notice">
-				الأسعار بالدولار قريبًا. لمعرفة أسعار بلدك الآن،
+				{ p.t.USDSoon }
 				if p.whatsApp != "" {
-					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">تواصل معنا على واتساب</a>.
+					<a href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.ContactWhatsApp }</a>.
 				}
 			</p>
 		}
@@ -187,11 +198,11 @@ templ pricingPage(p *pageCtx, pr pricing) {
 			for _, pl := range pr.Plans {
 				<div class={ "plan", templ.KV("hi", pl.Recommended) }>
 					if pl.Recommended {
-						<span class="badge">موصى بها</span>
+						<span class="badge">{ p.t.Recommended }</span>
 					}
 					<h2>{ pl.Name }</h2>
-					@planPrice(pl, true)
-					<a class={ "btn", templ.KV("primary", pl.Recommended), templ.KV("ghost", !pl.Recommended) } href={ templ.SafeURL(p.signup) }>{ planCTA(pl) }</a>
+					@planPrice(p.t, pl, true)
+					<a class={ "btn", templ.KV("primary", pl.Recommended), templ.KV("ghost", !pl.Recommended) } href={ templ.SafeURL(p.signup) }>{ planCTA(p.t, pl) }</a>
 					if len(pl.Lines) > 0 {
 						<ul class="ticks">
 							for _, l := range pl.Lines {
@@ -206,19 +217,19 @@ templ pricingPage(p *pageCtx, pr pricing) {
 			}
 		</div>
 		<div class="grid3 extras">
-			<div class="card"><h3>لا رسوم مخفية</h3><p>رسوم Paymob على الدفع بالبطاقة، وأسعار شركة الشحن، تدفعها لهم مباشرة بأسعارهم. لا نأخذ منها شيئًا.</p></div>
-			<div class="card"><h3>نقل متجرك مجانًا</h3><p>مع أي باقة مدفوعة، ننقل منتجاتك من منصتك الحالية.</p></div>
-			<div class="card"><h3>بلا عقد</h3><p>ألغِ في أي وقت من لوحة التاجر، وتبقى بياناتك ملكك.</p></div>
+			<div class="card"><h3>{ p.t.ExtraNoHidden }</h3><p>{ p.t.ExtraNoHiddenBody }</p></div>
+			<div class="card"><h3>{ p.t.ExtraMove }</h3><p>{ p.t.ExtraMoveBody }</p></div>
+			<div class="card"><h3>{ p.t.ExtraNoContract }</h3><p>{ p.t.ExtraNoContractBody }</p></div>
 		</div>
 	</section>
 	if len(pr.Rows) > 0 {
 		<section class="wrap section tight" aria-labelledby="h-compare">
-			<h2 id="h-compare">قارن الباقات بالتفصيل</h2>
+			<h2 id="h-compare">{ p.t.CompareH2 }</h2>
 			<div class="table-box">
 				<table>
 					<thead>
 						<tr>
-							<th scope="col">الميزة</th>
+							<th scope="col">{ p.t.Feature }</th>
 							for _, pl := range pr.Plans {
 								<th scope="col">{ pl.Name }</th>
 							}
@@ -241,31 +252,31 @@ templ pricingPage(p *pageCtx, pr pricing) {
 	@finalCTA(p)
 }
 
-templ planPrice(pl planView, cycles bool) {
+templ planPrice(t *texts, pl planView, cycles bool) {
 	switch  {
 		case pl.Free:
-			<p class="price">{ freePrice(pl) }<span>دائمًا</span></p>
+			<p class="price">{ pl.FreeText }<span>{ t.Always }</span></p>
 		case pl.Pays && pl.Fee != "":
-			<p class="price">{ pl.Fee }<span>من كل طلب يصل لعميلك</span></p>
+			<p class="price">{ pl.Fee }<span>{ t.PerDelivered }</span></p>
 		case pl.Monthly != "":
-			<p class={ "price", templ.KV("m", cycles && pl.Annual != "") }>{ pl.Monthly }<span>في الشهر</span></p>
+			<p class={ "price", templ.KV("m", cycles && pl.Annual != "") }>{ pl.Monthly }<span>{ t.PerMonth }</span></p>
 			if cycles && pl.Annual != "" {
-				<p class="price a">{ pl.Annual }<span>في السنة</span></p>
+				<p class="price a">{ pl.Annual }<span>{ t.PerYear }</span></p>
 			}
 		default:
-			<p class="price soon">قريبًا</p>
+			<p class="price soon">{ t.Soon }</p>
 	}
 	if pl.TrialDays > 0 && !pl.Free && !pl.Pays {
-		<p class="trial">تجربة مجانية { trialText(pl.TrialDays) }</p>
+		<p class="trial">{ t.Trial } { trialText(t, pl.TrialDays) }</p>
 	}
 }
 
 templ faqPage(p *pageCtx, list []faq) {
 	<section class="dots">
 		<div class="wrap page-head">
-			<nav class="crumbs" aria-label="مسار الصفحة"><a href="/">الرئيسية</a> / <span>الأسئلة الشائعة</span></nav>
-			<h1>الأسئلة الشائعة عن افتح أونلاين</h1>
-			<p class="lead">كل ما يسأل عنه التجار قبل أن يبدؤوا: التكاليف، والتأكيد، والحماية، ونقل المتاجر.</p>
+			@crumbs(p, p.t.FAQ)
+			<h1>{ p.t.FAQH1 }</h1>
+			<p class="lead">{ p.t.FAQLead }</p>
 		</div>
 	</section>
 	<section class="wrap section tight faq-page">
@@ -289,13 +300,13 @@ templ finalCTA(p *pageCtx) {
 	<section class="wrap section" aria-labelledby="h-cta">
 		<div class="cta-card">
 			<div>
-				<h2 id="h-cta">افتح متجرك أونلاين اليوم</h2>
-				<p>ابدأ بالباقة المجانية، وطوّرها حين يكبر متجرك.</p>
+				<h2 id="h-cta">{ p.t.CTAH2 }</h2>
+				<p>{ p.t.CTALead }</p>
 			</div>
 			<div class="cta-row">
-				<a class="btn primary big" href={ templ.SafeURL(p.signup) }>أنشئ متجرك مجانًا</a>
+				<a class="btn primary big" href={ templ.SafeURL(p.signup) }>{ p.t.CreateFree }</a>
 				if p.whatsApp != "" {
-					<a class="btn outline big" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">تحدث معنا</a>
+					<a class="btn outline big" href={ templ.SafeURL(p.whatsApp) } rel="noopener" target="_blank">{ p.t.TalkToUs }</a>
 				}
 			</div>
 		</div>
@@ -304,38 +315,36 @@ templ finalCTA(p *pageCtx) {
 
 templ notFoundPage(p *pageCtx) {
 	<section class="wrap section page-head">
-		<h1>الصفحة غير موجودة</h1>
-		<p class="lead">ربما تغيّر الرابط. ابدأ من الصفحة الرئيسية.</p>
-		<p><a class="btn primary" href="/">الصفحة الرئيسية</a></p>
+		<h1>{ p.t.NotFoundH1 }</h1>
+		<p class="lead">{ p.t.NotFoundLead }</p>
+		<p><a class="btn primary" href={ templ.SafeURL(p.l.at("/")) }>{ p.t.HomePage }</a></p>
 	</section>
 }
 
-// The home page's illustrations: example screens, drawn in HTML.
-templ heroShot() {
-	<div class="shot" aria-label="مثال من لوحة التاجر" role="img">
+// The illustrations: example screens, drawn in HTML, in the page's
+// language.
+templ heroShot(t *texts) {
+	<div class="shot" aria-label={ t.ShotLabel } role="img">
 		<div class="window">
 			<div class="window-bar"><i></i><i></i><i></i><span dir="ltr">app.iftahonline.com</span></div>
 			<div class="window-body">
 				<div class="side">
-					<strong>متجر سوق</strong>
-					<span>الرئيسية</span>
-					<span class="on">الطلبات</span>
-					<span>المنتجات</span>
-					<span>رسائل العملاء</span>
-					<span>الربح الصافي</span>
+					<strong>{ t.ShotStore }</strong>
+					for i, n := range shotNav(t) {
+						<span class={ templ.KV("on", i == 1) }>{ n }</span>
+					}
 				</div>
 				<div class="board">
-					<div class="board-head"><strong>الطلبات</strong><span class="chip-muted">مثال توضيحي</span></div>
+					<div class="board-head"><strong>{ t.ShotOrders }</strong><span class="chip-muted">{ t.Example }</span></div>
 					<div class="stats">
-						<div><span>طلبات جديدة</span><strong>24</strong></div>
-						<div><span>أكّدها العملاء على واتساب</span><strong class="ok">19</strong></div>
-						<div><span>موقوفة للمراجعة</span><strong class="warn">2</strong></div>
+						<div><span>{ t.ShotNew }</span><strong>24</strong></div>
+						<div><span>{ t.ShotConfirmed }</span><strong class="ok">19</strong></div>
+						<div><span>{ t.ShotHeld }</span><strong class="warn">2</strong></div>
 					</div>
 					<div class="rows">
-						<div><span dir="ltr">#7P0R1S2T</span><span>منى · القاهرة</span><span class="chip ok">مؤكد</span><strong>515 ج.م</strong></div>
-						<div><span dir="ltr">#K8M2Q4ZX</span><span>أحمد · الجيزة</span><span class="chip info">تم الشحن</span><strong>320 ج.م</strong></div>
-						<div><span dir="ltr">#3HV9TB6N</span><span>سارة · طنطا</span><span class="chip warn">موقوف للمراجعة</span><strong>450 ج.م</strong></div>
-						<div><span dir="ltr">#W2N7C5LD</span><span>خالد · دبي</span><span class="chip">بانتظار التأكيد</span><strong>149 د.إ</strong></div>
+						for i, r := range t.ShotRows {
+							<div><span dir="ltr">{ shotRefs[i] }</span><span>{ r[0] }</span><span class={ "chip", shotChips[i] }>{ r[1] }</span><strong>{ r[2] }</strong></div>
+						}
 					</div>
 				</div>
 			</div>
@@ -344,45 +353,45 @@ templ heroShot() {
 			<span class="toast-icon">
 				@icon("chat")
 			</span>
-			<span><strong>أكّدت منى طلبها على واتساب</strong><br/>الطلب <bdi dir="ltr">#7P0R1S2T</bdi> جاهز للشحن</span>
+			<span><strong>{ t.ToastTitle }</strong><br/>{ t.ToastOrder } <bdi dir="ltr">#7P0R1S2T</bdi> { t.ToastBody }</span>
 		</div>
 	</div>
 }
 
-templ chatArt() {
+templ chatArt(t *texts) {
 	<div class="chat">
-		<p class="in">أهلاً منى، شكراً لطلبك من متجر سوق. رقم الطلب <bdi dir="ltr">7P0R1S2T</bdi> والإجمالي 515 ج.م. هل تؤكد الطلب؟</p>
-		<p class="buttons"><span>تأكيد الطلب</span><span>إلغاء الطلب</span></p>
-		<p class="out">تأكيد الطلب</p>
-		<p class="in">شكراً منى، تم تأكيد طلبك. سنبلغك عند شحنه.</p>
+		<p class="in">{ t.ChatIn1 }</p>
+		<p class="buttons"><span>{ t.ChatConfirm }</span><span>{ t.ChatCancel }</span></p>
+		<p class="out">{ t.ChatConfirm }</p>
+		<p class="in">{ t.ChatIn2 }</p>
 	</div>
 }
 
-templ riskArt() {
+templ riskArt(t *texts) {
 	<div class="risk">
 		<div class="risk-card">
-			<div class="risk-head"><strong>تقييم العميل</strong><span class="risk-high">مخاطر مرتفعة</span></div>
+			<div class="risk-head"><strong>{ t.RiskTitle }</strong><span class="risk-high">{ t.RiskHigh }</span></div>
 			<div class="meter"><i></i><i></i><i></i><i></i></div>
-			<p>رفض الاستلام مرتين في متجرين آخرين خلال الشهور الأخيرة.</p>
+			<p>{ t.RiskWhy }</p>
 		</div>
 		<div class="risk-card">
-			<strong>قاعدتك لهذا المستوى</strong>
-			<div class="rules"><span class="on">اطلب دفع التوصيل مقدمًا</span><span>أوقفه للمراجعة</span><span>تأكيد بالهاتف</span></div>
+			<strong>{ t.RiskRule }</strong>
+			<div class="rules"><span class="on">{ t.RiskPrepay }</span><span>{ t.RiskHold }</span><span>{ t.RiskPhone }</span></div>
 		</div>
 	</div>
 }
 
-templ profitArt() {
+templ profitArt(t *texts) {
 	<div class="profit">
 		<div class="profit-card">
-			<div class="profit-head"><span>صافي الربح · 30 يومًا · <em>مثال توضيحي</em></span><strong>18,450 ج.م</strong></div>
+			<div class="profit-head"><span>{ t.ProfitHead } · <em>{ t.Example }</em></span><strong>{ t.ProfitFigures[0] }</strong></div>
 			<div class="bars"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><i class="b5"></i><i class="b6 loss"></i><i class="b7"></i><i class="b8"></i><i class="b9"></i><i class="b10"></i></div>
 		</div>
 		<dl class="profit-list">
-			<div><dt>الإيراد</dt><dd>62,300 ج.م</dd></div>
-			<div><dt>تكلفة المنتجات</dt><dd>−27,900 ج.م</dd></div>
-			<div><dt>الشحن والمرتجعات</dt><dd>−9,750 ج.م</dd></div>
-			<div><dt>الإعلانات</dt><dd>−6,200 ج.م</dd></div>
+			<div><dt>{ t.ProfitRevenue }</dt><dd>{ t.ProfitFigures[1] }</dd></div>
+			<div><dt>{ t.ProfitCost }</dt><dd>{ t.ProfitFigures[2] }</dd></div>
+			<div><dt>{ t.ProfitShipping }</dt><dd>{ t.ProfitFigures[3] }</dd></div>
+			<div><dt>{ t.ProfitAds }</dt><dd>{ t.ProfitFigures[4] }</dd></div>
 		</dl>
 	</div>
 }
