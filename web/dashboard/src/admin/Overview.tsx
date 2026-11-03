@@ -107,6 +107,9 @@ export function Overview() {
   const s = health?.stores;
   const b = health?.billing;
   const j = health?.jobs;
+  // Paying accounts, from the revenue: a store on the free plan is an
+  // active subscription too, so the health's count is not the answer.
+  const paying = metrics?.revenue?.reduce((n, r) => n + r.accounts, 0);
   const seats = founding?.program.seats ?? 0;
   const taken = founding?.members.length ?? 0;
   const jobs = !j
@@ -185,7 +188,7 @@ export function Overview() {
         </div>
         <div className="card kpi">
           <span className="muted">اشتراكات مدفوعة</span>
-          <strong>{b ? count(b.active) : '—'}</strong>
+          <strong>{paying === undefined ? '—' : count(paying)}</strong>
           {b && <span className="kpi-note">{count(b.past_due)} متأخرة الدفع</span>}
         </div>
         <div className="card kpi">

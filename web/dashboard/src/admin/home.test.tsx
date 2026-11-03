@@ -108,7 +108,11 @@ describe('console home', () => {
     expect(kpis).toHaveTextContent(/المتاجر النشطة\s*4,812 من 4,959/);
     expect(kpis).toHaveTextContent('6 موقوف من المنصة');
     expect(kpis).toHaveTextContent(/في الفترة التجريبية\s*512/);
-    expect(kpis).toHaveTextContent(/اشتراكات مدفوعة\s*2,904/);
+    // Paying accounts come from the revenue (35), not the health's active
+    // subscriptions (2,904), which count stores on the free plan too.
+    await waitFor(() => {
+      expect(kpis).toHaveTextContent(/اشتراكات مدفوعة\s*35/);
+    });
     await waitFor(() => {
       expect(within(kpis).getByRole('img', { name: '12 من 100 مقعد' })).toBeInTheDocument();
     });
