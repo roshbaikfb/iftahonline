@@ -40,9 +40,9 @@ type Activity struct {
 	LastOrderAt time.Time // zero: never
 }
 
-// StoreActivity counts the current store's orders since since and finds
+// ReadActivity counts the current store's orders since since and finds
 // its last one, in one query on the primary key.
-func StoreActivity(ctx context.Context, tx Tx, since time.Time) (Activity, error) {
+func ReadActivity(ctx context.Context, tx Tx, since time.Time) (Activity, error) {
 	store, err := current(ctx)
 	if err != nil {
 		return Activity{}, err

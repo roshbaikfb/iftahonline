@@ -71,7 +71,7 @@ type OwnerContact = store.OwnerContact
 // OwnerContactTx reads the store-in-ctx's owner in its tenant
 // transaction tx, in one query; ok is false for a store without one.
 func OwnerContactTx(ctx context.Context, tx pgx.Tx) (OwnerContact, bool, error) {
-	return store.StoreOwnerContact(ctx, tx)
+	return store.ReadOwnerContact(ctx, tx)
 }
 
 // CountStaff counts the store-in-ctx's team seats (members and pending

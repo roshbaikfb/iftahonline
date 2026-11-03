@@ -178,7 +178,7 @@ type Activity = store.Activity
 // ActivityTx reads the store-in-ctx's orders since since, and its last
 // order's time, in its tenant transaction tx (one query).
 func ActivityTx(ctx context.Context, tx pgx.Tx, since time.Time) (Activity, error) {
-	return store.StoreActivity(ctx, tx, since)
+	return store.ReadActivity(ctx, tx, since)
 }
 
 // MaxBestsellers is the most products Bestsellers returns.

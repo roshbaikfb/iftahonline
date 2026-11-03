@@ -176,9 +176,9 @@ type OwnerContact struct {
 	LastSeenAt         time.Time // zero: never; support sessions left out
 }
 
-// StoreOwnerContact reads the current store's owner, in one query; ok
+// ReadOwnerContact reads the current store's owner, in one query; ok
 // is false for a store without one.
-func StoreOwnerContact(ctx context.Context, tx Tx) (_ OwnerContact, ok bool, _ error) {
+func ReadOwnerContact(ctx context.Context, tx Tx) (_ OwnerContact, ok bool, _ error) {
 	store, err := current(ctx)
 	if err != nil {
 		return OwnerContact{}, false, err
