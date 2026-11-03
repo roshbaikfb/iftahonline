@@ -165,7 +165,7 @@ export function Overview() {
                     {a.title}
                   </strong>
                   <p>{a.body}</p>
-                  {a.link && <a href={a.link.href}>{a.link.label}</a>}
+                  {a.link && (a.link.href.startsWith('/') ? <Link to={a.link.href}>{a.link.label}</Link> : <a href={a.link.href}>{a.link.label}</a>)}
                 </li>
               ))}
             </ul>

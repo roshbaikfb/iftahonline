@@ -87,7 +87,8 @@ describe('attention', () => {
   it('lists the urgent first, and does not repeat a down Redis as an unread section', () => {
     const got = attention({ ...healthy, redis: false, errors: ['redis'], billing: { ...billing, past_due: 2 }, jobs: { ...jobs, discarded_24h: 1 } }, 1);
     expect(got.map((a) => a.key)).toEqual(['redis', 'duplicates', 'discarded', 'past_due']);
-    expect(got.find((a) => a.key === 'duplicates')?.link).toEqual({ href: '#h-duplicates', label: 'راجعها بالأسفل' });
+    expect(got.find((a) => a.key === 'duplicates')?.link).toEqual({ href: '/billing?tab=payments&outcome=duplicate', label: 'راجعها' });
+    expect(attention({ ...healthy, billing: { ...billing, invoices_overdue: 3 } }, 0)[0]?.link).toEqual({ href: '/billing?status=overdue', label: 'اعرضها' });
   });
 
   it('greets by the hour and marks a store by its first letter', () => {
