@@ -95,6 +95,9 @@ type Directory interface {
 	// NewStores are the stores created in the last 30 Cairo days up to
 	// now: the last 7 and 30, and per day.
 	NewStores(ctx context.Context, now time.Time) (NewStores, error)
+	// Names maps store IDs to their names, in one query; an unknown ID
+	// is left out.
+	Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error)
 }
 
 // StoreCounts are the platform's stores by state.

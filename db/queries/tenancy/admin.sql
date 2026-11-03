@@ -36,3 +36,7 @@ FROM stores
 WHERE created_at >= @since::timestamptz
 GROUP BY 1
 ORDER BY 1;
+
+-- name: AdminStoreNames :many
+-- Store names by ID, for the admin log (ADR-0058): one query a page.
+SELECT id, name FROM stores WHERE id = ANY (@ids::uuid[]);
