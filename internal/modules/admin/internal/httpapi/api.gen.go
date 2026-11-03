@@ -336,6 +336,60 @@ func (e AdminPlanPriceCycle) Valid() bool {
 	}
 }
 
+// Defines values for AdminSiteGuideStatus.
+const (
+	AdminSiteGuideStatusDraft     AdminSiteGuideStatus = "draft"
+	AdminSiteGuideStatusPublished AdminSiteGuideStatus = "published"
+)
+
+// Valid indicates whether the value is a known member of the AdminSiteGuideStatus enum.
+func (e AdminSiteGuideStatus) Valid() bool {
+	switch e {
+	case AdminSiteGuideStatusDraft:
+		return true
+	case AdminSiteGuideStatusPublished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSiteGuideInputStatus.
+const (
+	AdminSiteGuideInputStatusDraft     AdminSiteGuideInputStatus = "draft"
+	AdminSiteGuideInputStatusPublished AdminSiteGuideInputStatus = "published"
+)
+
+// Valid indicates whether the value is a known member of the AdminSiteGuideInputStatus enum.
+func (e AdminSiteGuideInputStatus) Valid() bool {
+	switch e {
+	case AdminSiteGuideInputStatusDraft:
+		return true
+	case AdminSiteGuideInputStatusPublished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSiteGuideSummaryStatus.
+const (
+	AdminSiteGuideSummaryStatusDraft     AdminSiteGuideSummaryStatus = "draft"
+	AdminSiteGuideSummaryStatusPublished AdminSiteGuideSummaryStatus = "published"
+)
+
+// Valid indicates whether the value is a known member of the AdminSiteGuideSummaryStatus enum.
+func (e AdminSiteGuideSummaryStatus) Valid() bool {
+	switch e {
+	case AdminSiteGuideSummaryStatusDraft:
+		return true
+	case AdminSiteGuideSummaryStatusPublished:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminSitePersonKind.
 const (
 	AdminSitePersonKindFounder AdminSitePersonKind = "founder"
@@ -1265,6 +1319,72 @@ type AdminSiteFAQInput struct {
 	Reason string `json:"reason"`
 }
 
+// AdminSiteGuide defines model for AdminSiteGuide.
+type AdminSiteGuide struct {
+	// BodyAr Markdown.
+	BodyAr   string `json:"body_ar"`
+	BodyEn   string `json:"body_en"`
+	CoverUrl string `json:"cover_url"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id          ULID                 `json:"id"`
+	PublishedAt *time.Time           `json:"published_at,omitempty"`
+	Slug        string               `json:"slug"`
+	Status      AdminSiteGuideStatus `json:"status"`
+	SummaryAr   string               `json:"summary_ar"`
+	SummaryEn   string               `json:"summary_en"`
+	TitleAr     string               `json:"title_ar"`
+	TitleEn     string               `json:"title_en"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+}
+
+// AdminSiteGuideStatus defines model for AdminSiteGuide.Status.
+type AdminSiteGuideStatus string
+
+// AdminSiteGuideInput defines model for AdminSiteGuideInput.
+type AdminSiteGuideInput struct {
+	BodyAr string  `json:"body_ar"`
+	BodyEn *string `json:"body_en,omitempty"`
+
+	// Reason Kept in the admin audit log.
+	Reason      string `json:"reason"`
+	RemoveCover *bool  `json:"remove_cover,omitempty"`
+
+	// Slug The address: /guides/{slug}.
+	Slug      string                    `json:"slug"`
+	Status    AdminSiteGuideInputStatus `json:"status"`
+	SummaryAr string                    `json:"summary_ar"`
+	SummaryEn *string                   `json:"summary_en,omitempty"`
+	TitleAr   string                    `json:"title_ar"`
+	TitleEn   *string                   `json:"title_en,omitempty"`
+
+	// UploadKey A new cover
+	UploadKey *string `json:"upload_key,omitempty"`
+}
+
+// AdminSiteGuideInputStatus defines model for AdminSiteGuideInput.Status.
+type AdminSiteGuideInputStatus string
+
+// AdminSiteGuideSummary defines model for AdminSiteGuideSummary.
+type AdminSiteGuideSummary struct {
+	CoverUrl string `json:"cover_url"`
+	HasEn    bool   `json:"has_en"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// PublishedAt Absent until first published.
+	PublishedAt *time.Time                  `json:"published_at,omitempty"`
+	Slug        string                      `json:"slug"`
+	Status      AdminSiteGuideSummaryStatus `json:"status"`
+	SummaryAr   string                      `json:"summary_ar"`
+	TitleAr     string                      `json:"title_ar"`
+	UpdatedAt   time.Time                   `json:"updated_at"`
+}
+
+// AdminSiteGuideSummaryStatus defines model for AdminSiteGuideSummary.Status.
+type AdminSiteGuideSummaryStatus string
+
 // AdminSiteImage defines model for AdminSiteImage.
 type AdminSiteImage struct {
 	// Url A signed thumbnail; empty once removed.
@@ -1770,6 +1890,16 @@ type AdminDeleteSiteFAQParams struct {
 	Reason string `form:"reason" json:"reason"`
 }
 
+// AdminPreviewSiteGuideJSONBody defines parameters for AdminPreviewSiteGuide.
+type AdminPreviewSiteGuideJSONBody struct {
+	Markdown string `json:"markdown"`
+}
+
+// AdminDeleteSiteGuideParams defines parameters for AdminDeleteSiteGuide.
+type AdminDeleteSiteGuideParams struct {
+	Reason string `form:"reason" json:"reason"`
+}
+
 // AdminRemoveSiteImageParams defines parameters for AdminRemoveSiteImage.
 type AdminRemoveSiteImageParams struct {
 	Reason string `form:"reason" json:"reason"`
@@ -1841,6 +1971,15 @@ type AdminCreateSiteFAQJSONRequestBody = AdminSiteFAQInput
 
 // AdminUpdateSiteFAQJSONRequestBody defines body for AdminUpdateSiteFAQ for application/json ContentType.
 type AdminUpdateSiteFAQJSONRequestBody = AdminSiteFAQInput
+
+// AdminCreateSiteGuideJSONRequestBody defines body for AdminCreateSiteGuide for application/json ContentType.
+type AdminCreateSiteGuideJSONRequestBody = AdminSiteGuideInput
+
+// AdminPreviewSiteGuideJSONRequestBody defines body for AdminPreviewSiteGuide for application/json ContentType.
+type AdminPreviewSiteGuideJSONRequestBody AdminPreviewSiteGuideJSONBody
+
+// AdminUpdateSiteGuideJSONRequestBody defines body for AdminUpdateSiteGuide for application/json ContentType.
+type AdminUpdateSiteGuideJSONRequestBody = AdminSiteGuideInput
 
 // AdminSetSiteImageJSONRequestBody defines body for AdminSetSiteImage for application/json ContentType.
 type AdminSetSiteImageJSONRequestBody = AdminSiteImageInput
@@ -1970,6 +2109,24 @@ type ServerInterface interface {
 	// AdminUpdateSiteFAQ Rewrite a question
 	// (PUT /admin/v1/site/faqs/{faq_id})
 	AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Request, faqId ULID)
+	// AdminListSiteGuides The site's guides, newest first, without their bodies
+	// (GET /admin/v1/site/guides)
+	AdminListSiteGuides(w http.ResponseWriter, r *http.Request)
+	// AdminCreateSiteGuide Write a guide
+	// (POST /admin/v1/site/guides)
+	AdminCreateSiteGuide(w http.ResponseWriter, r *http.Request)
+	// AdminPreviewSiteGuide Render Markdown as the site would
+	// (POST /admin/v1/site/guides/preview)
+	AdminPreviewSiteGuide(w http.ResponseWriter, r *http.Request)
+	// AdminDeleteSiteGuide Remove a guide and its cover
+	// (DELETE /admin/v1/site/guides/{guide_id})
+	AdminDeleteSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID, params AdminDeleteSiteGuideParams)
+	// AdminGetSiteGuide One guide, whole
+	// (GET /admin/v1/site/guides/{guide_id})
+	AdminGetSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID)
+	// AdminUpdateSiteGuide Rewrite, publish or unpublish a guide
+	// (PUT /admin/v1/site/guides/{guide_id})
+	AdminUpdateSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID)
 	// AdminRemoveSiteImage Remove the logo or the share image
 	// (DELETE /admin/v1/site/images/{image})
 	AdminRemoveSiteImage(w http.ResponseWriter, r *http.Request, image string, params AdminRemoveSiteImageParams)
@@ -2601,6 +2758,142 @@ func (siw *ServerInterfaceWrapper) AdminUpdateSiteFAQ(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminUpdateSiteFAQ(w, r, faqId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListSiteGuides operation middleware
+func (siw *ServerInterfaceWrapper) AdminListSiteGuides(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListSiteGuides(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreateSiteGuide operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateSiteGuide(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateSiteGuide(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminPreviewSiteGuide operation middleware
+func (siw *ServerInterfaceWrapper) AdminPreviewSiteGuide(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminPreviewSiteGuide(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDeleteSiteGuide operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteSiteGuide(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "guide_id" -------------
+	var guideId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "guide_id", r.PathValue("guide_id"), &guideId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "guide_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminDeleteSiteGuideParams
+
+	// ------------- Required query parameter "reason" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reason", r.URL.Query(), &params.Reason, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reason"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteSiteGuide(w, r, guideId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetSiteGuide operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetSiteGuide(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "guide_id" -------------
+	var guideId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "guide_id", r.PathValue("guide_id"), &guideId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "guide_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetSiteGuide(w, r, guideId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateSiteGuide operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSiteGuide(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "guide_id" -------------
+	var guideId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "guide_id", r.PathValue("guide_id"), &guideId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "guide_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSiteGuide(w, r, guideId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3378,6 +3671,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/testimonials/{testimonial_id}", wrapper.AdminUpdateSiteTestimonial)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/founding", wrapper.AdminGetFounding)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/founding", wrapper.AdminSaveFounding)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/site/guides", wrapper.AdminListSiteGuides)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/guides", wrapper.AdminCreateSiteGuide)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/site/guides/preview", wrapper.AdminPreviewSiteGuide)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminDeleteSiteGuide)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminGetSiteGuide)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminUpdateSiteGuide)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
@@ -4472,6 +4771,239 @@ func (response AdminUpdateSiteFAQdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type AdminListSiteGuidesRequestObject struct {
+}
+
+type AdminListSiteGuidesResponseObject interface {
+	VisitAdminListSiteGuidesResponse(w http.ResponseWriter) error
+}
+
+type AdminListSiteGuides200JSONResponse struct {
+	Items []AdminSiteGuideSummary `json:"items"`
+}
+
+func (response AdminListSiteGuides200JSONResponse) VisitAdminListSiteGuidesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListSiteGuidesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListSiteGuidesdefaultApplicationProblemPlusJSONResponse) VisitAdminListSiteGuidesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteGuideRequestObject struct {
+	Body *AdminCreateSiteGuideJSONRequestBody
+}
+
+type AdminCreateSiteGuideResponseObject interface {
+	VisitAdminCreateSiteGuideResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateSiteGuide201JSONResponse AdminSiteGuide
+
+func (response AdminCreateSiteGuide201JSONResponse) VisitAdminCreateSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreateSiteGuidedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreateSiteGuidedefaultApplicationProblemPlusJSONResponse) VisitAdminCreateSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPreviewSiteGuideRequestObject struct {
+	Body *AdminPreviewSiteGuideJSONRequestBody
+}
+
+type AdminPreviewSiteGuideResponseObject interface {
+	VisitAdminPreviewSiteGuideResponse(w http.ResponseWriter) error
+}
+
+type AdminPreviewSiteGuide200JSONResponse struct {
+	Html string `json:"html"`
+}
+
+func (response AdminPreviewSiteGuide200JSONResponse) VisitAdminPreviewSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPreviewSiteGuidedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminPreviewSiteGuidedefaultApplicationProblemPlusJSONResponse) VisitAdminPreviewSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDeleteSiteGuideRequestObject struct {
+	GuideId ULID `json:"guide_id"`
+	Params  AdminDeleteSiteGuideParams
+}
+
+type AdminDeleteSiteGuideResponseObject interface {
+	VisitAdminDeleteSiteGuideResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteSiteGuide204Response struct {
+}
+
+func (response AdminDeleteSiteGuide204Response) VisitAdminDeleteSiteGuideResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteSiteGuidedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDeleteSiteGuidedefaultApplicationProblemPlusJSONResponse) VisitAdminDeleteSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetSiteGuideRequestObject struct {
+	GuideId ULID `json:"guide_id"`
+}
+
+type AdminGetSiteGuideResponseObject interface {
+	VisitAdminGetSiteGuideResponse(w http.ResponseWriter) error
+}
+
+type AdminGetSiteGuide200JSONResponse AdminSiteGuide
+
+func (response AdminGetSiteGuide200JSONResponse) VisitAdminGetSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetSiteGuidedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetSiteGuidedefaultApplicationProblemPlusJSONResponse) VisitAdminGetSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteGuideRequestObject struct {
+	GuideId ULID `json:"guide_id"`
+	Body    *AdminUpdateSiteGuideJSONRequestBody
+}
+
+type AdminUpdateSiteGuideResponseObject interface {
+	VisitAdminUpdateSiteGuideResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSiteGuide200JSONResponse AdminSiteGuide
+
+func (response AdminUpdateSiteGuide200JSONResponse) VisitAdminUpdateSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateSiteGuidedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUpdateSiteGuidedefaultApplicationProblemPlusJSONResponse) VisitAdminUpdateSiteGuideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminRemoveSiteImageRequestObject struct {
 	Image  string `json:"image"`
 	Params AdminRemoveSiteImageParams
@@ -5374,6 +5906,24 @@ type StrictServerInterface interface {
 	// AdminUpdateSiteFAQ Rewrite a question
 	// (PUT /admin/v1/site/faqs/{faq_id})
 	AdminUpdateSiteFAQ(ctx context.Context, request AdminUpdateSiteFAQRequestObject) (AdminUpdateSiteFAQResponseObject, error)
+	// AdminListSiteGuides The site's guides, newest first, without their bodies
+	// (GET /admin/v1/site/guides)
+	AdminListSiteGuides(ctx context.Context, request AdminListSiteGuidesRequestObject) (AdminListSiteGuidesResponseObject, error)
+	// AdminCreateSiteGuide Write a guide
+	// (POST /admin/v1/site/guides)
+	AdminCreateSiteGuide(ctx context.Context, request AdminCreateSiteGuideRequestObject) (AdminCreateSiteGuideResponseObject, error)
+	// AdminPreviewSiteGuide Render Markdown as the site would
+	// (POST /admin/v1/site/guides/preview)
+	AdminPreviewSiteGuide(ctx context.Context, request AdminPreviewSiteGuideRequestObject) (AdminPreviewSiteGuideResponseObject, error)
+	// AdminDeleteSiteGuide Remove a guide and its cover
+	// (DELETE /admin/v1/site/guides/{guide_id})
+	AdminDeleteSiteGuide(ctx context.Context, request AdminDeleteSiteGuideRequestObject) (AdminDeleteSiteGuideResponseObject, error)
+	// AdminGetSiteGuide One guide, whole
+	// (GET /admin/v1/site/guides/{guide_id})
+	AdminGetSiteGuide(ctx context.Context, request AdminGetSiteGuideRequestObject) (AdminGetSiteGuideResponseObject, error)
+	// AdminUpdateSiteGuide Rewrite, publish or unpublish a guide
+	// (PUT /admin/v1/site/guides/{guide_id})
+	AdminUpdateSiteGuide(ctx context.Context, request AdminUpdateSiteGuideRequestObject) (AdminUpdateSiteGuideResponseObject, error)
 	// AdminRemoveSiteImage Remove the logo or the share image
 	// (DELETE /admin/v1/site/images/{image})
 	AdminRemoveSiteImage(ctx context.Context, request AdminRemoveSiteImageRequestObject) (AdminRemoveSiteImageResponseObject, error)
@@ -6271,6 +6821,178 @@ func (sh *strictHandler) AdminUpdateSiteFAQ(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminUpdateSiteFAQResponseObject); ok {
 		if err := validResponse.VisitAdminUpdateSiteFAQResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListSiteGuides operation middleware
+func (sh *strictHandler) AdminListSiteGuides(w http.ResponseWriter, r *http.Request) {
+	var request AdminListSiteGuidesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListSiteGuides(ctx, request.(AdminListSiteGuidesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListSiteGuides")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListSiteGuidesResponseObject); ok {
+		if err := validResponse.VisitAdminListSiteGuidesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateSiteGuide operation middleware
+func (sh *strictHandler) AdminCreateSiteGuide(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateSiteGuideRequestObject
+
+	var body AdminCreateSiteGuideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateSiteGuide(ctx, request.(AdminCreateSiteGuideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateSiteGuide")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateSiteGuideResponseObject); ok {
+		if err := validResponse.VisitAdminCreateSiteGuideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminPreviewSiteGuide operation middleware
+func (sh *strictHandler) AdminPreviewSiteGuide(w http.ResponseWriter, r *http.Request) {
+	var request AdminPreviewSiteGuideRequestObject
+
+	var body AdminPreviewSiteGuideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminPreviewSiteGuide(ctx, request.(AdminPreviewSiteGuideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminPreviewSiteGuide")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminPreviewSiteGuideResponseObject); ok {
+		if err := validResponse.VisitAdminPreviewSiteGuideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteSiteGuide operation middleware
+func (sh *strictHandler) AdminDeleteSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID, params AdminDeleteSiteGuideParams) {
+	var request AdminDeleteSiteGuideRequestObject
+
+	request.GuideId = guideId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteSiteGuide(ctx, request.(AdminDeleteSiteGuideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteSiteGuide")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteSiteGuideResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteSiteGuideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetSiteGuide operation middleware
+func (sh *strictHandler) AdminGetSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID) {
+	var request AdminGetSiteGuideRequestObject
+
+	request.GuideId = guideId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetSiteGuide(ctx, request.(AdminGetSiteGuideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetSiteGuide")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetSiteGuideResponseObject); ok {
+		if err := validResponse.VisitAdminGetSiteGuideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSiteGuide operation middleware
+func (sh *strictHandler) AdminUpdateSiteGuide(w http.ResponseWriter, r *http.Request, guideId ULID) {
+	var request AdminUpdateSiteGuideRequestObject
+
+	request.GuideId = guideId
+
+	var body AdminUpdateSiteGuideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSiteGuide(ctx, request.(AdminUpdateSiteGuideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSiteGuide")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSiteGuideResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSiteGuideResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

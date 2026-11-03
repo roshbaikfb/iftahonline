@@ -956,6 +956,22 @@ type SiteFaq struct {
 	UpdatedAt  time.Time
 }
 
+type SiteGuide struct {
+	ID          ulid.ID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type SitePerson struct {
 	ID          ulid.ID
 	Kind        string

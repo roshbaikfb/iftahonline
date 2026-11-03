@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/markdown"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/media"
@@ -53,6 +54,7 @@ type Deps struct {
 // Service implements the use cases.
 type Service struct {
 	d     Deps
+	md    *markdown.Renderer
 	mu    sync.Mutex
 	got   domain.Content
 	until time.Time
@@ -68,7 +70,7 @@ func NewService(d Deps) *Service {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{d: d}
+	return &Service{d: d, md: markdown.New()}
 }
 
 // Content is the site's content, read at most once a minute and shared
@@ -106,7 +108,7 @@ func (s *Service) Content(ctx context.Context) (domain.Content, error) {
 	return c, nil
 }
 
-// read is everything the site shows, in four reads.
+// read is everything the site shows, in five reads.
 func (s *Service) read(ctx context.Context, db store.Tx) (domain.Content, error) {
 	settings, identity, err := store.SettingsAndIdentity(ctx, db)
 	if err != nil {
@@ -124,7 +126,11 @@ func (s *Service) read(ctx context.Context, db store.Tx) (domain.Content, error)
 	if err != nil {
 		return domain.Content{}, err
 	}
-	return domain.Content{Settings: settings, Identity: identity, FAQs: faqs, People: people, Testimonials: reviews}, nil
+	guides, err := store.PublishedGuides(ctx, db)
+	if err != nil {
+		return domain.Content{}, err
+	}
+	return domain.Content{Settings: settings, Identity: identity, FAQs: faqs, People: people, Testimonials: reviews, Guides: guides}, nil
 }
 
 // All is everything the site shows, as the console edits it (uncached).

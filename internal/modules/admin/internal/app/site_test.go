@@ -120,3 +120,55 @@ func TestSiteFromTheConsole(t *testing.T) {
 		t.Fatalf("cli: %v", err)
 	}
 }
+
+// TestSiteGuidesFromTheConsole: guides are written, published and
+// removed with a reason, each change in the admin log; the preview
+// records nothing.
+func TestSiteGuidesFromTheConsole(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, me := f.signedIn(t)
+
+	draft := site.Guide{Slug: "cod-shipping-egypt", Status: site.Draft, TitleAr: "تسعير الشحن في مصر", SummaryAr: "كيف تحدد أسعار الشحن ورسوم التحصيل.",
+		BodyAr: strings.Repeat("نص الدليل. ", 10)}
+	if _, err := f.svc.CreateSiteGuide(ctx, draft, "", "x"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("no reason: %v", err)
+	}
+	g, err := f.svc.CreateSiteGuide(ctx, draft, "", "the first guide")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Status = site.Published
+	if g, err = f.svc.UpdateSiteGuide(ctx, g, "", false, "reviewed"); err != nil || g.PublishedAt.IsZero() {
+		t.Fatalf("published = %+v, %v", g, err)
+	}
+	if list, listErr := f.svc.SiteGuides(ctx); listErr != nil || len(list) != 1 {
+		t.Fatalf("guides = %+v, %v", list, listErr)
+	}
+	if whole, getErr := f.svc.SiteGuide(ctx, g.ID); getErr != nil || whole.BodyAr == "" {
+		t.Fatalf("guide = %+v, %v", whole, getErr)
+	}
+	if html, prevErr := f.svc.PreviewGuide(ctx, "# عنوان"); prevErr != nil || !strings.Contains(html, "<h2") {
+		t.Fatalf("preview = %q, %v", html, prevErr)
+	}
+	if err = f.svc.DeleteSiteGuide(ctx, g.ID, "replaced"); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := f.svc.Audit(ctx, "", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range page.Items {
+		if e.AdminID != nil && *e.AdminID == me.Admin.ID && strings.HasPrefix(e.Action, "site.guide") {
+			got = append(got, e.Action)
+		}
+	}
+	if strings.Join(got, ",") != "site.guide_deleted,site.guide_updated,site.guide_created" {
+		t.Fatalf("admin log = %v", got)
+	}
+	if _, err = f.cli.SiteGuides(ctx); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("cli: %v", err)
+	}
+}

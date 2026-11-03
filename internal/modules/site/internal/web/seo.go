@@ -51,26 +51,51 @@ func (s *Site) robots() string {
 	return b.String()
 }
 
-func (s *Site) sitemap() string {
+func (s *Site) sitemap(ctx context.Context) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" +
 		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")
 	// Each page in both languages, each naming the other (Google's
 	// hreflang in sitemaps).
+	englishGuides := s.guideSitePages(ctx, english)
 	for _, l := range []*language{arabic, english} {
 		for _, p := range sitePages(l) {
-			fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod>", s.origin(), l.at(p.path), updated)
-			for _, alt := range []struct {
-				code string
-				l    *language
-			}{{"ar", arabic}, {"en", english}, {"x-default", arabic}} {
-				fmt.Fprintf(&b, `<xhtml:link rel="alternate" hreflang="%s" href="%s%s"/>`, alt.code, s.origin(), alt.l.at(p.path))
-			}
-			b.WriteString("</url>\n")
+			s.sitemapURL(&b, l, p.path, true)
+		}
+		// Guides: an Arabic-only guide has no English alternate.
+		for _, p := range s.guideSitePages(ctx, l) {
+			s.sitemapURL(&b, l, p.path, l == english || hasEnglishPath(englishGuides, p.path))
 		}
 	}
 	b.WriteString("</urlset>\n")
 	return b.String()
+}
+
+// sitemapURL is one page of l in the sitemap, with its alternates (the
+// English one when withEnglish).
+func (s *Site) sitemapURL(b *strings.Builder, l *language, path string, withEnglish bool) {
+	fmt.Fprintf(b, "<url><loc>%s%s</loc><lastmod>%s</lastmod>", s.origin(), l.at(path), updated)
+	alts := []struct {
+		code string
+		l    *language
+	}{{"ar", arabic}, {"en", english}, {"x-default", arabic}}
+	for _, alt := range alts {
+		if alt.l == english && !withEnglish {
+			continue
+		}
+		fmt.Fprintf(b, `<xhtml:link rel="alternate" hreflang="%s" href="%s%s"/>`, alt.code, s.origin(), alt.l.at(path))
+	}
+	b.WriteString("</url>\n")
+}
+
+// hasEnglishPath says whether pages holds path.
+func hasEnglishPath(pages []sitePage, path string) bool {
+	for _, p := range pages {
+		if p.path == path {
+			return true
+		}
+	}
+	return false
 }
 
 // llms is /llms.txt (llmstxt.org): a short, factual account of the
@@ -87,13 +112,13 @@ func (s *Site) llms(ctx context.Context, full bool) string {
 	b.WriteString("- لوحة الربح الصافي بعد تكلفة المنتج والشحن والتحصيل والمرتجعات والإعلانات.\n")
 	b.WriteString("- الشحن والتحصيل، والدفع بالبطاقة عبر Paymob، وبكسلات الإعلانات، والكوبونات، وكتالوج المنتجات.\n\n")
 	b.WriteString("## الصفحات\n\n")
-	for _, p := range sitePages(arabic) {
+	for _, p := range append(sitePages(arabic), s.guideSitePages(ctx, arabic)...) {
 		fmt.Fprintf(&b, "- [%s](%s%s): %s\n", p.name, s.origin(), p.path, p.about)
 	}
 	b.WriteString("\n## In English\n\n")
 	fmt.Fprintf(&b, "%s (also eftahonline, in Arabic %s) is an online store platform for merchants in Egypt and the Gulf who sell with cash on delivery: "+
 		"order confirmation on WhatsApp, fake-order protection, a net profit dashboard, shipping and collection, and a store in Arabic and English.\n\n", brandEN, brandAR)
-	for _, p := range sitePages(english) {
+	for _, p := range append(sitePages(english), s.guideSitePages(ctx, english)...) {
 		fmt.Fprintf(&b, "- [%s](%s%s): %s\n", p.name, s.origin(), english.at(p.path), p.about)
 	}
 	if !full {

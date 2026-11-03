@@ -954,6 +954,22 @@ type SiteFaq struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
+type SiteGuide struct {
+	ID          pgtype.UUID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type SitePerson struct {
 	ID          pgtype.UUID
 	Kind        string

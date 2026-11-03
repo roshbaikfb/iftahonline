@@ -8,6 +8,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/netip"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -70,12 +71,12 @@ type AdBanner struct {
 	LinkUrl   string
 	Placement string
 	Country   pgtype.Text
-	StartsAt  pgtype.Timestamptz
-	EndsAt    pgtype.Timestamptz
+	StartsAt  time.Time
+	EndsAt    *time.Time
 	Weight    int32
 	Active    bool
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type AdClick struct {
@@ -89,7 +90,7 @@ type AdSetting struct {
 	AdsenseEnabled bool
 	PublisherID    string
 	Units          []byte
-	UpdatedAt      pgtype.Timestamptz
+	UpdatedAt      time.Time
 }
 
 type AdSpend struct {
@@ -102,12 +103,12 @@ type AdSpend struct {
 	AmountMinor int64
 	Source      string
 	Note        string
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 }
 
 type AdminAuditLog struct {
 	ID         ulid.ID
-	OccurredAt pgtype.Timestamptz
+	OccurredAt time.Time
 	AdminID    pgtype.UUID
 	Action     string
 	TargetType string
@@ -122,15 +123,15 @@ type AdminSession struct {
 	TokenHash  []byte
 	UserAgent  string
 	IpPrefix   string
-	CreatedAt  pgtype.Timestamptz
-	LastSeenAt pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
 }
 
 type AnalyticsBackfill struct {
 	StoreID  ulid.ID
-	QueuedAt pgtype.Timestamptz
+	QueuedAt time.Time
 }
 
 type AnalyticsDirty struct {
@@ -164,7 +165,7 @@ type AnalyticsOrder struct {
 	DepositPaidMinor   int64
 	CarrierChargeMinor pgtype.Int8
 	RiskBand           pgtype.Text
-	UpdatedAt          pgtype.Timestamptz
+	UpdatedAt          time.Time
 }
 
 type AppMonthlyPartitioned struct {
@@ -177,7 +178,7 @@ type AppMonthlyPartitioned struct {
 type AuditLog struct {
 	ID          ulid.ID
 	StoreID     ulid.ID
-	OccurredAt  pgtype.Timestamptz
+	OccurredAt  time.Time
 	ActorUserID pgtype.UUID
 	Action      string
 	TargetType  string
@@ -192,15 +193,15 @@ type BillingAccount struct {
 	Name      string
 	Currency  string
 	Country   string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	PlanCode  pgtype.Text
 }
 
 type BillingAccountStore struct {
 	AccountID     ulid.ID
 	MemberStoreID ulid.ID
-	AddedAt       pgtype.Timestamptz
+	AddedAt       time.Time
 }
 
 type BillingCheckout struct {
@@ -213,8 +214,8 @@ type BillingCheckout struct {
 	Currency      string
 	AmountMinor   int64
 	Status        string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type BillingPaymentMethod struct {
@@ -222,8 +223,8 @@ type BillingPaymentMethod struct {
 	Gateway   string
 	Token     []byte
 	Label     string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type CarrierConnection struct {
@@ -233,9 +234,9 @@ type CarrierConnection struct {
 	Credentials       []byte
 	WebhookSecretHash []byte
 	Status            string
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	DisconnectedAt    pgtype.Timestamptz
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DisconnectedAt    *time.Time
 }
 
 type CatalogImport struct {
@@ -253,10 +254,10 @@ type CatalogImport struct {
 	FailedCount    int32
 	RowErrors      []byte
 	FailureReason  string
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	StartedAt      pgtype.Timestamptz
-	FinishedAt     pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
 }
 
 type Category struct {
@@ -266,8 +267,8 @@ type Category struct {
 	Slug      string
 	Name      string
 	Position  int32
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type CodSettlement struct {
@@ -279,10 +280,10 @@ type CodSettlement struct {
 	ShipmentID     pgtype.UUID
 	Currency       string
 	AmountMinor    int64
-	SettledAt      pgtype.Timestamptz
+	SettledAt      time.Time
 	Reference      string
 	Source         string
-	CreatedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
 }
 
 type Coupon struct {
@@ -295,12 +296,12 @@ type Coupon struct {
 	MinSubtotalMinor int64
 	MaxUses          pgtype.Int4
 	MaxPerCustomer   pgtype.Int4
-	StartsAt         pgtype.Timestamptz
-	EndsAt           pgtype.Timestamptz
+	StartsAt         *time.Time
+	EndsAt           *time.Time
 	Active           bool
 	Uses             int32
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type CouponRedemption struct {
@@ -310,8 +311,8 @@ type CouponRedemption struct {
 	CustomerID    ulid.ID
 	DiscountMinor int64
 	FreeShipping  bool
-	ReleasedAt    pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
+	ReleasedAt    *time.Time
+	CreatedAt     time.Time
 }
 
 type Customer struct {
@@ -321,21 +322,21 @@ type Customer struct {
 	Name        string
 	NameKey     string
 	OrdersCount int32
-	LastOrderAt pgtype.Timestamptz
-	BlockedAt   pgtype.Timestamptz
+	LastOrderAt *time.Time
+	BlockedAt   *time.Time
 	BlockReason string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type EntitlementOverride struct {
 	StoreID   ulid.ID
 	Feature   string
 	Value     pgtype.Int8
-	ExpiresAt pgtype.Timestamptz
+	ExpiresAt *time.Time
 	Reason    string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Feature struct {
@@ -344,8 +345,8 @@ type Feature struct {
 	NameAr    string
 	NameEn    string
 	Sort      int32
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type FoundingMember struct {
@@ -357,10 +358,10 @@ type FoundingMember struct {
 	PlanCode    string
 	Cycle       string
 	LockedMinor int64
-	JoinedAt    pgtype.Timestamptz
-	LostAt      pgtype.Timestamptz
+	JoinedAt    time.Time
+	LostAt      *time.Time
 	LostReason  pgtype.Text
-	UpdatedAt   pgtype.Timestamptz
+	UpdatedAt   time.Time
 }
 
 type FoundingProgram struct {
@@ -368,7 +369,7 @@ type FoundingProgram struct {
 	Enabled     bool
 	Seats       int32
 	DiscountBps int32
-	UpdatedAt   pgtype.Timestamptz
+	UpdatedAt   time.Time
 }
 
 type InventoryLevel struct {
@@ -377,7 +378,7 @@ type InventoryLevel struct {
 	Tracked   bool
 	OnHand    int32
 	Reserved  int32
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type Invoice struct {
@@ -391,13 +392,13 @@ type Invoice struct {
 	TaxMinor      int64
 	TotalMinor    int64
 	Status        string
-	IssuedAt      pgtype.Timestamptz
-	DueAt         pgtype.Timestamptz
-	PaidAt        pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
+	IssuedAt      time.Time
+	DueAt         time.Time
+	PaidAt        *time.Time
+	CreatedAt     time.Time
 	Attempts      int32
-	FirstFailedAt pgtype.Timestamptz
-	NextAttemptAt pgtype.Timestamptz
+	FirstFailedAt *time.Time
+	NextAttemptAt *time.Time
 	LastError     pgtype.Text
 	Purpose       string
 	PlanID        pgtype.UUID
@@ -425,7 +426,7 @@ type MarketingSetting struct {
 	StoreID   ulid.ID
 	Consent   string
 	Version   int32
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type MerchantNotification struct {
@@ -434,13 +435,13 @@ type MerchantNotification struct {
 	Kind      string
 	DedupKey  string
 	Data      []byte
-	ReadAt    pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
+	ReadAt    *time.Time
+	CreatedAt time.Time
 }
 
 type Message struct {
 	StoreID           ulid.ID
-	CreatedAt         pgtype.Timestamptz
+	CreatedAt         time.Time
 	ID                ulid.ID
 	Kind              string
 	Locale            string
@@ -455,8 +456,8 @@ type Message struct {
 	Fallback          bool
 	ErrorCode         string
 	Reply             string
-	RepliedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	RepliedAt         *time.Time
+	UpdatedAt         time.Time
 }
 
 type MessageTemplate struct {
@@ -464,20 +465,20 @@ type MessageTemplate struct {
 	Kind      string
 	Locale    string
 	SmsBody   string
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type MessagingSetting struct {
 	StoreID         ulid.ID
 	ConfirmCod      bool
 	AutoCancelHours int32
-	UpdatedAt       pgtype.Timestamptz
+	UpdatedAt       time.Time
 }
 
 type Order struct {
 	ID              ulid.ID
 	StoreID         ulid.ID
-	CreatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
 	Status          string
 	Version         int32
 	Source          string
@@ -494,8 +495,8 @@ type Order struct {
 	TotalMinor      int64
 	ItemCount       int32
 	LinesHash       []byte
-	UpdatedAt       pgtype.Timestamptz
-	StatusChangedAt pgtype.Timestamptz
+	UpdatedAt       time.Time
+	StatusChangedAt time.Time
 	CodFeeMinor     int64
 	PaymentMethod   string
 	PaymentStatus   string
@@ -519,20 +520,20 @@ type OrderConfirmation struct {
 	MessageID  pgtype.UUID
 	Status     string
 	TokenHash  []byte
-	ExpiresAt  pgtype.Timestamptz
-	AnsweredAt pgtype.Timestamptz
+	ExpiresAt  time.Time
+	AnsweredAt *time.Time
 	AnsweredBy string
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 	WaCode     pgtype.Text
 }
 
 type OrderEvent struct {
 	ID             ulid.ID
 	StoreID        ulid.ID
-	OrderCreatedAt pgtype.Timestamptz
+	OrderCreatedAt time.Time
 	OrderID        ulid.ID
-	OccurredAt     pgtype.Timestamptz
+	OccurredAt     time.Time
 	FromStatus     pgtype.Text
 	ToStatus       string
 	ActorUserID    pgtype.UUID
@@ -545,12 +546,12 @@ type OrderIdempotency struct {
 	Key         string
 	Fingerprint []byte
 	OrderID     ulid.ID
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 }
 
 type OrderItem struct {
 	StoreID        ulid.ID
-	OrderCreatedAt pgtype.Timestamptz
+	OrderCreatedAt time.Time
 	OrderID        ulid.ID
 	Line           int16
 	VariantID      ulid.ID
@@ -571,7 +572,7 @@ type OrderSalesCounted struct {
 
 type OrderSignal struct {
 	StoreID        ulid.ID
-	OrderCreatedAt pgtype.Timestamptz
+	OrderCreatedAt time.Time
 	OrderID        ulid.ID
 	Fbp            string
 	Fbc            string
@@ -597,9 +598,9 @@ type Payment struct {
 	ProviderRef   string
 	TransactionID string
 	Failure       string
-	StatusAt      pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	StatusAt      time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	Version       int32
 }
 
@@ -612,8 +613,8 @@ type PaymentAttempt struct {
 	Reason          string
 	Reference       string
 	AmountMinor     int64
-	CreatedAt       pgtype.Timestamptz
-	RefundedAt      pgtype.Timestamptz
+	CreatedAt       time.Time
+	RefundedAt      *time.Time
 	RefundReference pgtype.Text
 }
 
@@ -623,9 +624,9 @@ type PaymentConnection struct {
 	Gateway        string
 	Credentials    []byte
 	Status         string
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	DisconnectedAt pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DisconnectedAt *time.Time
 }
 
 type PaymentRefund struct {
@@ -638,14 +639,14 @@ type PaymentRefund struct {
 	Reason           string
 	ProviderRefundID string
 	Failure          string
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type PaymentSetting struct {
 	StoreID       ulid.ID
 	DefaultMethod string
-	UpdatedAt     pgtype.Timestamptz
+	UpdatedAt     time.Time
 }
 
 type Plan struct {
@@ -659,8 +660,8 @@ type Plan struct {
 	Public    bool
 	Status    string
 	Sort      int32
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type PlanEntitlement struct {
@@ -692,9 +693,9 @@ type PlatformAdmin struct {
 	TotpSecret   []byte
 	TotpLastStep int64
 	Status       string
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	LastLoginAt  pgtype.Timestamptz
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 type Product struct {
@@ -705,9 +706,9 @@ type Product struct {
 	Description string
 	Status      string
 	Options     []byte
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	DeletedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
 	IsSample    bool
 	SizeChartID pgtype.UUID
 }
@@ -721,7 +722,7 @@ type ProductCategory struct {
 type ProductFeed struct {
 	StoreID   ulid.ID
 	Key       string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type ProductImage struct {
@@ -738,8 +739,8 @@ type ProductImage struct {
 	Alt           string
 	Position      int32
 	FailureReason string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type ProductSale struct {
@@ -776,29 +777,29 @@ type ProfitSetting struct {
 	DeliveryCostMinor pgtype.Int8
 	ReturnCostMinor   pgtype.Int8
 	CodFeeBp          int32
-	UpdatedAt         pgtype.Timestamptz
+	UpdatedAt         time.Time
 }
 
 type RiskBackfill struct {
 	StoreID  ulid.ID
-	QueuedAt pgtype.Timestamptz
+	QueuedAt time.Time
 }
 
 type RiskOrder struct {
 	StoreID   ulid.ID
 	OrderID   ulid.ID
 	PhoneKey  []byte
-	PlacedAt  pgtype.Timestamptz
+	PlacedAt  time.Time
 	Outcome   pgtype.Text
-	OutcomeAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	OutcomeAt *time.Time
+	UpdatedAt time.Time
 }
 
 type RiskSetting struct {
 	StoreID    ulid.ID
 	HoldFrom   string
 	VerifyFrom string
-	UpdatedAt  pgtype.Timestamptz
+	UpdatedAt  time.Time
 	PrepayFrom string
 }
 
@@ -807,10 +808,10 @@ type RiverJob struct {
 	State        RiverJobState
 	Attempt      int16
 	MaxAttempts  int16
-	AttemptedAt  pgtype.Timestamptz
-	CreatedAt    pgtype.Timestamptz
-	FinalizedAt  pgtype.Timestamptz
-	ScheduledAt  pgtype.Timestamptz
+	AttemptedAt  *time.Time
+	CreatedAt    time.Time
+	FinalizedAt  *time.Time
+	ScheduledAt  time.Time
 	Priority     int16
 	Args         []byte
 	AttemptedBy  []string
@@ -824,31 +825,31 @@ type RiverJob struct {
 }
 
 type RiverLeader struct {
-	ElectedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
+	ElectedAt time.Time
+	ExpiresAt time.Time
 	LeaderID  string
 	Name      string
 }
 
 type RiverMigration struct {
 	ID        int64
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	Version   int64
 }
 
 type RiverNotification struct {
 	ID        int64
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	Payload   string
 	Topic     string
 }
 
 type RiverQueue struct {
 	Name      string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	Metadata  []byte
-	PausedAt  pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	PausedAt  *time.Time
+	UpdatedAt time.Time
 }
 
 type SellFee struct {
@@ -861,10 +862,10 @@ type SellFee struct {
 	FeeMinor    int64
 	Currency    string
 	Status      string
-	DeliveredAt pgtype.Timestamptz
-	ReturnedAt  pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	DeliveredAt time.Time
+	ReturnedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	InvoiceID   pgtype.UUID
 }
 
@@ -882,10 +883,10 @@ type Shipment struct {
 	LabelKey          string
 	RawState          string
 	Failure           string
-	CancelRequestedAt pgtype.Timestamptz
-	StatusAt          pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	CancelRequestedAt *time.Time
+	StatusAt          time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 	Version           int32
 }
 
@@ -893,7 +894,7 @@ type ShipmentEvent struct {
 	ID         ulid.ID
 	StoreID    ulid.ID
 	ShipmentID ulid.ID
-	OccurredAt pgtype.Timestamptz
+	OccurredAt time.Time
 	Status     string
 	RawState   string
 	Source     string
@@ -916,7 +917,7 @@ type ShippingSetting struct {
 	CodMaxMinor   int64
 	FreeOverMinor pgtype.Int8
 	Version       int32
-	UpdatedAt     pgtype.Timestamptz
+	UpdatedAt     time.Time
 }
 
 type ShippingZone struct {
@@ -931,8 +932,8 @@ type ShippingZone struct {
 	CodMaxMinor   pgtype.Int8
 	Position      int32
 	Version       int32
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	EtaMinDays    pgtype.Int2
 	EtaMaxDays    pgtype.Int2
 }
@@ -951,8 +952,24 @@ type SiteFaq struct {
 	AnswerAr   string
 	QuestionEn string
 	AnswerEn   string
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type SiteGuide struct {
+	ID          ulid.ID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type SitePerson struct {
@@ -968,8 +985,8 @@ type SitePerson struct {
 	PhotoKey    string
 	LinkedinUrl string
 	XUrl        string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type SiteSetting struct {
@@ -979,7 +996,7 @@ type SiteSetting struct {
 	Email         string
 	Socials       []byte
 	CompanyNumber string
-	UpdatedAt     pgtype.Timestamptz
+	UpdatedAt     time.Time
 	StoryAr       string
 	StoryEn       string
 	VideoID       string
@@ -996,8 +1013,8 @@ type SiteTestimonial struct {
 	QuoteAr   string
 	QuoteEn   string
 	PhotoKey  string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type SizeChart struct {
@@ -1006,8 +1023,8 @@ type SizeChart struct {
 	Name      string
 	Header    []byte
 	Body      []byte
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type StockReservation struct {
@@ -1018,11 +1035,11 @@ type StockReservation struct {
 	Qty         int32
 	Counted     bool
 	Status      string
-	ExpiresAt   pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
-	ReleasedAt  pgtype.Timestamptz
-	CommittedAt pgtype.Timestamptz
-	ReturnedAt  pgtype.Timestamptz
+	ExpiresAt   *time.Time
+	CreatedAt   time.Time
+	ReleasedAt  *time.Time
+	CommittedAt *time.Time
+	ReturnedAt  *time.Time
 }
 
 type Store struct {
@@ -1033,8 +1050,8 @@ type Store struct {
 	Currency    string
 	Locale      string
 	Timezone    string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	BillingHold bool
 }
 
@@ -1050,8 +1067,8 @@ type StoreAsset struct {
 	Height        pgtype.Int4
 	Bytes         pgtype.Int8
 	FailureReason string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type StoreDomain struct {
@@ -1064,9 +1081,9 @@ type StoreDomain struct {
 	VerificationToken string
 	FailureReason     string
 	CheckAttempts     int32
-	VerifiedAt        pgtype.Timestamptz
-	LastCheckedAt     pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
+	VerifiedAt        *time.Time
+	LastCheckedAt     *time.Time
+	CreatedAt         time.Time
 }
 
 type StoreInvitation struct {
@@ -1076,18 +1093,18 @@ type StoreInvitation struct {
 	Role       string
 	TokenHash  []byte
 	InvitedBy  ulid.ID
-	CreatedAt  pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	AcceptedAt pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	AcceptedAt *time.Time
+	RevokedAt  *time.Time
 }
 
 type StoreMembership struct {
 	StoreID   ulid.ID
 	UserID    ulid.ID
 	Role      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type StoreOnboarding struct {
@@ -1098,9 +1115,9 @@ type StoreOnboarding struct {
 	TemplateStatus  string
 	TemplateSeq     int32
 	TemplateVersion pgtype.Int4
-	CompletedAt     pgtype.Timestamptz
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
+	CompletedAt     *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type StorePage struct {
@@ -1114,8 +1131,8 @@ type StorePage struct {
 	Body        string
 	Status      string
 	Version     int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type StorePixel struct {
@@ -1128,29 +1145,29 @@ type StorePixel struct {
 	Enabled     bool
 	ServerToken []byte
 	Version     int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type StoreTheme struct {
 	StoreID   ulid.ID
 	Settings  []byte
 	Version   int32
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type StorefrontDraft struct {
 	StoreID   ulid.ID
 	Theme     []byte
 	Home      []byte
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type StorefrontPreview struct {
 	TokenHash []byte
 	StoreID   ulid.ID
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 type Subscription struct {
@@ -1158,15 +1175,15 @@ type Subscription struct {
 	PlanID            ulid.ID
 	Status            string
 	Cycle             pgtype.Text
-	TrialEndsAt       pgtype.Timestamptz
-	PeriodStart       pgtype.Timestamptz
-	PeriodEnd         pgtype.Timestamptz
-	GraceUntil        pgtype.Timestamptz
-	SuspendedAt       pgtype.Timestamptz
+	TrialEndsAt       *time.Time
+	PeriodStart       *time.Time
+	PeriodEnd         *time.Time
+	GraceUntil        *time.Time
+	SuspendedAt       *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 	AccountID         pgtype.UUID
 	RenewalInvoiceID  pgtype.UUID
 	RenewalPlanID     pgtype.UUID
@@ -1186,22 +1203,22 @@ type UsageCounter struct {
 	Feature   string
 	Period    pgtype.Date
 	Used      int64
-	UpdatedAt pgtype.Timestamptz
+	UpdatedAt time.Time
 }
 
 type User struct {
 	ID              ulid.ID
 	Email           string
-	EmailVerifiedAt pgtype.Timestamptz
+	EmailVerifiedAt *time.Time
 	Name            string
 	PasswordHash    string
 	Status          string
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 	Phone           pgtype.Text
-	PhoneVerifiedAt pgtype.Timestamptz
+	PhoneVerifiedAt *time.Time
 	TotpSecret      []byte
-	TotpEnabledAt   pgtype.Timestamptz
+	TotpEnabledAt   *time.Time
 	TotpLastStep    int64
 }
 
@@ -1210,15 +1227,15 @@ type UserDevice struct {
 	DeviceHash  []byte
 	UserAgent   string
 	IpPrefix    string
-	FirstSeenAt pgtype.Timestamptz
-	LastSeenAt  pgtype.Timestamptz
+	FirstSeenAt time.Time
+	LastSeenAt  time.Time
 }
 
 type UserRecoveryCode struct {
 	UserID    ulid.ID
 	CodeHash  []byte
-	CreatedAt pgtype.Timestamptz
-	UsedAt    pgtype.Timestamptz
+	CreatedAt time.Time
+	UsedAt    *time.Time
 }
 
 type UserSession struct {
@@ -1227,10 +1244,10 @@ type UserSession struct {
 	TokenHash      []byte
 	UserAgent      string
 	IpPrefix       string
-	CreatedAt      pgtype.Timestamptz
-	LastSeenAt     pgtype.Timestamptz
-	ExpiresAt      pgtype.Timestamptz
-	RevokedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	ExpiresAt      time.Time
+	RevokedAt      *time.Time
 	ImpersonatorID pgtype.UUID
 	ScopeStoreID   pgtype.UUID
 	ReadOnly       bool
@@ -1246,16 +1263,16 @@ type Variant struct {
 	CompareAtMinor pgtype.Int8
 	Currency       string
 	Position       int32
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	DeletedAt      pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeletedAt      *time.Time
 	Hidden         bool
 	CostMinor      pgtype.Int8
 }
 
 type WebhookBody struct {
 	StoreID     ulid.ID
-	ReceivedAt  pgtype.Timestamptz
+	ReceivedAt  time.Time
 	ReceiptID   ulid.ID
 	ContentType string
 	Body        []byte
@@ -1267,7 +1284,7 @@ type WebhookReceipt struct {
 	Provider     string
 	ConnectionID ulid.ID
 	EventID      string
-	ReceivedAt   pgtype.Timestamptz
-	ProcessedAt  pgtype.Timestamptz
+	ReceivedAt   time.Time
+	ProcessedAt  *time.Time
 	Outcome      string
 }

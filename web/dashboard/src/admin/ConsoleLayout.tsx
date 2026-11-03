@@ -10,6 +10,7 @@ const nav = [
   { to: '/founding', label: 'التجار المؤسسون', end: false },
   { to: '/ads', label: 'الإعلانات', end: false },
   { to: '/site', label: 'الموقع التعريفي', end: false },
+  { to: '/guides', label: 'الأدلة', end: false },
   { to: '/audit', label: 'سجل الأدمن', end: false },
 ];
 

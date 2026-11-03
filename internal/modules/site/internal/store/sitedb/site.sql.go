@@ -7,9 +7,21 @@ package sitedb
 
 import (
 	"context"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
+
+const countGuides = `-- name: CountGuides :one
+SELECT count(*) FROM site_guides
+`
+
+func (q *Queries) CountGuides(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countGuides)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const deleteFAQ = `-- name: DeleteFAQ :execrows
 DELETE FROM site_faqs WHERE id = $1
@@ -17,6 +29,18 @@ DELETE FROM site_faqs WHERE id = $1
 
 func (q *Queries) DeleteFAQ(ctx context.Context, id ulid.ID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteFAQ, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteGuide = `-- name: DeleteGuide :execrows
+DELETE FROM site_guides WHERE id = $1
+`
+
+func (q *Queries) DeleteGuide(ctx context.Context, id ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteGuide, id)
 	if err != nil {
 		return 0, err
 	}
@@ -45,6 +69,46 @@ func (q *Queries) DeleteTestimonial(ctx context.Context, id ulid.ID) (int64, err
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getGuide = `-- name: GetGuide :one
+SELECT id, slug, status, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at, updated_at
+FROM site_guides WHERE id = $1
+`
+
+type GetGuideRow struct {
+	ID          ulid.ID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) GetGuide(ctx context.Context, id ulid.ID) (GetGuideRow, error) {
+	row := q.db.QueryRow(ctx, getGuide, id)
+	var i GetGuideRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Status,
+		&i.TitleAr,
+		&i.SummaryAr,
+		&i.BodyAr,
+		&i.TitleEn,
+		&i.SummaryEn,
+		&i.BodyEn,
+		&i.CoverKey,
+		&i.PublishedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getPerson = `-- name: GetPerson :one
@@ -183,6 +247,42 @@ func (q *Queries) InsertFAQ(ctx context.Context, arg InsertFAQParams) error {
 	return err
 }
 
+const insertGuide = `-- name: InsertGuide :exec
+INSERT INTO site_guides (id, slug, status, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+`
+
+type InsertGuideParams struct {
+	ID          ulid.ID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+}
+
+func (q *Queries) InsertGuide(ctx context.Context, arg InsertGuideParams) error {
+	_, err := q.db.Exec(ctx, insertGuide,
+		arg.ID,
+		arg.Slug,
+		arg.Status,
+		arg.TitleAr,
+		arg.SummaryAr,
+		arg.BodyAr,
+		arg.TitleEn,
+		arg.SummaryEn,
+		arg.BodyEn,
+		arg.CoverKey,
+		arg.PublishedAt,
+	)
+	return err
+}
+
 const insertPerson = `-- name: InsertPerson :exec
 INSERT INTO site_people (id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_key, linkedin_url, x_url)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -296,6 +396,56 @@ func (q *Queries) ListFAQs(ctx context.Context) ([]ListFAQsRow, error) {
 	return items, nil
 }
 
+const listGuides = `-- name: ListGuides :many
+SELECT id, slug, status, title_ar, summary_ar, title_en, cover_key, published_at, updated_at
+FROM site_guides
+ORDER BY updated_at DESC
+LIMIT 500
+`
+
+type ListGuidesRow struct {
+	ID          ulid.ID
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	TitleEn     string
+	CoverKey    string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
+// Every guide for the console, newest first, without their bodies.
+func (q *Queries) ListGuides(ctx context.Context) ([]ListGuidesRow, error) {
+	rows, err := q.db.Query(ctx, listGuides)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGuidesRow{}
+	for rows.Next() {
+		var i ListGuidesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Status,
+			&i.TitleAr,
+			&i.SummaryAr,
+			&i.TitleEn,
+			&i.CoverKey,
+			&i.PublishedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPeople = `-- name: ListPeople :many
 SELECT id, kind, position, name_ar, name_en, role_ar, role_en, bio_ar, bio_en, photo_key, linkedin_url, x_url
 FROM site_people
@@ -398,6 +548,61 @@ func (q *Queries) ListTestimonials(ctx context.Context) ([]ListTestimonialsRow, 
 	return items, nil
 }
 
+const publishedGuides = `-- name: PublishedGuides :many
+SELECT id, slug, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at, updated_at
+FROM site_guides
+WHERE status = 'published'
+ORDER BY published_at DESC
+LIMIT 200
+`
+
+type PublishedGuidesRow struct {
+	ID          ulid.ID
+	Slug        string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
+// The guides the site shows, newest first, with their bodies.
+func (q *Queries) PublishedGuides(ctx context.Context) ([]PublishedGuidesRow, error) {
+	rows, err := q.db.Query(ctx, publishedGuides)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PublishedGuidesRow{}
+	for rows.Next() {
+		var i PublishedGuidesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.TitleAr,
+			&i.SummaryAr,
+			&i.BodyAr,
+			&i.TitleEn,
+			&i.SummaryEn,
+			&i.BodyEn,
+			&i.CoverKey,
+			&i.PublishedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveSettings = `-- name: SaveSettings :exec
 UPDATE site_settings
 SET whatsapp = $1, whatsapp_intl = $2, email = $3, socials = $4, company_number = $5, updated_at = now()
@@ -481,6 +686,47 @@ func (q *Queries) UpdateFAQ(ctx context.Context, arg UpdateFAQParams) (int64, er
 		arg.AnswerAr,
 		arg.QuestionEn,
 		arg.AnswerEn,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateGuide = `-- name: UpdateGuide :execrows
+UPDATE site_guides
+SET slug = $1, status = $2, title_ar = $3, summary_ar = $4, body_ar = $5,
+    title_en = $6, summary_en = $7, body_en = $8, cover_key = $9, published_at = $10, updated_at = now()
+WHERE id = $11
+`
+
+type UpdateGuideParams struct {
+	Slug        string
+	Status      string
+	TitleAr     string
+	SummaryAr   string
+	BodyAr      string
+	TitleEn     string
+	SummaryEn   string
+	BodyEn      string
+	CoverKey    string
+	PublishedAt *time.Time
+	ID          ulid.ID
+}
+
+func (q *Queries) UpdateGuide(ctx context.Context, arg UpdateGuideParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateGuide,
+		arg.Slug,
+		arg.Status,
+		arg.TitleAr,
+		arg.SummaryAr,
+		arg.BodyAr,
+		arg.TitleEn,
+		arg.SummaryEn,
+		arg.BodyEn,
+		arg.CoverKey,
+		arg.PublishedAt,
 		arg.ID,
 	)
 	if err != nil {

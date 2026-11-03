@@ -1,0 +1,75 @@
+package web
+
+// The site's guides (S4c).
+
+templ guidesPage(p *pageCtx, list []guideView) {
+	<section class="dots">
+		<div class="wrap page-head">
+			@crumbs(p, p.t.Guides)
+			<h1>{ p.t.GuidesH1 }</h1>
+			<p class="lead">{ p.t.GuidesLead }</p>
+		</div>
+	</section>
+	<section class="wrap section tight" aria-label={ p.t.Guides }>
+		if len(list) == 0 {
+			<p class="center muted">{ p.t.NoGuides }</p>
+		} else {
+			<div class="grid3 links">
+				for _, g := range list {
+					@guideCard(p, g)
+				}
+			</div>
+		}
+	</section>
+	@finalCTA(p)
+}
+
+templ guideCard(p *pageCtx, g guideView) {
+	<a class="card link guide-card" href={ templ.SafeURL(p.l.at("/guides/" + g.slug)) }>
+		if g.cover != "" {
+			<img src={ g.cover } alt="" loading="lazy" width="640" height="336"/>
+		}
+		<h2>{ g.title }</h2>
+		<p>{ g.summary }</p>
+		<span class="muted small">{ dateIn(p.l, g.published) } · { minutesIn(p.l, g.minutes) }</span>
+	</a>
+}
+
+templ guidePage(p *pageCtx, g guideView, cover string, body templ.Component, more []guideView) {
+	<article class="guide">
+		<header class="dots">
+			<div class="wrap page-head">
+				@crumbs(p, g.title, crumb{p.t.Guides, "/guides"})
+				<h1>{ g.title }</h1>
+				<p class="lead">{ g.summary }</p>
+				<p class="muted small">
+					{ p.t.PublishedOn } <time datetime={ g.published.UTC().Format("2006-01-02") }>{ dateIn(p.l, g.published) }</time>
+					if dateIn(p.l, g.updated) != dateIn(p.l, g.published) {
+						· { p.t.UpdatedOn } <time datetime={ g.updated.UTC().Format("2006-01-02") }>{ dateIn(p.l, g.updated) }</time>
+					}
+					· { minutesIn(p.l, g.minutes) }
+				</p>
+			</div>
+		</header>
+		<div class="wrap section tight prose guide-body">
+			if cover != "" {
+				<img class="guide-cover" src={ cover } alt="" width="1200" height="630"/>
+			}
+			@body
+		</div>
+	</article>
+	if len(more) > 0 {
+		<section class="wrap section tight" aria-labelledby="h-more">
+			<h2 id="h-more" class="center">{ p.t.MoreGuides }</h2>
+			<div class="grid3 links">
+				for _, o := range more {
+					<a class="card link" href={ templ.SafeURL(p.l.at("/guides/" + o.slug)) }>
+						<h3>{ o.title }</h3>
+						<p>{ o.summary }</p>
+					</a>
+				}
+			</div>
+		</section>
+	}
+	@finalCTA(p)
+}

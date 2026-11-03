@@ -80,3 +80,38 @@ WHERE id = @id;
 
 -- name: DeleteTestimonial :execrows
 DELETE FROM site_testimonials WHERE id = @id;
+
+-- name: ListGuides :many
+-- Every guide for the console, newest first, without their bodies.
+SELECT id, slug, status, title_ar, summary_ar, title_en, cover_key, published_at, updated_at
+FROM site_guides
+ORDER BY updated_at DESC
+LIMIT 500;
+
+-- name: PublishedGuides :many
+-- The guides the site shows, newest first, with their bodies.
+SELECT id, slug, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at, updated_at
+FROM site_guides
+WHERE status = 'published'
+ORDER BY published_at DESC
+LIMIT 200;
+
+-- name: GetGuide :one
+SELECT id, slug, status, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at, updated_at
+FROM site_guides WHERE id = @id;
+
+-- name: InsertGuide :exec
+INSERT INTO site_guides (id, slug, status, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_key, published_at)
+VALUES (@id, @slug, @status, @title_ar, @summary_ar, @body_ar, @title_en, @summary_en, @body_en, @cover_key, @published_at);
+
+-- name: UpdateGuide :execrows
+UPDATE site_guides
+SET slug = @slug, status = @status, title_ar = @title_ar, summary_ar = @summary_ar, body_ar = @body_ar,
+    title_en = @title_en, summary_en = @summary_en, body_en = @body_en, cover_key = @cover_key, published_at = @published_at, updated_at = now()
+WHERE id = @id;
+
+-- name: DeleteGuide :execrows
+DELETE FROM site_guides WHERE id = @id;
+
+-- name: CountGuides :one
+SELECT count(*) FROM site_guides;
