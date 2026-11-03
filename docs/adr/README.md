@@ -82,3 +82,4 @@ supersedes it.
 | [0074](0074-founding-merchants-in-billing.md) | The founding-merchants program, in billing | Accepted |
 | [0075](0075-console-revenue-and-new-stores.md) | The console's monthly recurring revenue and new stores | Accepted |
 | [0076](0076-console-invoices-and-payments.md) | The console's invoices and payments | Accepted |
+| [0077](0077-console-roles.md) | Console roles | Accepted |
