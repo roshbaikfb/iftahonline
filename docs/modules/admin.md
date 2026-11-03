@@ -38,12 +38,14 @@ same-origin.
 
 The UI is `web/dashboard/admin.html`, a second page of the dashboard's
 build, served under `/console` on `ADMIN_HOST` (see `deploy/README.md`).
-It follows the approved mockups, with a dark sidebar and the «أدمن» badge.
+It follows the approved mockups, with a dark sidebar in titled groups and
+the «أدمن» badge; on phones a top bar opens the sidebar as a drawer.
 
 | Screen | Path | What |
 |---|---|---|
 | Login | — | Email, password and authenticator code in one step |
-| Health and stores | `/console/` | The checks and counts (a section that could not be read is named), duplicate payments waiting for a refund (only while one waits), and the directory with search and a status filter |
+| Home | `/console/` | «يحتاج انتباهك» first: each problem (a check down, duplicate payments, failed or retrying or late jobs, an unread section, held stores, overdue invoices, past-due subscriptions) as one card, the urgent first, or «كل شيء يعمل». Then four numbers (active stores, trials, paying subscriptions, founding seats), a slot kept for revenue, the systems in one line with every count behind «كل الأرقام», duplicate payments waiting for a refund (only while one waits), and the five newest stores. The health check is read again every minute while the tab is visible |
+| Stores | `/console/stores` | The directory, newest first: status tabs with their counts, search by name or address; the tab and the search live in the URL. Cards instead of a table on phones |
 | A store | `/console/stores/{id}` | Support session, suspend or reactivate, billing with "settle as a transfer", join an agency, per-store feature flags |
 | Plans and features | `/console/plans` | Versions per plan; an editor that publishes the next version from the one on sale; retire (not the free plan); the features catalog |
 | Agencies | `/console/agencies`, `/console/agencies/{id}` | List, create, the stores (by name), take a store out |
