@@ -84,3 +84,18 @@ func DirectoryCounts(ctx context.Context, adminDB Tx) (domain.StoreCounts, error
 	}
 	return domain.StoreCounts{Active: r.Active, Held: r.Held, Suspended: r.Suspended, Closed: r.Closed, Total: r.Total}, nil
 }
+
+// NewStoresByDay counts the stores created since since, per calendar day
+// in tz (midnight UTC keys).
+func NewStoresByDay(ctx context.Context, adminDB Tx, since time.Time, tz string) (map[time.Time]int64, error) {
+	rows, err := tenancydb.New(adminDB).AdminNewStoresByDay(ctx, tenancydb.AdminNewStoresByDayParams{Tz: tz, Since: since})
+	if err != nil {
+		return nil, fmt.Errorf("tenancy store: new stores: %w", err)
+	}
+	out := make(map[time.Time]int64, len(rows))
+	for _, r := range rows {
+		d := r.Day.Time
+		out[time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)] = r.Stores
+	}
+	return out, nil
+}

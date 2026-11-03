@@ -118,6 +118,10 @@ func (a directoryAdapter) Store(ctx context.Context, id tenant.StoreID) (Store, 
 
 func (a directoryAdapter) Counts(ctx context.Context) (StoreCounts, error) { return a.d.Counts(ctx) }
 
+func (a directoryAdapter) NewStores(ctx context.Context, now time.Time) (NewStores, error) {
+	return a.d.NewStores(ctx, now)
+}
+
 // Resolver returns the host resolver.
 func (m *Module) Resolver() HostResolver { return m.resolver }
 

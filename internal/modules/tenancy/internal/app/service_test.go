@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -547,6 +548,67 @@ func TestStoreDirectory(t *testing.T) {
 	}
 	if _, _, err := dir.Store(t.Context(), tenant.StoreID{ID: f.ids.New()}); kindOf(err) != errs.KindNotFound {
 		t.Fatalf("missing store: %v", err)
+	}
+}
+
+// TestNewStores: the console's new stores count Cairo days (ADR-0075).
+// The stores are dated in 2030, where no other test creates any, and
+// put back to now at the end.
+func TestNewStores(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	adminPool, err := pgxpool.New(t.Context(), infra.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(adminPool.Close)
+	dir := app.NewStoreDirectory(adminPool)
+	// date sets a store's creation time, as the store (RLS).
+	date := func(ctx context.Context, at string) {
+		t.Helper()
+		if err := postgres.InTenantTx(ctx, f.app, func(tx pgx.Tx) error {
+			_, execErr := tx.Exec(ctx, `UPDATE stores SET created_at = $1`, at)
+			return execErr
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tag := f.slug("ns")
+	var stores []context.Context
+	for i, at := range []string{
+		"2030-01-14T22:30:00Z", // 00:30 on the 15th in Cairo: today
+		"2030-01-14T21:30:00Z", // 23:30 on the 14th in Cairo
+		"2030-01-09T10:00:00Z", // the 9th: the 7th day back, in the last 7
+		"2030-01-08T10:00:00Z", // the 8th: out of the last 7
+		"2029-12-16T22:00:00Z", // 00:00 on 17 Dec in Cairo: the 30th day back
+		"2029-12-16T21:00:00Z", // 23:00 on 16 Dec in Cairo: out of the window
+	} {
+		ctx, _ := f.createStore(t, fmt.Sprintf("%s-%d", tag, i))
+		stores = append(stores, ctx)
+		date(ctx, at)
+	}
+	t.Cleanup(func() {
+		for _, ctx := range stores {
+			date(context.WithoutCancel(ctx), time.Now().UTC().Format(time.RFC3339))
+		}
+	})
+
+	n, err := dir.NewStores(t.Context(), time.Date(2030, 1, 15, 9, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Last7 != 3 || n.Last30 != 5 || len(n.Daily) != domain.NewStoresDays {
+		t.Fatalf("new stores = %d in 7, %d in 30, %d days", n.Last7, n.Last30, len(n.Daily))
+	}
+	day := func(i int) (string, int64) { return n.Daily[i].Day.Format(time.DateOnly), n.Daily[i].Count }
+	for i, want := range map[int]struct {
+		day   string
+		count int64
+	}{0: {"2029-12-17", 1}, 22: {"2030-01-08", 1}, 23: {"2030-01-09", 1}, 28: {"2030-01-14", 1}, 29: {"2030-01-15", 1}, 1: {"2029-12-18", 0}} {
+		if d, c := day(i); d != want.day || c != want.count {
+			t.Errorf("day %d = %s %d; want %s %d", i, d, c, want.day, want.count)
+		}
 	}
 }
 

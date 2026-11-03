@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -61,6 +62,46 @@ func (q *Queries) AdminListDomains(ctx context.Context, storeID ulid.ID) ([]Stor
 			&i.LastCheckedAt,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const adminNewStoresByDay = `-- name: AdminNewStoresByDay :many
+SELECT (created_at AT TIME ZONE $1::text)::date AS day, count(*)::bigint AS stores
+FROM stores
+WHERE created_at >= $2::timestamptz
+GROUP BY 1
+ORDER BY 1
+`
+
+type AdminNewStoresByDayParams struct {
+	Tz    string
+	Since time.Time
+}
+
+type AdminNewStoresByDayRow struct {
+	Day    pgtype.Date
+	Stores int64
+}
+
+// Stores created since @since, per day in @tz, for the console's home
+// (ADR-0075).
+func (q *Queries) AdminNewStoresByDay(ctx context.Context, arg AdminNewStoresByDayParams) ([]AdminNewStoresByDayRow, error) {
+	rows, err := q.db.Query(ctx, adminNewStoresByDay, arg.Tz, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminNewStoresByDayRow{}
+	for rows.Next() {
+		var i AdminNewStoresByDayRow
+		if err := rows.Scan(&i.Day, &i.Stores); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
