@@ -124,3 +124,11 @@ func (d *StoreDirectory) NewStores(ctx context.Context, now time.Time) (domain.N
 	}
 	return domain.NewStoresFrom(byDay, local), nil
 }
+
+// Names maps store IDs to their names (the admin log), in one query.
+func (d *StoreDirectory) Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error) {
+	if len(ids) == 0 {
+		return map[ulid.ID]string{}, nil
+	}
+	return store.StoreNames(ctx, d.db, ids)
+}

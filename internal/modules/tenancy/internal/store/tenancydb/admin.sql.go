@@ -218,3 +218,33 @@ func (q *Queries) AdminStoreCounts(ctx context.Context) (AdminStoreCountsRow, er
 	)
 	return i, err
 }
+
+const adminStoreNames = `-- name: AdminStoreNames :many
+SELECT id, name FROM stores WHERE id = ANY ($1::uuid[])
+`
+
+type AdminStoreNamesRow struct {
+	ID   ulid.ID
+	Name string
+}
+
+// Store names by ID, for the admin log (ADR-0058): one query a page.
+func (q *Queries) AdminStoreNames(ctx context.Context, ids []ulid.ID) ([]AdminStoreNamesRow, error) {
+	rows, err := q.db.Query(ctx, adminStoreNames, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminStoreNamesRow{}
+	for rows.Next() {
+		var i AdminStoreNamesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

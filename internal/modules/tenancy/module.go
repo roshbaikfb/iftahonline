@@ -118,6 +118,10 @@ func (a directoryAdapter) Store(ctx context.Context, id tenant.StoreID) (Store, 
 
 func (a directoryAdapter) Counts(ctx context.Context) (StoreCounts, error) { return a.d.Counts(ctx) }
 
+func (a directoryAdapter) Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error) {
+	return a.d.Names(ctx, ids)
+}
+
 func (a directoryAdapter) NewStores(ctx context.Context, now time.Time) (NewStores, error) {
 	return a.d.NewStores(ctx, now)
 }

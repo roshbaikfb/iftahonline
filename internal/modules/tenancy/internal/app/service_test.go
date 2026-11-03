@@ -542,6 +542,13 @@ func TestStoreDirectory(t *testing.T) {
 			t.Errorf("%s: %v", name, e)
 		}
 	}
+	names, err := dir.Names(t.Context(), []ulid.ID{a.ID.ID, b.ID.ID, f.ids.New()})
+	if err != nil || len(names) != 2 || names[a.ID.ID] != a.Name || names[b.ID.ID] != b.Name {
+		t.Fatalf("names = %v, %v", names, err)
+	}
+	if none, noneErr := dir.Names(t.Context(), nil); noneErr != nil || len(none) != 0 {
+		t.Fatalf("no ids = %v, %v", none, noneErr)
+	}
 	st, ds, err := dir.Store(t.Context(), a.ID)
 	if err != nil || st.ID != a.ID || len(ds) != 1 {
 		t.Fatalf("store = %+v %+v %v", st, ds, err)
