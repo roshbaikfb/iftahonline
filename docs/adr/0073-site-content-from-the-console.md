@@ -80,6 +80,40 @@ Added the same way (migration 00082):
   - Reviews get no `Review` data, because Google does not show reviews
     an organization publishes about itself.
 
+## S4c: the guides
+
+- **Storage:** `site_guides` (migration 00085) holds articles in
+  Markdown.
+  - Arabic is required; English is optional, as one block (title,
+    summary and body together).
+  - A guide is a draft or published. Its publishing date is set once,
+    the first time, and kept if it is unpublished and published again.
+  - The site keeps the published ones (at most 200) in its one-minute
+    content cache.
+- **Rendering:** `site/internal/markdown`, built on goldmark:
+  - CommonMark, plus tables and strikethrough;
+  - raw HTML is left out and script links are dropped (goldmark's safe
+    mode);
+  - `#` becomes `<h2>`, since the page has the `<h1>`;
+  - a fuzz test checks that no input yields a script, an event handler
+    or a script link.
+- **The console's preview** calls the same renderer (`POST
+  /admin/v1/site/guides/preview`), so the console shows exactly what the
+  site will.
+- **The site:**
+  - `/guides` lists the published guides, newest first.
+  - `/guides/{slug}` shows one, with its cover, dates and reading time.
+    It carries `Article` and `BreadcrumbList` data, and its cover becomes
+    the share image.
+  - The menu links «الأدلة» only when there are guides in that language.
+  - A guide without English is on the Arabic site only: no English
+    alternate, no English sitemap entry, and its language switch goes to
+    `/en/guides`.
+  - The sitemap and `llms.txt` list the guides.
+- **Saving:** guides reuse the people's create, edit and delete steps
+  (the cover is ingested like a photo), plus a hook that sets the
+  publishing date.
+
 ## Consequences
 
 - The FAQ's words are no longer in code. Tests use a fake content source

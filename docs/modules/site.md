@@ -67,6 +67,15 @@ It owns no tables, emits no events and has no HTTP API of its own.
     with seats left.
   - The section has the terms and the live seat count from billing's
     `Showcase.FoundingSeats`, kept a minute.
+- **Guides (S4c):**
+  - Written in Markdown in the console («الأدلة»), with a live preview
+    from the site's own renderer (`site/internal/markdown`).
+  - Published at `/guides` and `/guides/{slug}`, with `Article` data.
+    Arabic-only guides stay off `/en`.
+  - API:
+    - `GET`/`POST /admin/v1/site/guides`;
+    - `GET`/`PUT`/`DELETE /admin/v1/site/guides/{id}`;
+    - `POST /admin/v1/site/guides/preview`.
 - **Caching:** the site keeps a one-minute cache and keeps the last read
   when a read fails. Pages stay 10 minutes at the edge.
 
@@ -113,7 +122,7 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S4c:** the guides (articles) and their editor.
+- **S4c-2:** the first five guides, as drafts for the owner's review.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).
 - **The Open Graph image**, with the logo.
