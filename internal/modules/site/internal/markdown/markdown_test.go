@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/markdown"
 )
 
@@ -65,16 +67,18 @@ func FuzzHTML(f *testing.F) {
 				t.Fatalf("%q renders %q: %s", src, bad, got)
 			}
 		}
-		// An event handler can only come from an HTML tag the renderer
-		// wrote itself, never from the source.
-		for _, tag := range strings.Split(low, "<")[1:] {
-			end := strings.IndexByte(tag, '>')
-			if end < 0 {
+		// No element carries an event handler. The output is read as a
+		// browser reads it, so a value that merely contains "on" (alt="
+		// on") is not one, and a handler however written (<img/onerror=…>)
+		// is.
+		z := html.NewTokenizer(strings.NewReader(got))
+		for tt := z.Next(); tt != html.ErrorToken; tt = z.Next() {
+			if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
 				continue
 			}
-			for _, attr := range strings.Fields(tag[:end])[1:] {
-				if strings.HasPrefix(attr, "on") {
-					t.Fatalf("%q renders an event handler: %s", src, got)
+			for _, a := range z.Token().Attr {
+				if strings.HasPrefix(strings.ToLower(a.Key), "on") {
+					t.Fatalf("%q renders an event handler %q: %s", src, a.Key, got)
 				}
 			}
 		}
