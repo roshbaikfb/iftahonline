@@ -501,8 +501,8 @@ func (q AuditQuery) filter() (store.AuditFilter, error) {
 		if v == "" {
 			return nil, nil //nolint:nilnil // no bound
 		}
-		d, err := time.ParseInLocation(time.DateOnly, v, cairo)
-		if err != nil {
+		d, parseErr := time.ParseInLocation(time.DateOnly, v, cairo)
+		if parseErr != nil {
 			return nil, errs.Validation(errs.FieldError{Field: field, Code: "invalid", Message: "a date, 2006-01-02"})
 		}
 		if next {
