@@ -189,7 +189,7 @@ export function StorePage() {
 
   return (
     <ConsoleLayout>
-      <Link to="/">→ المتاجر</Link>
+      <Link to="/stores">→ المتاجر</Link>
       {error && <p role="alert">{error}</p>}
       {notice && (
         <p role="status" className="ok-note">

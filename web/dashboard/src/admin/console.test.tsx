@@ -72,6 +72,7 @@ function consoleRoutes(over: Record<string, (c: Call) => { status: number; body?
         ],
       },
     }),
+    'GET /admin/v1/founding': () => ({ status: 200, body: { program: { enabled: true, seats: 100, discount_bps: 2000 }, members: [] } }),
     'GET /admin/v1/agencies': () => ({ status: 200, body: { items: [{ id: 'AG1', name: 'وكالة النيل', currency: 'EGP', plan_code: 'agency', stores: 12, created_at: '' }] } }),
     ...over,
   });
@@ -97,20 +98,26 @@ describe('console', () => {
   it('shows the platform’s health, a section it could not read, and the stores', async () => {
     const calls = consoleRoutes();
     renderConsole({ kind: 'signed-in', admin });
-    expect(await screen.findByText('لا يرد')).toBeInTheDocument();
-    expect(screen.getByText(/تعذّرت قراءة: Redis/)).toBeInTheDocument();
+    const systems = await screen.findByRole('region', { name: 'الأنظمة' });
+    expect(within(systems).getByText('لا ترد')).toBeInTheDocument();
+    const needs = screen.getByRole('region', { name: /يحتاج انتباهك/ });
+    expect(within(needs).getByText('Redis لا يرد')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(within(systems).getByRole('button', { name: 'كل الأرقام' }));
     const subs = screen.getByRole('region', { name: 'الاشتراكات والفواتير' });
     expect(within(subs).getByText('58')).toHaveClass('warn');
-    expect(screen.getByRole('link', { name: 'متجر الأناقة' })).toHaveAttribute('href', `/stores/${store}`);
+    expect(screen.getByRole('link', { name: /متجر الأناقة/ })).toHaveAttribute('href', `/stores/${store}`);
 
-    const user = userEvent.setup();
-    await user.type(screen.getByLabelText('بحث بالاسم أو العنوان'), 'alanaqa');
-    await user.selectOptions(screen.getByLabelText('الحالة'), 'active');
+    await user.click(screen.getByRole('link', { name: 'كل المتاجر ←' }));
+    await user.type(await screen.findByRole('searchbox', { name: 'ابحث باسم المتجر أو عنوانه' }), 'alanaqa');
     await user.click(screen.getByRole('button', { name: 'بحث' }));
-    const search = calls.filter((c) => c.path === '/admin/v1/stores').at(-1);
-    expect(search?.search.get('query')).toBe('alanaqa');
-    expect(search?.search.get('status')).toBe('active');
-    await user.click(screen.getByRole('button', { name: 'المزيد' }));
+    await user.click(await screen.findByRole('tab', { name: /نشطة/ }));
+    await waitFor(() => {
+      const last = calls.filter((c) => c.path === '/admin/v1/stores').at(-1);
+      expect(last?.search.get('query')).toBe('alanaqa');
+      expect(last?.search.get('status')).toBe('active');
+    });
+    await user.click(await screen.findByRole('button', { name: 'عرض المزيد' }));
     expect(calls.filter((c) => c.path === '/admin/v1/stores').at(-1)?.search.get('cursor')).toBe('c1');
     expect(waited(12)).toBe('12 ث');
     expect(waited(7200)).toBe('2 س');

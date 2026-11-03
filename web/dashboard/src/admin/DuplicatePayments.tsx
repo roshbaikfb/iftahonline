@@ -1,29 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 
-import { api, type components } from '../api/client';
+import { api } from '../api/client';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
-import { dateTimeAr } from './lib';
-
-type Duplicate = components['schemas']['AdminDuplicatePayment'];
+import { dateTimeAr, waiting, type Duplicate } from './lib';
 
 // DuplicatePayments lists payments the gateway took for invoices already
 // paid (ADR-0063): the admin refunds each on the gateway, then records
-// the refund here. Nothing shows while none waits for a refund.
-export function DuplicatePayments() {
-  const [items, setItems] = useState<Duplicate[]>([]);
+// the refund here. Nothing shows while none waits for a refund. The home
+// reads the list, so it can count them among what needs attention.
+export function DuplicatePayments({ items, onRefunded }: { items: Duplicate[]; onRefunded: (id: string, reference: string) => void }) {
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    let live = true;
-    void api.GET('/admin/v1/billing/duplicates').then(({ data }) => {
-      if (live && data) setItems(data.items);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
 
   async function refunded(d: Duplicate) {
     const reference = window.prompt('رقم عملية الاسترداد على بوابة الدفع');
@@ -39,15 +27,15 @@ export function DuplicatePayments() {
       setError(problemMessage(err));
       return;
     }
-    setItems((xs) => xs.map((x) => (x.id === d.id ? { ...x, refunded_at: new Date().toISOString(), refund_reference: reference } : x)));
+    onRefunded(d.id, reference);
   }
 
-  const waiting = items.filter((d) => !d.refunded_at);
-  if (waiting.length === 0) return null;
+  const open = waiting(items);
+  if (open.length === 0) return null;
   return (
-    <section className="table-card" aria-labelledby="h-duplicates">
+    <section className="table-card dup-card" aria-labelledby="h-duplicates">
       <div className="card-head">
-        <h2 id="h-duplicates">دفعات زائدة تحتاج استردادًا ({waiting.length})</h2>
+        <h2 id="h-duplicates">دفعات زائدة تحتاج استردادًا ({open.length})</h2>
         <span className="muted small">دفعات لفواتير كانت مدفوعة بالفعل. استردّها من بوابة الدفع ثم سجّلها هنا.</span>
       </div>
       {error && <p role="alert">{error}</p>}
@@ -66,7 +54,7 @@ export function DuplicatePayments() {
             </tr>
           </thead>
           <tbody>
-            {waiting.map((d) => (
+            {open.map((d) => (
               <tr key={d.id}>
                 <td>
                   <Link to={`/stores/${d.store_id}`}>صفحة المتجر</Link>

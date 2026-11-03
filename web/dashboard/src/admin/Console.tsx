@@ -14,12 +14,14 @@ import { PlansPage } from './PlansPage';
 import { SitePage } from './SitePage';
 import { AdminSessionContext, fetchAdmin, type Admin, type AdminState } from './session';
 import { StorePage } from './StorePage';
+import { StoresPage } from './StoresPage';
 
 // ConsoleRoutes are the console's screens once an admin is signed in.
 export function ConsoleRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Overview />} />
+      <Route path="/stores" element={<StoresPage />} />
       <Route path="/stores/:storeId" element={<StorePage />} />
       <Route path="/plans" element={<PlansPage />} />
       <Route path="/agencies" element={<AgenciesPage />} />
