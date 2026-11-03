@@ -51,3 +51,20 @@ Owner, manager and support hold both permissions; shipping holds neither.
   together with the phone lookup that runs before every order.
 - **Fuzzing.** `domain`: `FuzzResolveQuery`. Any text resolves to a
   phone, a LIKE-safe name prefix, or a validation error.
+
+## Dashboard
+
+The «العملاء» screen (`web/dashboard/src/pages/Customers.tsx`):
+- Two tabs, all customers and blocked. Search by name or number.
+- Each row has call and WhatsApp links.
+- «حظر رقم» blocks a number that never ordered (`blockPhone`).
+- The tab and the search live in the URL.
+
+The customer page (`CustomerDetail.tsx`):
+- Shows the customer and their orders (`listOrders?customer_id`, newest first).
+- Shows the cross-store risk card when the plan includes it.
+- Blocks with a reason, or unblocks.
+- The delivered and refused counts and the delivered total are summed
+  in the browser from the latest 100 orders. Past 100 orders, the page
+  says so.
+- Exact server-side totals are deferred until a merchant needs them.
