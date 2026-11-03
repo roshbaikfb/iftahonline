@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -34,7 +35,7 @@ func TestStoreOverridesAreAuditedFirst(t *testing.T) {
 		t.Fatalf("clear twice: %v", err)
 	}
 
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}

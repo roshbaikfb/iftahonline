@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 )
@@ -36,7 +37,7 @@ func TestFoundingFromTheConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}

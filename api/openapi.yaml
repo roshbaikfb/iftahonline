@@ -3017,14 +3017,54 @@ paths:
           description: Off sale.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/admins:
+    get:
+      tags: [admin]
+      operationId: adminListAdmins
+      summary: The console's admins
+      description: For the admin log's filter. No password, no authenticator secret.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: Every admin, by name.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAdminList" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/audit-log:
     get:
       tags: [admin]
       operationId: adminAuditLog
       summary: Every admin action, newest first
+      description: |
+        Each entry names its admin and, for a store, the store. The
+        filters combine; a page's cursor carries on with the same filters.
+        Days are Cairo days.
       security:
         - adminSessionCookie: []
       parameters:
+        - name: admin
+          in: query
+          description: Only this admin's actions.
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: family
+          in: query
+          description: "Only one kind of action: stores, billing and plans, the site and ads, or sign-ins and admins."
+          schema: { type: string, enum: [store, billing, content, security] }
+        - name: store
+          in: query
+          description: Only what was done to this store (its own actions and its invoices).
+          schema: { $ref: "#/components/schemas/ULID" }
+        - name: from
+          in: query
+          description: From this day.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: To this day, included.
+          schema: { type: string, format: date }
         - name: cursor
           in: query
           schema: { type: string, maxLength: 200 }
@@ -5427,6 +5467,21 @@ components:
         domains:
           type: array
           items: { $ref: "#/components/schemas/Domain" }
+    AdminAdminList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAdminSummary" }
+    AdminAdminSummary:
+      type: object
+      required: [id, name, email, active]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        email: { type: string }
+        active: { type: boolean, description: False once disabled. }
     AdminAuditEntry:
       type: object
       required: [id, occurred_at, action, target_type, target_id, ip_prefix, metadata]
@@ -5434,7 +5489,9 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         occurred_at: { type: string, format: date-time }
         admin_id: { $ref: "#/components/schemas/ULID" }
+        admin_name: { type: string, description: The admin's name; absent for the system. }
         action: { type: string, example: store.suspended }
+        store_name: { type: string, description: "The store's name, when the action was on a store or one of its invoices." }
         target_type: { type: string }
         target_id: { type: string }
         ip_prefix: { type: string }

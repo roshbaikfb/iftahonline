@@ -63,7 +63,7 @@ func TestImpersonateIsAuditedFirst(t *testing.T) {
 	if _, err = f.svc.Impersonate(ctx, store, "second try, write", 60*time.Minute, true); err == nil {
 		t.Fatal("identity's failure must surface")
 	}
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}

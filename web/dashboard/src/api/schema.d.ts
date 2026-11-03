@@ -2487,6 +2487,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The console's admins
+         * @description For the admin log's filter. No password, no authenticator secret.
+         */
+        get: operations["adminListAdmins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/audit-log": {
         parameters: {
             query?: never;
@@ -2494,7 +2514,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every admin action, newest first */
+        /**
+         * Every admin action, newest first
+         * @description Each entry names its admin and, for a store, the store. The
+         *     filters combine; a page's cursor carries on with the same filters.
+         *     Days are Cairo days.
+         */
         get: operations["adminAuditLog"];
         put?: never;
         post?: never;
@@ -4557,13 +4582,27 @@ export interface components {
             store: components["schemas"]["Store"];
             domains: components["schemas"]["Domain"][];
         };
+        AdminAdminList: {
+            items: components["schemas"]["AdminAdminSummary"][];
+        };
+        AdminAdminSummary: {
+            id: components["schemas"]["ULID"];
+            name: string;
+            email: string;
+            /** @description False once disabled. */
+            active: boolean;
+        };
         AdminAuditEntry: {
             id: components["schemas"]["ULID"];
             /** Format: date-time */
             occurred_at: string;
             admin_id?: components["schemas"]["ULID"];
+            /** @description The admin's name; absent for the system. */
+            admin_name?: string;
             /** @example store.suspended */
             action: string;
+            /** @description The store's name, when the action was on a store or one of its invoices. */
+            store_name?: string;
             target_type: string;
             target_id: string;
             ip_prefix: string;
@@ -10650,9 +10689,40 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    adminListAdmins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every admin, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAdminList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     adminAuditLog: {
         parameters: {
             query?: {
+                /** @description Only this admin's actions. */
+                admin?: components["schemas"]["ULID"];
+                /** @description Only one kind of action: stores, billing and plans, the site and ads, or sign-ins and admins. */
+                family?: "store" | "billing" | "content" | "security";
+                /** @description Only what was done to this store (its own actions and its invoices). */
+                store?: components["schemas"]["ULID"];
+                /** @description From this day. */
+                from?: string;
+                /** @description To this day, included. */
+                to?: string;
                 cursor?: string;
                 limit?: number;
             };

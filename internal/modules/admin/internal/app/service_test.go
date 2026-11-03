@@ -16,7 +16,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
@@ -285,7 +284,7 @@ func TestSuspendAndReactivate(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("store audit entries = %d, %v", n, err)
 	}
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,15 +328,15 @@ func TestDirectoryAndSessionsNeedIdentity(t *testing.T) {
 	if err != nil || a.ID != me.Admin.ID || a.LastLoginAt == nil {
 		t.Fatalf("me = %+v, %v", a, err)
 	}
-	if _, err := f.svc.Audit(ctx, "!!", 10); !errs.Is(err, errs.KindValidation) {
+	if _, err := f.svc.Audit(ctx, app.AuditQuery{}, "!!", 10); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("bad cursor: %v", err)
 	}
-	if _, err := f.svc.Audit(ctx, "", 500); !errs.Is(err, errs.KindValidation) {
+	if _, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 500); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("huge limit: %v", err)
 	}
-	if p, err := f.svc.Audit(ctx, "", 1); err != nil || len(p.Items) != 1 || p.NextCursor == "" {
+	if p, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 1); err != nil || len(p.Items) != 1 || p.NextCursor == "" {
 		t.Fatalf("paged audit = %+v, %v", p, err)
-	} else if p2, err := f.svc.Audit(ctx, p.NextCursor, 1); err != nil || len(p2.Items) != 1 || p2.Items[0].ID == p.Items[0].ID {
+	} else if p2, err := f.svc.Audit(ctx, app.AuditQuery{}, p.NextCursor, 1); err != nil || len(p2.Items) != 1 || p2.Items[0].ID == p.Items[0].ID {
 		t.Fatalf("second page = %+v, %v", p2, err)
 	}
 
@@ -347,7 +346,7 @@ func TestDirectoryAndSessionsNeedIdentity(t *testing.T) {
 		"stores":     func() error { _, e := f.svc.Stores(anon, "", "", "", 1); return e },
 		"store":      func() error { _, _, e := f.svc.Store(anon, store); return e },
 		"suspend":    func() error { _, e := f.svc.Suspend(anon, store, "reason here"); return e },
-		"audit":      func() error { _, e := f.svc.Audit(anon, "", 1); return e },
+		"audit":      func() error { _, e := f.svc.Audit(anon, app.AuditQuery{}, "", 1); return e },
 		"logout":     func() error { return f.svc.Logout(anon) },
 		"bad token":  func() error { _, e := f.svc.Authenticate(anon, "junk"); return e },
 		"good shape": func() error { _, e := f.svc.Authenticate(anon, strings.Repeat("A", 43)); return e },

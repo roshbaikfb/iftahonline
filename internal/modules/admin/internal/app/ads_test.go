@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/ads"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -120,7 +121,7 @@ func TestAdsFromTheConsole(t *testing.T) {
 		t.Fatalf("banners = %+v", banners)
 	}
 
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}

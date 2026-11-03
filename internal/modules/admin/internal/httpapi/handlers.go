@@ -14,6 +14,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Handlers implements StrictServerInterface.
@@ -201,15 +202,40 @@ func (h *Handlers) AdminReactivateStore(ctx context.Context, req AdminReactivate
 
 // AdminAuditLog implements StrictServerInterface.
 func (h *Handlers) AdminAuditLog(ctx context.Context, req AdminAuditLogRequestObject) (AdminAuditLogResponseObject, error) {
+	p := req.Params
+	var q app.AuditQuery
 	var cursor string
 	limit := 0
-	if req.Params.Cursor != nil {
-		cursor = *req.Params.Cursor
+	if p.Admin != nil {
+		id, err := ulid.Parse(*p.Admin)
+		if err != nil {
+			return nil, errs.Validation(errs.FieldError{Field: "admin", Code: "invalid", Message: "an admin ID"})
+		}
+		q.Admin = &id
 	}
-	if req.Params.Limit != nil {
-		limit = *req.Params.Limit
+	if p.Store != nil {
+		id, err := ulid.Parse(*p.Store)
+		if err != nil {
+			return nil, errs.Validation(errs.FieldError{Field: "store", Code: "invalid", Message: "a store ID"})
+		}
+		q.Store = &id
 	}
-	page, err := h.svc.Audit(ctx, cursor, limit)
+	if p.Family != nil {
+		q.Family = string(*p.Family)
+	}
+	if p.From != nil {
+		q.From = p.From.Format(time.DateOnly)
+	}
+	if p.To != nil {
+		q.To = p.To.Format(time.DateOnly)
+	}
+	if p.Cursor != nil {
+		cursor = *p.Cursor
+	}
+	if p.Limit != nil {
+		limit = *p.Limit
+	}
+	page, err := h.svc.Audit(ctx, q, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +247,12 @@ func (h *Handlers) AdminAuditLog(ctx context.Context, req AdminAuditLogRequestOb
 			id := e.AdminID.String()
 			item.AdminId = &id
 		}
+		if e.AdminName != "" {
+			item.AdminName = &e.AdminName
+		}
+		if e.StoreName != "" {
+			item.StoreName = &e.StoreName
+		}
 		if len(e.Metadata) > 0 {
 			if err := json.Unmarshal(e.Metadata, &item.Metadata); err != nil {
 				return nil, err
@@ -230,6 +262,19 @@ func (h *Handlers) AdminAuditLog(ctx context.Context, req AdminAuditLogRequestOb
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
+	}
+	return out, nil
+}
+
+// AdminListAdmins implements StrictServerInterface.
+func (h *Handlers) AdminListAdmins(ctx context.Context, _ AdminListAdminsRequestObject) (AdminListAdminsResponseObject, error) {
+	admins, err := h.svc.Admins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := AdminListAdmins200JSONResponse{Items: make([]AdminAdminSummary, len(admins))}
+	for i, a := range admins {
+		out.Items[i] = AdminAdminSummary{Id: a.ID.String(), Name: a.Name, Email: a.Email, Active: a.Active}
 	}
 	return out, nil
 }
