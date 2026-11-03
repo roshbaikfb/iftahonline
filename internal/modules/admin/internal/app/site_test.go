@@ -142,7 +142,8 @@ func TestSiteGuidesFromTheConsole(t *testing.T) {
 	if g, err = f.svc.UpdateSiteGuide(ctx, g, "", false, "reviewed"); err != nil || g.PublishedAt.IsZero() {
 		t.Fatalf("published = %+v, %v", g, err)
 	}
-	if list, listErr := f.svc.SiteGuides(ctx); listErr != nil || len(list) != 1 {
+	// The five seeded drafts (00086) and this one, newest first.
+	if list, listErr := f.svc.SiteGuides(ctx); listErr != nil || len(list) != 6 || list[0].ID != g.ID {
 		t.Fatalf("guides = %+v, %v", list, listErr)
 	}
 	if whole, getErr := f.svc.SiteGuide(ctx, g.ID); getErr != nil || whole.BodyAr == "" {
