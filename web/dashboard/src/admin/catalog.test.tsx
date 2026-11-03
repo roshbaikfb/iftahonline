@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -293,6 +293,81 @@ describe('plans screen', () => {
     expect(body(calls, 'PUT', '/admin/v1/features/live_chat')).toEqual({ kind: 'count', name_ar: 'دردشة مباشرة', name_en: 'Live chat', sort: 910, reason: 'طلب المبيعات' });
     expect(await screen.findByRole('status')).toHaveTextContent('حُفظت الميزة «دردشة مباشرة».');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('admin log filters', () => {
+  const entry = (id: string, over: object = {}) => ({
+    id,
+    occurred_at: new Date().toISOString(),
+    admin_id: '01M5ADMIN000000000000000BB',
+    admin_name: 'سارة',
+    action: 'store.suspended',
+    target_type: 'store',
+    target_id: store,
+    store_name: 'متجر الأناقة',
+    ip_prefix: '10.0.0.0/24',
+    metadata: { reason: 'بلاغ' },
+    ...over,
+  });
+  const admins = { items: [{ id: admin.id, name: 'منى', email: 'ops@iftahonline.com', active: true }, { id: '01M5ADMIN000000000000000BB', name: 'سارة', email: 's@x.com', active: false }] };
+
+  it('names who did it and the store, and narrows by kind, admin, dates and store', async () => {
+    const calls = mockAPI({
+      'GET /admin/v1/audit-log': () => ({ status: 200, body: { items: [entry('E1')] } }),
+      'GET /admin/v1/admins': () => ({ status: 200, body: admins }),
+    });
+    renderAt('/audit');
+    const user = userEvent.setup();
+    const row = (await screen.findByText('أوقف متجرًا')).closest('li');
+    if (!row) throw new Error('no entry');
+    expect(within(row).getByRole('link', { name: 'متجر الأناقة' })).toHaveAttribute('href', `/stores/${store}`);
+    expect(row).toHaveTextContent('سارة');
+    const last = () => calls.filter((c) => c.path === '/admin/v1/audit-log').at(-1)?.search;
+
+    await user.click(screen.getByRole('button', { name: 'المتاجر' }));
+    expect(screen.getByRole('button', { name: 'المتاجر' })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => {
+      expect(last()?.get('family')).toBe('store');
+    });
+
+    const filters = screen.getByRole('region', { name: 'تصفية السجل' });
+    expect(within(filters).getByRole('option', { name: 'منى (أنت)' })).toBeInTheDocument();
+    expect(within(filters).getByRole('option', { name: 'سارة — موقوف' })).toBeInTheDocument();
+    await user.selectOptions(within(filters).getByLabelText('الأدمن'), '01M5ADMIN000000000000000BB');
+    await user.type(within(filters).getByLabelText('من'), '2026-11-01');
+    await user.type(within(filters).getByLabelText('إلى'), '2026-11-03');
+    await user.click(within(filters).getByRole('button', { name: 'تصفية' }));
+    await waitFor(() => {
+      expect(last()?.get('admin')).toBe('01M5ADMIN000000000000000BB');
+    });
+    expect(last()?.get('from')).toBe('2026-11-01');
+    expect(last()?.get('to')).toBe('2026-11-03');
+    expect(last()?.get('family')).toBe('store');
+
+    await user.click(screen.getByRole('button', { name: 'مسح التصفية' }));
+    await waitFor(() => {
+      expect(last()?.has('admin')).toBe(false);
+    });
+    expect(last()?.has('family')).toBe(false);
+  });
+
+  it('shows one store’s history from its address, and says when nothing matches', async () => {
+    const calls = mockAPI({
+      'GET /admin/v1/audit-log': (c) => ({ status: 200, body: { items: c.search.get('family') ? [] : [entry('E1')] } }),
+      'GET /admin/v1/admins': () => ({ status: 200, body: admins }),
+    });
+    renderAt(`/audit?store=${store}`);
+    const user = userEvent.setup();
+    const filters = await screen.findByRole('region', { name: 'تصفية السجل' });
+    expect(await within(filters).findByRole('link', { name: 'متجر الأناقة' })).toHaveAttribute('href', `/stores/${store}`);
+    expect(calls.find((c) => c.path === '/admin/v1/audit-log')?.search.get('store')).toBe(store);
+    await user.click(screen.getByRole('button', { name: 'المحتوى' }));
+    expect(await screen.findByText('لا شيء يطابق هذه التصفية.')).toBeInTheDocument();
+    await user.click(within(filters).getByRole('button', { name: 'كل المتاجر' }));
+    await waitFor(() => {
+      expect(calls.filter((c) => c.path === '/admin/v1/audit-log').at(-1)?.search.has('store')).toBe(false);
+    });
   });
 });
 

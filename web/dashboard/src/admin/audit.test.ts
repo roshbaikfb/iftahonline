@@ -64,6 +64,13 @@ group('describe', () => {
     expect(describe(entry('store.suspended', { metadata: { reason: 'بلاغ احتيال' } }), me).reason).toBe('بلاغ احتيال');
     expect(describe(entry('store.suspended'), me).who).toBe('أنت');
     expect(describe(entry('store.suspended', { admin_id: '01M5ADMIN000000000000000BB' }), me).who).toBe('أدمن آخر');
+    expect(describe(entry('store.suspended', { admin_id: '01M5ADMIN000000000000000BB', admin_name: 'سارة' }), me).who).toBe('سارة');
+    // The server names the store when it can.
+    expect(describe(entry('store.suspended', { store_name: 'متجر الأناقة', metadata: { slug: 'alanaqa' } }), me).target).toEqual({ text: 'متجر الأناقة', to: `/stores/${store}` });
+    expect(describe(entry('invoice.settled', { target_type: 'invoice', target_id: 'I1', store_name: 'متجر الأناقة', metadata: { store } }), me).target).toEqual({
+      text: 'فاتورة «متجر الأناقة»',
+      to: `/stores/${store}`,
+    });
     const system = entry('admin.created');
     delete system.admin_id;
     expect(describe(system, me).who).toBe('النظام');
