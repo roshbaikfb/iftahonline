@@ -1794,6 +1794,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue and growth for the console's home
+         * @description Monthly recurring revenue by currency: every active subscription
+         *     that renews, at the price its next renewal is charged (the plan
+         *     and cycle it renews into, in its account's currency, a founding
+         *     member's discount taken off), an annual one divided by 12, an
+         *     agency's flat price once per agency, before VAT. Trials, past-due
+         *     subscriptions, ones cancelled at the period's end, and
+         *     pay-as-you-sell fees are not in it (ADR-0075). New stores of the
+         *     last 7 and 30 days, and per Cairo day. A section that could not be
+         *     read is absent and named in `errors`.
+         */
+        get: operations["adminGetMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/agencies": {
         parameters: {
             query?: never;
@@ -4954,6 +4982,45 @@ export interface components {
             billing?: components["schemas"]["AdminBillingHealth"];
             jobs?: components["schemas"]["AdminJobHealth"];
             errors: ("database" | "redis" | "stores" | "billing" | "jobs")[];
+        };
+        AdminMetrics: {
+            /** Format: date-time */
+            computed_at: string;
+            /** @description One entry per currency with paying accounts, EGP then SAR then AED. */
+            revenue?: components["schemas"]["AdminRevenue"][];
+            new_stores?: components["schemas"]["AdminNewStores"];
+            errors: ("revenue" | "new_stores")[];
+        };
+        AdminRevenue: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /**
+             * Format: int64
+             * @description Monthly recurring revenue in minor units
+             */
+            mrr_minor: number;
+            /**
+             * Format: int64
+             * @description The paying accounts it comes from (an agency is one).
+             */
+            accounts: number;
+        };
+        AdminNewStores: {
+            /**
+             * Format: int64
+             * @description Stores created in the last 7 Cairo days
+             */
+            last_7d: number;
+            /** Format: int64 */
+            last_30d: number;
+            /** @description The last 30 Cairo days, oldest first, today last. */
+            daily: components["schemas"]["AdminDayCount"][];
+        };
+        AdminDayCount: {
+            /** Format: date */
+            day: string;
+            /** Format: int64 */
+            count: number;
         };
         AdminStoreCounts: {
             /** Format: int64 */
@@ -9573,6 +9640,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminHealth"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMetrics"];
                 };
             };
             default: components["responses"]["Problem"];

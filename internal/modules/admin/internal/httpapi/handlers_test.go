@@ -462,6 +462,14 @@ func TestConsoleHealthAndStoreBilling(t *testing.T) {
 		r.body["stores"] == nil || r.body["billing"] == nil || r.body["jobs"] == nil {
 		t.Fatalf("health = %d %v", r.status, r.body)
 	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/metrics", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous metrics = %d", r.status)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/metrics", "", withCookie(sess))
+	if ns, _ := r.body["new_stores"].(map[string]any); r.status != http.StatusOK || len(r.body["errors"].([]any)) != 0 || r.body["revenue"] == nil ||
+		ns == nil || ns["last_30d"].(float64) < 1 || len(ns["daily"].([]any)) != 30 {
+		t.Fatalf("metrics = %d %v", r.status, r.body)
+	}
 	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+storeID+"/billing", "", withCookie(sess))
 	if r.status != http.StatusOK || r.body["status"] != "active" || r.body["plan_name_en"] == "" {
 		t.Fatalf("billing = %d %v", r.status, r.body)
