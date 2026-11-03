@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -67,9 +68,10 @@ func TestGuidesEndToEnd(t *testing.T) {
 	if len(b.keys()) != 0 {
 		t.Fatalf("the removed cover is left: %v", b.keys())
 	}
+	// The list: the five seeded drafts (00086) and this one, newest first.
 	list, err := console.Guides(ctx)
-	if err != nil || len(list) != 1 || list[0].BodyAr != "" || !list[0].HasEnglish() {
-		t.Fatalf("console list = %+v, %v", list, err)
+	if err != nil || len(list) != seededGuides+1 || list[0].ID != g.ID || list[0].BodyAr != "" || !list[0].HasEnglish() {
+		t.Fatalf("console list = %d, first %+v, %v", len(list), list[0], err)
 	}
 	whole, err := console.Guide(ctx, g.ID)
 	if err != nil || whole.BodyEn == "" {
@@ -96,5 +98,53 @@ func TestGuidesEndToEnd(t *testing.T) {
 	}
 	if _, err = site.Guides(ctx); !errs.Is(err, errs.KindUnavailable) {
 		t.Fatalf("the site's pool edits guides: %v", err)
+	}
+}
+
+// seededGuides are the drafts migration 00086 adds.
+const seededGuides = 5
+
+// TestSeededGuides: the first five guides (00086) are drafts that meet
+// the guides' rules, render safely, and link only guides that exist.
+func TestSeededGuides(t *testing.T) {
+	ctx := t.Context()
+	adminPool := open(t, infra.AdminURL)
+	console := app.NewService(app.Deps{DB: adminPool, Admin: adminPool, IDs: ulid.NewGenerator()})
+	list, err := console.Guides(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slugs := map[string]bool{"reduce-fake-orders-cod": true, "whatsapp-order-confirmation": true, "calculate-net-profit": true,
+		"start-online-store-egypt": true, "shipping-cod-pricing-egypt": true}
+	var seeded []domain.Guide
+	for _, g := range list {
+		if slugs[g.Slug] {
+			seeded = append(seeded, g)
+		}
+	}
+	if len(seeded) != seededGuides {
+		t.Fatalf("%d seeded drafts, want %d", len(seeded), seededGuides)
+	}
+	link := regexp.MustCompile(`\]\((/guides/[a-z0-9-]+)\)`)
+	for _, s := range seeded {
+		g, getErr := console.Guide(ctx, s.ID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		if g.Status != domain.Draft || !g.PublishedAt.IsZero() {
+			t.Errorf("%s is not a draft: %s", g.Slug, g.Status)
+		}
+		if vErr := g.Validate(); vErr != nil {
+			t.Errorf("%s: %v", g.Slug, vErr)
+		}
+		html, prevErr := console.Preview(ctx, g.BodyAr)
+		if prevErr != nil || !strings.Contains(html, "<h3") || strings.Contains(html, "<h1") {
+			t.Errorf("%s renders: %v", g.Slug, prevErr)
+		}
+		for _, m := range link.FindAllStringSubmatch(g.BodyAr, -1) {
+			if !slugs[strings.TrimPrefix(m[1], "/guides/")] {
+				t.Errorf("%s links %s, which is not a guide", g.Slug, m[1])
+			}
+		}
 	}
 }

@@ -249,6 +249,9 @@ account, before merchants rely on it:
   console («التجار المؤسسون»). Check the seats (100) and the discount
   (20%) first. Merchants who join keep their discount even if it is
   changed later.
+- **The first five guides:** they are drafts in the console («الأدلة»).
+  Read each one and correct anything that doesn't fit your experience,
+  then publish them together, because they link to each other.
 - **Legal pages, before launch:** `/terms` and `/privacy` are drafts
   written from what the platform does (`internal/modules/site/internal/web/legal.go`).
   A lawyer must:

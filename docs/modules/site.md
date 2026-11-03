@@ -122,7 +122,8 @@ It owns no tables, emits no events and has no HTTP API of its own.
 
 ## Still to come
 
-- **S4c-2:** the first five guides, as drafts for the owner's review.
+- **The first five guides** (migration 00086) are drafts for the owner
+  to review and publish together.
 - **The stores' own SEO:** robots, sitemap, Product JSON-LD.
 - **`ads.txt` on the domain**, for AdSense (go-live §11).
 - **The Open Graph image**, with the logo.

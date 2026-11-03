@@ -858,7 +858,8 @@ func TestConsoleSiteGuides(t *testing.T) {
 	if r = f.do(t, http.MethodGet, adminHost, one, "", withCookie(sess)); r.status != http.StatusOK || !strings.HasPrefix(r.body["body_ar"].(string), "# أولًا") {
 		t.Fatalf("get = %d %v", r.status, r.body)
 	}
-	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site/guides", "", withCookie(sess)); len(r.body["items"].([]any)) != 1 {
+	// The five seeded drafts (00086) and this one.
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site/guides", "", withCookie(sess)); len(r.body["items"].([]any)) != 6 {
 		t.Fatalf("list = %v", r.body)
 	}
 	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/site/guides/preview", `{"markdown":"# عنوان\n\n<script>x</script>"}`, withCookie(sess), sameOrigin)
