@@ -731,7 +731,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Ads:       adv.Console(),
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
-			Impersonate: impersonator(id), DashboardURL: c.cfg.Mail.DashboardURL,
+			Impersonate: impersonator(id), Profile: storeProfiler(c.pool, time.Now), DashboardURL: c.cfg.Mail.DashboardURL,
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
 			Site: siteConsole, Founding: billing.NewFounding(c.adminPool),

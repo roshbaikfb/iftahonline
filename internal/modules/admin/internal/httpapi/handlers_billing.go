@@ -61,6 +61,34 @@ func (h *Handlers) AdminGetMetrics(ctx context.Context, _ AdminGetMetricsRequest
 	return out, nil
 }
 
+// AdminGetStoreProfile implements StrictServerInterface. The owner's
+// contact goes to the admin, never to a log.
+func (h *Handlers) AdminGetStoreProfile(ctx context.Context, req AdminGetStoreProfileRequestObject) (AdminGetStoreProfileResponseObject, error) {
+	id, err := storeID(req.StoreId)
+	if err != nil {
+		return nil, err
+	}
+	p, err := h.svc.StoreProfile(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	out := AdminGetStoreProfile200JSONResponse{Orders30d: p.Orders30d, Products: p.Products}
+	if !p.LastOrderAt.IsZero() {
+		out.LastOrderAt = &p.LastOrderAt
+	}
+	if o := p.Owner; o != nil {
+		owner := AdminStoreOwner{Name: o.Name, Email: o.Email, EmailVerified: o.EmailVerified}
+		if o.Phone != "" {
+			owner.Phone = &o.Phone
+		}
+		if !o.LastSeenAt.IsZero() {
+			owner.LastSeenAt = &o.LastSeenAt
+		}
+		out.Owner = &owner
+	}
+	return out, nil
+}
+
 // AdminGetStoreBilling implements StrictServerInterface.
 func (h *Handlers) AdminGetStoreBilling(ctx context.Context, req AdminGetStoreBillingRequestObject) (AdminGetStoreBillingResponseObject, error) {
 	id, err := storeID(req.StoreId)
