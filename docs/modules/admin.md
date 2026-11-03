@@ -102,14 +102,40 @@ Every change asks for a reason.
 | `admin_audit_log` | `app_admin` SELECT, INSERT; append-only through a trigger (even for the owner) |
 | `stores`, `store_domains` | `app_admin` SELECT through the `admin_read` policies |
 
+## Roles (ADR-0077)
+
+| Role | May |
+|---|---|
+| owner | Everything, the team and the admin log |
+| operations | Stores: suspend, reactivate, support sessions, overrides; a store owner's contact; reads billing and the catalog |
+| finance | Invoices and payments: settle, refunds, CSV; plans, features, founding, agencies; reads stores |
+| content | The site, guides and ads |
+| viewer | Reads stores, billing, the catalog and content |
+
+- **The table:** each operation's permission is in
+  `internal/httpapi/permissions.go`. The `authorize` strict middleware
+  refuses the rest with 403, and an operation missing from the table is
+  refused for everyone. `TestEveryOperationHasAPermission` keeps the table
+  complete.
+- **Contacts:** a store owner's contact (`/profile`) is left out without
+  `contacts.read`.
+- **The console:** `/me` returns the role and its permissions. The menu,
+  the routes (`Need`), the action buttons, and an editor's forms
+  (`Editable`, disabled under «عرض فقط») follow them.
+- **Changing a role:** until the team page, use SQL:
+  `UPDATE platform_admins SET role = 'finance' WHERE email = '…';`
+
 ## Operations
 
 ### Creating an admin
 
 ```sh
 read -rs PW && printf '%s\n' "$PW" | \
-  ADMIN_DATABASE_URL=… SECRETBOX_KEYS=… platform admin create --email ops@iftahonline.com --name "Ops"
+  ADMIN_DATABASE_URL=… SECRETBOX_KEYS=… platform admin create --email ops@iftahonline.com --name "Ops" [--role finance]
 ```
+
+- The role is `owner` (the default), `operations`, `finance`, `content`
+  or `viewer` (ADR-0077).
 
 - The password comes from stdin (at least 14 characters).
 - The TOTP secret and `otpauth://` URI are printed once. Add them to an
@@ -141,5 +167,6 @@ next request.
 | Both audit trails | `TestSuspendAndReactivate` |
 | `app_admin` cannot write stores or read users, audit logs or sessions; `app_user` cannot read `platform_admins` | `TestAdminDirectory` |
 | Invoices and payments: names, an agency's invoice settled, logged first without a store; the CSV (filters, Cairo times, formula-like names defused) logged with its filters; over HTTP with validation and cross-site refusal | `TestConsoleInvoices`, `TestExportInvoices`, `TestConsoleInvoicesAndPayments` |
+| Roles: every operation has a permission; each role over HTTP (403s, /me, the owner's contact) and in the console (menu, pages, buttons, read-only forms) | `TestEveryOperationHasAPermission`, `TestConsoleRoles`, `domain.TestRoles`, `console.test.tsx` «roles» |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
