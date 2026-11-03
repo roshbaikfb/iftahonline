@@ -80,7 +80,7 @@ function target(e: Entry): Described['target'] {
   const m = e.metadata;
   switch (e.target_type) {
     case 'store':
-      return { text: str(m['slug']) || 'صفحة المتجر', to: `/stores/${e.target_id}` };
+      return { text: e.store_name ?? (str(m['slug']) || 'صفحة المتجر'), to: `/stores/${e.target_id}` };
     case 'plan':
       return { text: e.target_id, to: `/plans/${e.target_id}` };
     case 'feature':
@@ -88,7 +88,7 @@ function target(e: Entry): Described['target'] {
     case 'agency':
       return { text: str(m['name']) || 'وكالة', to: `/agencies/${e.target_id}` };
     case 'invoice':
-      return str(m['store']) ? { text: 'فاتورة المتجر', to: `/stores/${str(m['store'])}` } : { text: 'فاتورة' };
+      return str(m['store']) ? { text: e.store_name ? `فاتورة «${e.store_name}»` : 'فاتورة المتجر', to: `/stores/${str(m['store'])}` } : { text: 'فاتورة' };
     case 'site_guide':
       return { text: str(m['slug']) || 'دليل', to: `/guides/${e.target_id}` };
     case 'site_faq':
@@ -194,7 +194,8 @@ function chips(e: Entry, features: Feature[]): string[] {
 }
 
 // describe turns an entry into the log's line: what was done, to what,
-// why, the details, and who (the reader is «أنت»).
+// why, the details, and who (the reader is «أنت», another admin by
+// name).
 export function describe(e: Entry, me: string, features: Feature[] = []): Described {
   const a = actions[e.action];
   return {
@@ -204,7 +205,7 @@ export function describe(e: Entry, me: string, features: Feature[] = []): Descri
     target: target(e),
     reason: str(e.metadata['reason']),
     chips: chips(e, features),
-    who: !e.admin_id ? 'النظام' : e.admin_id === me ? 'أنت' : 'أدمن آخر',
+    who: !e.admin_id ? 'النظام' : e.admin_id === me ? 'أنت' : (e.admin_name ?? 'أدمن آخر'),
   };
 }
 

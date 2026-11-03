@@ -163,6 +163,10 @@ describe('console', () => {
     expect(body(`/admin/v1/stores/${store}/impersonate`)).toEqual({ reason: 'تذكرة 4821', minutes: 30, write: false });
     expect(await screen.findByRole('link', { name: 'افتح جلسة الدعم في الداشبورد' })).toHaveAttribute('href', 'https://app.iftahonline.com/impersonate#code=C');
 
+    const history = screen.getByRole('region', { name: 'آخر إجراءات الأدمن على هذا المتجر' });
+    expect(within(history).getByRole('link', { name: 'كل سجله ←' })).toHaveAttribute('href', `/audit?store=${store}`);
+    expect(calls.find((c) => c.path === '/admin/v1/audit-log')?.search.get('store')).toBe(store);
+
     // The open invoice keeps the store out of agencies until it is settled.
     expect(screen.getByRole('button', { name: 'ضمّه للوكالة' })).toBeDisabled();
     const settle = screen.getByRole('form', { name: 'تسجيل INV-2026-000184 مدفوعة' });

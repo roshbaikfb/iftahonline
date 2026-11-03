@@ -7,10 +7,13 @@ import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { storefrontURL } from '../lib/storefront';
 import { field } from '../session';
+import type { Entry } from './audit';
+import { AuditRow } from './AuditRow';
 import { ConsoleLayout } from './ConsoleLayout';
 import { Dialog } from './Dialog';
 import { dateTimeAr, initial, storeStatusLabel } from './lib';
 import { currencyName } from './plans';
+import { useAdmin } from './session';
 
 type Detail = components['schemas']['AdminStoreDetail'];
 type Billing = components['schemas']['Billing'];
@@ -28,6 +31,7 @@ function fetchStore(storeId: string) {
     api.GET('/admin/v1/stores/{store_id}/entitlements', p),
     api.GET('/admin/v1/features'),
     api.GET('/admin/v1/agencies'),
+    api.GET('/admin/v1/audit-log', { params: { query: { store: storeId, limit: 5 } } }),
   ]);
 }
 
@@ -52,6 +56,9 @@ export function StorePage() {
   const [grants, setGrants] = useState<Grants | null>(null);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [history, setHistory] = useState<Entry[]>([]);
+  const { state } = useAdmin();
+  const me = state.kind === 'signed-in' ? state.admin.id : '';
   const [support, setSupport] = useState<{ url: string; expires: string } | null>(null);
   const [dialog, setDialog] = useState<{ kind: 'override' } | { kind: 'clear'; feature: Feature } | null>(null);
   const [error, setError] = useState('');
@@ -59,12 +66,13 @@ export function StorePage() {
   const [busy, setBusy] = useState(false);
 
   const apply = useCallback((r: Awaited<ReturnType<typeof fetchStore>>) => {
-    const [d, b, g, f, a] = r;
+    const [d, b, g, f, a, h] = r;
     if (d.data) setDetail(d.data);
     if (b.data) setBilling(b.data);
     if (g.data) setGrants(g.data);
     if (f.data) setFeatures(f.data.items);
     if (a.data) setAgencies(a.data.items);
+    if (h.data) setHistory(h.data.items);
     const err = d.error ?? b.error ?? g.error;
     if (err) setError(problemMessage(err));
   }, []);
@@ -421,9 +429,20 @@ export function StorePage() {
         </section>
       )}
 
-      <section className="slot-card" aria-label="آخر إجراءات الأدمن على المتجر">
-        <h2>آخر إجراءات الأدمن على هذا المتجر</h2>
-        <p className="muted small">تصل مع تحديث الخادم (تصفية السجل بالمتجر).</p>
+      <section className="table-card" aria-labelledby="h-history">
+        <div className="card-head">
+          <h2 id="h-history">آخر إجراءات الأدمن على هذا المتجر</h2>
+          <Link to={`/audit?store=${storeId}`}>كل سجله ←</Link>
+        </div>
+        {history.length === 0 ? (
+          <p className="empty flat">لم يفعل أحد شيئًا بهذا المتجر بعد.</p>
+        ) : (
+          <ol className="audit-list flat">
+            {history.map((e) => (
+              <AuditRow key={e.id} entry={e} me={me} features={features} withDate />
+            ))}
+          </ol>
+        )}
       </section>
 
       {store && (

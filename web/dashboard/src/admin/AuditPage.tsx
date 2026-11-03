@@ -1,32 +1,60 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { Link, useSearchParams } from 'react-router';
 
-import { api } from '../api/client';
+import { api, type components } from '../api/client';
+import type { paths } from '../api/schema';
 import { problemMessage } from '../lib/problem';
-import { dayOf, describe, type Entry, type Family } from './audit';
+import { field } from '../session';
+import { dayOf, type Entry, type Family } from './audit';
+import { AuditRow } from './AuditRow';
 import { ConsoleLayout } from './ConsoleLayout';
 import type { Feature } from './plans';
 import { useAdmin } from './session';
 
-// fetchPage reads a page of the log after cursor.
-function fetchPage(cursor: string) {
-  return api.GET('/admin/v1/audit-log', { params: { query: cursor ? { limit: 50, cursor } : { limit: 50 } } });
+type AdminSummary = components['schemas']['AdminAdminSummary'];
+type Query = NonNullable<paths['/admin/v1/audit-log']['get']['parameters']['query']>;
+
+const families: { value: Family | ''; label: string }[] = [
+  { value: '', label: 'الكل' },
+  { value: 'store', label: 'المتاجر' },
+  { value: 'billing', label: 'الفوترة والباقات' },
+  { value: 'content', label: 'المحتوى' },
+  { value: 'security', label: 'الدخول والأمان' },
+];
+const isFamily = (v: string | null): v is Family => v === 'store' || v === 'billing' || v === 'content' || v === 'security';
+
+// queryOf reads the log's filters from the address.
+function queryOf(params: URLSearchParams): Query {
+  const q: Query = { limit: 50 };
+  const family = params.get('family');
+  if (isFamily(family)) q.family = family;
+  for (const k of ['admin', 'store', 'from', 'to'] as const) {
+    const v = params.get(k);
+    if (v) q[k] = v;
+  }
+  return q;
 }
 
-const glyph: Record<Family, string> = { store: 'م', billing: 'ب', content: 'ح', security: 'د' };
-const time = (iso: string) => new Date(iso).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
-
 // AuditPage is the admin log (the approved mockup), newest first and by
-// day: what was done in words, to what (a link where the console shows
-// it), why, and who. It is append-only.
+// day, narrowed by kind, admin, store and dates. The filters live in the
+// address, so a store's page links to its own history.
 export function AuditPage() {
   const { state } = useAdmin();
   const me = state.kind === 'signed-in' ? state.admin.id : '';
+  const [params, setParams] = useSearchParams();
+  const key = params.toString();
   const [items, setItems] = useState<Entry[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
+  const [admins, setAdmins] = useState<AdminSummary[]>([]);
   const [cursor, setCursor] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+
+  const fetchPage = useCallback((after: string) => {
+    const q = queryOf(new URLSearchParams(key));
+    if (after) q.cursor = after;
+    return api.GET('/admin/v1/audit-log', { params: { query: q } });
+  }, [key]);
 
   const show = useCallback((r: Awaited<ReturnType<typeof fetchPage>>, more: boolean) => {
     setLoaded(true);
@@ -34,6 +62,7 @@ export function AuditPage() {
       setError(problemMessage(r.error));
       return;
     }
+    setError('');
     const page = r.data;
     setItems((prev) => (more ? [...prev, ...page.items] : page.items));
     setCursor(page.next_cursor ?? '');
@@ -41,20 +70,44 @@ export function AuditPage() {
 
   useEffect(() => {
     let live = true;
-    void Promise.all([fetchPage(''), api.GET('/admin/v1/features')]).then(([r, f]) => {
+    void Promise.all([api.GET('/admin/v1/features'), api.GET('/admin/v1/admins')]).then(([f, a]) => {
       if (!live) return;
-      show(r, false);
       if (f.data) setFeatures(f.data.items);
+      if (a.data) setAdmins(a.data.items);
     });
     return () => {
       live = false;
     };
-  }, [show]);
+  }, []);
 
-  async function more() {
-    show(await fetchPage(cursor), true);
+  useEffect(() => {
+    let live = true;
+    void fetchPage('').then((r) => {
+      if (live) show(r, false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [fetchPage, show]);
+
+  function set(change: Record<string, string>) {
+    const p = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(change)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    setParams(p);
   }
 
+  function narrow(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    set({ admin: field(form, 'admin'), from: field(form, 'from'), to: field(form, 'to') });
+  }
+
+  const family = params.get('family') ?? '';
+  const store = params.get('store');
+  const storeName = store ? items.find((e) => e.store_name)?.store_name : undefined;
   const now = new Date();
   const days: { title: string; rows: Entry[] }[] = [];
   for (const e of items) {
@@ -72,51 +125,89 @@ export function AuditPage() {
           <p className="muted">كل ما فعله فريق الكونسول، الأحدث أولًا، ومعه السبب. لا يُعدَّل ولا يُحذف.</p>
         </div>
       </div>
+
+      <section className="card audit-filters" aria-label="تصفية السجل">
+        <div className="chips" role="group" aria-label="النوع">
+          {families.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              className={family === f.value ? 'chip on' : 'chip'}
+              aria-pressed={family === f.value}
+              onClick={() => {
+                set({ family: f.value });
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <form className="audit-narrow" onSubmit={narrow} key={key}>
+          <label>
+            <span className="field-label">الأدمن</span>
+            <select name="admin" defaultValue={params.get('admin') ?? ''}>
+              <option value="">كل الأدمن</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.id === me ? `${a.name} (أنت)` : a.name}
+                  {a.active ? '' : ' — موقوف'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">من</span>
+            <input name="from" type="date" defaultValue={params.get('from') ?? ''} />
+          </label>
+          <label>
+            <span className="field-label">إلى</span>
+            <input name="to" type="date" defaultValue={params.get('to') ?? ''} />
+          </label>
+          <button type="submit" className="secondary">
+            تصفية
+          </button>
+          {key && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setParams({});
+              }}
+            >
+              مسح التصفية
+            </button>
+          )}
+        </form>
+        {store && (
+          <p className="audit-store">
+            ما فُعل بالمتجر <Link to={`/stores/${store}`}>{storeName ?? 'صفحة المتجر'}</Link> فقط ·{' '}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                set({ store: '' });
+              }}
+            >
+              كل المتاجر
+            </button>
+          </p>
+        )}
+      </section>
+
       {error && <p role="alert">{error}</p>}
-      {loaded && items.length === 0 && !error && <p className="empty">لا شيء في السجل بعد.</p>}
+      {loaded && items.length === 0 && !error && <p className="empty">{key ? 'لا شيء يطابق هذه التصفية.' : 'لا شيء في السجل بعد.'}</p>}
       {days.map((d) => (
         <section key={d.title} className="audit-day" aria-label={d.title}>
           <h2>{d.title}</h2>
           <ol className="audit-list">
-            {d.rows.map((e) => {
-              const x = describe(e, me, features);
-              return (
-                <li key={e.id}>
-                  <span className={`audit-mark ${x.danger ? 'danger' : x.family}`} aria-hidden="true">
-                    {x.danger ? '!' : glyph[x.family]}
-                  </span>
-                  <div className="audit-body">
-                    <p className="audit-what">
-                      <strong>{x.label}</strong>
-                      {x.target && (
-                        <>
-                          {' — '}
-                          {x.target.to ? <Link to={x.target.to}>{x.target.text}</Link> : <span>{x.target.text}</span>}
-                        </>
-                      )}
-                    </p>
-                    {x.reason && <p className="audit-reason">السبب: {x.reason}</p>}
-                    {x.chips.length > 0 && (
-                      <ul className="audit-chips">
-                        {x.chips.map((c) => (
-                          <li key={c}>{c}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div className="audit-meta">
-                    <time dateTime={e.occurred_at}>{time(e.occurred_at)}</time>
-                    <span>{x.who}</span>
-                    {e.ip_prefix && <span className="ltr">{e.ip_prefix}</span>}
-                  </div>
-                </li>
-              );
-            })}
+            {d.rows.map((e) => (
+              <AuditRow key={e.id} entry={e} me={me} features={features} />
+            ))}
           </ol>
         </section>
       ))}
       {cursor && (
-        <button type="button" className="secondary audit-more" onClick={() => void more()}>
+        <button type="button" className="secondary audit-more" onClick={() => void fetchPage(cursor).then((r) => { show(r, true); })}>
           عرض الأقدم
         </button>
       )}
