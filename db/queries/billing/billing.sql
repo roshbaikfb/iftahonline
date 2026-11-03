@@ -37,3 +37,12 @@ FROM plans WHERE id = @id;
 
 -- name: GetPlanPrice :one
 SELECT amount_minor FROM plan_prices WHERE plan_id = @plan_id AND currency = @currency AND cycle = @cycle;
+
+-- name: BillingPaying :many
+-- Every subscription that pays and renews, at its next renewal's price,
+-- for the console's revenue (ADR-0075). founding_bps 0: not a member.
+SELECT account_id::uuid, kind::text, currency::text, plan_code::text, cycle::text, amount_minor::bigint,
+       coalesce(founding_bps, 0)::int AS founding_bps, coalesce(founding_currency, '')::text AS founding_currency,
+       coalesce(founding_plan_code, '')::text AS founding_plan_code, coalesce(founding_cycle, '')::text AS founding_cycle,
+       coalesce(founding_locked_minor, 0)::bigint AS founding_locked_minor
+FROM app.billing_paying();

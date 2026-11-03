@@ -87,6 +87,8 @@ type (
 	OpenInvoice = app.OpenInvoice
 	// Health is the platform's subscriptions and invoices, counted.
 	Health = app.Health
+	// Revenue is the monthly recurring revenue in one currency.
+	Revenue = app.Revenue
 )
 
 // Console is billing for the super-admin console.
@@ -94,6 +96,11 @@ type Console interface {
 	// Health counts every store's subscription by status, and the open
 	// and overdue invoices.
 	Health(ctx context.Context) (Health, error)
+	// Revenue is the monthly recurring revenue per currency (ADR-0075):
+	// every active subscription that renews, at its next renewal's price
+	// as a month's share, an agency once; trials, past-due subscriptions
+	// and pay-as-you-sell fees are not in it.
+	Revenue(ctx context.Context) ([]Revenue, error)
 	// Summary is the store in ctx's plan, status, card and open invoices.
 	Summary(ctx context.Context) (Summary, error)
 	// SettleStoreInvoice records an open invoice of the store-in-ctx's

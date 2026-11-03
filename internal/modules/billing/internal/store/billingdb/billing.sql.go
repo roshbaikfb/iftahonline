@@ -44,6 +44,62 @@ func (q *Queries) BillingHealth(ctx context.Context, now time.Time) (BillingHeal
 	return i, err
 }
 
+const billingPaying = `-- name: BillingPaying :many
+SELECT account_id::uuid, kind::text, currency::text, plan_code::text, cycle::text, amount_minor::bigint,
+       coalesce(founding_bps, 0)::int AS founding_bps, coalesce(founding_currency, '')::text AS founding_currency,
+       coalesce(founding_plan_code, '')::text AS founding_plan_code, coalesce(founding_cycle, '')::text AS founding_cycle,
+       coalesce(founding_locked_minor, 0)::bigint AS founding_locked_minor
+FROM app.billing_paying()
+`
+
+type BillingPayingRow struct {
+	AccountID           ulid.ID
+	Kind                string
+	Currency            string
+	PlanCode            string
+	Cycle               string
+	AmountMinor         int64
+	FoundingBps         int32
+	FoundingCurrency    string
+	FoundingPlanCode    string
+	FoundingCycle       string
+	FoundingLockedMinor int64
+}
+
+// Every subscription that pays and renews, at its next renewal's price,
+// for the console's revenue (ADR-0075). founding_bps 0: not a member.
+func (q *Queries) BillingPaying(ctx context.Context) ([]BillingPayingRow, error) {
+	rows, err := q.db.Query(ctx, billingPaying)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BillingPayingRow{}
+	for rows.Next() {
+		var i BillingPayingRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Kind,
+			&i.Currency,
+			&i.PlanCode,
+			&i.Cycle,
+			&i.AmountMinor,
+			&i.FoundingBps,
+			&i.FoundingCurrency,
+			&i.FoundingPlanCode,
+			&i.FoundingCycle,
+			&i.FoundingLockedMinor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFreePlan = `-- name: GetFreePlan :one
 SELECT id, code, version, kind, name_ar, name_en, trial_days, public, status = 'active' AS active, sort
 FROM plans

@@ -182,6 +182,34 @@ func PlatformHealth(ctx context.Context, tx Tx, now time.Time) (Health, error) {
 		InvoicesOpen: r.InvoicesOpen, InvoicesOverdue: r.InvoicesOverdue}, nil
 }
 
+// Paying reads every subscription that pays and renews through
+// app.billing_paying, at its next renewal's price (ADR-0075).
+func Paying(ctx context.Context, tx Tx) ([]domain.Paying, error) {
+	rows, err := billingdb.New(tx).BillingPaying(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: paying: %w", err)
+	}
+	out := make([]domain.Paying, len(rows))
+	for i, r := range rows {
+		p := domain.Paying{Account: r.AccountID, Currency: r.Currency, PlanCode: r.PlanCode, AmountMinor: r.AmountMinor}
+		if p.Kind, err = domain.ParseKind(r.Kind); err != nil {
+			return nil, err
+		}
+		if p.Cycle, err = domain.ParseCycle(r.Cycle); err != nil {
+			return nil, err
+		}
+		if r.FoundingBps > 0 {
+			m := domain.Member{DiscountBps: r.FoundingBps, Currency: r.FoundingCurrency, PlanCode: r.FoundingPlanCode, LockedMinor: r.FoundingLockedMinor}
+			if m.Cycle, err = domain.ParseCycle(r.FoundingCycle); err != nil {
+				return nil, err
+			}
+			p.Founding = &m
+		}
+		out[i] = p
+	}
+	return out, nil
+}
+
 // PlanPrice is plan's price in currency for cycle; ok is false when it
 // does not sell that cycle there.
 func PlanPrice(ctx context.Context, tx Tx, plan ulid.ID, currency string, cycle domain.Cycle) (int64, bool, error) {
