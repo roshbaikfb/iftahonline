@@ -61,10 +61,17 @@ func (c *Catalog) SaveFeature(ctx context.Context, f domain.Feature) error {
 	})
 }
 
-// Plans lists every version of every plan.
+// Plans lists every version of every plan, with the stores on each.
 func (c *Catalog) Plans(ctx context.Context) (out []domain.PlanVersion, err error) {
-	err = postgres.InTx(ctx, c.db, func(tx pgx.Tx) (txErr error) {
-		out, txErr = store.Plans(ctx, tx)
+	err = postgres.InTx(ctx, c.db, func(tx pgx.Tx) error {
+		var txErr error
+		if out, txErr = store.Plans(ctx, tx); txErr != nil {
+			return txErr
+		}
+		subscribers, txErr := store.PlanSubscribers(ctx, tx)
+		for i := range out {
+			out[i].Subscribers = subscribers[out[i].ID]
+		}
 		return txErr
 	})
 	return out, err

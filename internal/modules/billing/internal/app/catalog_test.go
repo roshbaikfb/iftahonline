@@ -215,3 +215,50 @@ func (d *dunning) planOf(ctx context.Context, t *testing.T) (id ulid.ID) {
 	}
 	return id
 }
+
+// TestPlanSubscribers: the console sees how many stores are on each
+// version, counting trials, active and past-due subscriptions only.
+func TestPlanSubscribers(t *testing.T) {
+	t.Parallel()
+	c, ids := newCatalog(t)
+	d := newDunning(t)
+	code := uniqueKey(ids, "subs_")
+	first, err := c.PublishPlan(t.Context(), paidVersion(code, 10000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := func(status, extra string) {
+		t.Helper()
+		ctx := d.store(t)
+		d.subscribe(ctx, t, code, status, extra)
+	}
+	period := "cycle, period_start, period_end='monthly', '2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z'"
+	on("trialing", "trial_ends_at='2026-11-20T00:00:00Z'")
+	on("active", period)
+	on("past_due", "cycle, period_start, period_end, grace_until='monthly', '2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z', '2026-11-08T00:00:00Z'")
+	on("suspended", "suspended_at='2026-10-20T00:00:00Z'")
+	on("cancelled", "suspended_at='2026-10-20T00:00:00Z'")
+
+	// A new version starts with none: its stores are still on the first.
+	second, err := c.PublishPlan(t.Context(), paidVersion(code, 12000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := c.Plans(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := func(id ulid.ID) int64 {
+		i := slices.IndexFunc(all, func(v domain.PlanVersion) bool { return v.ID == id })
+		if i < 0 {
+			t.Fatalf("version %s not listed", id)
+		}
+		return all[i].Subscribers
+	}
+	if got := count(first.ID); got != 3 {
+		t.Errorf("first version = %d subscribers; want 3 (trial, active, past due)", got)
+	}
+	if got := count(second.ID); got != 0 {
+		t.Errorf("new version = %d subscribers; want 0", got)
+	}
+}
