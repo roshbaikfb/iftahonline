@@ -2424,6 +2424,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open, overdue and collected invoices, and failed payments
+         * @description Per currency: open invoices and those of them past due (count and
+         *     total), and what was collected since the Cairo month began (the
+         *     totals paid, VAT included, and the VAT in them). Failed payments
+         *     are the last 7 days' declined charges and charges with no card,
+         *     counted per reason.
+         */
+        get: operations["adminBillingSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every account's invoices, newest first
+         * @description Store and agency accounts alike. The filters combine; a page's
+         *     cursor carries on with the same filters. Overdue is an open
+         *     invoice past its due time.
+         */
+        get: operations["adminListInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/invoices/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the invoices as CSV
+         * @description The list's filters; newest first, at most 50,000 rows. Recorded
+         *     in the admin log first, with the filters. UTF-8 with a BOM, times
+         *     in Cairo, plain decimal amounts; text that a spreadsheet would run
+         *     as a formula starts with an apostrophe.
+         */
+        get: operations["adminExportInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/invoices/{invoice_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        /** One invoice with its lines and payment attempts */
+        get: operations["adminGetInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/invoices/{invoice_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record any account's invoice as paid by a confirmed transfer
+         * @description An open invoice, of a store or an agency (404 otherwise). Its
+         *     stores settle as on any payment. Recorded in the admin log first
+         *     with the reason and the transfer's reference.
+         */
+        post: operations["adminSettleAccountInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every payment attempt, newest first
+         * @description The filters combine; a page's cursor carries on with the same filters.
+         */
+        get: operations["adminListPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/features": {
         parameters: {
             query?: never;
@@ -5051,6 +5183,139 @@ export interface components {
             refunded_at?: string;
             refund_reference?: string;
         };
+        AdminCurrencyTotal: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: int64 */
+            count: number;
+            /**
+             * Format: int64
+             * @description VAT included.
+             */
+            total_minor: number;
+            /**
+             * Format: int64
+             * @description The VAT in the total.
+             */
+            tax_minor: number;
+        };
+        AdminBillingSummary: {
+            open: components["schemas"]["AdminCurrencyTotal"][];
+            overdue: components["schemas"]["AdminCurrencyTotal"][];
+            /** @description Paid since month_start. */
+            collected: components["schemas"]["AdminCurrencyTotal"][];
+            /**
+             * Format: date-time
+             * @description The Cairo month's first moment.
+             */
+            month_start: string;
+            /** @description Declined charges and charges with no card, the last 7 days. */
+            failed: {
+                /** Format: int64 */
+                count: number;
+                /** @description Most frequent first. */
+                reasons: components["schemas"]["AdminFailedReason"][];
+            };
+        };
+        AdminFailedReason: {
+            /** @enum {string} */
+            outcome: "declined" | "no_method";
+            /** @description The gateway's words; empty when it gave none. */
+            reason: string;
+            /** Format: int64 */
+            count: number;
+        };
+        AdminInvoice: {
+            id: components["schemas"]["ULID"];
+            number: string;
+            account_id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            account_kind: "store" | "agency";
+            /** @description The store's name now for a store's account, else the agency's. */
+            account_name: string;
+            /** @description The store billed (an agency's first store when it bills them all). */
+            store_id?: components["schemas"]["ULID"];
+            /** Format: date */
+            period: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: int64 */
+            subtotal_minor: number;
+            tax_bps: number;
+            /** Format: int64 */
+            tax_minor: number;
+            /** Format: int64 */
+            total_minor: number;
+            /** @enum {string} */
+            status: "open" | "paid" | "void";
+            /** @description Open and past its due time. */
+            overdue: boolean;
+            /** Format: date-time */
+            issued_at: string;
+            /** Format: date-time */
+            due_at: string;
+            /** Format: date-time */
+            paid_at?: string;
+            /** @description Failed charges so far. */
+            attempts: number;
+            last_error?: string;
+            /** Format: date-time */
+            next_attempt_at?: string;
+        };
+        AdminInvoicePage: {
+            items: components["schemas"]["AdminInvoice"][];
+            next_cursor?: string;
+        };
+        AdminInvoiceLine: {
+            /** @enum {string} */
+            kind: "subscription" | "sell_fees" | "fee_credit" | "founding_discount";
+            description: string;
+            /** Format: int64 */
+            quantity: number;
+            /**
+             * Format: int64
+             * @description Negative for a credit or a discount.
+             */
+            amount_minor: number;
+            store_id?: components["schemas"]["ULID"];
+        };
+        AdminInvoiceDetail: {
+            invoice: components["schemas"]["AdminInvoice"];
+            lines: components["schemas"]["AdminInvoiceLine"][];
+            /** @description Its payment attempts, newest first. */
+            payments: components["schemas"]["AdminPayment"][];
+        };
+        /**
+         * @description approved: the gateway took it; manual: a transfer recorded by an admin; duplicate: taken for an invoice already paid, to refund.
+         * @enum {string}
+         */
+        AdminPaymentOutcome: "approved" | "declined" | "no_method" | "manual" | "duplicate";
+        AdminPayment: {
+            id: components["schemas"]["ULID"];
+            /** Format: date-time */
+            created_at: string;
+            invoice_id: components["schemas"]["ULID"];
+            invoice_number: string;
+            /** @enum {string} */
+            account_kind: "store" | "agency";
+            account_name: string;
+            store_id?: components["schemas"]["ULID"];
+            gateway: string;
+            outcome: components["schemas"]["AdminPaymentOutcome"];
+            /** @description Why it failed */
+            reason?: string;
+            reference?: string;
+            /** Format: int64 */
+            amount_minor: number;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: date-time */
+            refunded_at?: string;
+        };
+        AdminPaymentPage: {
+            items: components["schemas"]["AdminPayment"][];
+            next_cursor?: string;
+        };
         AdminDuplicatePaymentList: {
             items: components["schemas"]["AdminDuplicatePayment"][];
         };
@@ -7191,6 +7456,10 @@ export interface components {
     parameters: {
         AgencyID: components["schemas"]["ULID"];
         FeatureKey: string;
+        InvoiceStatusFilter: "open" | "overdue" | "paid" | "void";
+        InvoiceCurrencyFilter: "EGP" | "SAR" | "AED";
+        /** @description An invoice number's start, or a part of the store's or agency's name. */
+        InvoiceSearch: string;
         InvoiceID: components["schemas"]["ULID"];
         StoreID: components["schemas"]["ULID"];
         DomainID: components["schemas"]["ULID"];
@@ -10644,6 +10913,159 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminBillingSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBillingSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListInvoices: {
+        parameters: {
+            query?: {
+                status?: components["parameters"]["InvoiceStatusFilter"];
+                currency?: components["parameters"]["InvoiceCurrencyFilter"];
+                /** @description An invoice number's start, or a part of the store's or agency's name. */
+                q?: components["parameters"]["InvoiceSearch"];
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInvoicePage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminExportInvoices: {
+        parameters: {
+            query?: {
+                status?: components["parameters"]["InvoiceStatusFilter"];
+                currency?: components["parameters"]["InvoiceCurrencyFilter"];
+                /** @description An invoice number's start, or a part of the store's or agency's name. */
+                q?: components["parameters"]["InvoiceSearch"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The CSV file. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInvoiceDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSettleAccountInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_id: components["parameters"]["InvoiceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSettleInput"];
+            };
+        };
+        responses: {
+            /** @description Settled; the invoice now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInvoiceDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListPayments: {
+        parameters: {
+            query?: {
+                outcome?: components["schemas"]["AdminPaymentOutcome"];
+                /** @description The gateway, as its attempts name it (manual for a recorded transfer). */
+                gateway?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPaymentPage"];
+                };
             };
             default: components["responses"]["Problem"];
         };
