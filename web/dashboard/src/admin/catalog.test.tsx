@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockAPI, type Call } from '../test/api';
 import { Gate } from './Console';
 import { details } from './lib';
-import { byCode, draftFrom, toInput, type Plan } from './plans';
+import { byCode, draftFrom, facts, headline, otherPrices, saving, toInput, type Feature, type Plan } from './plans';
 import { AdminSessionContext, type AdminSession } from './session';
 
 const admin = { id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' };
@@ -132,52 +132,143 @@ describe('plan editor helpers', () => {
   });
 });
 
-describe('plans screen', () => {
-  it('publishes the next version, retires a plan, and adds a feature', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('توقف البيع');
-    const calls = routes({
-      'POST /admin/v1/plans': (c) => ({ status: 201, body: { ...plan({}), version: 2, ...(c.body as object) } }),
-      'POST /admin/v1/plans/pro/retire': () => ({ status: 204 }),
-      'PUT /admin/v1/features/live_chat': (c) => ({ status: 200, body: c.body }),
-    });
-    renderAt('/plans');
-    const user = userEvent.setup();
+describe('plan cards helpers', () => {
+  it.each([
+    [29900, 299000, 'يوفّر شهرين'],
+    [10000, 110000, 'يوفّر شهرًا'],
+    [10000, 90000, 'يوفّر 3 أشهر'],
+    [10000, 116000, ''], // less than half a month
+    [undefined, 299000, ''],
+  ])('saving(%s, %s) = %j', (m, y, want) => {
+    expect(saving(m, y)).toBe(want);
+  });
 
-    await user.click(await screen.findByRole('button', { name: /برو/ }));
-    const editor = screen.getByRole('form', { name: 'إصدار جديد' });
-    expect(within(editor).getByRole('heading')).toHaveTextContent('برو — إصدار جديد (v2)');
-    expect(within(editor).getByLabelText('دردشة')).toBeInTheDocument();
+  it('writes each kind’s price line and the first limits', () => {
+    expect(headline(plan({}))).toEqual({ price: '599 ج.م', per: '/ شهر', sub: '5,990 ج.م سنويًا · يوفّر شهرين' });
+    expect(headline(plan({ prices: plan({}).prices.filter((x) => x.cycle === 'monthly') })).sub).toBe('');
+    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 250, min_minor: 0 }] }))).toEqual({ price: '2.5%', per: 'من كل طلب مسلّم', sub: 'بلا حد أدنى ولا أقصى' });
+    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 300, min_minor: 500, max_minor: 5000 }] })).sub).toBe('حد أدنى 5 ج.م · حد أقصى 50 ج.م');
+    expect(headline(plan({ kind: 'free', prices: [] }))).toEqual({ price: '0 ج.م', per: '', sub: 'بلا اشتراك' });
+    expect(headline(plan({ kind: 'agency' })).sub).toBe('سعر واحد لكل متاجر الوكالة');
+    expect(otherPrices(plan({}))).toBe('99 ر.س شهريًا · 99 د.إ شهريًا');
+    expect(facts(plan({}), features as Feature[])).toEqual(['الطلبات في الشهر: 1,500', 'المنتجات: بلا حد', 'تجربة 14 يومًا']);
+    expect(facts(plan({ trial_days: 0, grants: [] }), features as Feature[])).toEqual(['بلا تجربة']);
+  });
+});
+
+describe('plans screen', () => {
+  it('shows a card per plan as merchants see them, in their order', async () => {
+    routes();
+    renderAt('/plans');
+    const pro = (await screen.findByRole('heading', { name: /برو/ })).closest('li');
+    if (!pro) throw new Error('no card');
+    expect(pro).toHaveTextContent('599 ج.م');
+    expect(pro).toHaveTextContent('معروضة');
+    expect(pro).toHaveTextContent('الإصدار v1');
+    expect(within(pro).getByRole('link', { name: 'تعديل برو' })).toHaveAttribute('href', '/plans/pro');
+    const names = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(names[0]).toMatch(/المجانية/); // sort 10 before 40
+    expect(screen.getByRole('link', { name: 'باقة جديدة' })).toHaveAttribute('href', '/plans/new');
+  });
+
+  it('publishes the next version from a plan’s page, with switches for features', async () => {
+    const calls = routes({ 'POST /admin/v1/plans': (c) => ({ status: 201, body: { ...plan({}), version: 2, ...(c.body as object) } }) });
+    renderAt('/plans/pro');
+    const user = userEvent.setup();
+    const editor = await screen.findByRole('form', { name: 'إصدار جديد من برو' });
+    expect(within(editor).getByText('يوفّر شهرين')).toBeInTheDocument();
     const egp = within(editor).getByLabelText('EGP شهري');
     await user.clear(egp);
     await user.type(egp, '649');
-    await user.type(within(editor).getByLabelText('سبب التغيير (إجباري)'), 'رفع السعر');
-    await user.click(within(editor).getByRole('button', { name: 'انشر الإصدار' }));
-    const sent = body(calls, 'POST', '/admin/v1/plans') as { prices: { amount_minor: number }[]; reason: string };
+    const coupons = within(editor).getByRole('switch', { name: 'الكوبونات' });
+    expect(coupons).toBeChecked();
+    await user.click(coupons);
+    expect(within(editor).getByRole('switch', { name: 'دردشة' })).not.toBeChecked();
+    await user.type(within(editor).getByLabelText('سبب التغيير'), 'رفع السعر');
+    await user.click(within(editor).getByRole('button', { name: 'انشر الإصدار v2' }));
+    const sent = body(calls, 'POST', '/admin/v1/plans') as { prices: { amount_minor: number }[]; grants: { feature: string; value?: number }[]; reason: string };
     expect(sent.prices[0]?.amount_minor).toBe(64900);
+    expect(sent.grants.find((g) => g.feature === 'coupons')).toEqual({ feature: 'coupons', unlimited: false, value: 0 });
     expect(sent.reason).toBe('رفع السعر');
-    expect(await screen.findByText(/نُشر برو v2/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'إيقاف بيع الباقة' }));
-    expect(body(calls, 'POST', '/admin/v1/plans/pro/retire')).toEqual({ reason: 'توقف البيع' });
-
-    const add = screen.getByRole('form', { name: 'ميزة جديدة' });
-    await user.type(within(add).getByLabelText('المفتاح'), 'live_chat');
-    await user.type(within(add).getByLabelText('الاسم بالعربية'), 'دردشة مباشرة');
-    await user.type(within(add).getByLabelText('الاسم بالإنجليزية'), 'Live chat');
-    await user.type(within(add).getByLabelText('السبب'), 'طلب المبيعات');
-    await user.click(within(add).getByRole('button', { name: 'حفظ الميزة' }));
-    expect(body(calls, 'PUT', '/admin/v1/features/live_chat')).toEqual({ kind: 'flag', name_ar: 'دردشة مباشرة', name_en: 'Live chat', sort: 0, reason: 'طلب المبيعات' });
+    expect(await screen.findByRole('status')).toHaveTextContent('نُشر برو v2');
+    expect(screen.getByRole('button', { name: 'انشر الإصدار v3' })).toBeInTheDocument();
   });
 
-  it('offers no retiring of the free plan, and shows a refused version', async () => {
-    routes({ 'POST /admin/v1/plans': () => ({ status: 409, body: { title: 'Conflict', status: 409, detail: 'a plan’s kind cannot change between versions' } }) });
-    renderAt('/plans');
+  it('retires a plan from its danger zone, with a reason', async () => {
+    const calls = routes({ 'POST /admin/v1/plans/pro/retire': () => ({ status: 204 }) });
+    renderAt('/plans/pro');
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: /المجانية/ }));
-    expect(screen.queryByRole('button', { name: 'إيقاف بيع الباقة' })).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText('سبب التغيير (إجباري)'), 'تجربة');
-    await user.click(screen.getByRole('button', { name: 'انشر الإصدار' }));
+    await user.click(await screen.findByText('منطقة خطرة: إيقاف بيع الباقة'));
+    const zone = screen.getByRole('form', { name: 'إيقاف بيع الباقة' });
+    await user.type(within(zone).getByLabelText('السبب'), 'توقف البيع');
+    await user.click(within(zone).getByRole('button', { name: 'أوقف بيع «برو»' }));
+    expect(body(calls, 'POST', '/admin/v1/plans/pro/retire')).toEqual({ reason: 'توقف البيع' });
+    expect(await screen.findByRole('status')).toHaveTextContent('أُوقف بيع الباقة');
+    expect(screen.getByText('متوقفة عن البيع')).toBeInTheDocument();
+    expect(screen.queryByText('منطقة خطرة: إيقاف بيع الباقة')).toBeNull();
+  });
+
+  it('offers no retiring of the free plan, shows a refused version, and says when a plan is unknown', async () => {
+    routes({ 'POST /admin/v1/plans': () => ({ status: 409, body: { title: 'Conflict', status: 409, detail: 'a plan’s kind cannot change between versions' } }) });
+    renderAt('/plans/free');
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('سبب التغيير'), 'تجربة');
+    expect(screen.queryByText('منطقة خطرة: إيقاف بيع الباقة')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'انشر الإصدار v2' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('cannot change');
+  });
+
+  it('says when no plan has the code', async () => {
+    routes();
+    renderAt('/plans/gold');
+    expect(await screen.findByText(/لا توجد باقة بهذا الكود/)).toBeInTheDocument();
+  });
+
+  it('starts a new plan with its code and kind, then opens its page', async () => {
+    const gold = plan({ id: '01M8PLAN0000000000000000AE', code: 'gold', name_ar: 'ذهبية', name_en: 'Gold' });
+    let created = false;
+    const calls = routes({
+      'GET /admin/v1/plans': () => ({ status: 200, body: { items: created ? [...plans, gold] : plans } }),
+      'POST /admin/v1/plans': (c) => {
+        created = true;
+        return { status: 201, body: { ...gold, ...(c.body as object) } };
+      },
+    });
+    renderAt('/plans/new');
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('الكود'), 'gold');
+    await user.type(screen.getByLabelText('الاسم بالعربية'), 'ذهبية');
+    await user.type(screen.getByLabelText('الاسم بالإنجليزية'), 'Gold');
+    await user.type(screen.getByLabelText('EGP شهري'), '999');
+    await user.type(screen.getByLabelText('سبب التغيير'), 'باقة جديدة');
+    await user.click(screen.getByRole('button', { name: 'انشر الباقة' }));
+    expect((body(calls, 'POST', '/admin/v1/plans') as { code: string; kind: string }).code).toBe('gold');
+    expect(await screen.findByRole('heading', { level: 1, name: 'ذهبية' })).toBeInTheDocument();
+  });
+
+  it('lists the features in their tab and adds one from a dialog', async () => {
+    const calls = routes({ 'PUT /admin/v1/features/live_chat': (c) => ({ status: 200, body: c.body }) });
+    renderAt('/plans?tab=features');
+    const user = userEvent.setup();
+    const table = await screen.findByRole('region', { name: 'كتالوج المميزات' });
+    expect(within(table).getByText('orders_per_month')).toBeInTheDocument();
+    expect(within(table).getByText('عرض فقط')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'ميزة جديدة' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'ميزة جديدة' }));
+    const dialog = screen.getByRole('dialog', { name: 'ميزة جديدة' });
+    await user.type(within(dialog).getByLabelText('الاسم بالعربية'), 'دردشة مباشرة');
+    await user.type(within(dialog).getByLabelText('الاسم بالإنجليزية'), 'Live chat');
+    await user.type(within(dialog).getByLabelText('المفتاح'), 'live_chat');
+    await user.click(within(dialog).getByLabelText(/عدد/));
+    await user.type(within(dialog).getByLabelText('السبب'), 'طلب المبيعات');
+    await user.click(within(dialog).getByRole('button', { name: 'حفظ الميزة' }));
+    expect(body(calls, 'PUT', '/admin/v1/features/live_chat')).toEqual({ kind: 'count', name_ar: 'دردشة مباشرة', name_en: 'Live chat', sort: 910, reason: 'طلب المبيعات' });
+    expect(await screen.findByRole('status')).toHaveTextContent('حُفظت الميزة «دردشة مباشرة».');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

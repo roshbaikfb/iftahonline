@@ -1,397 +1,277 @@
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { Link, useSearchParams } from 'react-router';
 
 import { api } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
-import { byCode, currencies, cycles, draftFrom, featureKindLabel, kindLabel, priceKey, toInput, type Draft, type Feature, type Kind, type Plan } from './plans';
+import { useCatalog } from './catalog';
+import { byCode, facts, featureKindLabel, headline, kindLabel, otherPrices, type Feature } from './plans';
 
-function fetchCatalog() {
-  return Promise.all([api.GET('/admin/v1/plans'), api.GET('/admin/v1/features')]);
+// The seat for the subscribers count, filled by the next server change.
+export function SubscribersSlot() {
+  return (
+    <span className="slot" title="يصل العدد مع تحديث الخادم التالي">
+      — مشترك
+    </span>
+  );
 }
 
-// PlansPage is the plan catalog (the approved mockup): the plans and their
-// versions, an editor that publishes the next version (stores renew into
-// it, ADR-0056), retiring a plan, and the features catalog.
+// PlansPage is the plan catalog (the approved mockup): one card per plan
+// as merchants see them, and the features catalog in its own tab. A plan
+// is edited on its own page.
 export function PlansPage() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [features, setFeatures] = useState<Feature[]>([]);
-  const [code, setCode] = useState('');
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const [error, setError] = useState('');
+  const { plans, features, error, setError, reload } = useCatalog();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'features' ? 'features' : 'plans';
+  const groups = byCode(plans).sort((a, b) => a.head.sort - b.head.sort);
+  const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
 
-  const apply = useCallback((r: Awaited<ReturnType<typeof fetchCatalog>>) => {
-    const [p, f] = r;
-    if (p.data) setPlans(p.data.items);
-    if (f.data) setFeatures(f.data.items);
-    const err = p.error ?? f.error;
-    if (err) setError(problemMessage(err));
-  }, []);
-
-  useEffect(() => {
-    let live = true;
-    void fetchCatalog().then((r) => {
-      if (live) apply(r);
-    });
-    return () => {
-      live = false;
-    };
-  }, [apply]);
-
-  const groups = byCode(plans);
-  const current = groups.find((g) => g.code === code);
-
-  function pick(c: string) {
-    const g = groups.find((x) => x.code === c);
-    setCode(c);
-    setIsNew(false);
-    setDraft(draftFrom(g?.head));
-    setNotice('');
-    setError('');
-  }
-
-  function startNew() {
-    setCode('');
-    setIsNew(true);
-    setDraft(draftFrom(undefined));
-    setNotice('');
-  }
-
-  const edit = (patch: Partial<Draft>) => {
-    if (draft) setDraft({ ...draft, ...patch });
-  };
-
-  async function publish(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!draft) return;
-    const input = toInput(draft, field(new FormData(e.currentTarget), 'reason'));
-    if (typeof input === 'string') {
-      setError(input);
-      return;
-    }
-    setBusy(true);
-    setError('');
-    const { data, error: err } = await api.POST('/admin/v1/plans', { body: input });
-    setBusy(false);
-    if (err) {
-      setError(problemMessage(err));
-      return;
-    }
-    setNotice(`نُشر ${data.name_ar} v${String(data.version)}. المشتركون يأخذونه عند تجديدهم القادم.`);
-    setCode(data.code);
-    setIsNew(false);
-    apply(await fetchCatalog());
-  }
-
-  async function retire() {
-    if (!current) return;
-    const reason = window.prompt(`سبب إيقاف بيع «${current.head.name_ar}»`);
-    if (!reason) return;
-    setBusy(true);
-    setError('');
-    const { error: err } = await api.POST('/admin/v1/plans/{code}/retire', { params: { path: { code: current.code } }, body: { reason } });
-    setBusy(false);
-    if (err) {
-      setError(problemMessage(err));
-      return;
-    }
-    setNotice('أُوقف بيع الباقة. المشتركون عليها يبقون ويجددون نفس الإصدار.');
-    apply(await fetchCatalog());
-  }
-
-  async function saveFeature(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const el = e.currentTarget;
-    const form = new FormData(el);
-    setBusy(true);
-    setError('');
-    const { error: err } = await api.PUT('/admin/v1/features/{key}', {
-      params: { path: { key: field(form, 'key').trim() } },
-      body: {
-        kind: field(form, 'kind') as Feature['kind'],
-        name_ar: field(form, 'name_ar'),
-        name_en: field(form, 'name_en'),
-        sort: Number(field(form, 'sort') || '0'),
-        reason: field(form, 'reason'),
-      },
-    });
-    setBusy(false);
-    if (err) {
-      setError(problemMessage(err));
-      return;
-    }
-    el.reset();
-    setNotice('حُفظت الميزة.');
-    apply(await fetchCatalog());
-  }
-
-  const paid = draft?.kind === 'subscription' || draft?.kind === 'agency';
   return (
     <ConsoleLayout>
-      <h1>الباقات والمميزات</h1>
+      <div className="page-head">
+        <div>
+          <h1>الباقات والمميزات</h1>
+          <p className="muted">
+            {tab === 'plans'
+              ? 'ما يراه التاجر في صفحة الفوترة، بالترتيب نفسه. التعديل يُنشر إصدارًا جديدًا، والمشتركون ينتقلون إليه عند تجديدهم.'
+              : 'كل ما يمكن أن تمنحه باقة. الميزة الجديدة تظهر في الباقات للعرض فقط حتى يدعمها النظام.'}
+          </p>
+        </div>
+        {tab === 'plans' ? (
+          <Link className="button primary" to="/plans/new">
+            باقة جديدة
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => {
+              setAdding(true);
+            }}
+          >
+            ميزة جديدة
+          </button>
+        )}
+      </div>
       {error && <p role="alert">{error}</p>}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
         </p>
       )}
-      <div className="plans-console">
-        <section className="card plans-list" aria-labelledby="h-plans">
-          <h2 id="h-plans">الباقات</h2>
-          <ul>
-            {groups.map((g) => (
-              <li key={g.code}>
-                <button type="button" className={g.code === code ? 'plan-pick current' : 'plan-pick'} aria-pressed={g.code === code} onClick={() => { pick(g.code); }}>
-                  <span>
-                    <strong>{g.head.name_ar}</strong> <span className="muted small">{kindLabel[g.head.kind]}</span>
-                  </span>
-                  <span className="muted small ltr">
-                    {g.versions.map((v) => `v${String(v.version)}${v.active ? '' : '×'}`).join(' ')}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="button" onClick={startNew}>
-            باقة جديدة
-          </button>
-        </section>
 
-        {draft && (
-          <form className="card plan-editor" onSubmit={(e) => void publish(e)} aria-label="إصدار جديد">
-            <h2>{isNew ? 'باقة جديدة' : `${current?.head.name_ar ?? ''} — إصدار جديد (v${String((current?.versions[0]?.version ?? 0) + 1)})`}</h2>
-            {!isNew && <p className="muted small">لن يتغير شيء على المشتركين قبل تجديدهم القادم. الإصدارات لا تُعدَّل ولا تُحذف.</p>}
-            <div className="editor-fields">
-              {isNew && (
-                <>
-                  <label>
-                    <span className="field-label">الكود</span>
-                    <input value={draft.code} onChange={(e) => { edit({ code: e.target.value }); }} required pattern="[a-z][a-z_]{1,31}" dir="ltr" />
-                  </label>
-                  <label>
-                    <span className="field-label">النوع</span>
-                    <select value={draft.kind} onChange={(e) => { edit({ kind: e.target.value as Kind }); }}>
-                      {(Object.keys(kindLabel) as Kind[]).map((k) => (
-                        <option key={k} value={k}>
-                          {kindLabel[k]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
-              )}
-              <label>
-                <span className="field-label">الاسم بالعربية</span>
-                <input value={draft.name_ar} onChange={(e) => { edit({ name_ar: e.target.value }); }} required maxLength={80} />
-              </label>
-              <label>
-                <span className="field-label">الاسم بالإنجليزية</span>
-                <input value={draft.name_en} onChange={(e) => { edit({ name_en: e.target.value }); }} required maxLength={80} dir="ltr" />
-              </label>
-              <label>
-                <span className="field-label">أيام التجربة</span>
-                <input value={draft.trial_days} onChange={(e) => { edit({ trial_days: e.target.value }); }} inputMode="numeric" />
-              </label>
-              <label>
-                <span className="field-label">الترتيب</span>
-                <input value={draft.sort} onChange={(e) => { edit({ sort: e.target.value }); }} inputMode="numeric" />
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={draft.public} onChange={(e) => { edit({ public: e.target.checked }); }} /> معروضة للتجار
-              </label>
-            </div>
-
-            {paid && (
-              <fieldset>
-                <legend>الأسعار</legend>
-                <table className="compact">
-                  <thead>
-                    <tr>
-                      <th scope="col">العملة</th>
-                      <th scope="col">شهري</th>
-                      <th scope="col">سنوي</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currencies.map((c) => (
-                      <tr key={c}>
-                        <th scope="row">{c}</th>
-                        {cycles.map((cy) => (
-                          <td key={cy}>
-                            <input
-                              aria-label={`${c} ${cy === 'monthly' ? 'شهري' : 'سنوي'}`}
-                              value={draft.prices[priceKey(c, cy)] ?? ''}
-                              onChange={(e) => { edit({ prices: { ...draft.prices, [priceKey(c, cy)]: e.target.value } }); }}
-                              inputMode="decimal"
-                              dir="ltr"
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </fieldset>
-            )}
-            {draft.kind === 'pays' && (
-              <fieldset>
-                <legend>رسوم الطلبات المسلّمة</legend>
-                <table className="compact">
-                  <thead>
-                    <tr>
-                      <th scope="col">العملة</th>
-                      <th scope="col">النسبة %</th>
-                      <th scope="col">أقل رسوم</th>
-                      <th scope="col">أقصى رسوم</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currencies.map((c) => {
-                      const f = draft.fees[c] ?? { rate: '', min: '', max: '' };
-                      const set = (patch: Partial<typeof f>) => {
-                        edit({ fees: { ...draft.fees, [c]: { ...f, ...patch } } });
-                      };
-                      return (
-                        <tr key={c}>
-                          <th scope="row">{c}</th>
-                          <td>
-                            <input aria-label={`${c} النسبة`} value={f.rate} onChange={(e) => { set({ rate: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                          </td>
-                          <td>
-                            <input aria-label={`${c} أقل رسوم`} value={f.min} onChange={(e) => { set({ min: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                          </td>
-                          <td>
-                            <input aria-label={`${c} أقصى رسوم`} value={f.max} onChange={(e) => { set({ max: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </fieldset>
-            )}
-
-            <fieldset>
-              <legend>ما تمنحه الباقة</legend>
-              <p className="muted small">اترك القيمة فارغة لميزة لا تمنحها الباقة. التشغيل/الإيقاف: 1 أو 0.</p>
-              <table className="compact">
-                <thead>
-                  <tr>
-                    <th scope="col">الميزة</th>
-                    <th scope="col">النوع</th>
-                    <th scope="col">القيمة</th>
-                    <th scope="col">بلا حد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {features.map((f) => {
-                    const g = draft.grants[f.key] ?? { value: '', unlimited: false };
-                    const set = (patch: Partial<typeof g>) => {
-                      edit({ grants: { ...draft.grants, [f.key]: { ...g, ...patch } } });
-                    };
-                    return (
-                      <tr key={f.key}>
-                        <th scope="row">
-                          {f.name_ar} {!f.enforced && <span className="status">عرض فقط</span>}
-                        </th>
-                        <td className="muted">{featureKindLabel[f.kind]}</td>
-                        <td>
-                          <input aria-label={f.name_ar} value={g.value} disabled={g.unlimited} onChange={(e) => { set({ value: e.target.value }); }} inputMode="numeric" dir="ltr" />
-                        </td>
-                        <td>
-                          {f.kind !== 'flag' && <input type="checkbox" aria-label={`${f.name_ar} بلا حد`} checked={g.unlimited} onChange={(e) => { set({ unlimited: e.target.checked }); }} />}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </fieldset>
-
-            <div className="inline-form">
-              <label className="grow">
-                <span className="field-label">سبب التغيير (إجباري)</span>
-                <input name="reason" required minLength={3} maxLength={500} />
-              </label>
-              <button type="submit" className="button primary" disabled={busy}>
-                {isNew ? 'انشر الباقة' : 'انشر الإصدار'}
-              </button>
-              {!isNew && current?.head.active && current.head.kind !== 'free' && (
-                <button type="button" className="link-button danger" disabled={busy} onClick={() => void retire()}>
-                  إيقاف بيع الباقة
-                </button>
-              )}
-            </div>
-          </form>
-        )}
+      <div className="tabs" role="tablist" aria-label="العرض">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'plans'}
+          onClick={() => {
+            setParams({});
+          }}
+        >
+          الباقات <span className="count">{groups.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'features'}
+          onClick={() => {
+            setParams({ tab: 'features' });
+          }}
+        >
+          كتالوج المميزات <span className="count">{features.length}</span>
+        </button>
       </div>
 
-      <section className="table-card" aria-labelledby="h-catalog">
-        <div className="card-head wrap">
-          <h2 id="h-catalog">كتالوج المميزات</h2>
-          <span className="muted small">الميزة الجديدة تظهر على الباقات للعرض، ولا يطبّقها النظام حتى يدعمها الكود. نوع الميزة لا يتغير بعد إنشائها.</span>
-        </div>
-        <div className="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">المفتاح</th>
-                <th scope="col">الاسم</th>
-                <th scope="col">النوع</th>
-                <th scope="col">التطبيق</th>
-              </tr>
-            </thead>
-            <tbody>
-              {features.map((f) => (
-                <tr key={f.key}>
-                  <td className="ltr">{f.key}</td>
-                  <td>{f.name_ar}</td>
-                  <td className="muted">{featureKindLabel[f.kind]}</td>
-                  <td>
-                    <span className={f.enforced ? 'status store-active' : 'status'}>{f.enforced ? 'يطبّقه النظام' : 'عرض فقط'}</span>
-                  </td>
+      {tab === 'plans' ? (
+        <ul className="plan-cards">
+          {groups.map(({ code, head }) => {
+            const h = headline(head);
+            const others = otherPrices(head);
+            return (
+              <li key={code} className="card plan-card">
+                <div className="plan-card-head">
+                  <div>
+                    <h2>
+                      {head.name_ar} <span className="ltr muted">{head.name_en}</span>
+                    </h2>
+                    <span className={`status kind-${head.kind}`}>{kindLabel[head.kind]}</span>
+                  </div>
+                  {!head.active ? (
+                    <span className="status store-closed">متوقفة عن البيع</span>
+                  ) : head.public ? (
+                    <span className="status store-active">معروضة</span>
+                  ) : (
+                    <span className="status">مخفية</span>
+                  )}
+                </div>
+                <div className="plan-price" title={others || undefined}>
+                  <strong>
+                    {h.price} {h.per && <small>{h.per}</small>}
+                  </strong>
+                  <span className="muted">{h.sub}</span>
+                </div>
+                <ul className="plan-facts">
+                  {facts(head, features).map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+                <div className="plan-card-foot">
+                  <span className="muted small">
+                    الإصدار v{head.version} · <SubscribersSlot />
+                  </span>
+                  <Link to={`/plans/${code}`} aria-label={`تعديل ${head.name_ar}`}>
+                    تعديل ←
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <section className="table-card" aria-label="كتالوج المميزات">
+          <div className="scroll">
+            <table className="features-table">
+              <thead>
+                <tr>
+                  <th scope="col">الميزة</th>
+                  <th scope="col">النوع</th>
+                  <th scope="col">التطبيق</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <form className="inline-form foot" onSubmit={(e) => void saveFeature(e)} aria-label="ميزة جديدة">
-          <label>
-            <span className="field-label">المفتاح</span>
-            <input name="key" required pattern="[a-z][a-z_]{0,31}" dir="ltr" placeholder="live_chat" />
-          </label>
-          <label>
-            <span className="field-label">الاسم بالعربية</span>
-            <input name="name_ar" required maxLength={80} />
-          </label>
+              </thead>
+              <tbody>
+                {[...features]
+                  .sort((a, b) => a.sort - b.sort)
+                  .map((f) => (
+                    <tr key={f.key}>
+                      <td>
+                        <strong>{f.name_ar}</strong>
+                        <code className="ltr">{f.key}</code>
+                      </td>
+                      <td className="muted">{featureKindLabel[f.kind]}</td>
+                      <td>
+                        <span className={f.enforced ? 'status store-active' : 'status'}>{f.enforced ? 'يطبّقها النظام' : 'عرض فقط'}</span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {adding && (
+        <FeatureDialog
+          nextSort={Math.max(0, ...features.map((f) => f.sort)) + 10}
+          onSaved={async (name) => {
+            setAdding(false);
+            setNotice(`حُفظت الميزة «${name}».`);
+            await reload();
+          }}
+          onError={setError}
+          onClose={() => {
+            setAdding(false);
+          }}
+        />
+      )}
+    </ConsoleLayout>
+  );
+}
+
+// FeatureDialog adds a feature to the catalog (the approved mockup's
+// «ميزة جديدة»). Escape or «إلغاء» closes it.
+function FeatureDialog({ nextSort, onSaved, onError, onClose }: { nextSort: number; onSaved: (name: string) => Promise<void>; onError: (m: string) => void; onClose: () => void }) {
+  const box = useRef<HTMLFormElement>(null);
+  const close = useRef(onClose);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null;
+    box.current?.querySelector<HTMLInputElement>('input')?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current();
+    };
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('keydown', key);
+      back?.focus();
+    };
+  }, []);
+
+  async function save(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const name = field(form, 'name_ar').trim();
+    setBusy(true);
+    setError('');
+    onError('');
+    const { error: err } = await api.PUT('/admin/v1/features/{key}', {
+      params: { path: { key: field(form, 'key').trim() } },
+      body: { kind: field(form, 'kind') as Feature['kind'], name_ar: name, name_en: field(form, 'name_en').trim(), sort: nextSort, reason: field(form, 'reason').trim() },
+    });
+    setBusy(false);
+    if (err) {
+      setError(problemMessage(err));
+      return;
+    }
+    await onSaved(name);
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <form ref={box} className="modal feature-dialog" role="dialog" aria-modal="true" aria-labelledby="h-feature" onSubmit={(e) => void save(e)}>
+        <h2 id="h-feature">ميزة جديدة</h2>
+        <p className="muted">تظهر في الباقات للعرض فقط إلى أن يدعمها النظام. نوعها ومفتاحها لا يتغيران بعد الحفظ.</p>
+        {error && <p role="alert">{error}</p>}
+        <label>
+          <span className="field-label">الاسم بالعربية</span>
+          <input name="name_ar" required maxLength={80} />
+        </label>
+        <div className="two">
           <label>
             <span className="field-label">الاسم بالإنجليزية</span>
             <input name="name_en" required maxLength={80} dir="ltr" />
           </label>
           <label>
-            <span className="field-label">النوع</span>
-            <select name="kind" defaultValue="flag">
-              <option value="flag">تشغيل/إيقاف</option>
-              <option value="count">عدد</option>
-              <option value="monthly">شهري</option>
-            </select>
+            <span className="field-label">المفتاح</span>
+            <input name="key" required pattern="[a-z][a-z_]{0,31}" dir="ltr" placeholder="live_chat" />
           </label>
-          <label>
-            <span className="field-label">الترتيب</span>
-            <input name="sort" inputMode="numeric" defaultValue="0" />
+        </div>
+        <fieldset>
+          <legend className="field-label">النوع</legend>
+          <label className="radio">
+            <input type="radio" name="kind" value="flag" defaultChecked /> تشغيل/إيقاف <small className="muted">متاحة أو لا</small>
           </label>
-          <label className="grow">
-            <span className="field-label">السبب</span>
-            <input name="reason" required minLength={3} maxLength={500} />
+          <label className="radio">
+            <input type="radio" name="kind" value="count" /> عدد <small className="muted">مثل المنتجات</small>
           </label>
+          <label className="radio">
+            <input type="radio" name="kind" value="monthly" /> في الشهر <small className="muted">يتجدد كل شهر</small>
+          </label>
+        </fieldset>
+        <label>
+          <span className="field-label">السبب</span>
+          <input name="reason" required minLength={3} maxLength={500} />
+        </label>
+        <div className="actions">
           <button type="submit" className="button primary" disabled={busy}>
             حفظ الميزة
           </button>
-        </form>
-      </section>
-    </ConsoleLayout>
+          <button type="button" className="secondary" onClick={onClose}>
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
