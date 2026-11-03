@@ -23,6 +23,8 @@ import { LandingEditor } from './pages/LandingEditor';
 import { MessageLog } from './pages/MessageLog';
 import { Messages } from './pages/Messages';
 import { Login } from './pages/Login';
+import { CustomerDetail } from './pages/CustomerDetail';
+import { Customers } from './pages/Customers';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
@@ -93,6 +95,8 @@ function Gate() {
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
+          <Route path="/stores/:storeId/customers" element={<Customers />} />
+          <Route path="/stores/:storeId/customers/:customerId" element={<CustomerDetail />} />
           <Route path="/stores/:storeId/products" element={<Products />} />
           <Route path="/stores/:storeId/products/new" element={<ProductEditor />} />
           <Route path="/stores/:storeId/products/:productId" element={<ProductEditor key="edit" />} />

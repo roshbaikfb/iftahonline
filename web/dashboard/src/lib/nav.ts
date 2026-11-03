@@ -23,7 +23,7 @@ export function navGroups(storeId: string): NavGroup[] {
         { label: 'الطلبات', to: at('orders'), pendingBadge: true },
         { label: 'المدفوعات', to: at('payments') },
         { label: 'رسائل العملاء', to: at('messages') },
-        { label: 'العملاء' },
+        { label: 'العملاء', to: at('customers') },
       ],
     },
     { title: 'التقارير', items: [{ label: 'الربح الصافي', to: at('profit') }] },
