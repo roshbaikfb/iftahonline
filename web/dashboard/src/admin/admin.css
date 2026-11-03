@@ -1331,21 +1331,9 @@ button.danger-solid:hover:not(:disabled) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem;
 }
-.slot-card {
-  display: grid;
-  gap: 0.3rem;
-  padding: 1rem;
-  border: 1.5px dashed var(--field);
-  border-radius: var(--radius-card);
-  background: #fbfcfe;
-}
-.slot-card h2,
 .store-card h2 {
   margin: 0;
   font-size: 1.05rem;
-}
-.slot-card p {
-  margin: 0;
 }
 .store-card {
   align-content: start;
@@ -1480,4 +1468,29 @@ button.chip.on:hover:not(:disabled) {
 .audit-list.flat {
   border: 0;
   border-radius: 0;
+}
+.owner-phone {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.owner-phone a {
+  font-weight: 600;
+}
+.store-numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.store-numbers > div {
+  display: grid;
+  gap: 0.2rem;
+}
+.store-numbers strong {
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+.store-numbers strong.date {
+  font-size: 1rem;
 }

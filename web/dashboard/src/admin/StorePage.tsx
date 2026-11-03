@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { cycleLabel, dateAr, statusLabel } from '../lib/billing';
+import { telLink, waLink } from '../lib/customers';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { storefrontURL } from '../lib/storefront';
@@ -21,6 +22,7 @@ type Grants = components['schemas']['AdminStoreEntitlements'];
 type Feature = components['schemas']['AdminFeature'];
 type Agency = components['schemas']['AdminAgency'];
 type Grant = components['schemas']['AdminPlanGrant'];
+type Profile = components['schemas']['AdminStoreProfile'];
 
 // fetchStore reads everything the page shows, at once.
 function fetchStore(storeId: string) {
@@ -32,6 +34,7 @@ function fetchStore(storeId: string) {
     api.GET('/admin/v1/features'),
     api.GET('/admin/v1/agencies'),
     api.GET('/admin/v1/audit-log', { params: { query: { store: storeId, limit: 5 } } }),
+    api.GET('/admin/v1/stores/{store_id}/profile', p),
   ]);
 }
 
@@ -57,6 +60,7 @@ export function StorePage() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [history, setHistory] = useState<Entry[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const { state } = useAdmin();
   const me = state.kind === 'signed-in' ? state.admin.id : '';
   const [support, setSupport] = useState<{ url: string; expires: string } | null>(null);
@@ -66,13 +70,14 @@ export function StorePage() {
   const [busy, setBusy] = useState(false);
 
   const apply = useCallback((r: Awaited<ReturnType<typeof fetchStore>>) => {
-    const [d, b, g, f, a, h] = r;
+    const [d, b, g, f, a, h, pr] = r;
     if (d.data) setDetail(d.data);
     if (b.data) setBilling(b.data);
     if (g.data) setGrants(g.data);
     if (f.data) setFeatures(f.data.items);
     if (a.data) setAgencies(a.data.items);
     if (h.data) setHistory(h.data.items);
+    if (pr.data) setProfile(pr.data);
     const err = d.error ?? b.error ?? g.error;
     if (err) setError(problemMessage(err));
   }, []);
@@ -214,13 +219,63 @@ export function StorePage() {
       )}
 
       <div className="store-grid">
-        <section className="slot-card" aria-label="صاحب المتجر">
-          <h2>صاحب المتجر</h2>
-          <p className="muted small">الاسم والإيميل والموبايل كاملين، للتواصل. لا تُكتب في أي سجل. تصل مع تحديث الخادم.</p>
+        <section className="card store-card" aria-labelledby="h-owner">
+          <h2 id="h-owner">صاحب المتجر</h2>
+          {!profile ? (
+            <p className="muted small">…</p>
+          ) : !profile.owner ? (
+            <p className="muted">لا صاحب لهذا المتجر.</p>
+          ) : (
+            <>
+              <dl className="store-facts">
+                <dt>الاسم</dt>
+                <dd>{profile.owner.name}</dd>
+                <dt>البريد</dt>
+                <dd>
+                  <a className="ltr" href={`mailto:${profile.owner.email}`}>
+                    {profile.owner.email}
+                  </a>
+                  {!profile.owner.email_verified && <span className="muted small"> · غير مؤكد</span>}
+                </dd>
+                <dt>الموبايل</dt>
+                <dd>
+                  {profile.owner.phone ? (
+                    <span className="owner-phone">
+                      <bdi className="ltr">{profile.owner.phone}</bdi>
+                      <a href={telLink(profile.owner.phone)}>اتصال</a>
+                      <a href={waLink(profile.owner.phone)} target="_blank" rel="noopener noreferrer">
+                        واتساب
+                      </a>
+                    </span>
+                  ) : (
+                    <span className="muted">لم يضف رقمًا</span>
+                  )}
+                </dd>
+                <dt>آخر دخول للوحة</dt>
+                <dd className={profile.owner.last_seen_at ? '' : 'muted'}>{profile.owner.last_seen_at ? dateTimeAr(profile.owner.last_seen_at) : 'لم يدخل بعد'}</dd>
+              </dl>
+              <p className="muted small store-card-foot">للتواصل فقط. لا تُكتب هذه البيانات في أي سجل.</p>
+            </>
+          )}
         </section>
-        <section className="slot-card" aria-label="أرقام المتجر">
-          <h2>أرقام المتجر</h2>
-          <p className="muted small">طلبات آخر 30 يومًا، آخر طلب، المنتجات، آخر دخول. تصل مع تحديث الخادم.</p>
+        <section className="card store-card" aria-labelledby="h-numbers">
+          <h2 id="h-numbers">أرقام المتجر</h2>
+          {profile && (
+            <div className="store-numbers">
+              <div>
+                <span className="muted">طلبات آخر 30 يومًا</span>
+                <strong>{profile.orders_30d.toLocaleString('en-US')}</strong>
+              </div>
+              <div>
+                <span className="muted">آخر طلب</span>
+                <strong className={profile.last_order_at ? 'date' : 'date muted'}>{profile.last_order_at ? dateTimeAr(profile.last_order_at) : 'لا طلبات بعد'}</strong>
+              </div>
+              <div>
+                <span className="muted">المنتجات</span>
+                <strong>{profile.products.toLocaleString('en-US')}</strong>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
