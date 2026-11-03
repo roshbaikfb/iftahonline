@@ -5,8 +5,10 @@ import { api } from '../api/client';
 import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
+import { BillingPage } from './BillingPage';
 import { FoundingPage } from './FoundingPage';
 import { GuideEditor, GuidesPage } from './GuidesPage';
+import { InvoicePage } from './InvoicePage';
 import { AuditPage } from './AuditPage';
 import { Login } from './Login';
 import { Overview } from './Overview';
@@ -24,6 +26,8 @@ export function ConsoleRoutes() {
       <Route path="/" element={<Overview />} />
       <Route path="/stores" element={<StoresPage />} />
       <Route path="/stores/:storeId" element={<StorePage />} />
+      <Route path="/billing" element={<BillingPage />} />
+      <Route path="/billing/invoices/:invoiceId" element={<InvoicePage />} />
       <Route path="/plans" element={<PlansPage />} />
       <Route path="/plans/:code" element={<PlanEditorPage />} />
       <Route path="/agencies" element={<AgenciesPage />} />

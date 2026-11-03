@@ -1,4 +1,5 @@
 import type { components } from '../api/client';
+import { invoiceStatusLabel } from './billing';
 import { featureKindLabel, kindLabel, type Feature } from './plans';
 
 export type Entry = components['schemas']['AdminAuditEntry'];
@@ -30,6 +31,7 @@ const actions: Record<string, Action> = {
   'agency.created': { label: 'أنشأ وكالة', family: 'billing' },
   'invoice.settled': { label: 'سجّل فاتورة مدفوعة بتحويل', family: 'billing' },
   'payment.refunded': { label: 'سجّل استرداد دفعة زائدة', family: 'billing' },
+  'billing.invoices_exported': { label: 'صدّر الفواتير (CSV)', family: 'billing' },
   'billing.founding_saved': { label: 'حفظ برنامج التجار المؤسسين', family: 'billing' },
   'ads.settings_saved': { label: 'حفظ إعدادات الإعلانات', family: 'content' },
   'ads.banner_created': { label: 'أضاف بانرًا إعلانيًا', family: 'content' },
@@ -88,7 +90,11 @@ function target(e: Entry): Described['target'] {
     case 'agency':
       return { text: str(m['name']) || 'وكالة', to: `/agencies/${e.target_id}` };
     case 'invoice':
-      return str(m['store']) ? { text: e.store_name ? `فاتورة «${e.store_name}»` : 'فاتورة المتجر', to: `/stores/${str(m['store'])}` } : { text: 'فاتورة' };
+      if (e.action === 'billing.invoices_exported') return { text: 'الفواتير', to: '/billing' };
+      return {
+        text: e.store_name ? `فاتورة «${e.store_name}»` : str(m['number']) ? `فاتورة ${str(m['number'])}` : str(m['store']) ? 'فاتورة المتجر' : 'فاتورة',
+        to: `/billing/invoices/${e.target_id}`,
+      };
     case 'site_guide':
       return { text: str(m['slug']) || 'دليل', to: `/guides/${e.target_id}` };
     case 'site_faq':
@@ -128,6 +134,8 @@ function chips(e: Entry, features: Feature[]): string[] {
       case 'link_url':
       case 'publisher_id':
       case 'video_id':
+      case 'number':
+      case 'account':
         break; // the reason has its line; the rest names the target or is an ID
       case 'feature':
         if (e.action !== 'store.feature_overridden') out.push(feature?.name_ar ?? str(v));
@@ -178,12 +186,19 @@ function chips(e: Entry, features: Feature[]): string[] {
         out.push(`المكان: ${str(v)}`);
         break;
       case 'currency':
-        out.push(str(v));
+        if (str(v)) out.push(str(v));
+        break;
+      case 'q':
+        if (str(v)) out.push(`بحث: ${str(v)}`);
         break;
       case 'plan_code':
         out.push(`باقة ${str(v)}`);
         break;
       case 'status':
+        if (e.action === 'billing.invoices_exported') {
+          if (str(v)) out.push(labelOf(invoiceStatusLabel, v));
+          break;
+        }
         out.push(v === 'published' ? 'منشور' : v === 'draft' ? 'مسودة' : str(v));
         break;
       default:

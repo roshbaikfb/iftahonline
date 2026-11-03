@@ -1494,3 +1494,248 @@ button.chip.on:hover:not(:disabled) {
 .store-numbers strong.date {
   font-size: 1rem;
 }
+
+/* The invoices and payments page (ADR-0076, the approved mockup). */
+.kpi-link {
+  color: inherit;
+  text-decoration: none;
+}
+.kpi-link:hover {
+  border-color: #cbd5e1;
+}
+.kpi-link.warn {
+  border-color: #fde68a;
+  box-shadow: inset 0 3px 0 #d97706;
+}
+.kpi-link.warn > strong {
+  color: #b45309;
+}
+.kpi-go {
+  color: var(--navy);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.kpi > strong.kpi-money {
+  font-size: 1.35rem;
+}
+.segmented-tabs {
+  display: flex;
+  gap: 0.25rem;
+  align-self: flex-start;
+  inline-size: fit-content;
+  padding: 0.25rem;
+  border-radius: 0.65rem;
+  background: #e9eef5;
+}
+.segmented-tabs button {
+  min-block-size: 2.25rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.segmented-tabs button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.segmented-tabs button[aria-selected='true'],
+.segmented-tabs button[aria-selected='true']:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+.billing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-block-end: 1px solid var(--line);
+}
+.billing-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.billing-search label,
+.billing-gateway {
+  display: grid;
+  gap: 0.25rem;
+}
+.billing-search input {
+  inline-size: 16rem;
+  max-inline-size: 100%;
+}
+.billing-table td {
+  vertical-align: top;
+}
+.billing-table .code {
+  font-weight: 700;
+}
+.kind-note {
+  color: var(--subtle);
+  font-size: 0.8rem;
+}
+.billing-table tr.flagged td {
+  background: #fffbeb;
+}
+.billing-more {
+  justify-content: center;
+}
+.status.inv-open,
+.status.pay-manual {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.status.inv-overdue,
+.status.pay-duplicate {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status.inv-paid,
+.status.pay-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.pay-declined {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.crumbs {
+  color: var(--subtle);
+  font-size: 0.85rem;
+}
+.crumbs a {
+  color: var(--subtle);
+}
+.invoice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.invoice-head h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+.invoice-head p {
+  margin: 0.25rem 0 0;
+}
+.invoice-total {
+  font-size: 1.6rem;
+}
+.invoice-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+.invoice-grid.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.table-card table.invoice-lines {
+  min-inline-size: 0;
+}
+.invoice-lines td.line-amount {
+  text-align: end;
+  white-space: nowrap;
+}
+.invoice-lines tr.sum td {
+  color: var(--muted);
+}
+.invoice-lines tr.total td {
+  border-block-start: 1px solid var(--line);
+}
+.settle-card {
+  gap: 0.75rem;
+}
+.settle-card h2,
+.settle-card p {
+  margin: 0;
+}
+.settle-form {
+  display: grid;
+  gap: 0.75rem;
+}
+.settle-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.settle-form button {
+  justify-self: start;
+}
+.notice.ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+@media (max-width: 56rem) {
+  .invoice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* On phones each invoice or payment is a card: who and the status, then
+   the number and the amount, then the note. */
+@media (max-width: 40rem) {
+  .billing-table thead {
+    display: none;
+  }
+  .table-card table.billing-table,
+  .billing-table tbody {
+    display: block;
+    min-inline-size: 0;
+  }
+  .billing-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.3rem 0.75rem;
+    padding: 0.85rem 1rem;
+    border-block-start: 1px solid var(--line);
+  }
+  .billing-table td {
+    padding: 0;
+    border: 0;
+  }
+  .billing-table .b-who {
+    order: 1;
+    font-weight: 700;
+  }
+  .billing-table .b-status {
+    order: 2;
+    text-align: end;
+  }
+  .billing-table .b-number {
+    order: 3;
+  }
+  .billing-table .b-total {
+    order: 4;
+    text-align: end;
+  }
+  .billing-table .b-period,
+  .billing-table .b-due {
+    order: 5;
+    font-size: 0.85rem;
+  }
+  .billing-table .b-action {
+    order: 6;
+    grid-column: 1 / -1;
+  }
+  .billing-table .b-action:empty {
+    display: none;
+  }
+  .billing-search input {
+    inline-size: 100%;
+  }
+  .billing-search .grow {
+    flex: 1 1 100%;
+  }
+}
