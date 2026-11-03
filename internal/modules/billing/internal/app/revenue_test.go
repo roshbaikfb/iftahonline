@@ -44,16 +44,16 @@ func TestPaying(t *testing.T) {
 	d.subscribe(former, t, "merchant", "active", period)
 	join := func(ctx context.Context, seat int, lost string) {
 		t.Helper()
-		if _, err := owner.Exec(t.Context(), `INSERT INTO founding_members (store_id, owner_id, seat, discount_bps, currency, plan_code, cycle, locked_minor, lost_at, lost_reason)
-			VALUES ($1, $2, $3, 2000, 'EGP', 'merchant', 'monthly', 24900, `+lost+`)`, idOf(ctx), d.ids.New(), seat); err != nil {
-			t.Fatal(err)
+		if _, joinErr := owner.Exec(t.Context(), `INSERT INTO founding_members (store_id, owner_id, seat, discount_bps, currency, plan_code, cycle, locked_minor, lost_at, lost_reason)
+			VALUES ($1, $2, $3, 2000, 'EGP', 'merchant', 'monthly', 24900, `+lost+`)`, idOf(ctx), d.ids.New(), seat); joinErr != nil {
+			t.Fatal(joinErr)
 		}
 	}
 	join(member, 9901, "NULL, NULL")
 	join(former, 9902, "'2026-10-15T00:00:00Z', 'cancelled'")
 	t.Cleanup(func() {
-		if _, err := owner.Exec(context.Background(), `DELETE FROM founding_members WHERE store_id = ANY($1)`, []ulid.ID{idOf(member), idOf(former)}); err != nil {
-			t.Error(err)
+		if _, delErr := owner.Exec(context.Background(), `DELETE FROM founding_members WHERE store_id = ANY($1)`, []ulid.ID{idOf(member), idOf(former)}); delErr != nil {
+			t.Error(delErr)
 		}
 	})
 

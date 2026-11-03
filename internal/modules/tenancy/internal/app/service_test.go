@@ -566,11 +566,11 @@ func TestNewStores(t *testing.T) {
 	// date sets a store's creation time, as the store (RLS).
 	date := func(ctx context.Context, at string) {
 		t.Helper()
-		if err := postgres.InTenantTx(ctx, f.app, func(tx pgx.Tx) error {
+		if dateErr := postgres.InTenantTx(ctx, f.app, func(tx pgx.Tx) error {
 			_, execErr := tx.Exec(ctx, `UPDATE stores SET created_at = $1`, at)
 			return execErr
-		}); err != nil {
-			t.Fatal(err)
+		}); dateErr != nil {
+			t.Fatal(dateErr)
 		}
 	}
 
