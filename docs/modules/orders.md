@@ -13,6 +13,7 @@ Customers and stock holds: [ADR-0020](../adr/0020-customers-order-stock-and-mont
 | `New(Deps)`, `Module.Mount` | Wiring, and the merchant HTTP API (behind identity's membership middleware) |
 | `Order`, `Status`, `Status…` constants | The order DTO and its states |
 | `TransitionError`, `ErrInvalidTransition`, `ErrOrderNotFound`, `ErrIdempotencyKeyReused`, `ErrVersionConflict` | Errors |
+| `ActivityTx(ctx, tx, since)`, `Activity` | The store-in-ctx's orders since a time and its last order's time, for the console's store page (one query on the primary key) |
 | `OrderPlaced`, `OrderStatusChanged`, `EventOrderPlaced`, `EventOrderStatusChanged` | Events the module publishes |
 | `StoreInfo`, `StoreSource` | The store's currency, country and zone; `cmd/platform` adapts tenancy |
 | `Shop.Bestsellers(ctx, limit)` | Product IDs by units sold in confirmed orders over the last 30 days, most first, ≤ `MaxBestsellers` (48) |
