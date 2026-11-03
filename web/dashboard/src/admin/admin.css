@@ -713,22 +713,6 @@ body {
 .guide-preview .prose :is(h2, h3) {
   margin-block: 0.8rem 0.3rem;
 }
-.support-card {
-  background: #fffbeb;
-  border-color: #fde68a;
-}
-.support-card h2 {
-  margin: 0;
-}
-.console-danger summary {
-  list-style: none;
-  cursor: pointer;
-  color: var(--red);
-  border-color: #fca5a5;
-}
-.console-danger[open] summary {
-  margin-block-end: 0.5rem;
-}
 .console-invoice {
   display: grid;
   gap: 0.35rem;
@@ -891,43 +875,43 @@ td.wrap-cell {
   font-size: 0.8rem;
   text-align: end;
 }
-.feature-dialog {
+.console-dialog {
   max-inline-size: 30rem;
   gap: 0.85rem;
 }
-.feature-dialog h2,
-.feature-dialog p {
+.console-dialog h2,
+.console-dialog p {
   margin: 0;
 }
-.feature-dialog label,
+.console-dialog label,
 .plan-grid label,
 .plan-fold form label {
   display: grid;
   gap: 0.3rem;
 }
-.feature-dialog input:not([type='radio']) {
+.console-dialog input:not([type='radio']) {
   inline-size: 100%;
   min-inline-size: 0;
 }
-.feature-dialog .two {
+.console-dialog .two {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
-.feature-dialog fieldset {
+.console-dialog fieldset {
   display: grid;
   gap: 0.4rem;
   margin: 0;
   padding: 0;
   border: 0;
 }
-.feature-dialog label.radio {
+.console-dialog label.radio {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
 }
-.feature-dialog .actions {
+.console-dialog .actions {
   display: flex;
   gap: 0.5rem;
 }
@@ -1179,7 +1163,7 @@ button.danger-solid:hover:not(:disabled) {
 @media (max-width: 40rem) {
   .plan-grid,
   .flag-grid,
-  .feature-dialog .two {
+  .console-dialog .two {
     grid-template-columns: minmax(0, 1fr);
   }
   .price-row,
@@ -1197,5 +1181,257 @@ button.danger-solid:hover:not(:disabled) {
   }
   .save-bar .grow {
     flex-basis: 9rem;
+  }
+}
+
+/* The admin log (the approved mockup): by day, one line per action. */
+.audit-day {
+  display: grid;
+  gap: 0.5rem;
+}
+.audit-day h2 {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.audit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.audit-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-block-start: 1px solid #f1f5f9;
+}
+.audit-list > li:first-child {
+  border-block-start: 0;
+}
+.audit-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.15rem;
+  block-size: 2.15rem;
+  border-radius: 0.6rem;
+  font-weight: 700;
+}
+.audit-mark.store {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.audit-mark.billing {
+  background: #dcfce7;
+  color: #166534;
+}
+.audit-mark.content {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.audit-mark.security {
+  background: #f1f5f9;
+  color: #334155;
+}
+.audit-mark.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.audit-body {
+  display: grid;
+  flex: 1;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+.audit-body p {
+  margin: 0;
+}
+.audit-what a {
+  font-weight: 600;
+}
+.audit-reason {
+  color: #334155;
+  font-size: 0.9rem;
+}
+.audit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.audit-chips li {
+  padding: 0.05rem 0.6rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.8rem;
+}
+.audit-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.1rem;
+  color: var(--subtle);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.audit-more {
+  justify-self: center;
+}
+@media (max-width: 40rem) {
+  .audit-list > li {
+    flex-wrap: wrap;
+  }
+  .audit-meta {
+    display: flex;
+    flex: 1 1 100%;
+    justify-items: start;
+    gap: 0.6rem;
+    padding-inline-start: 3rem;
+  }
+}
+
+/* One store (the approved mockup). */
+.store-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.store-title {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.store-title h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+.store-title p {
+  margin: 0;
+}
+.store-mark.big {
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 0.75rem;
+  font-size: 1.25rem;
+}
+.store-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+.slot-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 1.5px dashed var(--field);
+  border-radius: var(--radius-card);
+  background: #fbfcfe;
+}
+.slot-card h2,
+.store-card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.slot-card p {
+  margin: 0;
+}
+.store-card {
+  align-content: start;
+}
+.store-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+.store-facts dt {
+  color: var(--muted);
+}
+.store-facts dd {
+  margin: 0;
+}
+.store-card-foot {
+  margin: 0;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid #f1f5f9;
+}
+.support-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.support-form label {
+  display: grid;
+  gap: 0.3rem;
+}
+.support-form .grow {
+  flex: 1 1 16rem;
+}
+.segmented {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: #f1f5f9;
+}
+.segmented label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-block-size: 2.25rem;
+  padding: 0 0.7rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.segmented label:has(input:checked) {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+tr.overridden > * {
+  background: #fffbeb;
+}
+.console-dialog .check {
+  display: inline-flex;
+  align-items: center;
+  align-self: end;
+  gap: 0.4rem;
+  min-block-size: 2.6rem;
+}
+.console-dialog .limit-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+.console-dialog .limit-pair input {
+  inline-size: 100%;
+}
+.console-dialog .check {
+  white-space: nowrap;
+}
+.console-dialog .field {
+  display: grid;
+  gap: 0.3rem;
+}
+@media (max-width: 56rem) {
+  .store-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

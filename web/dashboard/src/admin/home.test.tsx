@@ -205,7 +205,8 @@ describe('console frame', () => {
     expect(within(nav).getByRole('link', { name: 'المتاجر' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'الرئيسية' })).not.toHaveAttribute('aria-current');
     expect(within(nav).getByRole('link', { name: 'سجل الأدمن' })).toHaveAttribute('href', '/audit');
-    expect(await screen.findByRole('link', { name: '→ المتاجر' })).toHaveAttribute('href', '/stores');
+    const crumbs = await screen.findByRole('navigation', { name: 'مسار الصفحة' });
+    expect(within(crumbs).getByRole('link', { name: 'المتاجر' })).toHaveAttribute('href', '/stores');
   });
 
   it('opens the menu as a drawer, and closes it on Escape, its button, or a link', async () => {

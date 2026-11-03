@@ -143,7 +143,6 @@ describe('console', () => {
   });
 
   it('opens a support session, settles a transfer, sets and clears a flag, and suspends', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('انتهت الإساءة');
     const calls = consoleRoutes({
       [`POST /admin/v1/stores/${store}/impersonate`]: () => ({
         status: 201,
@@ -158,8 +157,9 @@ describe('console', () => {
     const user = userEvent.setup();
     const body = (path: string) => calls.find((c) => c.method !== 'GET' && c.path === path)?.body;
 
-    await user.type(await screen.findByLabelText('السبب (إجباري)'), 'تذكرة 4821');
-    await user.click(screen.getByRole('button', { name: 'افتح جلسة الدعم' }));
+    const support = await screen.findByRole('region', { name: 'جلسة دعم بحساب صاحب المتجر' });
+    await user.type(within(support).getByLabelText('السبب'), 'تذكرة 4821');
+    await user.click(within(support).getByRole('button', { name: 'افتح جلسة الدعم' }));
     expect(body(`/admin/v1/stores/${store}/impersonate`)).toEqual({ reason: 'تذكرة 4821', minutes: 30, write: false });
     expect(await screen.findByRole('link', { name: 'افتح جلسة الدعم في الداشبورد' })).toHaveAttribute('href', 'https://app.iftahonline.com/impersonate#code=C');
 
@@ -172,32 +172,70 @@ describe('console', () => {
     expect(body(`/admin/v1/stores/${store}/invoices/${invoice}/settle`)).toEqual({ reference: 'TRX-1', reason: 'وصل التحويل' });
     expect(await screen.findByText('سُجّلت الفاتورة مدفوعة.')).toBeInTheDocument();
 
-    // Only enforced features are listed and offered.
-    const flags = screen.getByRole('region', { name: 'مميزات هذا المتجر' });
+    // Only enforced features are listed and offered; a flag is a switch.
+    const flags = screen.getByRole('region', { name: 'مميزات المتجر' });
     expect(within(flags).queryByText('دردشة')).not.toBeInTheDocument();
-    const add = screen.getByRole('form', { name: 'استثناء جديد' });
-    await user.clear(within(add).getByLabelText(/القيمة/));
-    await user.type(within(add).getByLabelText(/القيمة/), '1');
+    await user.click(within(flags).getByRole('button', { name: 'استثناء جديد' }));
+    const add = screen.getByRole('dialog', { name: 'استثناء جديد لـ «متجر الأناقة»' });
+    expect(within(add).queryByRole('option', { name: /دردشة/ })).toBeNull();
+    expect(within(add).getByRole('switch', { name: 'متاحة لهذا المتجر' })).toBeChecked();
     await user.type(within(add).getByLabelText('حتى (اختياري)'), '2026-11-30');
     await user.type(within(add).getByLabelText('السبب'), 'شهر ترويجي');
     await user.click(within(add).getByRole('button', { name: 'حفظ الاستثناء' }));
     expect(body(`/admin/v1/stores/${store}/entitlements/coupons`)).toEqual({ reason: 'شهر ترويجي', unlimited: false, value: 1, expires_at: '2026-11-30T23:59:59.000Z' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
     await user.click(within(flags).getByRole('button', { name: 'إزالة' }));
+    const clear = screen.getByRole('dialog', { name: 'إزالة استثناء «الكوبونات»' });
+    await user.type(within(clear).getByLabelText('السبب'), 'انتهت الإساءة');
+    await user.click(within(clear).getByRole('button', { name: 'أزل الاستثناء' }));
     expect(body(`/admin/v1/stores/${store}/entitlements/coupons/clear`)).toEqual({ reason: 'انتهت الإساءة' });
 
-    await user.click(screen.getByText('إيقاف المتجر'));
+    await user.click(screen.getByText('منطقة خطرة: إيقاف المتجر'));
     const suspend = screen.getByRole('form', { name: 'إيقاف المتجر' });
     await user.type(within(suspend).getByLabelText('السبب'), 'بلاغ احتيال');
-    await user.click(within(suspend).getByRole('button', { name: 'أوقف' }));
+    await user.click(within(suspend).getByRole('button', { name: 'أوقف «متجر الأناقة»' }));
     expect(body(`/admin/v1/stores/${store}/suspend`)).toEqual({ reason: 'بلاغ احتيال' });
+  });
+
+  it('reactivates a suspended store, and sets a limit with no limit', async () => {
+    const calls = consoleRoutes({
+      [`GET /admin/v1/stores/${store}`]: () => ({ status: 200, body: { store: { ...storeRow.store, status: 'suspended' }, domains: [] } }),
+      [`GET /admin/v1/stores/${store}/entitlements`]: () => ({ status: 200, body: { plan: [{ feature: 'products', unlimited: false, value: 50 }], overrides: [], effective: [] } }),
+      'GET /admin/v1/features': () => ({ status: 200, body: { items: [{ key: 'products', kind: 'count', name_ar: 'المنتجات', name_en: 'Products', sort: 30, enforced: true }] } }),
+      [`PUT /admin/v1/stores/${store}/entitlements/products`]: () => ({ status: 200, body: {} }),
+      [`POST /admin/v1/stores/${store}/reactivate`]: () => ({ status: 200, body: {} }),
+    });
+    renderConsole({ kind: 'signed-in', admin }, `/stores/${store}`);
+    const user = userEvent.setup();
+    const body = (path: string) => calls.find((c) => c.method !== 'GET' && c.path === path)?.body;
+
+    await user.click(await screen.findByRole('button', { name: 'استثناء جديد' }));
+    const add = screen.getByRole('dialog', { name: 'استثناء جديد لـ «متجر الأناقة»' });
+    expect(within(add).getByRole('option', { name: 'المنتجات — من الباقة 50' })).toBeInTheDocument();
+    await user.click(within(add).getByLabelText('بلا حد'));
+    expect(within(add).getByLabelText('الحد الجديد')).toBeDisabled();
+    await user.type(within(add).getByLabelText('السبب'), 'عميل كبير');
+    await user.click(within(add).getByRole('button', { name: 'حفظ الاستثناء' }));
+    expect(body(`/admin/v1/stores/${store}/entitlements/products`)).toEqual({ reason: 'عميل كبير', unlimited: true });
+
+    await user.click(screen.getByText('إعادة تفعيل المتجر'));
+    const back = screen.getByRole('form', { name: 'إعادة تفعيل المتجر' });
+    await user.type(within(back).getByLabelText('السبب'), 'سُوّي البلاغ');
+    await user.click(within(back).getByRole('button', { name: 'أعد تفعيل «متجر الأناقة»' }));
+    expect(body(`/admin/v1/stores/${store}/reactivate`)).toEqual({ reason: 'سُوّي البلاغ' });
+    expect(await screen.findByText('أُعيد تفعيل المتجر.')).toBeInTheDocument();
   });
 
   it('shows a refused change', async () => {
     consoleRoutes({ [`POST /admin/v1/stores/${store}/impersonate`]: () => ({ status: 422, body: { title: 'Unprocessable', status: 422, detail: 'reason too short' } }) });
     renderConsole({ kind: 'signed-in', admin }, `/stores/${store}`);
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText('السبب (إجباري)'), 'abc');
-    await user.click(screen.getByRole('button', { name: 'افتح جلسة الدعم' }));
+    const support = await screen.findByRole('region', { name: 'جلسة دعم بحساب صاحب المتجر' });
+    await user.type(within(support).getByLabelText('السبب'), 'abc');
+    await user.click(within(support).getByRole('button', { name: 'افتح جلسة الدعم' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('reason too short');
   });
 });
