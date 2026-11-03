@@ -64,7 +64,9 @@ func (codeLang) Transform(doc *ast.Document, reader text.Reader, _ parser.Contex
 		// The info's first word, read here and not through Language(),
 		// which keeps what it read the first time.
 		if c, ok := n.(*ast.FencedCodeBlock); ok && entering && c.Info != nil {
-			word, _, _ := bytes.Cut(bytes.TrimSpace(c.Info.Segment.Value(src)), []byte(" "))
+			// Only what goldmark trims (spaces and tabs): a form feed it
+			// keeps would reach the class attribute.
+			word, _, _ := bytes.Cut(bytes.Trim(c.Info.Segment.Value(src), " \t"), []byte(" "))
 			if !plainName(word) {
 				c.Info = nil
 			}
