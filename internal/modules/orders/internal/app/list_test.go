@@ -377,7 +377,7 @@ func TestStoreActivity(t *testing.T) {
 		t.Helper()
 		var a store.Activity
 		if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) (txErr error) {
-			a, txErr = store.StoreActivity(ctx, tx, since)
+			a, txErr = store.ReadActivity(ctx, tx, since)
 			return txErr
 		}); err != nil {
 			t.Fatal(err)
