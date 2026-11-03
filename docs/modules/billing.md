@@ -32,7 +32,7 @@ are in place.
 | `Orders`, `Order`, `OrderStatus` | The order reader fees need; `cmd/platform` adapts `orders.Fulfilment` (billing does not import orders) |
 | `SellFeesSubscriber` | `billing.sell_fees`, subscribed to `orders.order.status_changed` in the worker |
 
-| `Module.Console()`, `Console` | The console's view (ADR-0058): `Health` (counts through `app.billing_health()`), `Revenue` (monthly recurring revenue per currency through `app.billing_paying()` and `domain.MRR`, ADR-0075), `Summary` of the store in ctx, `SettleStoreInvoice` (a confirmed transfer; 404 unless it is an open invoice of the store's account) |
+| `Module.Console()`, `Console` | The console's view (ADR-0058): `Health` (counts through `app.billing_health()`), `Revenue` (monthly recurring revenue per currency through `app.billing_paying()` and `domain.MRR`, ADR-0075), `Summary` of the store in ctx, `SettleStoreInvoice` (a confirmed transfer; 404 unless it is an open invoice of the store's account). The invoices and payments page (ADR-0076): `Totals` (open, overdue, collected this Cairo month with its VAT, the last 7 days' failures, through `app.billing_summary()`), `Invoices` and `Payments` (every account's, newest first, filtered, keyset pages of at most `MaxListPage`, through `app.billing_invoices()` and `app.billing_attempts()`), `Invoice` (one with its lines, read in its account's transaction, and its attempts), `SettleInvoice` (any account's open invoice, an agency's too) |
 | `Module.Agencies()`, `Agencies`, `Agency` | Agencies from the console (ADR-0059): create, list, view, `JoinAgency` and `LeaveAgency` for the store in ctx |
 | `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions with the stores on each (`app.plan_subscribers()`: trialing, active or past due, counts only), publish, retire |
 | `Feature`, `PlanVersion`, `Price`, `CurrencyFee` | The catalog's DTOs; `Validate()` checks them |
@@ -296,6 +296,7 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
 | `billing_payment_methods` | account (RLS) | The card on file, sealed (00060) |
 | `payment_attempts` | account (RLS) | Every try: approved, declined, no method, manual, duplicate (00069); never deleted; only a duplicate's `refunded_at` and `refund_reference` are ever updated |
+| (indexes, 00090) | | invoices `(issued_at DESC, id DESC)`, `(due_at)` where open, `(paid_at)` where paid; payment attempts `(created_at DESC, id DESC)`: the console's lists and summary (ADR-0076) |
 | `billing_checkouts` | tenant (RLS) | A "pay now": our reference `bc_<ULID>`, Paymob's order (00061) |
 | `invoice_counters` | platform | One row per year: gapless numbers |
 | `tax_rates` | platform | VAT by country |
@@ -315,4 +316,5 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | Fees once per delivery, cancelled or credited on return, none on other plans | `app.TestSellFees` |
 | The orders adapter (base, statuses) | `cmd/platform` `TestBillingOrders` |
 | A pay-as-you-sell invoice (late fee, credit, VAT, once); a renewal billed once; an agency's one invoice; nothing to bill; the month's run; the account wall | `app.TestInvoiceOfAPayAsYouSellStore`, `TestInvoiceRenewsAPaidPlanOnce`, `TestAgencyGetsOneInvoice`, `TestNothingToBill`, `TestStartMonth`, `TestAccountWall`, `TestAccountTablesUseTheWall` |
+| The console's invoices and payments: an invoice with its lines and attempts, every filter (a `%` is literal), validation, settled and collected with its VAT, the failures counted; keyset pages | `app.TestConsoleInvoicesAndPayments`, `TestConsolePages` |
 | No plan-name checks anywhere else | `internal/tools/noplannames` |

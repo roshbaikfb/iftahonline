@@ -29,6 +29,11 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
 | `GET /admin/v1/agencies`, `POST /admin/v1/agencies`, `GET /admin/v1/agencies/{id}` | Agency accounts (ADR-0059): name, currency and agency plan; the view lists its store IDs. Creation is recorded once it has an ID (`agency.created`) |
 | `POST /admin/v1/agencies/{id}/stores/{store_id}`, `POST …/{store_id}/remove` | A store joins (from no account, or from its own once that owes nothing: 409 `open_invoice`; the currency must match) or leaves onto the free plan. Recorded first (`store.agency_joined`, `store.agency_left`) |
+| `GET /admin/v1/billing/summary` | The invoices page's cards (ADR-0076): open and overdue invoices per currency, collected since the Cairo month began (total with VAT and the VAT in it), the last 7 days' failed charges per outcome and reason |
+| `GET /admin/v1/invoices`, `GET /admin/v1/invoices/{id}` | Every account's invoices, newest first, filtered by `status` (open, overdue, paid, void), `currency` and `q` (a number's start or a part of the name), keyset pages; one invoice with its lines and payment attempts. A store's account shows the store's name now (through the directory, one query a page) |
+| `POST /admin/v1/invoices/{id}/settle` | Any account's open invoice, an agency's too, as a confirmed transfer: `reference` and `reason`. Recorded here first (`invoice.settled`, with the account and number, and the store only for a store's account) |
+| `GET /admin/v1/invoices/export` | The list as CSV with the same filters (at most 50,000 rows, Cairo times, decimals, formula-like names defused). Recorded here first with the filters (`billing.invoices_exported`) |
+| `GET /admin/v1/payments` | Every payment attempt, newest first, by `outcome` and `gateway`, keyset pages |
 | `GET /admin/v1/billing/duplicates`, `POST …/{id}/refunded` | Payments of invoices already paid (ADR-0063), those to refund first; recording a refund takes the gateway's refund reference and a reason, recorded first (`payment.refunded`) |
 | `GET /admin/v1/ads`, `PUT /admin/v1/ads/settings` | Ads in free stores (ADR-0062): AdSense's settings and every banner with its last 30 days' clicks. Settings are validated, then recorded first (`ads.settings_saved`) |
 | `POST /admin/v1/ads/uploads`, `POST /admin/v1/ads/banners`, `PUT /admin/v1/ads/banners/{id}/active` | A banner's image upload (2 MiB, JPEG, PNG or WebP), the banner (re-encoded, recorded once saved: `ads.banner_created`), and show or stop (recorded first: `ads.banner_active_set`) |
@@ -134,5 +139,6 @@ next request.
 | Replay, lockout and disabled admins | `TestLoginNeedsPasswordAndTOTP` |
 | Both audit trails | `TestSuspendAndReactivate` |
 | `app_admin` cannot write stores or read users, audit logs or sessions; `app_user` cannot read `platform_admins` | `TestAdminDirectory` |
+| Invoices and payments: names, an agency's invoice settled, logged first without a store; the CSV (filters, Cairo times, formula-like names defused) logged with its filters; over HTTP with validation and cross-site refusal | `TestConsoleInvoices`, `TestExportInvoices`, `TestConsoleInvoicesAndPayments` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
