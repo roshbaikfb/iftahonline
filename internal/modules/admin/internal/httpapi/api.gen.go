@@ -792,6 +792,30 @@ func (e PolicySlug) Valid() bool {
 	}
 }
 
+// Defines values for AdminAuditLogParamsFamily.
+const (
+	AdminAuditLogParamsFamilyBilling  AdminAuditLogParamsFamily = "billing"
+	AdminAuditLogParamsFamilyContent  AdminAuditLogParamsFamily = "content"
+	AdminAuditLogParamsFamilySecurity AdminAuditLogParamsFamily = "security"
+	AdminAuditLogParamsFamilyStore    AdminAuditLogParamsFamily = "store"
+)
+
+// Valid indicates whether the value is a known member of the AdminAuditLogParamsFamily enum.
+func (e AdminAuditLogParamsFamily) Valid() bool {
+	switch e {
+	case AdminAuditLogParamsFamilyBilling:
+		return true
+	case AdminAuditLogParamsFamilyContent:
+		return true
+	case AdminAuditLogParamsFamilySecurity:
+		return true
+	case AdminAuditLogParamsFamilyStore:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminListStoresParamsStatus.
 const (
 	AdminListStoresParamsStatusActive    AdminListStoresParamsStatus = "active"
@@ -917,6 +941,22 @@ type AdminAdUploadRequest struct {
 // AdminAdUploadRequestContentType defines model for AdminAdUploadRequest.ContentType.
 type AdminAdUploadRequestContentType string
 
+// AdminAdminList defines model for AdminAdminList.
+type AdminAdminList struct {
+	Items []AdminAdminSummary `json:"items"`
+}
+
+// AdminAdminSummary defines model for AdminAdminSummary.
+type AdminAdminSummary struct {
+	// Active False once disabled.
+	Active bool   `json:"active"`
+	Email  string `json:"email"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id   ULID   `json:"id"`
+	Name string `json:"name"`
+}
+
 // AdminAds defines model for AdminAds.
 type AdminAds struct {
 	Banners  []AdminAdBanner `json:"banners"`
@@ -970,13 +1010,19 @@ type AdminAuditEntry struct {
 	// AdminId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	AdminId *ULID `json:"admin_id,omitempty"`
 
+	// AdminName The admin's name; absent for the system.
+	AdminName *string `json:"admin_name,omitempty"`
+
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 	Id         ULID                   `json:"id"`
 	IpPrefix   string                 `json:"ip_prefix"`
 	Metadata   map[string]interface{} `json:"metadata"`
 	OccurredAt time.Time              `json:"occurred_at"`
-	TargetId   string                 `json:"target_id"`
-	TargetType string                 `json:"target_type"`
+
+	// StoreName The store's name, when the action was on a store or one of its invoices.
+	StoreName  *string `json:"store_name,omitempty"`
+	TargetId   string  `json:"target_id"`
+	TargetType string  `json:"target_type"`
 }
 
 // AdminAuditPage defines model for AdminAuditPage.
@@ -1964,9 +2010,26 @@ type VariantID = ULID
 
 // AdminAuditLogParams defines parameters for AdminAuditLog.
 type AdminAuditLogParams struct {
-	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	// Admin Only this admin's actions.
+	Admin *ULID `form:"admin,omitempty" json:"admin,omitempty"`
+
+	// Family Only one kind of action: stores, billing and plans, the site and ads, or sign-ins and admins.
+	Family *AdminAuditLogParamsFamily `form:"family,omitempty" json:"family,omitempty"`
+
+	// Store Only what was done to this store (its own actions and its invoices).
+	Store *ULID `form:"store,omitempty" json:"store,omitempty"`
+
+	// From From this day.
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To To this day, included.
+	To     *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+	Cursor *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// AdminAuditLogParamsFamily defines parameters for AdminAuditLog.
+type AdminAuditLogParamsFamily string
 
 // AdminDeleteSiteFAQParams defines parameters for AdminDeleteSiteFAQ.
 type AdminDeleteSiteFAQParams struct {
@@ -2109,6 +2172,9 @@ type AdminSuspendStoreJSONRequestBody = AdminReason
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// AdminListAdmins The console's admins
+	// (GET /admin/v1/admins)
+	AdminListAdmins(w http.ResponseWriter, r *http.Request)
 	// AdminGetAds Ads in free stores, their settings and banners
 	// (GET /admin/v1/ads)
 	AdminGetAds(w http.ResponseWriter, r *http.Request)
@@ -2287,6 +2353,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminListAdmins operation middleware
+func (siw *ServerInterfaceWrapper) AdminListAdmins(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListAdmins(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // AdminGetAds operation middleware
 func (siw *ServerInterfaceWrapper) AdminGetAds(w http.ResponseWriter, r *http.Request) {
@@ -2502,6 +2582,71 @@ func (siw *ServerInterfaceWrapper) AdminAuditLog(w http.ResponseWriter, r *http.
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params AdminAuditLogParams
+
+	// ------------- Optional query parameter "admin" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "admin", r.URL.Query(), &params.Admin, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "admin"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "admin", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "family" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "family", r.URL.Query(), &params.Family, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "family"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "family", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "store" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "store", r.URL.Query(), &params.Store, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "store"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "cursor" -------------
 
@@ -3786,12 +3931,51 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminPublishPlan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/plans/{code}/retire", wrapper.AdminRetirePlan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/admins", wrapper.AdminListAdmins)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/audit-log", wrapper.AdminAuditLog)
 
 	return m
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type AdminListAdminsRequestObject struct {
+}
+
+type AdminListAdminsResponseObject interface {
+	VisitAdminListAdminsResponse(w http.ResponseWriter) error
+}
+
+type AdminListAdmins200JSONResponse AdminAdminList
+
+func (response AdminListAdmins200JSONResponse) VisitAdminListAdminsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListAdminsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListAdminsdefaultApplicationProblemPlusJSONResponse) VisitAdminListAdminsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type AdminGetAdsRequestObject struct {
 }
@@ -5962,6 +6146,9 @@ func (response AdminSuspendStoredefaultApplicationProblemPlusJSONResponse) Visit
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// AdminListAdmins The console's admins
+	// (GET /admin/v1/admins)
+	AdminListAdmins(ctx context.Context, request AdminListAdminsRequestObject) (AdminListAdminsResponseObject, error)
 	// AdminGetAds Ads in free stores, their settings and banners
 	// (GET /admin/v1/ads)
 	AdminGetAds(ctx context.Context, request AdminGetAdsRequestObject) (AdminGetAdsResponseObject, error)
@@ -6169,6 +6356,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminListAdmins operation middleware
+func (sh *strictHandler) AdminListAdmins(w http.ResponseWriter, r *http.Request) {
+	var request AdminListAdminsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListAdmins(ctx, request.(AdminListAdminsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListAdmins")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListAdminsResponseObject); ok {
+		if err := validResponse.VisitAdminListAdminsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AdminGetAds operation middleware

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
@@ -51,7 +52,7 @@ func TestAgenciesFromTheConsole(t *testing.T) {
 		t.Fatalf("unknown agency: %v", err)
 	}
 
-	page, err := f.svc.Audit(ctx, "", 200)
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
 	if err != nil {
 		t.Fatal(err)
 	}

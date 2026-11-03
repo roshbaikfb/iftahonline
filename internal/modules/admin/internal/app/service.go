@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -449,14 +450,82 @@ func (s *Service) Impersonate(ctx context.Context, id tenant.StoreID, rawReason 
 	return s.d.Impersonate(tenant.WithStore(ctx, id), who.AdminID, reason, d, write)
 }
 
+// AuditItem is a log entry with the names the console shows.
+type AuditItem struct {
+	store.AuditEntry
+	AdminName string
+	StoreName string // the store's, when the action was on a store or its invoice
+}
+
 // AuditPage is a page of the admin log.
 type AuditPage struct {
-	Items      []store.AuditEntry
+	Items      []AuditItem
 	NextCursor string
 }
 
-// Audit lists admin actions, newest first.
-func (s *Service) Audit(ctx context.Context, after string, limit int) (AuditPage, error) {
+// AuditQuery narrows the admin log; the zero query lists everything.
+// From and To are Cairo days (2006-01-02), To included.
+type AuditQuery struct {
+	Admin    *ulid.ID
+	Family   string
+	Store    *ulid.ID
+	From, To string
+}
+
+// families are the action prefixes behind each of the log's filters.
+var families = map[string][]string{ //nolint:gochecknoglobals // a fixed table
+	"store":    {"store.%"},
+	"billing":  {"plan.%", "feature.%", "agency.%", "invoice.%", "payment.%", "billing.%"},
+	"content":  {"site.%", "ads.%"},
+	"security": {"admin.%"},
+}
+
+// filter reads q into the store's filter, refusing what it cannot read.
+func (q AuditQuery) filter() (store.AuditFilter, error) {
+	f := store.AuditFilter{AdminID: q.Admin}
+	if q.Family != "" {
+		p, ok := families[q.Family]
+		if !ok {
+			return f, errs.Validation(errs.FieldError{Field: "family", Code: "invalid", Message: "store, billing, content or security"})
+		}
+		f.Prefixes = p
+	}
+	if q.Store != nil {
+		f.Store = q.Store.String()
+	}
+	cairo, err := time.LoadLocation("Africa/Cairo")
+	if err != nil {
+		return f, fmt.Errorf("admin: zone: %w", err)
+	}
+	day := func(field, v string, next bool) (*time.Time, error) {
+		if v == "" {
+			return nil, nil //nolint:nilnil // no bound
+		}
+		d, err := time.ParseInLocation(time.DateOnly, v, cairo)
+		if err != nil {
+			return nil, errs.Validation(errs.FieldError{Field: field, Code: "invalid", Message: "a date, 2006-01-02"})
+		}
+		if next {
+			d = d.AddDate(0, 0, 1)
+		}
+		return &d, nil
+	}
+	if f.Since, err = day("from", q.From, false); err != nil {
+		return f, err
+	}
+	if f.Until, err = day("to", q.To, true); err != nil {
+		return f, err
+	}
+	if f.Since != nil && f.Until != nil && !f.Since.Before(*f.Until) {
+		return f, errs.Validation(errs.FieldError{Field: "to", Code: "invalid", Message: "the range ends before it starts"})
+	}
+	return f, nil
+}
+
+// Audit lists admin actions, newest first, through q, with each admin's
+// name and, for a store or its invoice, the store's (one more query a
+// page, through the directory).
+func (s *Service) Audit(ctx context.Context, q AuditQuery, after string, limit int) (AuditPage, error) {
 	if _, ok := IdentityFrom(ctx); !ok {
 		return AuditPage{}, errNoSession
 	}
@@ -466,26 +535,80 @@ func (s *Service) Audit(ctx context.Context, after string, limit int) (AuditPage
 	if limit > 200 {
 		return AuditPage{}, errs.Validation(errs.FieldError{Field: "limit", Code: "too_large", Message: "limit must be at most 200"})
 	}
+	f, err := q.filter()
+	if err != nil {
+		return AuditPage{}, err
+	}
 	var at *time.Time
 	var bid *ulid.ID
 	if after != "" {
-		t, id, err := cursor.Decode(after)
-		if err != nil {
+		t, id, decErr := cursor.Decode(after)
+		if decErr != nil {
 			return AuditPage{}, errs.Validation(errs.FieldError{Field: "cursor", Code: "invalid", Message: "invalid cursor"})
 		}
 		at, bid = &t, &id
 	}
-	items, err := store.ListAudit(ctx, s.d.DB, at, bid, limit+1)
+	rows, err := store.ListAudit(ctx, s.d.DB, f, at, bid, limit+1)
 	if err != nil {
 		return AuditPage{}, err
 	}
-	page := AuditPage{Items: items}
-	if len(items) > limit {
-		page.Items = items[:limit]
-		last := page.Items[limit-1]
+	page := AuditPage{}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		last := rows[limit-1]
 		page.NextCursor = cursor.Encode(last.OccurredAt, last.ID)
 	}
+	names, err := s.storeNames(ctx, rows)
+	if err != nil {
+		return AuditPage{}, err
+	}
+	page.Items = make([]AuditItem, len(rows))
+	for i, r := range rows {
+		item := AuditItem{AuditEntry: r.AuditEntry, AdminName: r.AdminName}
+		if id, ok := storeOf(r.AuditEntry); ok {
+			item.StoreName = names[id]
+		}
+		page.Items[i] = item
+	}
 	return page, nil
+}
+
+// storeOf is the store an entry is about: its target, or its invoice's.
+func storeOf(e store.AuditEntry) (ulid.ID, bool) {
+	raw := ""
+	if e.TargetType == "store" {
+		raw = e.TargetID
+	} else if len(e.Metadata) > 0 {
+		var m struct {
+			Store string `json:"store"`
+		}
+		if json.Unmarshal(e.Metadata, &m) == nil {
+			raw = m.Store
+		}
+	}
+	id, err := ulid.Parse(raw)
+	return id, raw != "" && err == nil
+}
+
+func (s *Service) storeNames(ctx context.Context, rows []store.AuditRow) (map[ulid.ID]string, error) {
+	var ids []ulid.ID
+	for _, r := range rows {
+		if id, ok := storeOf(r.AuditEntry); ok && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 || s.d.Directory == nil {
+		return map[ulid.ID]string{}, nil
+	}
+	return s.d.Directory.Names(ctx, ids)
+}
+
+// Admins lists the console's admins, for the log's filter.
+func (s *Service) Admins(ctx context.Context) ([]store.AdminSummary, error) {
+	if _, ok := IdentityFrom(ctx); !ok {
+		return nil, errNoSession
+	}
+	return store.ListAdmins(ctx, s.d.DB)
 }
 
 func (s *Service) audit(ctx context.Context, adminID *ulid.ID, action, targetType, targetID string, meta map[string]any) error {

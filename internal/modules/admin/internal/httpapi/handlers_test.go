@@ -501,6 +501,39 @@ func TestConsoleHealthAndStoreBilling(t *testing.T) {
 	}
 }
 
+// TestConsoleAuditFilters: the log's filters and the admins list over
+// HTTP, with each entry's admin and store names.
+func TestConsoleAuditFilters(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	storeID := f.store(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/admins", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous admins = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/admins", "", withCookie(sess))
+	if items, _ := r.body["items"].([]any); r.status != http.StatusOK || len(items) == 0 || items[0].(map[string]any)["email"] == nil {
+		t.Fatalf("admins = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/stores/"+storeID+"/suspend", `{"reason":"fraud report"}`, withCookie(sess), sameOrigin); r.status != http.StatusOK {
+		t.Fatalf("suspend = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/audit-log?family=store&store="+storeID, "", withCookie(sess))
+	items, _ := r.body["items"].([]any)
+	if r.status != http.StatusOK || len(items) != 1 {
+		t.Fatalf("filtered = %d %v", r.status, r.body)
+	}
+	if e := items[0].(map[string]any); e["action"] != "store.suspended" || e["store_name"] == nil || e["admin_name"] == nil {
+		t.Fatalf("entry = %v", e)
+	}
+	for _, bad := range []string{"?family=money", "?store=not-an-id", "?admin=nope", "?from=2026-13-01", "?from=2026-11-03&to=2026-11-01"} {
+		if got := f.do(t, http.MethodGet, adminHost, "/admin/v1/audit-log"+bad, "", withCookie(sess)); got.status != http.StatusBadRequest && got.status != http.StatusUnprocessableEntity {
+			t.Errorf("%s = %d %v", bad, got.status, got.body)
+		}
+	}
+}
+
 func TestConsoleAgencies(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

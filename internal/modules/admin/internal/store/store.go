@@ -152,16 +152,56 @@ func InsertAudit(ctx context.Context, db DB, e AuditEntry) error {
 	return nil
 }
 
-// ListAudit pages the admin log, newest first.
-func ListAudit(ctx context.Context, db DB, beforeAt *time.Time, beforeID *ulid.ID, limit int) ([]AuditEntry, error) {
-	rows, err := admindb.New(db).ListAdminAudit(ctx, admindb.ListAdminAuditParams{BeforeAt: beforeAt, BeforeID: beforeID, Lim: int32(limit)}) //nolint:gosec // bounded by the caller.
+// AuditFilter narrows the admin log; a zero field does not filter.
+type AuditFilter struct {
+	AdminID  *ulid.ID
+	Prefixes []string // action LIKE patterns: a family
+	Store    string   // a store's ID: its actions and its invoices'
+	Since    *time.Time
+	Until    *time.Time // excluded
+}
+
+// AuditRow is a log entry with its admin's name.
+type AuditRow struct {
+	AuditEntry
+	AdminName string
+}
+
+// ListAudit pages the admin log, newest first, through f.
+func ListAudit(ctx context.Context, db DB, f AuditFilter, beforeAt *time.Time, beforeID *ulid.ID, limit int) ([]AuditRow, error) {
+	prefixes := f.Prefixes
+	if prefixes == nil {
+		prefixes = []string{}
+	}
+	rows, err := admindb.New(db).ListAdminAudit(ctx, admindb.ListAdminAuditParams{BeforeAt: beforeAt, BeforeID: beforeID, AdminID: f.AdminID,
+		Prefixes: prefixes, Store: f.Store, Since: f.Since, Until: f.Until, Lim: int32(limit)}) //nolint:gosec // bounded by the caller.
 	if err != nil {
 		return nil, fmt.Errorf("admin store: list audit: %w", err)
 	}
-	out := make([]AuditEntry, len(rows))
+	out := make([]AuditRow, len(rows))
 	for i, r := range rows {
-		out[i] = AuditEntry{ID: r.ID, OccurredAt: r.OccurredAt, AdminID: r.AdminID, Action: r.Action, TargetType: r.TargetType,
-			TargetID: r.TargetID, IPPrefix: r.IpPrefix, Metadata: r.Metadata}
+		out[i] = AuditRow{AuditEntry: AuditEntry{ID: r.ID, OccurredAt: r.OccurredAt, AdminID: r.AdminID, Action: r.Action, TargetType: r.TargetType,
+			TargetID: r.TargetID, IPPrefix: r.IpPrefix, Metadata: r.Metadata}, AdminName: r.AdminName}
+	}
+	return out, nil
+}
+
+// AdminSummary is an admin as the log's filter lists it.
+type AdminSummary struct {
+	ID          ulid.ID
+	Name, Email string
+	Active      bool
+}
+
+// ListAdmins lists the console's admins by name.
+func ListAdmins(ctx context.Context, db DB) ([]AdminSummary, error) {
+	rows, err := admindb.New(db).ListAdmins(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("admin store: list admins: %w", err)
+	}
+	out := make([]AdminSummary, len(rows))
+	for i, r := range rows {
+		out[i] = AdminSummary{ID: r.ID, Name: r.Name, Email: r.Email, Active: r.Active}
 	}
 	return out, nil
 }

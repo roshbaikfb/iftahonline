@@ -222,28 +222,65 @@ func (q *Queries) JobHealth(ctx context.Context, now time.Time) (JobHealthRow, e
 }
 
 const listAdminAudit = `-- name: ListAdminAudit :many
-SELECT id, occurred_at, admin_id, action, target_type, target_id, ip_prefix, metadata FROM admin_audit_log
-WHERE $1::timestamptz IS NULL
-   OR (occurred_at, id) < ($1::timestamptz, $2::uuid)
-ORDER BY occurred_at DESC, id DESC
-LIMIT $3
+SELECT l.id, l.occurred_at, l.admin_id, l.action, l.target_type, l.target_id, l.ip_prefix, l.metadata,
+       coalesce(a.name, '')::text AS admin_name
+FROM admin_audit_log l
+LEFT JOIN platform_admins a ON a.id = l.admin_id
+WHERE ($1::timestamptz IS NULL
+       OR (l.occurred_at, l.id) < ($1::timestamptz, $2::uuid))
+  AND ($3::uuid IS NULL OR l.admin_id = $3::uuid)
+  AND (cardinality($4::text[]) = 0 OR l.action LIKE ANY ($4::text[]))
+  AND ($5::text = '' OR (l.target_type = 'store' AND l.target_id = $5::text) OR l.metadata ->> 'store' = $5::text)
+  AND ($6::timestamptz IS NULL OR l.occurred_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR l.occurred_at < $7::timestamptz)
+ORDER BY l.occurred_at DESC, l.id DESC
+LIMIT $8
 `
 
 type ListAdminAuditParams struct {
 	BeforeAt *time.Time
 	BeforeID *ulid.ID
+	AdminID  *ulid.ID
+	Prefixes []string
+	Store    string
+	Since    *time.Time
+	Until    *time.Time
 	Lim      int32
 }
 
-func (q *Queries) ListAdminAudit(ctx context.Context, arg ListAdminAuditParams) ([]AdminAuditLog, error) {
-	rows, err := q.db.Query(ctx, listAdminAudit, arg.BeforeAt, arg.BeforeID, arg.Lim)
+type ListAdminAuditRow struct {
+	ID         ulid.ID
+	OccurredAt time.Time
+	AdminID    *ulid.ID
+	Action     string
+	TargetType string
+	TargetID   string
+	IpPrefix   string
+	Metadata   []byte
+	AdminName  string
+}
+
+// A page of the log with each admin's name. Every filter is optional: an
+// admin, action prefixes (a family), a store (its own actions and its
+// invoices', whose metadata names it), and a time range.
+func (q *Queries) ListAdminAudit(ctx context.Context, arg ListAdminAuditParams) ([]ListAdminAuditRow, error) {
+	rows, err := q.db.Query(ctx, listAdminAudit,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.AdminID,
+		arg.Prefixes,
+		arg.Store,
+		arg.Since,
+		arg.Until,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AdminAuditLog{}
+	items := []ListAdminAuditRow{}
 	for rows.Next() {
-		var i AdminAuditLog
+		var i ListAdminAuditRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OccurredAt,
@@ -253,6 +290,44 @@ func (q *Queries) ListAdminAudit(ctx context.Context, arg ListAdminAuditParams) 
 			&i.TargetID,
 			&i.IpPrefix,
 			&i.Metadata,
+			&i.AdminName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAdmins = `-- name: ListAdmins :many
+SELECT id, name, email::text AS email, status = 'active' AS active FROM platform_admins ORDER BY name, id
+`
+
+type ListAdminsRow struct {
+	ID     ulid.ID
+	Name   string
+	Email  string
+	Active bool
+}
+
+// The console's admins for the log's filter: no secrets.
+func (q *Queries) ListAdmins(ctx context.Context) ([]ListAdminsRow, error) {
+	rows, err := q.db.Query(ctx, listAdmins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdminsRow{}
+	for rows.Next() {
+		var i ListAdminsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Active,
 		); err != nil {
 			return nil, err
 		}
