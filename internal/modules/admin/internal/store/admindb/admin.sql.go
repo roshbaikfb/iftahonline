@@ -13,7 +13,7 @@ import (
 )
 
 const getActiveAdminSession = `-- name: GetActiveAdminSession :one
-SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status
+SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status, a.role AS admin_role
 FROM admin_sessions s
 JOIN platform_admins a ON a.id = s.admin_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
@@ -26,6 +26,7 @@ type GetActiveAdminSessionRow struct {
 	LastSeenAt  time.Time
 	ExpiresAt   time.Time
 	AdminStatus string
+	AdminRole   string
 }
 
 func (q *Queries) GetActiveAdminSession(ctx context.Context, tokenHash []byte) (GetActiveAdminSessionRow, error) {
@@ -38,12 +39,13 @@ func (q *Queries) GetActiveAdminSession(ctx context.Context, tokenHash []byte) (
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.AdminStatus,
+		&i.AdminRole,
 	)
 	return i, err
 }
 
 const getAdmin = `-- name: GetAdmin :one
-SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at FROM platform_admins WHERE id = $1
+SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role FROM platform_admins WHERE id = $1
 `
 
 func (q *Queries) GetAdmin(ctx context.Context, id ulid.ID) (PlatformAdmin, error) {
@@ -60,12 +62,13 @@ func (q *Queries) GetAdmin(ctx context.Context, id ulid.ID) (PlatformAdmin, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getAdminByEmail = `-- name: GetAdminByEmail :one
-SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at FROM platform_admins WHERE email = $1
+SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role FROM platform_admins WHERE email = $1
 `
 
 func (q *Queries) GetAdminByEmail(ctx context.Context, email string) (PlatformAdmin, error) {
@@ -82,15 +85,16 @@ func (q *Queries) GetAdminByEmail(ctx context.Context, email string) (PlatformAd
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const insertAdmin = `-- name: InsertAdmin :one
 
-INSERT INTO platform_admins (id, email, name, password_hash, totp_secret)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at
+INSERT INTO platform_admins (id, email, name, password_hash, totp_secret, role)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role
 `
 
 type InsertAdminParams struct {
@@ -99,6 +103,7 @@ type InsertAdminParams struct {
 	Name         string
 	PasswordHash string
 	TotpSecret   []byte
+	Role         string
 }
 
 // Super-admin console queries. They run only on the app_admin pool; the
@@ -110,6 +115,7 @@ func (q *Queries) InsertAdmin(ctx context.Context, arg InsertAdminParams) (Platf
 		arg.Name,
 		arg.PasswordHash,
 		arg.TotpSecret,
+		arg.Role,
 	)
 	var i PlatformAdmin
 	err := row.Scan(
@@ -123,6 +129,7 @@ func (q *Queries) InsertAdmin(ctx context.Context, arg InsertAdminParams) (Platf
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.Role,
 	)
 	return i, err
 }

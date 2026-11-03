@@ -117,9 +117,12 @@ type Created struct {
 	URI    string // otpauth://
 }
 
-// CreateAdmin adds an admin with a fresh TOTP seed (CLI only: there is no
-// HTTP endpoint that creates admins).
-func (s *Service) CreateAdmin(ctx context.Context, rawEmail, rawName, pw string) (Created, error) {
+// CreateAdmin adds an admin in role with a fresh TOTP seed (the CLI;
+// the console invites instead).
+func (s *Service) CreateAdmin(ctx context.Context, rawEmail, rawName, pw string, role domain.Role) (Created, error) {
+	if _, err := domain.ParseRole(string(role)); err != nil {
+		return Created{}, err
+	}
 	addr, ok := email.Normalize(rawEmail)
 	if !ok {
 		return Created{}, errs.Validation(errs.FieldError{Field: "email", Code: "invalid", Message: "invalid email"})
@@ -144,14 +147,14 @@ func (s *Service) CreateAdmin(ctx context.Context, rawEmail, rawName, pw string)
 	if err != nil {
 		return Created{}, err
 	}
-	a, err := store.InsertAdmin(ctx, s.d.DB, id, addr, name, hash, sealed)
+	a, err := store.InsertAdmin(ctx, s.d.DB, id, addr, name, hash, sealed, role)
 	if errors.Is(err, store.ErrEmailTaken) {
 		return Created{}, errs.Conflict("admin_exists", "an admin with this email already exists")
 	}
 	if err != nil {
 		return Created{}, err
 	}
-	if err := s.audit(ctx, nil, "admin.created", "admin", a.ID.String(), nil); err != nil {
+	if err := s.audit(ctx, nil, "admin.created", "admin", a.ID.String(), map[string]any{"role": string(role)}); err != nil {
 		return Created{}, err
 	}
 	return Created{Admin: a, Secret: totp.EncodeSecret(seed), URI: totp.URI(seed, TOTPIssuer, a.Email)}, nil
@@ -181,7 +184,11 @@ func metaFrom(ctx context.Context) RequestMeta {
 type Identity struct {
 	AdminID   ulid.ID
 	SessionID ulid.ID
+	Role      domain.Role
 }
+
+// Can reports whether the signed-in admin's role grants p (ADR-0077).
+func (i Identity) Can(p domain.Permission) bool { return i.Role.Can(p) }
 
 type identityKey struct{}
 
@@ -317,7 +324,7 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (Identity, error
 			s.d.Log.WarnContext(ctx, "admin: touch session", "err", err)
 		}
 	}
-	return Identity{AdminID: sess.AdminID, SessionID: sess.ID}, nil
+	return Identity{AdminID: sess.AdminID, SessionID: sess.ID, Role: sess.Role}, nil
 }
 
 // Logout ends the current session.

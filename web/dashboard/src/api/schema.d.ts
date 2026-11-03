@@ -4693,7 +4693,17 @@ export interface components {
             name: string;
             /** Format: date-time */
             last_login_at?: string;
+            role: components["schemas"]["AdminRole"];
+            /** @description What the role grants (ADR-0077); the console hides what is not here, and the server refuses it (403). */
+            permissions: components["schemas"]["AdminPermission"][];
         };
+        /**
+         * @description owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+         * @enum {string}
+         */
+        AdminRole: "owner" | "operations" | "finance" | "content" | "viewer";
+        /** @enum {string} */
+        AdminPermission: "stores.read" | "stores.manage" | "contacts.read" | "billing.read" | "billing.manage" | "catalog.read" | "catalog.manage" | "content.read" | "content.manage" | "audit.read" | "team.manage";
         AdminAuth: {
             admin: components["schemas"]["AdminProfile"];
             /** Format: date-time */

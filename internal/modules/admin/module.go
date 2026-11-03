@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
@@ -95,9 +96,10 @@ func New(d Deps) (*Module, error) {
 	return &Module{svc: svc, deps: d}, nil
 }
 
-// CreateAdmin adds a platform admin (the `platform admin create` CLI).
-func (m *Module) CreateAdmin(ctx context.Context, email, name, password string) (Created, error) {
-	return m.svc.CreateAdmin(ctx, email, name, password)
+// CreateAdmin adds a platform admin in role (owner, operations, finance,
+// content or viewer; the `platform admin create` CLI).
+func (m *Module) CreateAdmin(ctx context.Context, email, name, password, role string) (Created, error) {
+	return m.svc.CreateAdmin(ctx, email, name, password, domain.Role(role))
 }
 
 // Mount registers the console routes; they answer only on AdminHost.

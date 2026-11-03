@@ -2,8 +2,8 @@
 -- merchant role (app_user) has no privileges on these tables at all.
 
 -- name: InsertAdmin :one
-INSERT INTO platform_admins (id, email, name, password_hash, totp_secret)
-VALUES (@id, @email, @name, @password_hash, @totp_secret)
+INSERT INTO platform_admins (id, email, name, password_hash, totp_secret, role)
+VALUES (@id, @email, @name, @password_hash, @totp_secret, @role)
 RETURNING *;
 
 -- name: GetAdminByEmail :one
@@ -25,7 +25,7 @@ VALUES (@id, @admin_id, @token_hash, @user_agent, @ip_prefix, @expires_at)
 RETURNING *;
 
 -- name: GetActiveAdminSession :one
-SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status
+SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status, a.role AS admin_role
 FROM admin_sessions s
 JOIN platform_admins a ON a.id = s.admin_id
 WHERE s.token_hash = @token_hash AND s.revoked_at IS NULL AND s.expires_at > now();

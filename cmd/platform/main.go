@@ -85,7 +85,7 @@ var (
 	commit  = "none" //nolint:gochecknoglobals // link-time build metadata.
 )
 
-const usage = `usage: platform <api|storefront|worker|migrate up|down|status|admin create --email E --name N|version>`
+const usage = `usage: platform <api|storefront|worker|migrate up|down|status|admin create --email E --name N [--role R]|version>`
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.LookupEnv))
@@ -772,7 +772,8 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	}, nil
 }
 
-// runAdmin implements `platform admin create --email E --name N`. The
+// runAdmin implements `platform admin create --email E --name N [--role R]`
+// (the role defaults to owner: the first admin manages the team). The
 // password is read from stdin (one line), so it never appears in shell
 // history or the process list. The TOTP seed is printed once, to stdout
 // only; it is never logged.
@@ -781,6 +782,7 @@ func runAdmin(ctx context.Context, cfg config.Config, log *slog.Logger, args []s
 	fs.SetOutput(io.Discard)
 	email := fs.String("email", "", "admin email")
 	name := fs.String("name", "", "admin display name")
+	role := fs.String("role", "owner", "owner, operations, finance, content or viewer")
 	if len(args) == 0 || args[0] != "create" {
 		return fmt.Errorf("%s", usage)
 	}
@@ -800,7 +802,7 @@ func runAdmin(ctx context.Context, cfg config.Config, log *slog.Logger, args []s
 	if err != nil {
 		return err
 	}
-	created, err := mod.CreateAdmin(ctx, *email, *name, strings.TrimRight(pw, "\r\n"))
+	created, err := mod.CreateAdmin(ctx, *email, *name, strings.TrimRight(pw, "\r\n"), *role)
 	if err != nil {
 		return err
 	}
