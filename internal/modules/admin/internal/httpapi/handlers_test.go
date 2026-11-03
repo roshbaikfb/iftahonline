@@ -108,6 +108,10 @@ func newFixture(t *testing.T) fixture {
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
+		Profile: func(context.Context) (admin.StoreProfile, error) {
+			return admin.StoreProfile{Owner: &admin.OwnerContact{Name: "منى", Email: "mona@example.com", Phone: "+201012345678", EmailVerified: true},
+				Orders30d: 7, Products: 42}, nil
+		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
 		Site: siteConsole, Founding: billing.NewFounding(adminPool),
@@ -531,6 +535,35 @@ func TestConsoleAuditFilters(t *testing.T) {
 		if got := f.do(t, http.MethodGet, adminHost, "/admin/v1/audit-log"+bad, "", withCookie(sess)); got.status != http.StatusBadRequest && got.status != http.StatusUnprocessableEntity {
 			t.Errorf("%s = %d %v", bad, got.status, got.body)
 		}
+	}
+}
+
+// TestConsoleStoreProfile: a store's owner and numbers over HTTP; a
+// time that never happened is left out, not sent as zero.
+func TestConsoleStoreProfile(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	storeID := f.store(t)
+	path := "/admin/v1/stores/" + storeID + "/profile"
+
+	if r := f.do(t, http.MethodGet, adminHost, path, ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, path, "", withCookie(sess))
+	owner, _ := r.body["owner"].(map[string]any)
+	if r.status != http.StatusOK || owner == nil || owner["phone"] != "+201012345678" || owner["email_verified"] != true ||
+		r.body["orders_30d"] != float64(7) || r.body["products"] != float64(42) {
+		t.Fatalf("profile = %d %v", r.status, r.body)
+	}
+	if _, has := r.body["last_order_at"]; has {
+		t.Fatalf("last_order_at for no order: %v", r.body)
+	}
+	if _, has := owner["last_seen_at"]; has {
+		t.Fatalf("last_seen_at for never: %v", owner)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+f.ids.New().String()+"/profile", "", withCookie(sess)); r.status != http.StatusNotFound {
+		t.Fatalf("unknown store = %d", r.status)
 	}
 }
 

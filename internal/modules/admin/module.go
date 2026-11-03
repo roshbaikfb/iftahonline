@@ -41,6 +41,8 @@ type Deps struct {
 	// DashboardURL; nil refuses them.
 	Impersonate  Impersonator
 	DashboardURL string
+	// Profile reads a store's owner and numbers; nil refuses them.
+	Profile Profiler
 	// Plans is billing's plan catalog on AdminPool (ADR-0056); Enforced
 	// tells feature keys the code checks. Nil refuses the catalog.
 	Plans    billing.Catalog
@@ -88,7 +90,7 @@ func New(d Deps) (*Module, error) {
 		limits = *d.Limits
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
-		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, DashboardURL: d.DashboardURL,
+		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, Profile: d.Profile, DashboardURL: d.DashboardURL,
 		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding})
 	return &Module{svc: svc, deps: d}, nil
 }

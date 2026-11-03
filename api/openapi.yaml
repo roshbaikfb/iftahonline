@@ -2063,6 +2063,28 @@ paths:
               schema: { $ref: "#/components/schemas/Billing" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/profile:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStoreProfile
+      summary: A store's owner and numbers
+      description: |
+        How to reach the store's owner (name, email and phone in full, for
+        support: shown to admins, never logged) and the store's numbers:
+        orders in the last 30 days, its last order, its products, and the
+        owner's last use of the dashboard (support sessions left out).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreProfile" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -5459,6 +5481,23 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AdminStoreSummary" }
         next_cursor: { type: string }
+    AdminStoreProfile:
+      type: object
+      required: [orders_30d, products]
+      properties:
+        owner: { $ref: "#/components/schemas/AdminStoreOwner" }
+        orders_30d: { type: integer, format: int64, description: Orders placed in the last 30 days. }
+        last_order_at: { type: string, format: date-time, description: Absent before the first order. }
+        products: { type: integer, format: int64, description: Products not deleted. }
+    AdminStoreOwner:
+      type: object
+      required: [name, email, email_verified]
+      properties:
+        name: { type: string }
+        email: { type: string }
+        email_verified: { type: boolean }
+        phone: { type: string, description: "E.164; absent when the owner gave none." }
+        last_seen_at: { type: string, format: date-time, description: The owner's last use of the dashboard; absent for never. }
     AdminStoreDetail:
       type: object
       required: [store, domains]

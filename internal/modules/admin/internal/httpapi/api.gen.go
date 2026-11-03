@@ -1724,10 +1724,36 @@ type AdminStoreEntitlements struct {
 	Plan      []AdminPlanGrant `json:"plan"`
 }
 
+// AdminStoreOwner defines model for AdminStoreOwner.
+type AdminStoreOwner struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+
+	// LastSeenAt The owner's last use of the dashboard; absent for never.
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+	Name       string     `json:"name"`
+
+	// Phone E.164; absent when the owner gave none.
+	Phone *string `json:"phone,omitempty"`
+}
+
 // AdminStorePage defines model for AdminStorePage.
 type AdminStorePage struct {
 	Items      []AdminStoreSummary `json:"items"`
 	NextCursor *string             `json:"next_cursor,omitempty"`
+}
+
+// AdminStoreProfile defines model for AdminStoreProfile.
+type AdminStoreProfile struct {
+	// LastOrderAt Absent before the first order.
+	LastOrderAt *time.Time `json:"last_order_at,omitempty"`
+
+	// Orders30d Orders placed in the last 30 days.
+	Orders30d int64            `json:"orders_30d"`
+	Owner     *AdminStoreOwner `json:"owner,omitempty"`
+
+	// Products Products not deleted.
+	Products int64 `json:"products"`
 }
 
 // AdminStoreSummary defines model for AdminStoreSummary.
@@ -2337,6 +2363,9 @@ type ServerInterface interface {
 	// AdminSettleInvoice Record an invoice as paid outside the card (a confirmed transfer)
 	// (POST /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle)
 	AdminSettleInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID)
+	// AdminGetStoreProfile A store's owner and numbers
+	// (GET /admin/v1/stores/{store_id}/profile)
+	AdminGetStoreProfile(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -3704,6 +3733,32 @@ func (siw *ServerInterfaceWrapper) AdminSettleInvoice(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// AdminGetStoreProfile operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStoreProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStoreProfile(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminReactivateStore operation middleware
 func (siw *ServerInterfaceWrapper) AdminReactivateStore(w http.ResponseWriter, r *http.Request) {
 
@@ -3887,6 +3942,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}", wrapper.AdminSetStoreOverride)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}/clear", wrapper.AdminClearStoreOverride)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/billing", wrapper.AdminGetStoreBilling)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/profile", wrapper.AdminGetStoreProfile)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
@@ -6064,6 +6120,45 @@ func (response AdminSettleInvoicedefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type AdminGetStoreProfileRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type AdminGetStoreProfileResponseObject interface {
+	VisitAdminGetStoreProfileResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStoreProfile200JSONResponse AdminStoreProfile
+
+func (response AdminGetStoreProfile200JSONResponse) VisitAdminGetStoreProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetStoreProfiledefaultApplicationProblemPlusJSONResponse) VisitAdminGetStoreProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminReactivateStoreRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *AdminReactivateStoreJSONRequestBody
@@ -6311,6 +6406,9 @@ type StrictServerInterface interface {
 	// AdminSettleInvoice Record an invoice as paid outside the card (a confirmed transfer)
 	// (POST /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle)
 	AdminSettleInvoice(ctx context.Context, request AdminSettleInvoiceRequestObject) (AdminSettleInvoiceResponseObject, error)
+	// AdminGetStoreProfile A store's owner and numbers
+	// (GET /admin/v1/stores/{store_id}/profile)
+	AdminGetStoreProfile(ctx context.Context, request AdminGetStoreProfileRequestObject) (AdminGetStoreProfileResponseObject, error)
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(ctx context.Context, request AdminReactivateStoreRequestObject) (AdminReactivateStoreResponseObject, error)
@@ -7945,6 +8043,32 @@ func (sh *strictHandler) AdminSettleInvoice(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSettleInvoiceResponseObject); ok {
 		if err := validResponse.VisitAdminSettleInvoiceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetStoreProfile operation middleware
+func (sh *strictHandler) AdminGetStoreProfile(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminGetStoreProfileRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStoreProfile(ctx, request.(AdminGetStoreProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStoreProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStoreProfileResponseObject); ok {
+		if err := validResponse.VisitAdminGetStoreProfileResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

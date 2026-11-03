@@ -1726,6 +1726,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/stores/{store_id}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A store's owner and numbers
+         * @description How to reach the store's owner (name, email and phone in full, for
+         *     support: shown to admins, never logged) and the store's numbers:
+         *     orders in the last 30 days, its last order, its products, and the
+         *     owner's last use of the dashboard (support sessions left out).
+         */
+        get: operations["adminGetStoreProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle": {
         parameters: {
             query?: never;
@@ -4577,6 +4602,36 @@ export interface components {
         AdminStorePage: {
             items: components["schemas"]["AdminStoreSummary"][];
             next_cursor?: string;
+        };
+        AdminStoreProfile: {
+            owner?: components["schemas"]["AdminStoreOwner"];
+            /**
+             * Format: int64
+             * @description Orders placed in the last 30 days.
+             */
+            orders_30d: number;
+            /**
+             * Format: date-time
+             * @description Absent before the first order.
+             */
+            last_order_at?: string;
+            /**
+             * Format: int64
+             * @description Products not deleted.
+             */
+            products: number;
+        };
+        AdminStoreOwner: {
+            name: string;
+            email: string;
+            email_verified: boolean;
+            /** @description E.164; absent when the owner gave none. */
+            phone?: string;
+            /**
+             * Format: date-time
+             * @description The owner's last use of the dashboard; absent for never.
+             */
+            last_seen_at?: string;
         };
         AdminStoreDetail: {
             store: components["schemas"]["Store"];
@@ -9608,6 +9663,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetStoreProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreProfile"];
                 };
             };
             default: components["responses"]["Problem"];

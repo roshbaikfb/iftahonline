@@ -11,6 +11,16 @@ import "github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 // Impersonation is a support session the identity module opened.
 type Impersonation = app.Impersonation
 
+// StoreProfile is a store's owner and numbers for the console, and
+// OwnerContact how to reach the owner (shown, never logged).
+type (
+	StoreProfile = app.StoreProfile
+	OwnerContact = app.OwnerContact
+)
+
+// Profiler reads the profile of the store in ctx.
+type Profiler = app.Profiler
+
 // Impersonator opens a support session as the owner of the store in ctx
 // (ADR-0055). The console's wiring adapts the identity module to it.
 type Impersonator = app.Impersonator

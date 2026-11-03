@@ -67,6 +67,9 @@ type Deps struct {
 	Stores    tenancy.Service   // nil for the CLI
 	// Impersonate opens support sessions; nil refuses them (the CLI).
 	Impersonate Impersonator
+	// Profile reads a store's owner and numbers; nil refuses them (the
+	// CLI).
+	Profile Profiler
 	// DashboardURL is where the admin exchanges an impersonation code.
 	DashboardURL string
 	// Plans is billing's plan catalog on the console's role; Enforced
