@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -30,6 +31,21 @@ func (s *Service) Health(ctx context.Context) (h Health, err error) {
 		return txErr
 	})
 	return h, err
+}
+
+// Revenue is the monthly recurring revenue in one currency.
+type Revenue = domain.Revenue
+
+// Revenue is the platform's monthly recurring revenue per currency
+// (ADR-0075): what every active subscription's next renewal is charged,
+// as a month's share.
+func (s *Service) Revenue(ctx context.Context) (r []Revenue, err error) {
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
+		paying, txErr := store.Paying(ctx, tx)
+		r = domain.MRR(paying)
+		return txErr
+	})
+	return r, err
 }
 
 // SettleStoreInvoice records invoice, an open invoice of the store-in-
