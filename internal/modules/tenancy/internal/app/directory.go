@@ -130,5 +130,5 @@ func (d *StoreDirectory) Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]
 	if len(ids) == 0 {
 		return map[ulid.ID]string{}, nil
 	}
-	return store.StoreNames(ctx, d.db, ids)
+	return store.Names(ctx, d.db, ids)
 }

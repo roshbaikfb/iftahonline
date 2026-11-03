@@ -100,9 +100,9 @@ func NewStoresByDay(ctx context.Context, adminDB Tx, since time.Time, tz string)
 	return out, nil
 }
 
-// StoreNames maps store IDs to their names, in one query; an unknown ID
+// Names maps store IDs to their names, in one query; an unknown ID
 // is left out.
-func StoreNames(ctx context.Context, adminDB Tx, ids []ulid.ID) (map[ulid.ID]string, error) {
+func Names(ctx context.Context, adminDB Tx, ids []ulid.ID) (map[ulid.ID]string, error) {
 	rows, err := tenancydb.New(adminDB).AdminStoreNames(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("tenancy store: store names: %w", err)
