@@ -5,9 +5,12 @@ import { api, type components } from '../api/client';
 import { cycleLabel, dateAr, statusLabel } from '../lib/billing';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
+import { storefrontURL } from '../lib/storefront';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
-import { dateTimeAr, storeStatusLabel } from './lib';
+import { Dialog } from './Dialog';
+import { dateTimeAr, initial, storeStatusLabel } from './lib';
+import { currencyName } from './plans';
 
 type Detail = components['schemas']['AdminStoreDetail'];
 type Billing = components['schemas']['Billing'];
@@ -31,14 +34,16 @@ function fetchStore(storeId: string) {
 const grantText = (g: Grant | undefined, kind: Feature['kind'] | undefined) => {
   if (!g) return '—';
   if (g.unlimited) return 'بلا حد';
-  if (kind === 'flag') return (g.value ?? 0) > 0 ? 'مفعّلة' : 'متوقفة';
+  if (kind === 'flag') return (g.value ?? 0) > 0 ? 'متاحة' : 'غير متاحة';
   return (g.value ?? 0).toLocaleString('en-US');
 };
 
-// StorePage is one store in the console (the approved mockup): a support
-// session, suspension, its billing with a transfer to settle, its agency,
-// and its per-store feature flags. Every change asks for a reason, which
-// the admin log keeps.
+const dateLong = (iso: string) => new Date(iso).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// StorePage is one store in the console (the approved mockup): its
+// billing with a transfer to settle, its agency, a support session, its
+// features with this store's exceptions, and suspending it in a closed
+// danger zone. Every change asks for a reason, which the admin log keeps.
 export function StorePage() {
   const { storeId = '' } = useParams();
   const path = { params: { path: { store_id: storeId } } };
@@ -48,6 +53,7 @@ export function StorePage() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [support, setSupport] = useState<{ url: string; expires: string } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: 'override' } | { kind: 'clear'; feature: Feature } | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,20 +83,23 @@ export function StorePage() {
     apply(await fetchStore(storeId));
   };
 
-  // act runs a change, then shows done and reads the store again.
-  async function act(call: () => Promise<{ error?: unknown }>, done: string, form?: HTMLFormElement) {
+  // act runs a change, then shows done and reads the store again. It
+  // returns the refusal, for a dialog to show.
+  async function act(call: () => Promise<{ error?: unknown }>, done: string, form?: HTMLFormElement): Promise<string> {
     setBusy(true);
     setError('');
     setNotice('');
     const { error: err } = await call();
     setBusy(false);
     if (err) {
-      setError(problemMessage(err));
-      return;
+      const msg = problemMessage(err);
+      setError(msg);
+      return msg;
     }
     form?.reset();
     setNotice(done);
     await load();
+    return '';
   }
 
   function impersonate(e: SubmitEvent<HTMLFormElement>) {
@@ -102,7 +111,7 @@ export function StorePage() {
     void api
       .POST('/admin/v1/stores/{store_id}/impersonate', {
         ...path,
-        body: { reason: field(form, 'reason'), minutes: Number(field(form, 'minutes')), write: form.get('write') === 'on' },
+        body: { reason: field(form, 'reason'), minutes: Number(field(form, 'minutes')), write: field(form, 'access') === 'write' },
       })
       .then(({ data, error: err }) => {
         setBusy(false);
@@ -123,7 +132,7 @@ export function StorePage() {
         to === 'suspend'
           ? api.POST('/admin/v1/stores/{store_id}/suspend', { ...path, body: { reason } })
           : api.POST('/admin/v1/stores/{store_id}/reactivate', { ...path, body: { reason } }),
-      to === 'suspend' ? 'أُوقف المتجر.' : 'أُعيد تشغيل المتجر.',
+      to === 'suspend' ? 'أُوقف المتجر.' : 'أُعيد تفعيل المتجر.',
       el,
     );
   }
@@ -158,108 +167,60 @@ export function StorePage() {
     );
   }
 
-  function override(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const el = e.currentTarget;
-    const form = new FormData(el);
-    const until = field(form, 'until');
-    const unlimited = form.get('unlimited') === 'on';
-    const body: components['schemas']['AdminOverrideInput'] = { reason: field(form, 'reason'), unlimited };
-    if (!unlimited) body.value = Number(field(form, 'value'));
-    if (until) body.expires_at = new Date(`${until}T23:59:59Z`).toISOString();
-    void act(
-      () => api.PUT('/admin/v1/stores/{store_id}/entitlements/{feature}', { params: { path: { store_id: storeId, feature: field(form, 'feature') } }, body }),
-      'حُفظ الاستثناء.',
-      el,
-    );
-  }
-
-  function clear(feature: string) {
-    const reason = window.prompt('سبب إزالة الاستثناء');
-    if (!reason) return;
-    void act(
-      () => api.POST('/admin/v1/stores/{store_id}/entitlements/{feature}/clear', { params: { path: { store_id: storeId, feature } }, body: { reason } }),
-      'أُزيل الاستثناء.',
-    );
-  }
-
   const store = detail?.store;
   const host = detail?.domains.find((d) => d.is_primary)?.host ?? detail?.domains[0]?.host ?? '';
   const enforced = features.filter((f) => f.enforced);
+  const suspended = store?.status === 'suspended';
+  const openInvoices = billing?.open_invoices.length ?? 0;
 
   return (
     <ConsoleLayout>
-      <Link to="/stores">→ المتاجر</Link>
-      {error && <p role="alert">{error}</p>}
+      <nav className="crumbs" aria-label="مسار الصفحة">
+        <Link to="/stores">المتاجر</Link> / {store?.name ?? '…'}
+      </nav>
+      {error && !dialog && <p role="alert">{error}</p>}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
         </p>
       )}
       {store && (
-        <div className="page-head">
-          <div>
-            <h1>
-              {store.name} <span className={`status store-${store.status}`}>{storeStatusLabel[store.status]}</span>
-            </h1>
-            <p className="muted ltr">
-              {host} · {store.currency} · {store.locale}
-            </p>
+        <div className="store-head">
+          <div className="store-title">
+            <span className="store-mark big" aria-hidden="true">
+              {initial(store.name)}
+            </span>
+            <div>
+              <h1>
+                {store.name} <span className={`status store-${store.status}`}>{storeStatusLabel[store.status]}</span>
+              </h1>
+              <p className="muted">
+                <bdi className="ltr">{host}</bdi> · {currencyName[store.currency]} · أُنشئ {dateLong(store.created_at)}
+              </p>
+            </div>
           </div>
-          <details className="console-danger">
-            <summary className="button">{store.status === 'suspended' ? 'إعادة تشغيل المتجر' : 'إيقاف المتجر'}</summary>
-            <form className="inline-form" aria-label={store.status === 'suspended' ? 'إعادة تشغيل المتجر' : 'إيقاف المتجر'} onSubmit={(e) => {
-                setStatus(e, store.status === 'suspended' ? 'reactivate' : 'suspend'); }}>
-              <label>
-                <span className="field-label">السبب</span>
-                <input name="reason" required minLength={3} maxLength={500} />
-              </label>
-              <button type="submit" className="button" disabled={busy}>
-                {store.status === 'suspended' ? 'أعد التشغيل' : 'أوقف'}
-              </button>
-            </form>
-          </details>
+          <a className="button secondary" href={storefrontURL(store.slug)} target="_blank" rel="noopener noreferrer">
+            فتح المتجر ↗
+          </a>
         </div>
       )}
 
-      <section className="card support-card" aria-labelledby="h-support">
-        <h2 id="h-support">جلسة دعم بحساب صاحب المتجر</h2>
-        <p className="muted small">تُسجَّل في سجل الأدمن وسجل المتجر، وكل طلب فيها يُسجَّل. لا تُمدَّد وتنتهي وحدها.</p>
-        <form className="inline-form" onSubmit={impersonate}>
-          <label className="grow">
-            <span className="field-label">السبب (إجباري)</span>
-            <input name="reason" required minLength={3} maxLength={500} placeholder="مثال: تذكرة 4821 — مشكلة في صفحة المنتج" />
-          </label>
-          <label>
-            <span className="field-label">المدة</span>
-            <select name="minutes" defaultValue="30">
-              <option value="15">15 دقيقة</option>
-              <option value="30">30 دقيقة</option>
-              <option value="60">60 دقيقة</option>
-            </select>
-          </label>
-          <label className="check">
-            <input type="checkbox" name="write" /> السماح بالتعديل (الافتراضي قراءة فقط)
-          </label>
-          <button type="submit" className="button primary" disabled={busy}>
-            افتح جلسة الدعم
-          </button>
-        </form>
-        {support && (
-          <p className="ok-note">
-            <a href={support.url} target="_blank" rel="noopener noreferrer">
-              افتح جلسة الدعم في الداشبورد
-            </a>{' '}
-            — الرابط صالح دقيقة واحدة ولمرة واحدة، والجلسة تنتهي {dateTimeAr(support.expires)}.
-          </p>
-        )}
-      </section>
+      <div className="store-grid">
+        <section className="slot-card" aria-label="صاحب المتجر">
+          <h2>صاحب المتجر</h2>
+          <p className="muted small">الاسم والإيميل والموبايل كاملين، للتواصل. لا تُكتب في أي سجل. تصل مع تحديث الخادم.</p>
+        </section>
+        <section className="slot-card" aria-label="أرقام المتجر">
+          <h2>أرقام المتجر</h2>
+          <p className="muted small">طلبات آخر 30 يومًا، آخر طلب، المنتجات، آخر دخول. تصل مع تحديث الخادم.</p>
+        </section>
+      </div>
 
-      <div className="bill-grid">
+      <div className="store-grid">
         {billing && (
-          <section className="card" aria-labelledby="h-billing">
+          <section className="card store-card" aria-labelledby="h-billing">
             <h2 id="h-billing">الفوترة</h2>
-            <dl className="facts">
+            <dl className="store-facts">
               <dt>الباقة</dt>
               <dd>
                 {billing.plan_name_ar}
@@ -268,6 +229,7 @@ export function StorePage() {
               <dt>الحالة</dt>
               <dd>
                 <span className={`status bill-${billing.status}`}>{statusLabel[billing.status]}</span>
+                {billing.status === 'trialing' && billing.trial_ends_at ? ` حتى ${dateAr(billing.trial_ends_at)}` : ''}
                 {billing.grace_until ? ` حتى ${dateAr(billing.grace_until)}` : ''}
               </dd>
               {billing.period_end && (
@@ -283,36 +245,40 @@ export function StorePage() {
                 </>
               )}
               <dt>البطاقة</dt>
-              <dd>{billing.card ?? '—'}</dd>
+              <dd className={billing.card ? '' : 'muted'}>{billing.card ?? 'لا توجد'}</dd>
             </dl>
-            {billing.open_invoices.map((inv) => (
-              <div key={inv.id} className="console-invoice">
-                <div className="row">
-                  <span className="ltr">{inv.number}</span>
-                  <strong>{money(inv.total_minor, inv.currency)}</strong>
+            {openInvoices === 0 ? (
+              <p className="muted small store-card-foot">لا فواتير مفتوحة.</p>
+            ) : (
+              billing.open_invoices.map((inv) => (
+                <div key={inv.id} className="console-invoice">
+                  <div className="row">
+                    <span className="ltr">{inv.number}</span>
+                    <strong>{money(inv.total_minor, inv.currency)}</strong>
+                  </div>
+                  <p className="muted small">
+                    مستحقة {dateAr(inv.due_at)} · محاولات {inv.attempts}
+                  </p>
+                  <form className="inline-form" onSubmit={(e) => { settle(e, inv.id); }} aria-label={`تسجيل ${inv.number} مدفوعة`}>
+                    <label>
+                      <span className="field-label">رقم التحويل</span>
+                      <input name="reference" required maxLength={120} />
+                    </label>
+                    <label className="grow">
+                      <span className="field-label">السبب</span>
+                      <input name="reason" required minLength={3} maxLength={500} />
+                    </label>
+                    <button type="submit" className="button" disabled={busy}>
+                      سجّل كمدفوعة
+                    </button>
+                  </form>
                 </div>
-                <p className="muted small">
-                  مستحقة {dateAr(inv.due_at)} · محاولات {inv.attempts}
-                </p>
-                <form className="inline-form" onSubmit={(e) => { settle(e, inv.id); }} aria-label={`تسجيل ${inv.number} مدفوعة`}>
-                  <label>
-                    <span className="field-label">رقم التحويل</span>
-                    <input name="reference" required maxLength={120} />
-                  </label>
-                  <label className="grow">
-                    <span className="field-label">السبب</span>
-                    <input name="reason" required minLength={3} maxLength={500} />
-                  </label>
-                  <button type="submit" className="button" disabled={busy}>
-                    سجّل كمدفوعة
-                  </button>
-                </form>
-              </div>
-            ))}
+              ))
+            )}
           </section>
         )}
 
-        <section className="card" aria-labelledby="h-agency">
+        <section className="card store-card" aria-labelledby="h-agency">
           <h2 id="h-agency">الوكالة</h2>
           <p className="muted small">ينضم المتجر بشرط ألا تكون عليه فاتورة مفتوحة، ويأخذ باقة الوكالة وفترتها.</p>
           {agencies.length === 0 ? (
@@ -333,20 +299,73 @@ export function StorePage() {
                 <span className="field-label">السبب</span>
                 <input name="reason" required minLength={3} maxLength={500} />
               </label>
-              <button type="submit" className="button" disabled={busy || (billing?.open_invoices.length ?? 0) > 0}>
+              <button type="submit" className="button" disabled={busy || openInvoices > 0}>
                 ضمّه للوكالة
               </button>
             </form>
           )}
-          {(billing?.open_invoices.length ?? 0) > 0 && <p className="warn-note">عليه فاتورة مفتوحة: سجّلها كمدفوعة أولًا.</p>}
+          {openInvoices > 0 && <p className="warn-note">عليه فاتورة مفتوحة: سجّلها كمدفوعة أولًا.</p>}
         </section>
       </div>
+
+      <section className="card store-card" aria-labelledby="h-support">
+        <div className="section-head">
+          <h2 id="h-support">جلسة دعم بحساب صاحب المتجر</h2>
+          <span className="muted small">تُسجَّل في سجل الأدمن وسجل المتجر، ولا تُمدَّد.</span>
+        </div>
+        <form className="support-form" onSubmit={impersonate}>
+          <label className="grow">
+            <span className="field-label">السبب</span>
+            <input name="reason" required minLength={3} maxLength={500} placeholder="مثال: تذكرة 4821 — مشكلة في صفحة المنتج" />
+          </label>
+          <label>
+            <span className="field-label">المدة</span>
+            <select name="minutes" defaultValue="30">
+              <option value="15">15 دقيقة</option>
+              <option value="30">30 دقيقة</option>
+              <option value="60">60 دقيقة</option>
+            </select>
+          </label>
+          <fieldset className="segmented">
+            <legend className="visually-hidden">الصلاحية</legend>
+            <label>
+              <input type="radio" name="access" value="read" defaultChecked /> للقراءة فقط
+            </label>
+            <label>
+              <input type="radio" name="access" value="write" /> مسموح بالتعديل
+            </label>
+          </fieldset>
+          <button type="submit" className="button primary" disabled={busy}>
+            افتح جلسة الدعم
+          </button>
+        </form>
+        {support && (
+          <p className="ok-note">
+            <a href={support.url} target="_blank" rel="noopener noreferrer">
+              افتح جلسة الدعم في الداشبورد
+            </a>{' '}
+            — الرابط صالح دقيقة واحدة ولمرة واحدة، والجلسة تنتهي {dateTimeAr(support.expires)}.
+          </p>
+        )}
+      </section>
 
       {grants && (
         <section className="table-card" aria-labelledby="h-features">
           <div className="card-head wrap">
-            <h2 id="h-features">مميزات هذا المتجر</h2>
-            <span className="muted small">استثناء يحل محل ما تمنحه الباقة لهذا المتجر وحده، ويطبَّق فورًا.</span>
+            <div>
+              <h2 id="h-features">مميزات المتجر</h2>
+              <span className="muted small">من الباقة، إلا ما استثنيته لهذا المتجر وحده.</span>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setError('');
+                setDialog({ kind: 'override' });
+              }}
+            >
+              استثناء جديد
+            </button>
           </div>
           <div className="scroll">
             <table>
@@ -356,16 +375,13 @@ export function StorePage() {
                   <th scope="col">من الباقة</th>
                   <th scope="col">الاستثناء</th>
                   <th scope="col">الفعلي</th>
-                  <th scope="col">
-                    <span className="visually-hidden">إجراء</span>
-                  </th>
                 </tr>
               </thead>
               <tbody>
                 {enforced.map((f) => {
                   const o = grants.overrides.find((x) => x.feature === f.key);
                   return (
-                    <tr key={f.key}>
+                    <tr key={f.key} className={o?.active ? 'overridden' : undefined}>
                       <th scope="row">{f.name_ar}</th>
                       <td className="muted">{grantText(grants.plan.find((g) => g.feature === f.key), f.kind)}</td>
                       <td>
@@ -373,9 +389,20 @@ export function StorePage() {
                           <>
                             <strong className={o.active ? '' : 'muted'}>{grantText(o, f.kind)}</strong>
                             <div className="muted small">
-                              {o.reason}
+                              السبب: {o.reason}
                               {o.expires_at ? ` · حتى ${dateAr(o.expires_at)}` : ''}
-                              {o.active ? '' : ' · منتهٍ'}
+                              {o.active ? '' : ' · منتهٍ'} ·{' '}
+                              <button
+                                type="button"
+                                className="link-button danger"
+                                disabled={busy}
+                                onClick={() => {
+                                  setError('');
+                                  setDialog({ kind: 'clear', feature: f });
+                                }}
+                              >
+                                إزالة
+                              </button>
                             </div>
                           </>
                         ) : (
@@ -385,51 +412,210 @@ export function StorePage() {
                       <td>
                         <strong>{grantText(grants.effective.find((g) => g.feature === f.key), f.kind)}</strong>
                       </td>
-                      <td>
-                        {o && (
-                          <button type="button" className="link-button danger" disabled={busy} onClick={() => { clear(f.key); }}>
-                            إزالة
-                          </button>
-                        )}
-                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <form className="inline-form foot" onSubmit={override} aria-label="استثناء جديد">
+        </section>
+      )}
+
+      <section className="slot-card" aria-label="آخر إجراءات الأدمن على المتجر">
+        <h2>آخر إجراءات الأدمن على هذا المتجر</h2>
+        <p className="muted small">تصل مع تحديث الخادم (تصفية السجل بالمتجر).</p>
+      </section>
+
+      {store && (
+        <details className="card plan-fold danger-zone">
+          <summary>{suspended ? 'إعادة تفعيل المتجر' : 'منطقة خطرة: إيقاف المتجر'}</summary>
+          <form
+            onSubmit={(e) => {
+              setStatus(e, suspended ? 'reactivate' : 'suspend');
+            }}
+            aria-label={suspended ? 'إعادة تفعيل المتجر' : 'إيقاف المتجر'}
+          >
+            <p className="muted">
+              {suspended ? 'يعود المتجر للعمل فور تفعيله. يُسجَّل السبب في سجل الأدمن.' : 'يتوقف المتجر عن العمل حتى تعيد تفعيله. يُسجَّل السبب في سجل الأدمن.'}
+            </p>
             <label>
-              <span className="field-label">الميزة</span>
-              <select name="feature" required>
-                {enforced.map((f) => (
-                  <option key={f.key} value={f.key}>
-                    {f.name_ar}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="field-label">القيمة (للتشغيل/الإيقاف: 1 أو 0)</span>
-              <input name="value" type="number" min={0} defaultValue={1} />
-            </label>
-            <label className="check">
-              <input type="checkbox" name="unlimited" /> بلا حد
-            </label>
-            <label>
-              <span className="field-label">حتى (اختياري)</span>
-              <input name="until" type="date" />
-            </label>
-            <label className="grow">
               <span className="field-label">السبب</span>
               <input name="reason" required minLength={3} maxLength={500} />
             </label>
-            <button type="submit" className="button primary" disabled={busy}>
-              حفظ الاستثناء
+            <button type="submit" className={suspended ? 'success' : 'danger-solid'} disabled={busy}>
+              {suspended ? `أعد تفعيل «${store.name}»` : `أوقف «${store.name}»`}
             </button>
           </form>
-        </section>
+        </details>
+      )}
+
+      {dialog?.kind === 'override' && store && grants && (
+        <OverrideDialog
+          storeName={store.name}
+          features={enforced}
+          plan={grants.plan}
+          error={error}
+          busy={busy}
+          onSave={async (feature, body) => {
+            const refused = await act(
+              () => api.PUT('/admin/v1/stores/{store_id}/entitlements/{feature}', { params: { path: { store_id: storeId, feature } }, body }),
+              'حُفظ الاستثناء.',
+            );
+            if (!refused) setDialog(null);
+          }}
+          onClose={() => {
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'clear' && (
+        <Dialog
+          title={`إزالة استثناء «${dialog.feature.name_ar}»`}
+          intro="يعود المتجر لما تمنحه باقته في هذه الميزة فورًا."
+          error={error}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const reason = field(new FormData(e.currentTarget), 'reason');
+            void act(
+              () =>
+                api.POST('/admin/v1/stores/{store_id}/entitlements/{feature}/clear', {
+                  params: { path: { store_id: storeId, feature: dialog.feature.key } },
+                  body: { reason },
+                }),
+              'أُزيل الاستثناء.',
+            ).then((refused) => {
+              if (!refused) setDialog(null);
+            });
+          }}
+          onClose={() => {
+            setDialog(null);
+          }}
+        >
+          <label>
+            <span className="field-label">السبب</span>
+            <input name="reason" required minLength={3} maxLength={500} />
+          </label>
+          <div className="actions">
+            <button type="submit" className="danger-solid" disabled={busy}>
+              أزل الاستثناء
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setDialog(null);
+              }}
+            >
+              إلغاء
+            </button>
+          </div>
+        </Dialog>
       )}
     </ConsoleLayout>
+  );
+}
+
+type OverrideInput = components['schemas']['AdminOverrideInput'];
+
+// OverrideDialog sets one feature for this store alone (the approved
+// mockup's «استثناء جديد»): a switch for a flag, a number or «بلا حد»
+// for a limit, until an optional date.
+function OverrideDialog({
+  storeName,
+  features,
+  plan,
+  error,
+  busy,
+  onSave,
+  onClose,
+}: {
+  storeName: string;
+  features: Feature[];
+  plan: Grant[];
+  error: string;
+  busy: boolean;
+  onSave: (feature: string, body: OverrideInput) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [key, setKey] = useState(features[0]?.key ?? '');
+  const [unlimited, setUnlimited] = useState(false);
+  const feature = features.find((f) => f.key === key);
+  const flag = feature?.kind === 'flag';
+
+  function save(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const until = field(form, 'until');
+    const body: OverrideInput = { reason: field(form, 'reason'), unlimited: !flag && unlimited };
+    if (flag) body.value = form.get('on') === 'on' ? 1 : 0;
+    else if (!unlimited) body.value = Number(field(form, 'value'));
+    if (until) body.expires_at = new Date(`${until}T23:59:59Z`).toISOString();
+    void onSave(key, body);
+  }
+
+  return (
+    <Dialog title={`استثناء جديد لـ «${storeName}»`} intro="يحل محل ما تمنحه الباقة لهذا المتجر وحده، ويُطبَّق فورًا." error={error} onSubmit={save} onClose={onClose}>
+      <label>
+        <span className="field-label">الميزة</span>
+        <select
+          name="feature"
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setUnlimited(false);
+          }}
+        >
+          {features.map((f) => (
+            <option key={f.key} value={f.key}>
+              {f.name_ar} — من الباقة {grantText(plan.find((g) => g.feature === f.key), f.kind)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {flag ? (
+        <label className="switch-row">
+          <span>متاحة لهذا المتجر</span>
+          <input type="checkbox" role="switch" name="on" defaultChecked />
+        </label>
+      ) : (
+        <div className="limit-pair">
+          <label>
+            <span className="field-label">الحد الجديد</span>
+            <input name="value" inputMode="numeric" dir="ltr" pattern="[0-9]+" required={!unlimited} disabled={unlimited} defaultValue="" />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={unlimited}
+              onChange={(e) => {
+                setUnlimited(e.target.checked);
+              }}
+            />{' '}
+            بلا حد
+          </label>
+        </div>
+      )}
+      <div className="field">
+        <label>
+          <span className="field-label">حتى (اختياري)</span>
+          <input name="until" type="date" aria-describedby="until-hint" />
+        </label>
+        <small id="until-hint" className="muted">
+          بعده يعود المتجر لما تمنحه باقته.
+        </small>
+      </div>
+      <label>
+        <span className="field-label">السبب</span>
+        <input name="reason" required minLength={3} maxLength={500} />
+      </label>
+      <div className="actions">
+        <button type="submit" className="button primary" disabled={busy}>
+          حفظ الاستثناء
+        </button>
+        <button type="button" className="secondary" onClick={onClose}>
+          إلغاء
+        </button>
+      </div>
+    </Dialog>
   );
 }
