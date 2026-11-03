@@ -5,6 +5,7 @@ package tenancy
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -91,10 +92,19 @@ type Directory interface {
 	// Counts are every store by state (active, held for billing,
 	// suspended, closed).
 	Counts(ctx context.Context) (StoreCounts, error)
+	// NewStores are the stores created in the last 30 Cairo days up to
+	// now: the last 7 and 30, and per day.
+	NewStores(ctx context.Context, now time.Time) (NewStores, error)
 }
 
 // StoreCounts are the platform's stores by state.
 type StoreCounts = domain.StoreCounts
+
+// NewStores are the stores created lately, per day.
+type NewStores = domain.NewStores
+
+// DayCount is how many stores were created on one day.
+type DayCount = domain.DayCount
 
 // HostResolver maps a raw Host header to its store. A cache hit does no
 // I/O.

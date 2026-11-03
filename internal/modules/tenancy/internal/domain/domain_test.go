@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -281,5 +282,34 @@ func TestCheckSlug(t *testing.T) {
 		if slug != c.slug || reason != c.reason {
 			t.Errorf("CheckSlug(%q) = %q, %q; want %q, %q", c.in, slug, reason, c.slug, c.reason)
 		}
+	}
+}
+
+func TestNewStoresFrom(t *testing.T) {
+	t.Parallel()
+	day := func(m time.Month, d int) time.Time { return time.Date(2030, m, d, 0, 0, 0, 0, time.UTC) }
+	today := time.Date(2030, 1, 15, 21, 30, 0, 0, time.FixedZone("Cairo", 2*3600))
+	for _, tt := range []struct {
+		name          string
+		byDay         map[time.Time]int64
+		last7, last30 int64
+	}{
+		{"none", nil, 0, 0},
+		{"today", map[time.Time]int64{day(1, 15): 4}, 4, 4},
+		{"the 7th day back is in the last 7", map[time.Time]int64{day(1, 9): 2}, 2, 2},
+		{"the 8th day back is not", map[time.Time]int64{day(1, 8): 2}, 0, 2},
+		{"the 30th day back is in the last 30", map[time.Time]int64{day(12, 17).AddDate(-1, 0, 0): 3}, 0, 3},
+		{"older days and future ones are left out", map[time.Time]int64{day(12, 16).AddDate(-1, 0, 0): 9, day(1, 16): 9}, 0, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			n := domain.NewStoresFrom(tt.byDay, today)
+			if n.Last7 != tt.last7 || n.Last30 != tt.last30 || len(n.Daily) != domain.NewStoresDays {
+				t.Fatalf("= %d, %d, %d days; want %d, %d", n.Last7, n.Last30, len(n.Daily), tt.last7, tt.last30)
+			}
+			if first, last := n.Daily[0].Day, n.Daily[domain.NewStoresDays-1].Day; !first.Equal(day(12, 17).AddDate(-1, 0, 0)) || !last.Equal(day(1, 15)) {
+				t.Fatalf("days run %v to %v", first, last)
+			}
+		})
 	}
 }

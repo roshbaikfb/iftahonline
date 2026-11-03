@@ -27,3 +27,12 @@ SELECT count(*) FILTER (WHERE status = 'active' AND NOT billing_hold)::bigint AS
        count(*) FILTER (WHERE status = 'closed')::bigint AS closed,
        count(*)::bigint AS total
 FROM stores;
+
+-- name: AdminNewStoresByDay :many
+-- Stores created since @since, per day in @tz, for the console's home
+-- (ADR-0075).
+SELECT (created_at AT TIME ZONE @tz::text)::date AS day, count(*)::bigint AS stores
+FROM stores
+WHERE created_at >= @since::timestamptz
+GROUP BY 1
+ORDER BY 1;

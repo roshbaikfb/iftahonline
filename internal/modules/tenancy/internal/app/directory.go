@@ -105,3 +105,22 @@ func decodeDirCursor(c string) (time.Time, ulid.ID, error) {
 func (d *StoreDirectory) Counts(ctx context.Context) (domain.StoreCounts, error) {
 	return store.DirectoryCounts(ctx, d.db)
 }
+
+// consoleZone is the zone the console counts days in: the owner's.
+const consoleZone = "Africa/Cairo"
+
+// NewStores are the stores created in the last 30 Cairo days up to now
+// (the console's home, ADR-0075).
+func (d *StoreDirectory) NewStores(ctx context.Context, now time.Time) (domain.NewStores, error) {
+	loc, err := time.LoadLocation(consoleZone)
+	if err != nil {
+		return domain.NewStores{}, fmt.Errorf("tenancy: zone: %w", err)
+	}
+	local := now.In(loc)
+	first := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1-domain.NewStoresDays)
+	byDay, err := store.NewStoresByDay(ctx, d.db, first, consoleZone)
+	if err != nil {
+		return domain.NewStores{}, err
+	}
+	return domain.NewStoresFrom(byDay, local), nil
+}

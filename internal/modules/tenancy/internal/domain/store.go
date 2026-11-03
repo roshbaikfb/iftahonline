@@ -171,3 +171,37 @@ func checkLocaleTZ(locale, tz string) []errs.FieldError {
 type StoreCounts struct {
 	Active, Held, Suspended, Closed, Total int64
 }
+
+// DayCount is how many stores were created on one day.
+type DayCount struct {
+	Day   time.Time // midnight UTC of the calendar day
+	Count int64
+}
+
+// NewStores are the stores created lately (the console's home,
+// ADR-0075): the last 7 and 30 days, today included, and each of those
+// 30 days, oldest first.
+type NewStores struct {
+	Last7, Last30 int64
+	Daily         []DayCount
+}
+
+// NewStoresDays is how many days NewStores covers.
+const NewStoresDays = 30
+
+// NewStoresFrom lays counts per calendar day (midnight UTC keys) over
+// the NewStoresDays days ending on today, a day with none as 0.
+func NewStoresFrom(byDay map[time.Time]int64, today time.Time) NewStores {
+	end := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	out := NewStores{Daily: make([]DayCount, NewStoresDays)}
+	for i := range NewStoresDays {
+		day := end.AddDate(0, 0, i-NewStoresDays+1)
+		n := byDay[day]
+		out.Daily[i] = DayCount{Day: day, Count: n}
+		out.Last30 += n
+		if i >= NewStoresDays-7 {
+			out.Last7 += n
+		}
+	}
+	return out
+}
