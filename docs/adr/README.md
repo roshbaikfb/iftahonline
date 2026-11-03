@@ -81,3 +81,4 @@ supersedes it.
 | [0073](0073-site-content-from-the-console.md) | The site's content from the console | Accepted |
 | [0074](0074-founding-merchants-in-billing.md) | The founding-merchants program, in billing | Accepted |
 | [0075](0075-console-revenue-and-new-stores.md) | The console's monthly recurring revenue and new stores | Accepted |
+| [0076](0076-console-invoices-and-payments.md) | The console's invoices and payments | Accepted |
