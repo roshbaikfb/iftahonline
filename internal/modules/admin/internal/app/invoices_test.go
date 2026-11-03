@@ -84,7 +84,7 @@ func TestConsoleInvoices(t *testing.T) {
 		t.Fatalf("store's invoice = %+v", inv)
 	}
 	d, err := f.svc.Invoice(ctx, agencyInvoice)
-	if err != nil || d.Invoice.AccountKind != "agency" || d.Invoice.AccountName != "=HYPERLINK(\"x\") Agency" || d.Invoice.Store != nil ||
+	if err != nil || d.Invoice.AccountKind != "agency" || d.Invoice.AccountName != "=HYPERLINK(\"x\") Agency" || d.Invoice.Store != nil || // noplannames:allow an account's kind, not a plan
 		len(d.Lines) != 1 || len(d.Payments) != 0 {
 		t.Fatalf("agency's invoice = %+v, %v", d, err)
 	}
