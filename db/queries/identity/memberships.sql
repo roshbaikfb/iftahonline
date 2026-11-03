@@ -48,3 +48,16 @@ JOIN users u ON u.id = m.user_id
 WHERE m.store_id = @store_id AND m.role = ANY(@roles::text[]) AND u.phone IS NOT NULL AND u.phone_verified_at IS NOT NULL
 ORDER BY m.created_at
 LIMIT 20;
+
+-- name: StoreOwnerContact :one
+-- The store's owner, to reach them from the console: name, email, phone
+-- and when they last used the dashboard (support sessions left out;
+-- zero time: never). Never logged.
+SELECT u.name, u.email::text AS email, coalesce(u.phone, '')::text AS phone, (u.email_verified_at IS NOT NULL)::bool AS email_verified,
+       coalesce((SELECT max(s.last_seen_at) FROM user_sessions s WHERE s.user_id = u.id AND s.impersonator_id IS NULL),
+                '0001-01-01T00:00:00Z')::timestamptz AS last_seen_at
+FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = @store_id AND m.role = 'owner'
+ORDER BY m.created_at
+LIMIT 1;

@@ -212,6 +212,41 @@ func (q *Queries) SetUserScope(ctx context.Context, userID ulid.ID) error {
 	return err
 }
 
+const storeOwnerContact = `-- name: StoreOwnerContact :one
+SELECT u.name, u.email::text AS email, coalesce(u.phone, '')::text AS phone, (u.email_verified_at IS NOT NULL)::bool AS email_verified,
+       coalesce((SELECT max(s.last_seen_at) FROM user_sessions s WHERE s.user_id = u.id AND s.impersonator_id IS NULL),
+                '0001-01-01T00:00:00Z')::timestamptz AS last_seen_at
+FROM store_memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.store_id = $1 AND m.role = 'owner'
+ORDER BY m.created_at
+LIMIT 1
+`
+
+type StoreOwnerContactRow struct {
+	Name          string
+	Email         string
+	Phone         string
+	EmailVerified bool
+	LastSeenAt    time.Time
+}
+
+// The store's owner, to reach them from the console: name, email, phone
+// and when they last used the dashboard (support sessions left out;
+// zero time: never). Never logged.
+func (q *Queries) StoreOwnerContact(ctx context.Context, storeID ulid.ID) (StoreOwnerContactRow, error) {
+	row := q.db.QueryRow(ctx, storeOwnerContact, storeID)
+	var i StoreOwnerContactRow
+	err := row.Scan(
+		&i.Name,
+		&i.Email,
+		&i.Phone,
+		&i.EmailVerified,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const updateMemberRole = `-- name: UpdateMemberRole :execrows
 UPDATE store_memberships SET role = $1, updated_at = now()
 WHERE store_id = $2 AND user_id = $3 AND role <> 'owner'

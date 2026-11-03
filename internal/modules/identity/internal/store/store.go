@@ -168,6 +168,35 @@ func Owner(ctx context.Context, tx Tx) (ulid.ID, error) {
 	return id, nil
 }
 
+// OwnerContact is how to reach the current store's owner (the console's
+// store page). It is never logged.
+type OwnerContact struct {
+	Name, Email, Phone string
+	EmailVerified      bool
+	LastSeenAt         time.Time // zero: never; support sessions left out
+}
+
+// StoreOwnerContact reads the current store's owner, in one query; ok
+// is false for a store without one.
+func StoreOwnerContact(ctx context.Context, tx Tx) (_ OwnerContact, ok bool, _ error) {
+	store, err := current(ctx)
+	if err != nil {
+		return OwnerContact{}, false, err
+	}
+	r, err := identitydb.New(tx).StoreOwnerContact(ctx, store)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return OwnerContact{}, false, nil
+	case err != nil:
+		return OwnerContact{}, false, fmt.Errorf("identity store: owner contact: %w", err)
+	}
+	c := OwnerContact{Name: r.Name, Email: r.Email, Phone: r.Phone, EmailVerified: r.EmailVerified}
+	if r.LastSeenAt.Year() > 1 {
+		c.LastSeenAt = r.LastSeenAt
+	}
+	return c, true, nil
+}
+
 // Impersonation is an admin's session as the current store's owner.
 type Impersonation struct {
 	ID, UserID, Admin ulid.ID
