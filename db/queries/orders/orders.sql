@@ -119,3 +119,12 @@ WHERE store_id = @store_id AND created_at = @created_at AND id = @id AND payment
 -- name: GetOrderSignals :one
 -- One partition: the order's time is its partition key.
 SELECT * FROM order_signals WHERE store_id = @store_id AND order_created_at = @order_created_at AND order_id = @order_id;
+
+-- name: StoreActivity :one
+-- The store's orders lately, for the console: placed since @since, and
+-- when the last one was (zero time: never). The primary key
+-- (store_id, created_at, id) serves both.
+SELECT count(*) FILTER (WHERE created_at >= @since::timestamptz)::bigint AS since_count,
+       coalesce(max(created_at), '0001-01-01T00:00:00Z')::timestamptz AS last_order_at
+FROM orders
+WHERE store_id = @store_id;

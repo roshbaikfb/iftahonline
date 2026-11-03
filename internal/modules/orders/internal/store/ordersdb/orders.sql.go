@@ -786,3 +786,30 @@ func (q *Queries) SetPaymentStatus(ctx context.Context, arg SetPaymentStatusPara
 	}
 	return result.RowsAffected(), nil
 }
+
+const storeActivity = `-- name: StoreActivity :one
+SELECT count(*) FILTER (WHERE created_at >= $1::timestamptz)::bigint AS since_count,
+       coalesce(max(created_at), '0001-01-01T00:00:00Z')::timestamptz AS last_order_at
+FROM orders
+WHERE store_id = $2
+`
+
+type StoreActivityParams struct {
+	Since   time.Time
+	StoreID ulid.ID
+}
+
+type StoreActivityRow struct {
+	SinceCount  int64
+	LastOrderAt time.Time
+}
+
+// The store's orders lately, for the console: placed since @since, and
+// when the last one was (zero time: never). The primary key
+// (store_id, created_at, id) serves both.
+func (q *Queries) StoreActivity(ctx context.Context, arg StoreActivityParams) (StoreActivityRow, error) {
+	row := q.db.QueryRow(ctx, storeActivity, arg.Since, arg.StoreID)
+	var i StoreActivityRow
+	err := row.Scan(&i.SinceCount, &i.LastOrderAt)
+	return i, err
+}
