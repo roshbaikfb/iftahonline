@@ -373,8 +373,14 @@ func TestConsolePlanCatalog(t *testing.T) {
 		t.Fatalf("publish = %d %v", r.status, r.body)
 	}
 	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/plans", "", withCookie(sess))
-	if items, _ := r.body["items"].([]any); r.status != http.StatusOK || len(items) < 7 {
+	items, _ := r.body["items"].([]any)
+	if r.status != http.StatusOK || len(items) < 7 {
 		t.Fatalf("plans = %d %v", r.status, r.body)
+	}
+	for _, it := range items {
+		if v := it.(map[string]any); v["code"] == code && v["subscribers"] != float64(0) {
+			t.Fatalf("a new plan's subscribers = %v", v["subscribers"])
+		}
 	}
 	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/plans/"+code+"/retire", `{"reason":"done"}`, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
 		t.Fatalf("retire = %d %v", r.status, r.body)
