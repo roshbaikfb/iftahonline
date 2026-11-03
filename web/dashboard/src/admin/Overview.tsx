@@ -1,184 +1,261 @@
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
-import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
 import { DuplicatePayments } from './DuplicatePayments';
-import { dateTimeAr, healthGroups, sectionLabel, storeStatusLabel, type AdminHealth, type StoreStatus } from './lib';
+import { attention, count, dateTimeAr, fetchStores, greeting, healthGroups, waiting, type AdminHealth, type Duplicate } from './lib';
+import { useAdmin } from './session';
+import { StoreCell, StoreStatusPill } from './StoresPage';
 
 type Summary = components['schemas']['AdminStoreSummary'];
-interface Filter { query: string; status: StoreStatus | '' }
+type Founding = components['schemas']['AdminFounding'];
 
-// fetchStores reads a page of the directory.
-function fetchStores(f: Filter, after: string) {
-  const query: { query?: string; status?: StoreStatus; cursor?: string } = {};
-  if (f.query) query.query = f.query;
-  if (f.status) query.status = f.status;
-  if (after) query.cursor = after;
-  return api.GET('/admin/v1/stores', { params: { query } });
-}
+// refreshEvery is how often the home reads the health check again while
+// the tab is visible.
+export const refreshEvery = 60_000;
 
-// Overview is the console's home (the approved mockup): the platform's
-// health, then the store directory with search and a status filter.
+const time = (iso: string) => new Date(iso).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
+const today = () => new Date().toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// Overview is the console's home (the approved mockup): what needs the
+// owner's attention first, then the platform in four numbers, the
+// systems in one line, payments to refund, and the newest stores.
 export function Overview() {
+  const { state } = useAdmin();
+  const name = state.kind === 'signed-in' ? state.admin.name : '';
   const [health, setHealth] = useState<AdminHealth | null>(null);
+  const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
+  const [founding, setFounding] = useState<Founding | null>(null);
   const [stores, setStores] = useState<Summary[]>([]);
-  const [cursor, setCursor] = useState('');
-  const [filter, setFilter] = useState<Filter>({ query: '', status: '' });
+  const [details, setDetails] = useState(false);
   const [error, setError] = useState('');
 
   const loadHealth = useCallback(async () => {
     const { data, error: err } = await api.GET('/admin/v1/health');
-    if (data) setHealth(data);
+    if (data) {
+      setHealth(data);
+      setError('');
+    }
     if (err) setError(problemMessage(err));
   }, []);
 
-  const showStores = useCallback((r: Awaited<ReturnType<typeof fetchStores>>, after: string) => {
-    if (r.error) {
-      setError(problemMessage(r.error));
-      return;
-    }
-    const page = r.data;
-    setStores((prev) => (after ? [...prev, ...page.items] : page.items));
-    setCursor(page.next_cursor ?? '');
-  }, []);
-
-  const loadStores = async (f: Filter, after: string) => {
-    showStores(await fetchStores(f, after), after);
-  };
-
   useEffect(() => {
     let live = true;
-    void Promise.all([api.GET('/admin/v1/health'), fetchStores({ query: '', status: '' }, '')]).then(([h, st]) => {
+    void Promise.all([
+      api.GET('/admin/v1/health'),
+      api.GET('/admin/v1/billing/duplicates'),
+      api.GET('/admin/v1/founding'),
+      fetchStores({ query: '', status: '' }, '', 5),
+    ]).then(([h, d, f, st]) => {
       if (!live) return;
       if (h.data) setHealth(h.data);
       if (h.error) setError(problemMessage(h.error));
-      showStores(st, '');
+      if (d.data) setDuplicates(d.data.items);
+      if (f.data) setFounding(f.data);
+      if (st.data) setStores(st.data.items);
     });
     return () => {
       live = false;
     };
-  }, [showStores]);
+  }, []);
 
-  function search(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const next = { query: field(form, 'query').trim(), status: field(form, 'status') as StoreStatus | '' };
-    setFilter(next);
-    void loadStores(next, '');
-  }
+  // The health check is read again every minute while the tab is seen.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!document.hidden) void loadHealth();
+    }, refreshEvery);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [loadHealth]);
+
+  const refunded = useCallback((id: string, reference: string) => {
+    setDuplicates((xs) => xs.map((x) => (x.id === id ? { ...x, refunded_at: new Date().toISOString(), refund_reference: reference } : x)));
+  }, []);
+
+  const alerts = health ? attention(health, waiting(duplicates).length) : [];
+  const s = health?.stores;
+  const b = health?.billing;
+  const j = health?.jobs;
+  const seats = founding?.program.seats ?? 0;
+  const taken = founding?.members.length ?? 0;
+  const jobs = !j
+    ? { tone: 'down', text: 'تعذّرت القراءة' }
+    : j.discarded_24h > 0
+      ? { tone: 'down', text: `${count(j.discarded_24h)} فشلت` }
+      : j.retryable > 0 || j.oldest_available_seconds > 300
+        ? { tone: 'warn', text: `${count(j.available)} تنتظر · ${count(j.retryable)} تُعاد` }
+        : { tone: 'ok', text: `${count(j.available)} تنتظر` };
 
   return (
     <ConsoleLayout>
-      <div className="page-head">
-        <h1>حالة المنصة</h1>
-        {health && (
-          <span className="muted small">
-            آخر فحص: {dateTimeAr(health.checked_at)} —{' '}
-            <button type="button" className="link-button" onClick={() => void loadHealth()}>
-              تحديث
-            </button>
-          </span>
-        )}
+      <div className="page-head home-head">
+        <div>
+          <h1>
+            {greeting(new Date())}
+            {name && `، ${name}`}
+          </h1>
+          <p className="muted">
+            {today()}
+            {health && ` · آخر فحص ${time(health.checked_at)}`} · يتحدّث كل دقيقة
+          </p>
+        </div>
+        <button type="button" className="button secondary" onClick={() => void loadHealth()}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" />
+          </svg>
+          تحديث الآن
+        </button>
       </div>
       {error && <p role="alert">{error}</p>}
-      {health && (
-        <>
-          <div className="health-checks">
-            {[
-              { label: 'قاعدة البيانات', ok: health.database },
-              { label: 'Redis', ok: health.redis },
-            ].map((c) => (
-              <div key={c.label} className="card health-check">
-                <span className={c.ok ? 'dot ok' : 'dot down'} aria-hidden="true" />
-                <div>
-                  <strong>{c.label}</strong>
-                  <div className="muted small">{c.ok ? 'يعمل' : 'لا يرد'}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {health.errors.length > 0 && (
-            <p className="warn-note reached">تعذّرت قراءة: {health.errors.map((e) => sectionLabel[e]).join('، ')}. باقي الصفحة يعمل.</p>
-          )}
-          <div className="health-groups">
-            {healthGroups(health).map((g) => (
-              <section key={g.title} className="card" aria-label={g.title}>
-                <h2>{g.title}</h2>
-                <dl className="facts">
-                  {g.items.map((it) => (
-                    <div key={it.label} className="fact">
-                      <dt>{it.label}</dt>
-                      <dd className={it.warn ? 'warn' : ''}>{it.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            ))}
-          </div>
-        </>
-      )}
-      <DuplicatePayments />
 
-      <section className="table-card" aria-labelledby="h-stores">
-        <div className="card-head wrap">
-          <h2 id="h-stores">المتاجر</h2>
-          <form role="search" className="inline-form" onSubmit={search}>
-            <label>
-              <span className="field-label">بحث بالاسم أو العنوان</span>
-              <input name="query" type="search" defaultValue={filter.query} maxLength={100} />
-            </label>
-            <label>
-              <span className="field-label">الحالة</span>
-              <select name="status" defaultValue={filter.status}>
-                <option value="">الكل</option>
-                <option value="active">نشط</option>
-                <option value="suspended">موقوف</option>
-                <option value="closed">مغلق</option>
-              </select>
-            </label>
-            <button type="submit" className="button">
-              بحث
-            </button>
-          </form>
-        </div>
-        <div className="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">المتجر</th>
-                <th scope="col">العنوان</th>
-                <th scope="col">الحالة</th>
-                <th scope="col">العملة</th>
-                <th scope="col">أنشئ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stores.map((s) => (
-                <tr key={s.store.id}>
-                  <td>
-                    <Link to={`/stores/${s.store.id}`}>{s.store.name}</Link>
-                  </td>
-                  <td className="ltr muted">{s.primary_host}</td>
-                  <td>
-                    <span className={`status store-${s.store.status}`}>{storeStatusLabel[s.store.status]}</span>
-                  </td>
-                  <td>{s.store.currency}</td>
-                  <td className="muted">{dateTimeAr(s.store.created_at)}</td>
-                </tr>
+      {health && (
+        <section className="needs" aria-labelledby="h-attention">
+          <h2 id="h-attention">
+            يحتاج انتباهك{' '}
+            {alerts.length > 0 && (
+              <span className="needs-count" aria-label={`${String(alerts.length)} أمور`}>
+                {alerts.length}
+              </span>
+            )}
+          </h2>
+          {alerts.length === 0 ? (
+            <p className="all-good" role="status">
+              كل شيء يعمل. لا شيء ينتظرك الآن.
+            </p>
+          ) : (
+            <ul className="needs-list">
+              {alerts.map((a) => (
+                <li key={a.key} className={`needs-card ${a.tone}`}>
+                  <strong>
+                    <span className="dot" aria-hidden="true" />
+                    {a.title}
+                  </strong>
+                  <p>{a.body}</p>
+                  {a.link && <a href={a.link.href}>{a.link.label}</a>}
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          )}
+        </section>
+      )}
+
+      <section className="kpis" aria-label="أرقام سريعة">
+        <div className="card kpi">
+          <span className="muted">المتاجر النشطة</span>
+          <strong>
+            {s ? count(s.active) : '—'} {s && <small>من {count(s.total)}</small>}
+          </strong>
+          {s && <span className="kpi-note">{s.suspended > 0 ? `${count(s.suspended)} موقوف من المنصة` : `${count(s.closed)} مغلق`}</span>}
         </div>
-        {stores.length === 0 && <p className="empty flat">لا توجد متاجر.</p>}
-        {cursor && (
-          <p className="foot">
-            <button type="button" className="button" onClick={() => void loadStores(filter, cursor)}>
-              المزيد
+        <div className="card kpi">
+          <span className="muted">في الفترة التجريبية</span>
+          <strong>{b ? count(b.trialing) : '—'}</strong>
+          <span className="kpi-note">اشتراكات لم تُدفع بعد</span>
+        </div>
+        <div className="card kpi">
+          <span className="muted">اشتراكات مدفوعة</span>
+          <strong>{b ? count(b.active) : '—'}</strong>
+          {b && <span className="kpi-note">{count(b.past_due)} متأخرة الدفع</span>}
+        </div>
+        <div className="card kpi">
+          <span className="muted">مقاعد التجار المؤسسين</span>
+          <strong>
+            {founding ? count(taken) : '—'} {founding && <small>من {count(seats)}</small>}
+          </strong>
+          {founding &&
+            (founding.program.enabled ? (
+              <span className="seat-bar" role="img" aria-label={`${String(taken)} من ${String(seats)} مقعد`}>
+                <span style={{ inlineSize: `${String(seats ? Math.min(100, (taken / seats) * 100) : 0)}%` }} />
+              </span>
+            ) : (
+              <span className="kpi-note">البرنامج متوقف</span>
+            ))}
+        </div>
+      </section>
+
+      <section className="revenue-slot" aria-label="الإيراد">
+        <div>
+          <span className="muted">الإيراد الشهري المتكرر</span>
+          <strong>— ج.م · — ر.س · — د.إ</strong>
+        </div>
+        <div>
+          <span className="muted">متاجر جديدة</span>
+          <strong>— آخر 7 أيام · — آخر 30 يومًا</strong>
+        </div>
+        <p>تصل هذه الأرقام مع تحديث الخادم التالي.</p>
+      </section>
+
+      {health && (
+        <section className="card systems" aria-labelledby="h-systems">
+          <div className="systems-line">
+            <h2 id="h-systems">الأنظمة</h2>
+            <span className="system">
+              <span className={health.database ? 'dot ok' : 'dot down'} aria-hidden="true" />
+              قاعدة البيانات <b className={health.database ? 'ok' : 'down'}>{health.database ? 'تعمل' : 'لا ترد'}</b>
+            </span>
+            <span className="system">
+              <span className={health.redis ? 'dot ok' : 'dot down'} aria-hidden="true" />
+              الذاكرة المؤقتة (Redis) <b className={health.redis ? 'ok' : 'down'}>{health.redis ? 'تعمل' : 'لا ترد'}</b>
+            </span>
+            <span className="system">
+              <span className={`dot ${jobs.tone}`} aria-hidden="true" />
+              طابور المهام <b className={jobs.tone}>{jobs.text}</b>
+            </span>
+            <button
+              type="button"
+              className="link-button"
+              aria-expanded={details}
+              aria-controls="all-numbers"
+              onClick={() => {
+                setDetails(!details);
+              }}
+            >
+              {details ? 'إخفاء الأرقام' : 'كل الأرقام'}
             </button>
-          </p>
+          </div>
+          {details && (
+            <div className="health-groups" id="all-numbers">
+              {healthGroups(health).map((g) => (
+                <section key={g.title} aria-label={g.title}>
+                  <h3>{g.title}</h3>
+                  <dl className="facts">
+                    {g.items.map((it) => (
+                      <div key={it.label} className="fact">
+                        <dt>{it.label}</dt>
+                        <dd className={it.warn ? 'warn' : ''}>{it.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              ))}
+              <p className="muted small">آخر فحص: {dateTimeAr(health.checked_at)}</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      <DuplicatePayments items={duplicates} onRefunded={refunded} />
+
+      <section className="table-card latest-stores" aria-labelledby="h-latest">
+        <div className="card-head">
+          <h2 id="h-latest">أحدث المتاجر</h2>
+          <Link to="/stores">كل المتاجر ←</Link>
+        </div>
+        {stores.length === 0 ? (
+          <p className="empty flat">لا توجد متاجر بعد.</p>
+        ) : (
+          <ul>
+            {stores.map((st) => (
+              <li key={st.store.id}>
+                <StoreCell summary={st} />
+                <StoreStatusPill status={st.store.status} />
+                <span className="muted small">{dateTimeAr(st.store.created_at)}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </ConsoleLayout>
