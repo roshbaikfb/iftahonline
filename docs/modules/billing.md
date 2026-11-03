@@ -34,7 +34,7 @@ are in place.
 
 | `Module.Console()`, `Console` | The console's view (ADR-0058): `Health` (counts through `app.billing_health()`), `Revenue` (monthly recurring revenue per currency through `app.billing_paying()` and `domain.MRR`, ADR-0075), `Summary` of the store in ctx, `SettleStoreInvoice` (a confirmed transfer; 404 unless it is an open invoice of the store's account) |
 | `Module.Agencies()`, `Agencies`, `Agency` | Agencies from the console (ADR-0059): create, list, view, `JoinAgency` and `LeaveAgency` for the store in ctx |
-| `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions, publish, retire |
+| `NewCatalog(adminPool, ids)`, `Catalog` | The console's plan catalog on `app_admin` (ADR-0056): features, plan versions with the stores on each (`app.plan_subscribers()`: trialing, active or past due, counts only), publish, retire |
 | `Feature`, `PlanVersion`, `Price`, `CurrencyFee` | The catalog's DTOs; `Validate()` checks them |
 
 It exports no plan codes. `internal/tools/noplannames` fails the build
