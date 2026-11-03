@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { api } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
+import { Dialog } from './Dialog';
 import { useCatalog } from './catalog';
 import { byCode, facts, featureKindLabel, headline, kindLabel, otherPrices, stores, subscribersOf, type Feature } from './plans';
 
@@ -174,25 +175,8 @@ export function PlansPage() {
 // FeatureDialog adds a feature to the catalog (the approved mockup's
 // «ميزة جديدة»). Escape or «إلغاء» closes it.
 function FeatureDialog({ nextSort, onSaved, onError, onClose }: { nextSort: number; onSaved: (name: string) => Promise<void>; onError: (m: string) => void; onClose: () => void }) {
-  const box = useRef<HTMLFormElement>(null);
-  const close = useRef(onClose);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    close.current = onClose;
-  });
-  useEffect(() => {
-    const back = document.activeElement as HTMLElement | null;
-    box.current?.querySelector<HTMLInputElement>('input')?.focus();
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close.current();
-    };
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('keydown', key);
-      back?.focus();
-    };
-  }, []);
 
   async function save(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -214,55 +198,51 @@ function FeatureDialog({ nextSort, onSaved, onError, onClose }: { nextSort: numb
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Dialog
+      title="ميزة جديدة"
+      intro="تظهر في الباقات للعرض فقط إلى أن يدعمها النظام. نوعها ومفتاحها لا يتغيران بعد الحفظ."
+      error={error}
+      onSubmit={(e) => void save(e)}
+      onClose={onClose}
     >
-      <form ref={box} className="modal feature-dialog" role="dialog" aria-modal="true" aria-labelledby="h-feature" onSubmit={(e) => void save(e)}>
-        <h2 id="h-feature">ميزة جديدة</h2>
-        <p className="muted">تظهر في الباقات للعرض فقط إلى أن يدعمها النظام. نوعها ومفتاحها لا يتغيران بعد الحفظ.</p>
-        {error && <p role="alert">{error}</p>}
+      <label>
+        <span className="field-label">الاسم بالعربية</span>
+        <input name="name_ar" required maxLength={80} />
+      </label>
+      <div className="two">
         <label>
-          <span className="field-label">الاسم بالعربية</span>
-          <input name="name_ar" required maxLength={80} />
+          <span className="field-label">الاسم بالإنجليزية</span>
+          <input name="name_en" required maxLength={80} dir="ltr" />
         </label>
-        <div className="two">
-          <label>
-            <span className="field-label">الاسم بالإنجليزية</span>
-            <input name="name_en" required maxLength={80} dir="ltr" />
-          </label>
-          <label>
-            <span className="field-label">المفتاح</span>
-            <input name="key" required pattern="[a-z][a-z_]{0,31}" dir="ltr" placeholder="live_chat" />
-          </label>
-        </div>
-        <fieldset>
-          <legend className="field-label">النوع</legend>
-          <label className="radio">
-            <input type="radio" name="kind" value="flag" defaultChecked /> تشغيل/إيقاف <small className="muted">متاحة أو لا</small>
-          </label>
-          <label className="radio">
-            <input type="radio" name="kind" value="count" /> عدد <small className="muted">مثل المنتجات</small>
-          </label>
-          <label className="radio">
-            <input type="radio" name="kind" value="monthly" /> في الشهر <small className="muted">يتجدد كل شهر</small>
-          </label>
-        </fieldset>
         <label>
-          <span className="field-label">السبب</span>
-          <input name="reason" required minLength={3} maxLength={500} />
+          <span className="field-label">المفتاح</span>
+          <input name="key" required pattern="[a-z][a-z_]{0,31}" dir="ltr" placeholder="live_chat" />
         </label>
-        <div className="actions">
-          <button type="submit" className="button primary" disabled={busy}>
-            حفظ الميزة
-          </button>
-          <button type="button" className="secondary" onClick={onClose}>
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+      <fieldset>
+        <legend className="field-label">النوع</legend>
+        <label className="radio">
+          <input type="radio" name="kind" value="flag" defaultChecked /> تشغيل/إيقاف <small className="muted">متاحة أو لا</small>
+        </label>
+        <label className="radio">
+          <input type="radio" name="kind" value="count" /> عدد <small className="muted">مثل المنتجات</small>
+        </label>
+        <label className="radio">
+          <input type="radio" name="kind" value="monthly" /> في الشهر <small className="muted">يتجدد كل شهر</small>
+        </label>
+      </fieldset>
+      <label>
+        <span className="field-label">السبب</span>
+        <input name="reason" required minLength={3} maxLength={500} />
+      </label>
+      <div className="actions">
+        <button type="submit" className="button primary" disabled={busy}>
+          حفظ الميزة
+        </button>
+        <button type="button" className="secondary" onClick={onClose}>
+          إلغاء
+        </button>
+      </div>
+    </Dialog>
   );
 }
