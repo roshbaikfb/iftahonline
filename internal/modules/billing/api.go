@@ -113,10 +113,63 @@ type Console interface {
 	// MarkRefunded records a duplicate payment refunded on the gateway
 	// under reference.
 	MarkRefunded(ctx context.Context, id ulid.ID, reference string) error
+	// Totals counts every account's open and overdue invoices, what was
+	// collected since the Cairo month began, and the last 7 days' failed
+	// payments.
+	Totals(ctx context.Context) (Totals, error)
+	// Invoices lists every account's invoices through q, newest first,
+	// a page of limit (at most MaxListPage) after the cursor.
+	Invoices(ctx context.Context, q InvoiceQuery, cursor string, limit int) (InvoicePage, error)
+	// Invoice is any account's invoice with its lines and payment
+	// attempts; 404 for none.
+	Invoice(ctx context.Context, id ulid.ID) (InvoiceDetail, error)
+	// Payments lists every account's payment attempts through q, newest
+	// first.
+	Payments(ctx context.Context, q PaymentQuery, cursor string, limit int) (PaymentPage, error)
+	// SettleInvoice records an open invoice of account as paid outside
+	// the card (a confirmed transfer, under reference); its stores
+	// settle as on any payment. Any other invoice is 404.
+	SettleInvoice(ctx context.Context, account, invoice ulid.ID, reference string) error
 }
 
 // DuplicatePayment is a payment of an invoice no longer open.
 type DuplicatePayment = app.DuplicatePayment
+
+// Totals is the console's billing summary (ADR-0076).
+type Totals = app.Totals
+
+// CurrencyTotal counts invoices in one currency, VAT included.
+type CurrencyTotal = app.CurrencyTotal
+
+// FailedCount counts failed payments of one outcome and reason.
+type FailedCount = app.FailedCount
+
+// InvoiceQuery narrows the console's invoices.
+type InvoiceQuery = app.InvoiceQuery
+
+// InvoicePage is a page of the console's invoices.
+type InvoicePage = app.InvoicePage
+
+// ConsoleInvoice is an invoice as the console lists it.
+type ConsoleInvoice = app.ConsoleInvoice
+
+// InvoiceDetail is an invoice with its lines and payment attempts.
+type InvoiceDetail = app.InvoiceDetail
+
+// InvoiceLine is a line of an invoice.
+type InvoiceLine = app.InvoiceLine
+
+// PaymentQuery narrows the console's payments.
+type PaymentQuery = app.PaymentQuery
+
+// PaymentPage is a page of the console's payments.
+type PaymentPage = app.PaymentPage
+
+// ConsolePayment is a payment attempt as the console lists it.
+type ConsolePayment = app.ConsolePayment
+
+// MaxListPage is the most invoices or payments a page holds.
+const MaxListPage = app.MaxListPage
 
 var _ Console = (*app.Service)(nil)
 
