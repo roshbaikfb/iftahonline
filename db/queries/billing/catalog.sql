@@ -50,3 +50,8 @@ INSERT INTO plan_entitlements (plan_id, feature, value) VALUES (@plan_id, @featu
 
 -- name: InsertPlanFee :exec
 INSERT INTO plan_fees (plan_id, currency, rate_bps, min_minor, max_minor) VALUES (@plan_id, @currency, @rate_bps, @min_minor, @max_minor);
+
+-- name: PlanSubscribers :many
+-- Subscriptions on each plan version that are trialing, active or past
+-- due, for the console (counts only).
+SELECT plan_id::uuid, subscribers::bigint FROM app.plan_subscribers();

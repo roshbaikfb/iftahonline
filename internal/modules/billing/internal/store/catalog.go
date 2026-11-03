@@ -199,3 +199,18 @@ func InsertPlanVersion(ctx context.Context, tx Tx, v domain.PlanVersion) error {
 	}
 	return nil
 }
+
+// PlanSubscribers counts the stores on each plan version that are
+// trialing, active or past due, through app.plan_subscribers (counts
+// only, for the console).
+func PlanSubscribers(ctx context.Context, tx Tx) (map[ulid.ID]int64, error) {
+	rows, err := billingdb.New(tx).PlanSubscribers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: plan subscribers: %w", err)
+	}
+	out := make(map[ulid.ID]int64, len(rows))
+	for _, r := range rows {
+		out[r.PlanID] = r.Subscribers
+	}
+	return out, nil
+}

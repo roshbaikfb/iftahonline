@@ -86,6 +86,9 @@ type PlanVersion struct {
 	Prices []Price
 	Grants Grants
 	Fees   []CurrencyFee
+	// Subscribers are the stores on this version that are trialing,
+	// active or past due (the console reads it; publishing ignores it).
+	Subscribers int64
 }
 
 // Validate checks a version the console is about to publish. Feature

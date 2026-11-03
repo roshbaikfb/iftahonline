@@ -323,6 +323,37 @@ func (q *Queries) LockPlanCode(ctx context.Context, code string) error {
 	return err
 }
 
+const planSubscribers = `-- name: PlanSubscribers :many
+SELECT plan_id::uuid, subscribers::bigint FROM app.plan_subscribers()
+`
+
+type PlanSubscribersRow struct {
+	PlanID      ulid.ID
+	Subscribers int64
+}
+
+// Subscriptions on each plan version that are trialing, active or past
+// due, for the console (counts only).
+func (q *Queries) PlanSubscribers(ctx context.Context) ([]PlanSubscribersRow, error) {
+	rows, err := q.db.Query(ctx, planSubscribers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlanSubscribersRow{}
+	for rows.Next() {
+		var i PlanSubscribersRow
+		if err := rows.Scan(&i.PlanID, &i.Subscribers); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retireActivePlan = `-- name: RetireActivePlan :execrows
 UPDATE plans SET status = 'retired', updated_at = now() WHERE code = $1 AND status = 'active'
 `
