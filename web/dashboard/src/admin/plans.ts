@@ -1,5 +1,6 @@
 import type { components } from '../api/client';
 import { bpToPercent, percentToBp, toMajor, toMinor } from '../lib/amounts';
+import { money } from '../lib/orders';
 
 export type Plan = components['schemas']['AdminPlan'];
 export type PlanInput = components['schemas']['AdminPlanInput'];
@@ -12,7 +13,7 @@ type Currency = (typeof currencies)[number];
 type Cycle = (typeof cycles)[number];
 
 export const kindLabel: Record<Kind, string> = { free: 'مجانية', pays: 'نسبة من المبيعات', subscription: 'اشتراك', agency: 'وكالة' };
-export const featureKindLabel: Record<Feature['kind'], string> = { flag: 'تشغيل/إيقاف', count: 'عدد', monthly: 'شهري' };
+export const featureKindLabel: Record<Feature['kind'], string> = { flag: 'تشغيل/إيقاف', count: 'عدد', monthly: 'في الشهر' };
 
 // Draft is the editor's form: text as typed, read back by toInput.
 export interface Draft {
@@ -112,4 +113,65 @@ export function byCode(plans: Plan[]): { code: string; head: Plan; versions: Pla
     const head = sorted.find((v) => v.active) ?? sorted[0];
     return head ? [{ code, head, versions: sorted }] : [];
   });
+}
+
+export const currencyName: Record<Currency, string> = { EGP: 'الجنيه المصري', SAR: 'الريال السعودي', AED: 'الدرهم الإماراتي' };
+
+// paidKind says whether a kind sells at a price (and so has prices).
+export const paidKind = (k: Kind) => k === 'subscription' || k === 'agency';
+
+// saving is what an annual price saves on twelve monthly ones, in whole
+// months ("يوفّر شهرين"); empty when it saves less than half a month.
+export function saving(monthly: number | undefined, annual: number | undefined): string {
+  if (!monthly || !annual || monthly <= 0) return '';
+  const months = Math.round((monthly * 12 - annual) / monthly);
+  if (months < 1) return '';
+  if (months === 1) return 'يوفّر شهرًا';
+  if (months === 2) return 'يوفّر شهرين';
+  return months <= 10 ? `يوفّر ${String(months)} أشهر` : `يوفّر ${String(months)} شهرًا`;
+}
+
+const priceOf = (p: Plan, c: Currency, cy: Cycle) => p.prices.find((x) => x.currency === c && x.cycle === cy)?.amount_minor;
+
+// headline is a plan card's price line and the line under it.
+export function headline(p: Plan): { price: string; per: string; sub: string } {
+  if (p.kind === 'pays') {
+    const f = p.fees.find((x) => x.currency === 'EGP') ?? p.fees[0];
+    if (!f) return { price: '—', per: '', sub: 'لم تُضبط النسبة' };
+    const min = f.min_minor;
+    const bounds =
+      min === 0 && f.max_minor === undefined
+        ? 'بلا حد أدنى ولا أقصى'
+        : [min > 0 ? `حد أدنى ${money(min, f.currency)}` : '', f.max_minor !== undefined ? `حد أقصى ${money(f.max_minor, f.currency)}` : ''].filter(Boolean).join(' · ');
+    return { price: `${bpToPercent(f.rate_bps)}%`, per: 'من كل طلب مسلّم', sub: bounds };
+  }
+  if (!paidKind(p.kind)) return { price: money(0, 'EGP'), per: '', sub: 'بلا اشتراك' };
+  const m = priceOf(p, 'EGP', 'monthly');
+  const y = priceOf(p, 'EGP', 'annual');
+  if (m === undefined) return { price: '—', per: '', sub: 'لا سعر بالجنيه' };
+  const annual = y === undefined ? '' : `${money(y, 'EGP')} سنويًا`;
+  const extra = p.kind === 'agency' ? 'سعر واحد لكل متاجر الوكالة' : [annual, saving(m, y)].filter(Boolean).join(' · ');
+  return { price: money(m, 'EGP'), per: '/ شهر', sub: extra };
+}
+
+// otherPrices are a card's monthly prices outside Egypt, for its title.
+export function otherPrices(p: Plan): string {
+  return (['SAR', 'AED'] as const)
+    .map((c) => priceOf(p, c, 'monthly'))
+    .flatMap((v, i) => (v === undefined ? [] : [`${money(v, i === 0 ? 'SAR' : 'AED')} شهريًا`]))
+    .join(' · ');
+}
+
+// facts are a card's first limits (by the catalog's order) and its trial.
+export function facts(p: Plan, features: Feature[], n = 3): string[] {
+  const out: string[] = [];
+  for (const f of [...features].sort((a, b) => a.sort - b.sort)) {
+    if (out.length === n - 1) break;
+    if (f.kind === 'flag') continue;
+    const g = p.grants.find((x) => x.feature === f.key);
+    if (!g) continue;
+    out.push(`${f.name_ar}: ${g.unlimited ? 'بلا حد' : (g.value ?? 0).toLocaleString('en-US')}`);
+  }
+  out.push(p.trial_days > 0 ? `تجربة ${String(p.trial_days)} يومًا` : 'بلا تجربة');
+  return out;
 }

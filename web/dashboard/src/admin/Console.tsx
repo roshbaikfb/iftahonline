@@ -10,6 +10,7 @@ import { GuideEditor, GuidesPage } from './GuidesPage';
 import { AuditPage } from './AuditPage';
 import { Login } from './Login';
 import { Overview } from './Overview';
+import { PlanEditorPage } from './PlanEditor';
 import { PlansPage } from './PlansPage';
 import { SitePage } from './SitePage';
 import { AdminSessionContext, fetchAdmin, type Admin, type AdminState } from './session';
@@ -24,6 +25,7 @@ export function ConsoleRoutes() {
       <Route path="/stores" element={<StoresPage />} />
       <Route path="/stores/:storeId" element={<StorePage />} />
       <Route path="/plans" element={<PlansPage />} />
+      <Route path="/plans/:code" element={<PlanEditorPage />} />
       <Route path="/agencies" element={<AgenciesPage />} />
       <Route path="/agencies/:agencyId" element={<AgencyPage />} />
       <Route path="/ads" element={<AdsPage />} />
