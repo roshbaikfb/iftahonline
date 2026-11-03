@@ -2932,6 +2932,156 @@ paths:
           description: Recorded.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/billing/summary:
+    get:
+      tags: [admin]
+      operationId: adminBillingSummary
+      summary: Open, overdue and collected invoices, and failed payments
+      description: |
+        Per currency: open invoices and those of them past due (count and
+        total), and what was collected since the Cairo month began (the
+        totals paid, VAT included, and the VAT in them). Failed payments
+        are the last 7 days' declined charges and charges with no card,
+        counted per reason.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBillingSummary" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/invoices:
+    get:
+      tags: [admin]
+      operationId: adminListInvoices
+      summary: Every account's invoices, newest first
+      description: |
+        Store and agency accounts alike. The filters combine; a page's
+        cursor carries on with the same filters. Overdue is an open
+        invoice past its due time.
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/InvoiceStatusFilter"
+        - $ref: "#/components/parameters/InvoiceCurrencyFilter"
+        - $ref: "#/components/parameters/InvoiceSearch"
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInvoicePage" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/invoices/export:
+    get:
+      tags: [admin]
+      operationId: adminExportInvoices
+      summary: Export the invoices as CSV
+      description: |
+        The list's filters; newest first, at most 50,000 rows. Recorded
+        in the admin log first, with the filters. UTF-8 with a BOM, times
+        in Cairo, plain decimal amounts; text that a spreadsheet would run
+        as a formula starts with an apostrophe.
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/InvoiceStatusFilter"
+        - $ref: "#/components/parameters/InvoiceCurrencyFilter"
+        - $ref: "#/components/parameters/InvoiceSearch"
+      responses:
+        "200":
+          description: The CSV file.
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: 'attachment; filename="invoices-2026-11-03.csv"' }
+          content:
+            text/csv:
+              schema: { type: string }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/invoices/{invoice_id}:
+    parameters:
+      - $ref: "#/components/parameters/InvoiceID"
+    get:
+      tags: [admin]
+      operationId: adminGetInvoice
+      summary: One invoice with its lines and payment attempts
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The invoice.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInvoiceDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/invoices/{invoice_id}/settle:
+    parameters:
+      - $ref: "#/components/parameters/InvoiceID"
+    post:
+      tags: [admin]
+      operationId: adminSettleAccountInvoice
+      summary: Record any account's invoice as paid by a confirmed transfer
+      description: |
+        An open invoice, of a store or an agency (404 otherwise). Its
+        stores settle as on any payment. Recorded in the admin log first
+        with the reason and the transfer's reference.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSettleInput" }
+      responses:
+        "200":
+          description: Settled; the invoice now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInvoiceDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/payments:
+    get:
+      tags: [admin]
+      operationId: adminListPayments
+      summary: Every payment attempt, newest first
+      description: The filters combine; a page's cursor carries on with the same filters.
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: outcome
+          in: query
+          schema: { $ref: "#/components/schemas/AdminPaymentOutcome" }
+        - name: gateway
+          in: query
+          description: The gateway, as its attempts name it (manual for a recorded transfer).
+          schema: { type: string, pattern: "^[a-z_]{1,32}$" }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPaymentPage" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/features:
     get:
       tags: [admin]
@@ -5089,6 +5239,19 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: "^[a-z][a-z_]{0,31}$" }
+    InvoiceStatusFilter:
+      name: status
+      in: query
+      schema: { type: string, enum: [open, overdue, paid, void] }
+    InvoiceCurrencyFilter:
+      name: currency
+      in: query
+      schema: { type: string, enum: [EGP, SAR, AED] }
+    InvoiceSearch:
+      name: q
+      in: query
+      description: An invoice number's start, or a part of the store's or agency's name.
+      schema: { type: string, maxLength: 100 }
     InvoiceID:
       name: invoice_id
       in: path
@@ -5916,6 +6079,130 @@ components:
         created_at: { type: string, format: date-time }
         refunded_at: { type: string, format: date-time }
         refund_reference: { type: string }
+    AdminCurrencyTotal:
+      type: object
+      required: [currency, count, total_minor, tax_minor]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        count: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64, description: VAT included. }
+        tax_minor: { type: integer, format: int64, description: The VAT in the total. }
+    AdminBillingSummary:
+      type: object
+      required: [open, overdue, collected, month_start, failed]
+      properties:
+        open:
+          type: array
+          items: { $ref: "#/components/schemas/AdminCurrencyTotal" }
+        overdue:
+          type: array
+          items: { $ref: "#/components/schemas/AdminCurrencyTotal" }
+        collected:
+          type: array
+          description: Paid since month_start.
+          items: { $ref: "#/components/schemas/AdminCurrencyTotal" }
+        month_start: { type: string, format: date-time, description: The Cairo month's first moment. }
+        failed:
+          type: object
+          required: [count, reasons]
+          description: Declined charges and charges with no card, the last 7 days.
+          properties:
+            count: { type: integer, format: int64 }
+            reasons:
+              type: array
+              description: Most frequent first.
+              items: { $ref: "#/components/schemas/AdminFailedReason" }
+    AdminFailedReason:
+      type: object
+      required: [outcome, reason, count]
+      properties:
+        outcome: { type: string, enum: [declined, no_method] }
+        reason: { type: string, description: "The gateway's words; empty when it gave none." }
+        count: { type: integer, format: int64 }
+    AdminInvoice:
+      type: object
+      required: [id, number, account_id, account_kind, account_name, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor,
+                 status, overdue, issued_at, due_at, attempts]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        number: { type: string }
+        account_id: { $ref: "#/components/schemas/ULID" }
+        account_kind: { type: string, enum: [store, agency] }
+        account_name: { type: string, description: "The store's name now for a store's account, else the agency's." }
+        store_id: { $ref: "#/components/schemas/ULID", description: "The store billed (an agency's first store when it bills them all)." }
+        period: { type: string, format: date }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        subtotal_minor: { type: integer, format: int64 }
+        tax_bps: { type: integer }
+        tax_minor: { type: integer, format: int64 }
+        total_minor: { type: integer, format: int64 }
+        status: { type: string, enum: [open, paid, void] }
+        overdue: { type: boolean, description: Open and past its due time. }
+        issued_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time }
+        paid_at: { type: string, format: date-time }
+        attempts: { type: integer, description: Failed charges so far. }
+        last_error: { type: string }
+        next_attempt_at: { type: string, format: date-time }
+    AdminInvoicePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminInvoice" }
+        next_cursor: { type: string }
+    AdminInvoiceLine:
+      type: object
+      required: [kind, description, quantity, amount_minor]
+      properties:
+        kind: { type: string, enum: [subscription, sell_fees, fee_credit, founding_discount] }
+        description: { type: string }
+        quantity: { type: integer, format: int64 }
+        amount_minor: { type: integer, format: int64, description: Negative for a credit or a discount. }
+        store_id: { $ref: "#/components/schemas/ULID" }
+    AdminInvoiceDetail:
+      type: object
+      required: [invoice, lines, payments]
+      properties:
+        invoice: { $ref: "#/components/schemas/AdminInvoice" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/AdminInvoiceLine" }
+        payments:
+          type: array
+          description: Its payment attempts, newest first.
+          items: { $ref: "#/components/schemas/AdminPayment" }
+    AdminPaymentOutcome:
+      type: string
+      description: "approved: the gateway took it; manual: a transfer recorded by an admin; duplicate: taken for an invoice already paid, to refund."
+      enum: [approved, declined, no_method, manual, duplicate]
+    AdminPayment:
+      type: object
+      required: [id, created_at, invoice_id, invoice_number, account_kind, account_name, gateway, outcome, amount_minor, currency]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        created_at: { type: string, format: date-time }
+        invoice_id: { $ref: "#/components/schemas/ULID" }
+        invoice_number: { type: string }
+        account_kind: { type: string, enum: [store, agency] }
+        account_name: { type: string }
+        store_id: { $ref: "#/components/schemas/ULID" }
+        gateway: { type: string }
+        outcome: { $ref: "#/components/schemas/AdminPaymentOutcome" }
+        reason: { type: string, description: Why it failed, in the gateway's words. }
+        reference: { type: string }
+        amount_minor: { type: integer, format: int64 }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        refunded_at: { type: string, format: date-time }
+    AdminPaymentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPayment" }
+        next_cursor: { type: string }
     AdminDuplicatePaymentList:
       type: object
       required: [items]

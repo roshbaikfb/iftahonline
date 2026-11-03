@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -147,6 +148,27 @@ func (e AdminAgencyInputCurrency) Valid() bool {
 	}
 }
 
+// Defines values for AdminCurrencyTotalCurrency.
+const (
+	AdminCurrencyTotalCurrencyAED AdminCurrencyTotalCurrency = "AED"
+	AdminCurrencyTotalCurrencyEGP AdminCurrencyTotalCurrency = "EGP"
+	AdminCurrencyTotalCurrencySAR AdminCurrencyTotalCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminCurrencyTotalCurrency enum.
+func (e AdminCurrencyTotalCurrency) Valid() bool {
+	switch e {
+	case AdminCurrencyTotalCurrencyAED:
+		return true
+	case AdminCurrencyTotalCurrencyEGP:
+		return true
+	case AdminCurrencyTotalCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminDuplicatePaymentCurrency.
 const (
 	AdminDuplicatePaymentCurrencyAED AdminDuplicatePaymentCurrency = "AED"
@@ -162,6 +184,24 @@ func (e AdminDuplicatePaymentCurrency) Valid() bool {
 	case AdminDuplicatePaymentCurrencyEGP:
 		return true
 	case AdminDuplicatePaymentCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminFailedReasonOutcome.
+const (
+	AdminFailedReasonOutcomeDeclined AdminFailedReasonOutcome = "declined"
+	AdminFailedReasonOutcomeNoMethod AdminFailedReasonOutcome = "no_method"
+)
+
+// Valid indicates whether the value is a known member of the AdminFailedReasonOutcome enum.
+func (e AdminFailedReasonOutcome) Valid() bool {
+	switch e {
+	case AdminFailedReasonOutcomeDeclined:
+		return true
+	case AdminFailedReasonOutcomeNoMethod:
 		return true
 	default:
 		return false
@@ -252,6 +292,90 @@ func (e AdminHealthErrors) Valid() bool {
 	}
 }
 
+// Defines values for AdminInvoiceAccountKind.
+const (
+	AdminInvoiceAccountKindAgency AdminInvoiceAccountKind = "agency"
+	AdminInvoiceAccountKindStore  AdminInvoiceAccountKind = "store"
+)
+
+// Valid indicates whether the value is a known member of the AdminInvoiceAccountKind enum.
+func (e AdminInvoiceAccountKind) Valid() bool {
+	switch e {
+	case AdminInvoiceAccountKindAgency:
+		return true
+	case AdminInvoiceAccountKindStore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminInvoiceCurrency.
+const (
+	AdminInvoiceCurrencyAED AdminInvoiceCurrency = "AED"
+	AdminInvoiceCurrencyEGP AdminInvoiceCurrency = "EGP"
+	AdminInvoiceCurrencySAR AdminInvoiceCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminInvoiceCurrency enum.
+func (e AdminInvoiceCurrency) Valid() bool {
+	switch e {
+	case AdminInvoiceCurrencyAED:
+		return true
+	case AdminInvoiceCurrencyEGP:
+		return true
+	case AdminInvoiceCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminInvoiceStatus.
+const (
+	AdminInvoiceStatusOpen AdminInvoiceStatus = "open"
+	AdminInvoiceStatusPaid AdminInvoiceStatus = "paid"
+	AdminInvoiceStatusVoid AdminInvoiceStatus = "void"
+)
+
+// Valid indicates whether the value is a known member of the AdminInvoiceStatus enum.
+func (e AdminInvoiceStatus) Valid() bool {
+	switch e {
+	case AdminInvoiceStatusOpen:
+		return true
+	case AdminInvoiceStatusPaid:
+		return true
+	case AdminInvoiceStatusVoid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminInvoiceLineKind.
+const (
+	AdminInvoiceLineKindFeeCredit        AdminInvoiceLineKind = "fee_credit"
+	AdminInvoiceLineKindFoundingDiscount AdminInvoiceLineKind = "founding_discount"
+	AdminInvoiceLineKindSellFees         AdminInvoiceLineKind = "sell_fees"
+	AdminInvoiceLineKindSubscription     AdminInvoiceLineKind = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the AdminInvoiceLineKind enum.
+func (e AdminInvoiceLineKind) Valid() bool {
+	switch e {
+	case AdminInvoiceLineKindFeeCredit:
+		return true
+	case AdminInvoiceLineKindFoundingDiscount:
+		return true
+	case AdminInvoiceLineKindSellFees:
+		return true
+	case AdminInvoiceLineKindSubscription:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminMetricsErrors.
 const (
 	NewStores AdminMetricsErrors = "new_stores"
@@ -264,6 +388,72 @@ func (e AdminMetricsErrors) Valid() bool {
 	case NewStores:
 		return true
 	case Revenue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentAccountKind.
+const (
+	AdminPaymentAccountKindAgency AdminPaymentAccountKind = "agency"
+	AdminPaymentAccountKindStore  AdminPaymentAccountKind = "store"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentAccountKind enum.
+func (e AdminPaymentAccountKind) Valid() bool {
+	switch e {
+	case AdminPaymentAccountKindAgency:
+		return true
+	case AdminPaymentAccountKindStore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentCurrency.
+const (
+	AdminPaymentCurrencyAED AdminPaymentCurrency = "AED"
+	AdminPaymentCurrencyEGP AdminPaymentCurrency = "EGP"
+	AdminPaymentCurrencySAR AdminPaymentCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentCurrency enum.
+func (e AdminPaymentCurrency) Valid() bool {
+	switch e {
+	case AdminPaymentCurrencyAED:
+		return true
+	case AdminPaymentCurrencyEGP:
+		return true
+	case AdminPaymentCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentOutcome.
+const (
+	AdminPaymentOutcomeApproved  AdminPaymentOutcome = "approved"
+	AdminPaymentOutcomeDeclined  AdminPaymentOutcome = "declined"
+	AdminPaymentOutcomeDuplicate AdminPaymentOutcome = "duplicate"
+	AdminPaymentOutcomeManual    AdminPaymentOutcome = "manual"
+	AdminPaymentOutcomeNoMethod  AdminPaymentOutcome = "no_method"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentOutcome enum.
+func (e AdminPaymentOutcome) Valid() bool {
+	switch e {
+	case AdminPaymentOutcomeApproved:
+		return true
+	case AdminPaymentOutcomeDeclined:
+		return true
+	case AdminPaymentOutcomeDuplicate:
+		return true
+	case AdminPaymentOutcomeManual:
+		return true
+	case AdminPaymentOutcomeNoMethod:
 		return true
 	default:
 		return false
@@ -768,6 +958,51 @@ func (e StoreStatus) Valid() bool {
 	}
 }
 
+// Defines values for InvoiceCurrencyFilter.
+const (
+	InvoiceCurrencyFilterAED InvoiceCurrencyFilter = "AED"
+	InvoiceCurrencyFilterEGP InvoiceCurrencyFilter = "EGP"
+	InvoiceCurrencyFilterSAR InvoiceCurrencyFilter = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the InvoiceCurrencyFilter enum.
+func (e InvoiceCurrencyFilter) Valid() bool {
+	switch e {
+	case InvoiceCurrencyFilterAED:
+		return true
+	case InvoiceCurrencyFilterEGP:
+		return true
+	case InvoiceCurrencyFilterSAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvoiceStatusFilter.
+const (
+	InvoiceStatusFilterOpen    InvoiceStatusFilter = "open"
+	InvoiceStatusFilterOverdue InvoiceStatusFilter = "overdue"
+	InvoiceStatusFilterPaid    InvoiceStatusFilter = "paid"
+	InvoiceStatusFilterVoid    InvoiceStatusFilter = "void"
+)
+
+// Valid indicates whether the value is a known member of the InvoiceStatusFilter enum.
+func (e InvoiceStatusFilter) Valid() bool {
+	switch e {
+	case InvoiceStatusFilterOpen:
+		return true
+	case InvoiceStatusFilterOverdue:
+		return true
+	case InvoiceStatusFilterPaid:
+		return true
+	case InvoiceStatusFilterVoid:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicySlug.
 const (
 	Privacy  PolicySlug = "privacy"
@@ -810,6 +1045,96 @@ func (e AdminAuditLogParamsFamily) Valid() bool {
 	case AdminAuditLogParamsFamilySecurity:
 		return true
 	case AdminAuditLogParamsFamilyStore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminListInvoicesParamsStatus.
+const (
+	AdminListInvoicesParamsStatusOpen    AdminListInvoicesParamsStatus = "open"
+	AdminListInvoicesParamsStatusOverdue AdminListInvoicesParamsStatus = "overdue"
+	AdminListInvoicesParamsStatusPaid    AdminListInvoicesParamsStatus = "paid"
+	AdminListInvoicesParamsStatusVoid    AdminListInvoicesParamsStatus = "void"
+)
+
+// Valid indicates whether the value is a known member of the AdminListInvoicesParamsStatus enum.
+func (e AdminListInvoicesParamsStatus) Valid() bool {
+	switch e {
+	case AdminListInvoicesParamsStatusOpen:
+		return true
+	case AdminListInvoicesParamsStatusOverdue:
+		return true
+	case AdminListInvoicesParamsStatusPaid:
+		return true
+	case AdminListInvoicesParamsStatusVoid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminListInvoicesParamsCurrency.
+const (
+	AdminListInvoicesParamsCurrencyAED AdminListInvoicesParamsCurrency = "AED"
+	AdminListInvoicesParamsCurrencyEGP AdminListInvoicesParamsCurrency = "EGP"
+	AdminListInvoicesParamsCurrencySAR AdminListInvoicesParamsCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminListInvoicesParamsCurrency enum.
+func (e AdminListInvoicesParamsCurrency) Valid() bool {
+	switch e {
+	case AdminListInvoicesParamsCurrencyAED:
+		return true
+	case AdminListInvoicesParamsCurrencyEGP:
+		return true
+	case AdminListInvoicesParamsCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminExportInvoicesParamsStatus.
+const (
+	AdminExportInvoicesParamsStatusOpen    AdminExportInvoicesParamsStatus = "open"
+	AdminExportInvoicesParamsStatusOverdue AdminExportInvoicesParamsStatus = "overdue"
+	AdminExportInvoicesParamsStatusPaid    AdminExportInvoicesParamsStatus = "paid"
+	AdminExportInvoicesParamsStatusVoid    AdminExportInvoicesParamsStatus = "void"
+)
+
+// Valid indicates whether the value is a known member of the AdminExportInvoicesParamsStatus enum.
+func (e AdminExportInvoicesParamsStatus) Valid() bool {
+	switch e {
+	case AdminExportInvoicesParamsStatusOpen:
+		return true
+	case AdminExportInvoicesParamsStatusOverdue:
+		return true
+	case AdminExportInvoicesParamsStatusPaid:
+		return true
+	case AdminExportInvoicesParamsStatusVoid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminExportInvoicesParamsCurrency.
+const (
+	AdminExportInvoicesParamsCurrencyAED AdminExportInvoicesParamsCurrency = "AED"
+	AdminExportInvoicesParamsCurrencyEGP AdminExportInvoicesParamsCurrency = "EGP"
+	AdminExportInvoicesParamsCurrencySAR AdminExportInvoicesParamsCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminExportInvoicesParamsCurrency enum.
+func (e AdminExportInvoicesParamsCurrency) Valid() bool {
+	switch e {
+	case AdminExportInvoicesParamsCurrencyAED:
+		return true
+	case AdminExportInvoicesParamsCurrencyEGP:
+		return true
+	case AdminExportInvoicesParamsCurrencySAR:
 		return true
 	default:
 		return false
@@ -1048,6 +1373,40 @@ type AdminBillingHealth struct {
 	Trialing        int64 `json:"trialing"`
 }
 
+// AdminBillingSummary defines model for AdminBillingSummary.
+type AdminBillingSummary struct {
+	// Collected Paid since month_start.
+	Collected []AdminCurrencyTotal `json:"collected"`
+
+	// Failed Declined charges and charges with no card, the last 7 days.
+	Failed struct {
+		Count int64 `json:"count"`
+
+		// Reasons Most frequent first.
+		Reasons []AdminFailedReason `json:"reasons"`
+	} `json:"failed"`
+
+	// MonthStart The Cairo month's first moment.
+	MonthStart time.Time            `json:"month_start"`
+	Open       []AdminCurrencyTotal `json:"open"`
+	Overdue    []AdminCurrencyTotal `json:"overdue"`
+}
+
+// AdminCurrencyTotal defines model for AdminCurrencyTotal.
+type AdminCurrencyTotal struct {
+	Count    int64                      `json:"count"`
+	Currency AdminCurrencyTotalCurrency `json:"currency"`
+
+	// TaxMinor The VAT in the total.
+	TaxMinor int64 `json:"tax_minor"`
+
+	// TotalMinor VAT included.
+	TotalMinor int64 `json:"total_minor"`
+}
+
+// AdminCurrencyTotalCurrency defines model for AdminCurrencyTotal.Currency.
+type AdminCurrencyTotalCurrency string
+
 // AdminDayCount defines model for AdminDayCount.
 type AdminDayCount struct {
 	Count int64              `json:"count"`
@@ -1081,6 +1440,18 @@ type AdminDuplicatePaymentCurrency string
 type AdminDuplicatePaymentList struct {
 	Items []AdminDuplicatePayment `json:"items"`
 }
+
+// AdminFailedReason defines model for AdminFailedReason.
+type AdminFailedReason struct {
+	Count   int64                    `json:"count"`
+	Outcome AdminFailedReasonOutcome `json:"outcome"`
+
+	// Reason The gateway's words; empty when it gave none.
+	Reason string `json:"reason"`
+}
+
+// AdminFailedReasonOutcome defines model for AdminFailedReason.Outcome.
+type AdminFailedReasonOutcome string
 
 // AdminFeature defines model for AdminFeature.
 type AdminFeature struct {
@@ -1208,6 +1579,80 @@ type AdminImpersonationRequest struct {
 	Write *bool `json:"write,omitempty"`
 }
 
+// AdminInvoice defines model for AdminInvoice.
+type AdminInvoice struct {
+	// AccountId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	AccountId   ULID                    `json:"account_id"`
+	AccountKind AdminInvoiceAccountKind `json:"account_kind"`
+
+	// AccountName The store's name now for a store's account, else the agency's.
+	AccountName string `json:"account_name"`
+
+	// Attempts Failed charges so far.
+	Attempts int                  `json:"attempts"`
+	Currency AdminInvoiceCurrency `json:"currency"`
+	DueAt    time.Time            `json:"due_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id            ULID       `json:"id"`
+	IssuedAt      time.Time  `json:"issued_at"`
+	LastError     *string    `json:"last_error,omitempty"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"`
+	Number        string     `json:"number"`
+
+	// Overdue Open and past its due time.
+	Overdue bool               `json:"overdue"`
+	PaidAt  *time.Time         `json:"paid_at,omitempty"`
+	Period  openapi_types.Date `json:"period"`
+	Status  AdminInvoiceStatus `json:"status"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId       *ULID `json:"store_id,omitempty"`
+	SubtotalMinor int64 `json:"subtotal_minor"`
+	TaxBps        int   `json:"tax_bps"`
+	TaxMinor      int64 `json:"tax_minor"`
+	TotalMinor    int64 `json:"total_minor"`
+}
+
+// AdminInvoiceAccountKind defines model for AdminInvoice.AccountKind.
+type AdminInvoiceAccountKind string
+
+// AdminInvoiceCurrency defines model for AdminInvoice.Currency.
+type AdminInvoiceCurrency string
+
+// AdminInvoiceStatus defines model for AdminInvoice.Status.
+type AdminInvoiceStatus string
+
+// AdminInvoiceDetail defines model for AdminInvoiceDetail.
+type AdminInvoiceDetail struct {
+	Invoice AdminInvoice       `json:"invoice"`
+	Lines   []AdminInvoiceLine `json:"lines"`
+
+	// Payments Its payment attempts, newest first.
+	Payments []AdminPayment `json:"payments"`
+}
+
+// AdminInvoiceLine defines model for AdminInvoiceLine.
+type AdminInvoiceLine struct {
+	// AmountMinor Negative for a credit or a discount.
+	AmountMinor int64                `json:"amount_minor"`
+	Description string               `json:"description"`
+	Kind        AdminInvoiceLineKind `json:"kind"`
+	Quantity    int64                `json:"quantity"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId *ULID `json:"store_id,omitempty"`
+}
+
+// AdminInvoiceLineKind defines model for AdminInvoiceLine.Kind.
+type AdminInvoiceLineKind string
+
+// AdminInvoicePage defines model for AdminInvoicePage.
+type AdminInvoicePage struct {
+	Items      []AdminInvoice `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
+}
+
 // AdminJobHealth defines model for AdminJobHealth.
 type AdminJobHealth struct {
 	Available    int64 `json:"available"`
@@ -1273,6 +1718,49 @@ type AdminOverrideInput struct {
 
 	// Value Ignored when unlimited. A flag is 0 or 1.
 	Value *int64 `json:"value,omitempty"`
+}
+
+// AdminPayment defines model for AdminPayment.
+type AdminPayment struct {
+	AccountKind AdminPaymentAccountKind `json:"account_kind"`
+	AccountName string                  `json:"account_name"`
+	AmountMinor int64                   `json:"amount_minor"`
+	CreatedAt   time.Time               `json:"created_at"`
+	Currency    AdminPaymentCurrency    `json:"currency"`
+	Gateway     string                  `json:"gateway"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// InvoiceId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	InvoiceId     ULID   `json:"invoice_id"`
+	InvoiceNumber string `json:"invoice_number"`
+
+	// Outcome approved: the gateway took it; manual: a transfer recorded by an admin; duplicate: taken for an invoice already paid, to refund.
+	Outcome AdminPaymentOutcome `json:"outcome"`
+
+	// Reason Why it failed
+	Reason     *string    `json:"reason,omitempty"`
+	Reference  *string    `json:"reference,omitempty"`
+	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+
+	// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	StoreId *ULID `json:"store_id,omitempty"`
+}
+
+// AdminPaymentAccountKind defines model for AdminPayment.AccountKind.
+type AdminPaymentAccountKind string
+
+// AdminPaymentCurrency defines model for AdminPayment.Currency.
+type AdminPaymentCurrency string
+
+// AdminPaymentOutcome approved: the gateway took it; manual: a transfer recorded by an admin; duplicate: taken for an invoice already paid, to refund.
+type AdminPaymentOutcome string
+
+// AdminPaymentPage defines model for AdminPaymentPage.
+type AdminPaymentPage struct {
+	Items      []AdminPayment `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
 }
 
 // AdminPlan defines model for AdminPlan.
@@ -2010,8 +2498,17 @@ type ImageID = ULID
 // ImportID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type ImportID = ULID
 
+// InvoiceCurrencyFilter defines model for InvoiceCurrencyFilter.
+type InvoiceCurrencyFilter string
+
 // InvoiceID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type InvoiceID = ULID
+
+// InvoiceSearch defines model for InvoiceSearch.
+type InvoiceSearch = string
+
+// InvoiceStatusFilter defines model for InvoiceStatusFilter.
+type InvoiceStatusFilter string
 
 // OrderID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type OrderID = ULID
@@ -2056,6 +2553,48 @@ type AdminAuditLogParams struct {
 
 // AdminAuditLogParamsFamily defines parameters for AdminAuditLog.
 type AdminAuditLogParamsFamily string
+
+// AdminListInvoicesParams defines parameters for AdminListInvoices.
+type AdminListInvoicesParams struct {
+	Status   *AdminListInvoicesParamsStatus   `form:"status,omitempty" json:"status,omitempty"`
+	Currency *AdminListInvoicesParamsCurrency `form:"currency,omitempty" json:"currency,omitempty"`
+
+	// Q An invoice number's start, or a part of the store's or agency's name.
+	Q      *InvoiceSearch `form:"q,omitempty" json:"q,omitempty"`
+	Cursor *string        `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int           `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// AdminListInvoicesParamsStatus defines parameters for AdminListInvoices.
+type AdminListInvoicesParamsStatus string
+
+// AdminListInvoicesParamsCurrency defines parameters for AdminListInvoices.
+type AdminListInvoicesParamsCurrency string
+
+// AdminExportInvoicesParams defines parameters for AdminExportInvoices.
+type AdminExportInvoicesParams struct {
+	Status   *AdminExportInvoicesParamsStatus   `form:"status,omitempty" json:"status,omitempty"`
+	Currency *AdminExportInvoicesParamsCurrency `form:"currency,omitempty" json:"currency,omitempty"`
+
+	// Q An invoice number's start, or a part of the store's or agency's name.
+	Q *InvoiceSearch `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// AdminExportInvoicesParamsStatus defines parameters for AdminExportInvoices.
+type AdminExportInvoicesParamsStatus string
+
+// AdminExportInvoicesParamsCurrency defines parameters for AdminExportInvoices.
+type AdminExportInvoicesParamsCurrency string
+
+// AdminListPaymentsParams defines parameters for AdminListPayments.
+type AdminListPaymentsParams struct {
+	Outcome *AdminPaymentOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// Gateway The gateway, as its attempts name it (manual for a recorded transfer).
+	Gateway *string `form:"gateway,omitempty" json:"gateway,omitempty"`
+	Cursor  *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // AdminDeleteSiteFAQParams defines parameters for AdminDeleteSiteFAQ.
 type AdminDeleteSiteFAQParams struct {
@@ -2132,6 +2671,9 @@ type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
 
 // AdminSaveFoundingJSONRequestBody defines body for AdminSaveFounding for application/json ContentType.
 type AdminSaveFoundingJSONRequestBody = AdminFoundingInput
+
+// AdminSettleAccountInvoiceJSONRequestBody defines body for AdminSettleAccountInvoice for application/json ContentType.
+type AdminSettleAccountInvoiceJSONRequestBody = AdminSettleInput
 
 // AdminPublishPlanJSONRequestBody defines body for AdminPublishPlan for application/json ContentType.
 type AdminPublishPlanJSONRequestBody = AdminPlanInput
@@ -2246,6 +2788,9 @@ type ServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request, paymentId ULID)
+	// AdminBillingSummary Open, overdue and collected invoices, and failed payments
+	// (GET /admin/v1/billing/summary)
+	AdminBillingSummary(w http.ResponseWriter, r *http.Request)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(w http.ResponseWriter, r *http.Request)
@@ -2261,12 +2806,27 @@ type ServerInterface interface {
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(w http.ResponseWriter, r *http.Request)
+	// AdminListInvoices Every account's invoices, newest first
+	// (GET /admin/v1/invoices)
+	AdminListInvoices(w http.ResponseWriter, r *http.Request, params AdminListInvoicesParams)
+	// AdminExportInvoices Export the invoices as CSV
+	// (GET /admin/v1/invoices/export)
+	AdminExportInvoices(w http.ResponseWriter, r *http.Request, params AdminExportInvoicesParams)
+	// AdminGetInvoice One invoice with its lines and payment attempts
+	// (GET /admin/v1/invoices/{invoice_id})
+	AdminGetInvoice(w http.ResponseWriter, r *http.Request, invoiceId InvoiceID)
+	// AdminSettleAccountInvoice Record any account's invoice as paid by a confirmed transfer
+	// (POST /admin/v1/invoices/{invoice_id}/settle)
+	AdminSettleAccountInvoice(w http.ResponseWriter, r *http.Request, invoiceId InvoiceID)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(w http.ResponseWriter, r *http.Request)
 	// AdminGetMetrics Revenue and growth for the console's home
 	// (GET /admin/v1/metrics)
 	AdminGetMetrics(w http.ResponseWriter, r *http.Request)
+	// AdminListPayments Every payment attempt, newest first
+	// (GET /admin/v1/payments)
+	AdminListPayments(w http.ResponseWriter, r *http.Request, params AdminListPaymentsParams)
 	// AdminListPlans Every version of every plan
 	// (GET /admin/v1/plans)
 	AdminListPlans(w http.ResponseWriter, r *http.Request)
@@ -2782,6 +3342,20 @@ func (siw *ServerInterfaceWrapper) AdminMarkDuplicateRefunded(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// AdminBillingSummary operation middleware
+func (siw *ServerInterfaceWrapper) AdminBillingSummary(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminBillingSummary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminListFeatures operation middleware
 func (siw *ServerInterfaceWrapper) AdminListFeatures(w http.ResponseWriter, r *http.Request) {
 
@@ -2864,6 +3438,202 @@ func (siw *ServerInterfaceWrapper) AdminHealth(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// AdminListInvoices operation middleware
+func (siw *ServerInterfaceWrapper) AdminListInvoices(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListInvoicesParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "currency" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "currency", r.URL.Query(), &params.Currency, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "currency"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "currency", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListInvoices(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminExportInvoices operation middleware
+func (siw *ServerInterfaceWrapper) AdminExportInvoices(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminExportInvoicesParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "currency" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "currency", r.URL.Query(), &params.Currency, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "currency"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "currency", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminExportInvoices(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetInvoice operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetInvoice(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invoice_id" -------------
+	var invoiceId InvoiceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invoice_id", r.PathValue("invoice_id"), &invoiceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invoice_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetInvoice(w, r, invoiceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSettleAccountInvoice operation middleware
+func (siw *ServerInterfaceWrapper) AdminSettleAccountInvoice(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invoice_id" -------------
+	var invoiceId InvoiceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invoice_id", r.PathValue("invoice_id"), &invoiceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invoice_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSettleAccountInvoice(w, r, invoiceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminMe operation middleware
 func (siw *ServerInterfaceWrapper) AdminMe(w http.ResponseWriter, r *http.Request) {
 
@@ -2883,6 +3653,78 @@ func (siw *ServerInterfaceWrapper) AdminGetMetrics(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminGetMetrics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListPayments operation middleware
+func (siw *ServerInterfaceWrapper) AdminListPayments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListPaymentsParams
+
+	// ------------- Optional query parameter "outcome" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "outcome", r.URL.Query(), &params.Outcome, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "outcome"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outcome", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "gateway" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "gateway", r.URL.Query(), &params.Gateway, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "gateway"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateway", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListPayments(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3982,6 +4824,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminUpdateSiteGuide)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/summary", wrapper.AdminBillingSummary)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/invoices", wrapper.AdminListInvoices)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/invoices/export", wrapper.AdminExportInvoices)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/invoices/{invoice_id}", wrapper.AdminGetInvoice)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/invoices/{invoice_id}/settle", wrapper.AdminSettleAccountInvoice)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/payments", wrapper.AdminListPayments)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/features", wrapper.AdminListFeatures)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/features/{key}", wrapper.AdminSaveFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/plans", wrapper.AdminListPlans)
@@ -4620,6 +5468,44 @@ func (response AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONRespon
 	return err
 }
 
+type AdminBillingSummaryRequestObject struct {
+}
+
+type AdminBillingSummaryResponseObject interface {
+	VisitAdminBillingSummaryResponse(w http.ResponseWriter) error
+}
+
+type AdminBillingSummary200JSONResponse AdminBillingSummary
+
+func (response AdminBillingSummary200JSONResponse) VisitAdminBillingSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminBillingSummarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminBillingSummarydefaultApplicationProblemPlusJSONResponse) VisitAdminBillingSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminListFeaturesRequestObject struct {
 }
 
@@ -4813,6 +5699,177 @@ func (response AdminHealthdefaultApplicationProblemPlusJSONResponse) VisitAdminH
 	return err
 }
 
+type AdminListInvoicesRequestObject struct {
+	Params AdminListInvoicesParams
+}
+
+type AdminListInvoicesResponseObject interface {
+	VisitAdminListInvoicesResponse(w http.ResponseWriter) error
+}
+
+type AdminListInvoices200JSONResponse AdminInvoicePage
+
+func (response AdminListInvoices200JSONResponse) VisitAdminListInvoicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListInvoicesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListInvoicesdefaultApplicationProblemPlusJSONResponse) VisitAdminListInvoicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminExportInvoicesRequestObject struct {
+	Params AdminExportInvoicesParams
+}
+
+type AdminExportInvoicesResponseObject interface {
+	VisitAdminExportInvoicesResponse(w http.ResponseWriter) error
+}
+
+type AdminExportInvoices200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type AdminExportInvoices200TextcsvResponse struct {
+	Body          io.Reader
+	Headers       AdminExportInvoices200ResponseHeaders
+	ContentLength int64
+}
+
+func (response AdminExportInvoices200TextcsvResponse) VisitAdminExportInvoicesResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type AdminExportInvoicesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminExportInvoicesdefaultApplicationProblemPlusJSONResponse) VisitAdminExportInvoicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetInvoiceRequestObject struct {
+	InvoiceId InvoiceID `json:"invoice_id"`
+}
+
+type AdminGetInvoiceResponseObject interface {
+	VisitAdminGetInvoiceResponse(w http.ResponseWriter) error
+}
+
+type AdminGetInvoice200JSONResponse AdminInvoiceDetail
+
+func (response AdminGetInvoice200JSONResponse) VisitAdminGetInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetInvoicedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetInvoicedefaultApplicationProblemPlusJSONResponse) VisitAdminGetInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSettleAccountInvoiceRequestObject struct {
+	InvoiceId InvoiceID `json:"invoice_id"`
+	Body      *AdminSettleAccountInvoiceJSONRequestBody
+}
+
+type AdminSettleAccountInvoiceResponseObject interface {
+	VisitAdminSettleAccountInvoiceResponse(w http.ResponseWriter) error
+}
+
+type AdminSettleAccountInvoice200JSONResponse AdminInvoiceDetail
+
+func (response AdminSettleAccountInvoice200JSONResponse) VisitAdminSettleAccountInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSettleAccountInvoicedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSettleAccountInvoicedefaultApplicationProblemPlusJSONResponse) VisitAdminSettleAccountInvoiceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminMeRequestObject struct {
 }
 
@@ -4878,6 +5935,45 @@ type AdminGetMetricsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminGetMetricsdefaultApplicationProblemPlusJSONResponse) VisitAdminGetMetricsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListPaymentsRequestObject struct {
+	Params AdminListPaymentsParams
+}
+
+type AdminListPaymentsResponseObject interface {
+	VisitAdminListPaymentsResponse(w http.ResponseWriter) error
+}
+
+type AdminListPayments200JSONResponse AdminPaymentPage
+
+func (response AdminListPayments200JSONResponse) VisitAdminListPaymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListPaymentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListPaymentsdefaultApplicationProblemPlusJSONResponse) VisitAdminListPaymentsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6289,6 +7385,9 @@ type StrictServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(ctx context.Context, request AdminMarkDuplicateRefundedRequestObject) (AdminMarkDuplicateRefundedResponseObject, error)
+	// AdminBillingSummary Open, overdue and collected invoices, and failed payments
+	// (GET /admin/v1/billing/summary)
+	AdminBillingSummary(ctx context.Context, request AdminBillingSummaryRequestObject) (AdminBillingSummaryResponseObject, error)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(ctx context.Context, request AdminListFeaturesRequestObject) (AdminListFeaturesResponseObject, error)
@@ -6304,12 +7403,27 @@ type StrictServerInterface interface {
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(ctx context.Context, request AdminHealthRequestObject) (AdminHealthResponseObject, error)
+	// AdminListInvoices Every account's invoices, newest first
+	// (GET /admin/v1/invoices)
+	AdminListInvoices(ctx context.Context, request AdminListInvoicesRequestObject) (AdminListInvoicesResponseObject, error)
+	// AdminExportInvoices Export the invoices as CSV
+	// (GET /admin/v1/invoices/export)
+	AdminExportInvoices(ctx context.Context, request AdminExportInvoicesRequestObject) (AdminExportInvoicesResponseObject, error)
+	// AdminGetInvoice One invoice with its lines and payment attempts
+	// (GET /admin/v1/invoices/{invoice_id})
+	AdminGetInvoice(ctx context.Context, request AdminGetInvoiceRequestObject) (AdminGetInvoiceResponseObject, error)
+	// AdminSettleAccountInvoice Record any account's invoice as paid by a confirmed transfer
+	// (POST /admin/v1/invoices/{invoice_id}/settle)
+	AdminSettleAccountInvoice(ctx context.Context, request AdminSettleAccountInvoiceRequestObject) (AdminSettleAccountInvoiceResponseObject, error)
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(ctx context.Context, request AdminMeRequestObject) (AdminMeResponseObject, error)
 	// AdminGetMetrics Revenue and growth for the console's home
 	// (GET /admin/v1/metrics)
 	AdminGetMetrics(ctx context.Context, request AdminGetMetricsRequestObject) (AdminGetMetricsResponseObject, error)
+	// AdminListPayments Every payment attempt, newest first
+	// (GET /admin/v1/payments)
+	AdminListPayments(ctx context.Context, request AdminListPaymentsRequestObject) (AdminListPaymentsResponseObject, error)
 	// AdminListPlans Every version of every plan
 	// (GET /admin/v1/plans)
 	AdminListPlans(ctx context.Context, request AdminListPlansRequestObject) (AdminListPlansResponseObject, error)
@@ -6917,6 +8031,30 @@ func (sh *strictHandler) AdminMarkDuplicateRefunded(w http.ResponseWriter, r *ht
 	}
 }
 
+// AdminBillingSummary operation middleware
+func (sh *strictHandler) AdminBillingSummary(w http.ResponseWriter, r *http.Request) {
+	var request AdminBillingSummaryRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminBillingSummary(ctx, request.(AdminBillingSummaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminBillingSummary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminBillingSummaryResponseObject); ok {
+		if err := validResponse.VisitAdminBillingSummaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminListFeatures operation middleware
 func (sh *strictHandler) AdminListFeatures(w http.ResponseWriter, r *http.Request) {
 	var request AdminListFeaturesRequestObject
@@ -7053,6 +8191,117 @@ func (sh *strictHandler) AdminHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AdminListInvoices operation middleware
+func (sh *strictHandler) AdminListInvoices(w http.ResponseWriter, r *http.Request, params AdminListInvoicesParams) {
+	var request AdminListInvoicesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListInvoices(ctx, request.(AdminListInvoicesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListInvoices")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListInvoicesResponseObject); ok {
+		if err := validResponse.VisitAdminListInvoicesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminExportInvoices operation middleware
+func (sh *strictHandler) AdminExportInvoices(w http.ResponseWriter, r *http.Request, params AdminExportInvoicesParams) {
+	var request AdminExportInvoicesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminExportInvoices(ctx, request.(AdminExportInvoicesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminExportInvoices")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminExportInvoicesResponseObject); ok {
+		if err := validResponse.VisitAdminExportInvoicesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetInvoice operation middleware
+func (sh *strictHandler) AdminGetInvoice(w http.ResponseWriter, r *http.Request, invoiceId InvoiceID) {
+	var request AdminGetInvoiceRequestObject
+
+	request.InvoiceId = invoiceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetInvoice(ctx, request.(AdminGetInvoiceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetInvoice")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetInvoiceResponseObject); ok {
+		if err := validResponse.VisitAdminGetInvoiceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSettleAccountInvoice operation middleware
+func (sh *strictHandler) AdminSettleAccountInvoice(w http.ResponseWriter, r *http.Request, invoiceId InvoiceID) {
+	var request AdminSettleAccountInvoiceRequestObject
+
+	request.InvoiceId = invoiceId
+
+	var body AdminSettleAccountInvoiceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSettleAccountInvoice(ctx, request.(AdminSettleAccountInvoiceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSettleAccountInvoice")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSettleAccountInvoiceResponseObject); ok {
+		if err := validResponse.VisitAdminSettleAccountInvoiceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminMe operation middleware
 func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 	var request AdminMeRequestObject
@@ -7094,6 +8343,32 @@ func (sh *strictHandler) AdminGetMetrics(w http.ResponseWriter, r *http.Request)
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminGetMetricsResponseObject); ok {
 		if err := validResponse.VisitAdminGetMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListPayments operation middleware
+func (sh *strictHandler) AdminListPayments(w http.ResponseWriter, r *http.Request, params AdminListPaymentsParams) {
+	var request AdminListPaymentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListPayments(ctx, request.(AdminListPaymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListPayments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListPaymentsResponseObject); ok {
+		if err := validResponse.VisitAdminListPaymentsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

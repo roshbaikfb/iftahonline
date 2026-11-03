@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -134,6 +135,7 @@ type resp struct {
 	header  http.Header
 	cookies []*http.Cookie
 	body    map[string]any
+	raw     string
 }
 
 func (f fixture) do(t *testing.T, method, host, path, body string, mods ...func(*http.Request)) resp {
@@ -153,7 +155,7 @@ func (f fixture) do(t *testing.T, method, host, path, body string, mods ...func(
 	f.h.ServeHTTP(rec, r)
 	res := rec.Result()
 	defer func() { _ = res.Body.Close() }()
-	out := resp{status: res.StatusCode, header: res.Header, cookies: res.Cookies()}
+	out := resp{status: res.StatusCode, header: res.Header, cookies: res.Cookies(), raw: rec.Body.String()}
 	if rec.Body.Len() > 0 {
 		_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
 	}
@@ -967,5 +969,95 @@ func TestConsoleSiteGuides(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=rewritten", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
 		t.Fatalf("delete = %d", r.status)
+	}
+}
+
+// TestConsoleInvoicesAndPayments: the billing page's endpoints over HTTP,
+// an agency's invoice settled by transfer, and the CSV export.
+func TestConsoleInvoicesAndPayments(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	owner, err := pgxpool.New(t.Context(), infra.OwnerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(owner.Close)
+	account, invoice := f.ids.New(), f.ids.New()
+	number := fmt.Sprintf("INV-2098-%012d", rand.Int64N(1e12)) //nolint:gosec // a test number
+	if err = postgres.InTx(t.Context(), owner, func(tx pgx.Tx) error {
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`SELECT set_config('app.account_id', $1::uuid::text, true)`, []any{account}},
+			{`INSERT INTO billing_accounts (id, kind, name, currency, country, plan_code) VALUES ($1, 'agency', 'Nile Agency', 'SAR', 'SA', 'agency')`, []any{account}},
+			{`INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at)
+			  VALUES ($1, $2, $3, '2098-01-01', 'SAR', 10000, 1500, 1500, 11500, now(), now() + interval '3 days')`, []any{invoice, account, number}},
+		} {
+			if _, execErr := tx.Exec(t.Context(), q.sql, q.args...); execErr != nil {
+				return execErr
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	inv := "/admin/v1/invoices/" + invoice.String()
+
+	for _, path := range []string{"/admin/v1/billing/summary", "/admin/v1/invoices", inv, "/admin/v1/payments", "/admin/v1/invoices/export"} {
+		if r := f.do(t, http.MethodGet, adminHost, path, ""); r.status != http.StatusUnauthorized {
+			t.Errorf("anonymous %s = %d", path, r.status)
+		}
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/summary", "", withCookie(sess))
+	if failed, _ := r.body["failed"].(map[string]any); r.status != http.StatusOK || r.body["open"] == nil || r.body["month_start"] == nil || failed == nil {
+		t.Fatalf("summary = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/invoices?status=open&currency=SAR&q="+number, "", withCookie(sess))
+	items, _ := r.body["items"].([]any)
+	if r.status != http.StatusOK || len(items) != 1 {
+		t.Fatalf("invoices = %d %v", r.status, r.body)
+	}
+	if it := items[0].(map[string]any); it["number"] != number || it["account_kind"] != "agency" || it["account_name"] != "Nile Agency" ||
+		it["overdue"] != false || it["total_minor"] != float64(11500) || it["store_id"] != nil || it["paid_at"] != nil {
+		t.Fatalf("invoice = %v", it)
+	}
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodGet, "/admin/v1/invoices?status=late", "", http.StatusUnprocessableEntity},
+		{http.MethodGet, "/admin/v1/invoices?cursor=junk", "", http.StatusUnprocessableEntity},
+		{http.MethodGet, "/admin/v1/payments?outcome=lost", "", http.StatusUnprocessableEntity},
+		{http.MethodGet, "/admin/v1/payments?gateway=Pay%20Mob", "", http.StatusUnprocessableEntity},
+		{http.MethodGet, "/admin/v1/invoices/junk", "", http.StatusNotFound},
+		{http.MethodGet, "/admin/v1/invoices/" + f.ids.New().String(), "", http.StatusNotFound},
+		{http.MethodPost, inv + "/settle", `{"reference":"","reason":"transfer received"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, inv + "/settle", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/invoices/" + f.ids.New().String() + "/settle", `{"reference":"T-1","reason":"transfer received"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+	if r = f.do(t, http.MethodPost, adminHost, inv+"/settle", `{"reference":"T-1","reason":"transfer received"}`, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r = f.do(t, http.MethodPost, adminHost, inv+"/settle", `{"reference":"T-1","reason":"transfer received"}`, withCookie(sess), sameOrigin)
+	got, _ := r.body["invoice"].(map[string]any)
+	pays, _ := r.body["payments"].([]any)
+	if r.status != http.StatusOK || got["status"] != "paid" || got["paid_at"] == nil || len(pays) != 1 || pays[0].(map[string]any)["outcome"] != "manual" {
+		t.Fatalf("settled = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/payments?outcome=manual&gateway=manual&limit=200", "", withCookie(sess))
+	if items, _ = r.body["items"].([]any); r.status != http.StatusOK || len(items) == 0 {
+		t.Fatalf("payments = %d %v", r.status, r.body)
+	}
+
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/invoices/export?status=paid&q="+number, "", withCookie(sess))
+	if r.status != http.StatusOK || r.header.Get("Content-Type") != "text/csv" || !strings.Contains(r.header.Get("Content-Disposition"), "invoices-") ||
+		!strings.Contains(r.raw, number+",") || !strings.Contains(r.raw, "Nile Agency,2098-01,SAR,100.00,15.00%,15.00,115.00,paid,") {
+		t.Fatalf("export = %d %v %q", r.status, r.header, r.raw)
 	}
 }
