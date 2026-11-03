@@ -87,7 +87,7 @@ func toFeature(f app.FeatureView) AdminFeature {
 
 func toPlan(p billing.PlanVersion) AdminPlan {
 	out := AdminPlan{Id: p.ID.String(), Code: p.Code, Version: int(p.Version), Kind: AdminPlanKind(p.Kind), NameAr: p.NameAr, NameEn: p.NameEn,
-		TrialDays: int(p.TrialDays), Public: p.Public, Sort: int(p.Sort), Active: p.Active,
+		TrialDays: int(p.TrialDays), Public: p.Public, Sort: int(p.Sort), Active: p.Active, Subscribers: p.Subscribers,
 		Prices: make([]AdminPlanPrice, len(p.Prices)), Grants: make([]AdminPlanGrant, 0, len(p.Grants)), Fees: make([]AdminPlanFee, len(p.Fees))}
 	for i, pr := range p.Prices {
 		out.Prices[i] = AdminPlanPrice{Currency: AdminPlanPriceCurrency(pr.Currency), Cycle: AdminPlanPriceCycle(pr.Cycle), AmountMinor: pr.AmountMinor}

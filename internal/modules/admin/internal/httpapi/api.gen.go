@@ -1238,15 +1238,18 @@ type AdminPlan struct {
 	Grants []AdminPlanGrant `json:"grants"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id        ULID             `json:"id"`
-	Kind      AdminPlanKind    `json:"kind"`
-	NameAr    string           `json:"name_ar"`
-	NameEn    string           `json:"name_en"`
-	Prices    []AdminPlanPrice `json:"prices"`
-	Public    bool             `json:"public"`
-	Sort      int              `json:"sort"`
-	TrialDays int              `json:"trial_days"`
-	Version   int              `json:"version"`
+	Id     ULID             `json:"id"`
+	Kind   AdminPlanKind    `json:"kind"`
+	NameAr string           `json:"name_ar"`
+	NameEn string           `json:"name_en"`
+	Prices []AdminPlanPrice `json:"prices"`
+	Public bool             `json:"public"`
+	Sort   int              `json:"sort"`
+
+	// Subscribers Stores on this version that are trialing, active or past due. They renew into the plan's next version.
+	Subscribers int64 `json:"subscribers"`
+	TrialDays   int   `json:"trial_days"`
+	Version     int   `json:"version"`
 }
 
 // AdminPlanFee defines model for AdminPlanFee.

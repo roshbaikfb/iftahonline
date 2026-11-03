@@ -5145,6 +5145,11 @@ export interface components {
             id: components["schemas"]["ULID"];
             code: string;
             version: number;
+            /**
+             * Format: int64
+             * @description Stores on this version that are trialing, active or past due. They renew into the plan's next version.
+             */
+            subscribers: number;
             kind: components["schemas"]["AdminPlanKind"];
             name_ar: string;
             name_en: string;
