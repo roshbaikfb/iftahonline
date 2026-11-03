@@ -1019,7 +1019,7 @@ func TestConsoleInvoicesAndPayments(t *testing.T) {
 	if r.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("invoices = %d %v", r.status, r.body)
 	}
-	if it := items[0].(map[string]any); it["number"] != number || it["account_kind"] != "agency" || it["account_name"] != "Nile Agency" ||
+	if it := items[0].(map[string]any); it["number"] != number || it["account_kind"] != "agency" || it["account_name"] != "Nile Agency" || // noplannames:allow an account's kind, not a plan
 		it["overdue"] != false || it["total_minor"] != float64(11500) || it["store_id"] != nil || it["paid_at"] != nil {
 		t.Fatalf("invoice = %v", it)
 	}
