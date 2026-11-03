@@ -10,7 +10,15 @@ import { dateTimeAr, waiting, type Duplicate } from './lib';
 // paid (ADR-0063): the admin refunds each on the gateway, then records
 // the refund here. Nothing shows while none waits for a refund. The home
 // reads the list, so it can count them among what needs attention.
-export function DuplicatePayments({ items, onRefunded }: { items: Duplicate[]; onRefunded: (id: string, reference: string) => void }) {
+export function DuplicatePayments({
+  items,
+  onRefunded,
+  canRefund = true,
+}: {
+  items: Duplicate[];
+  onRefunded: (id: string, reference: string) => void;
+  canRefund?: boolean;
+}) {
   const [error, setError] = useState('');
 
   async function refunded(d: Duplicate) {
@@ -66,9 +74,11 @@ export function DuplicatePayments({ items, onRefunded }: { items: Duplicate[]; o
                 </td>
                 <td className="muted">{dateTimeAr(d.created_at)}</td>
                 <td>
-                  <button type="button" className="link-button" onClick={() => void refunded(d)}>
-                    تم الاسترداد
-                  </button>
+                  {canRefund && (
+                    <button type="button" className="link-button" onClick={() => void refunded(d)}>
+                      تم الاسترداد
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

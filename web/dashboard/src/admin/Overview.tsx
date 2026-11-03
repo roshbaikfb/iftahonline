@@ -7,7 +7,7 @@ import { ConsoleLayout } from './ConsoleLayout';
 import { DuplicatePayments } from './DuplicatePayments';
 import { Growth } from './Growth';
 import { attention, count, dateTimeAr, fetchStores, greeting, healthGroups, waiting, type AdminHealth, type Duplicate } from './lib';
-import { useAdmin } from './session';
+import { useAdmin, useCan } from './session';
 import { StoreCell, StoreStatusPill } from './StoresPage';
 
 type Summary = components['schemas']['AdminStoreSummary'];
@@ -67,13 +67,19 @@ export function Overview() {
     showMetrics(m);
   };
 
+  // A section the role may not read is not asked for (ADR-0077).
+  const can = useCan();
+  const canBilling = can('billing.read');
+  const canCatalog = can('catalog.read');
+  const canStores = can('stores.read');
   useEffect(() => {
     let live = true;
+    const none = Promise.resolve({ data: undefined });
     void Promise.all([
       api.GET('/admin/v1/health'),
-      api.GET('/admin/v1/billing/duplicates'),
-      api.GET('/admin/v1/founding'),
-      fetchStores({ query: '', status: '' }, '', 5),
+      canBilling ? api.GET('/admin/v1/billing/duplicates') : none,
+      canCatalog ? api.GET('/admin/v1/founding') : none,
+      canStores ? fetchStores({ query: '', status: '' }, '', 5) : none,
       fetchMetrics(),
     ]).then(([h, d, f, st, m]) => {
       if (!live) return;
@@ -87,7 +93,7 @@ export function Overview() {
     return () => {
       live = false;
     };
-  }, [showMetrics]);
+  }, [showMetrics, canBilling, canCatalog, canStores]);
 
   // The health check is read again every minute while the tab is seen.
   useEffect(() => {
@@ -258,27 +264,29 @@ export function Overview() {
         </section>
       )}
 
-      <DuplicatePayments items={duplicates} onRefunded={refunded} />
+      <DuplicatePayments items={duplicates} onRefunded={refunded} canRefund={can('billing.manage')} />
 
-      <section className="table-card latest-stores" aria-labelledby="h-latest">
-        <div className="card-head">
-          <h2 id="h-latest">أحدث المتاجر</h2>
-          <Link to="/stores">كل المتاجر ←</Link>
-        </div>
-        {stores.length === 0 ? (
-          <p className="empty flat">لا توجد متاجر بعد.</p>
-        ) : (
-          <ul>
-            {stores.map((st) => (
-              <li key={st.store.id}>
-                <StoreCell summary={st} />
-                <StoreStatusPill status={st.store.status} />
-                <span className="muted small">{dateTimeAr(st.store.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {canStores && (
+        <section className="table-card latest-stores" aria-labelledby="h-latest">
+          <div className="card-head">
+            <h2 id="h-latest">أحدث المتاجر</h2>
+            <Link to="/stores">كل المتاجر ←</Link>
+          </div>
+          {stores.length === 0 ? (
+            <p className="empty flat">لا توجد متاجر بعد.</p>
+          ) : (
+            <ul>
+              {stores.map((st) => (
+                <li key={st.store.id}>
+                  <StoreCell summary={st} />
+                  <StoreStatusPill status={st.store.status} />
+                  <span className="muted small">{dateTimeAr(st.store.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </ConsoleLayout>
   );
 }

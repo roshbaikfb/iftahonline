@@ -14,7 +14,7 @@ import { ConsoleLayout } from './ConsoleLayout';
 import { Dialog } from './Dialog';
 import { dateTimeAr, initial, storeStatusLabel } from './lib';
 import { currencyName } from './plans';
-import { useAdmin } from './session';
+import { useAdmin, useCan } from './session';
 
 type Detail = components['schemas']['AdminStoreDetail'];
 type Billing = components['schemas']['Billing'];
@@ -63,6 +63,8 @@ export function StorePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const { state } = useAdmin();
   const me = state.kind === 'signed-in' ? state.admin.id : '';
+  // The role decides which actions show (ADR-0077); the server refuses the rest.
+  const can = useCan();
   const [support, setSupport] = useState<{ url: string; expires: string } | null>(null);
   const [dialog, setDialog] = useState<{ kind: 'override' } | { kind: 'clear'; feature: Feature } | null>(null);
   const [error, setError] = useState('');
@@ -223,6 +225,8 @@ export function StorePage() {
           <h2 id="h-owner">صاحب المتجر</h2>
           {!profile ? (
             <p className="muted small">…</p>
+          ) : !can('contacts.read') ? (
+            <p className="muted">بيانات التواصل للمالك وفريق العمليات فقط.</p>
           ) : !profile.owner ? (
             <p className="muted">لا صاحب لهذا المتجر.</p>
           ) : (
@@ -322,19 +326,21 @@ export function StorePage() {
                   <p className="muted small">
                     مستحقة {dateAr(inv.due_at)} · محاولات {inv.attempts}
                   </p>
-                  <form className="inline-form" onSubmit={(e) => { settle(e, inv.id); }} aria-label={`تسجيل ${inv.number} مدفوعة`}>
-                    <label>
-                      <span className="field-label">رقم التحويل</span>
-                      <input name="reference" required maxLength={120} />
-                    </label>
-                    <label className="grow">
-                      <span className="field-label">السبب</span>
-                      <input name="reason" required minLength={3} maxLength={500} />
-                    </label>
-                    <button type="submit" className="button" disabled={busy}>
-                      سجّل كمدفوعة
-                    </button>
-                  </form>
+                  {can('billing.manage') && (
+                    <form className="inline-form" onSubmit={(e) => { settle(e, inv.id); }} aria-label={`تسجيل ${inv.number} مدفوعة`}>
+                      <label>
+                        <span className="field-label">رقم التحويل</span>
+                        <input name="reference" required maxLength={120} />
+                      </label>
+                      <label className="grow">
+                        <span className="field-label">السبب</span>
+                        <input name="reason" required minLength={3} maxLength={500} />
+                      </label>
+                      <button type="submit" className="button" disabled={busy}>
+                        سجّل كمدفوعة
+                      </button>
+                    </form>
+                  )}
                 </div>
               ))
             )}
@@ -344,7 +350,9 @@ export function StorePage() {
         <section className="card store-card" aria-labelledby="h-agency">
           <h2 id="h-agency">الوكالة</h2>
           <p className="muted small">ينضم المتجر بشرط ألا تكون عليه فاتورة مفتوحة، ويأخذ باقة الوكالة وفترتها.</p>
-          {agencies.length === 0 ? (
+          {!can('catalog.manage') ? (
+            <p className="muted">ضمّ المتجر لوكالة للمالك والمالية.</p>
+          ) : agencies.length === 0 ? (
             <p className="muted">لا توجد وكالات بعد.</p>
           ) : (
             <form className="inline-form" onSubmit={joinAgency}>
@@ -371,46 +379,48 @@ export function StorePage() {
         </section>
       </div>
 
-      <section className="card store-card" aria-labelledby="h-support">
-        <div className="section-head">
-          <h2 id="h-support">جلسة دعم بحساب صاحب المتجر</h2>
-          <span className="muted small">تُسجَّل في سجل الأدمن وسجل المتجر، ولا تُمدَّد.</span>
-        </div>
-        <form className="support-form" onSubmit={impersonate}>
-          <label className="grow">
-            <span className="field-label">السبب</span>
-            <input name="reason" required minLength={3} maxLength={500} placeholder="مثال: تذكرة 4821 — مشكلة في صفحة المنتج" />
-          </label>
-          <label>
-            <span className="field-label">المدة</span>
-            <select name="minutes" defaultValue="30">
-              <option value="15">15 دقيقة</option>
-              <option value="30">30 دقيقة</option>
-              <option value="60">60 دقيقة</option>
-            </select>
-          </label>
-          <fieldset className="segmented">
-            <legend className="visually-hidden">الصلاحية</legend>
-            <label>
-              <input type="radio" name="access" value="read" defaultChecked /> للقراءة فقط
+      {can('stores.manage') && (
+        <section className="card store-card" aria-labelledby="h-support">
+          <div className="section-head">
+            <h2 id="h-support">جلسة دعم بحساب صاحب المتجر</h2>
+            <span className="muted small">تُسجَّل في سجل الأدمن وسجل المتجر، ولا تُمدَّد.</span>
+          </div>
+          <form className="support-form" onSubmit={impersonate}>
+            <label className="grow">
+              <span className="field-label">السبب</span>
+              <input name="reason" required minLength={3} maxLength={500} placeholder="مثال: تذكرة 4821 — مشكلة في صفحة المنتج" />
             </label>
             <label>
-              <input type="radio" name="access" value="write" /> مسموح بالتعديل
+              <span className="field-label">المدة</span>
+              <select name="minutes" defaultValue="30">
+                <option value="15">15 دقيقة</option>
+                <option value="30">30 دقيقة</option>
+                <option value="60">60 دقيقة</option>
+              </select>
             </label>
-          </fieldset>
-          <button type="submit" className="button primary" disabled={busy}>
-            افتح جلسة الدعم
-          </button>
-        </form>
-        {support && (
-          <p className="ok-note">
-            <a href={support.url} target="_blank" rel="noopener noreferrer">
-              افتح جلسة الدعم في الداشبورد
-            </a>{' '}
-            — الرابط صالح دقيقة واحدة ولمرة واحدة، والجلسة تنتهي {dateTimeAr(support.expires)}.
-          </p>
-        )}
-      </section>
+            <fieldset className="segmented">
+              <legend className="visually-hidden">الصلاحية</legend>
+              <label>
+                <input type="radio" name="access" value="read" defaultChecked /> للقراءة فقط
+              </label>
+              <label>
+                <input type="radio" name="access" value="write" /> مسموح بالتعديل
+              </label>
+            </fieldset>
+            <button type="submit" className="button primary" disabled={busy}>
+              افتح جلسة الدعم
+            </button>
+          </form>
+          {support && (
+            <p className="ok-note">
+              <a href={support.url} target="_blank" rel="noopener noreferrer">
+                افتح جلسة الدعم في الداشبورد
+              </a>{' '}
+              — الرابط صالح دقيقة واحدة ولمرة واحدة، والجلسة تنتهي {dateTimeAr(support.expires)}.
+            </p>
+          )}
+        </section>
+      )}
 
       {grants && (
         <section className="table-card" aria-labelledby="h-features">
@@ -419,16 +429,18 @@ export function StorePage() {
               <h2 id="h-features">مميزات المتجر</h2>
               <span className="muted small">من الباقة، إلا ما استثنيته لهذا المتجر وحده.</span>
             </div>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setError('');
-                setDialog({ kind: 'override' });
-              }}
-            >
-              استثناء جديد
-            </button>
+            {can('stores.manage') && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setError('');
+                  setDialog({ kind: 'override' });
+                }}
+              >
+                استثناء جديد
+              </button>
+            )}
           </div>
           <div className="scroll">
             <table>
@@ -454,18 +466,21 @@ export function StorePage() {
                             <div className="muted small">
                               السبب: {o.reason}
                               {o.expires_at ? ` · حتى ${dateAr(o.expires_at)}` : ''}
-                              {o.active ? '' : ' · منتهٍ'} ·{' '}
-                              <button
-                                type="button"
-                                className="link-button danger"
-                                disabled={busy}
-                                onClick={() => {
-                                  setError('');
-                                  setDialog({ kind: 'clear', feature: f });
-                                }}
-                              >
-                                إزالة
-                              </button>
+                              {o.active ? '' : ' · منتهٍ'}
+                              {can('stores.manage') && ' · '}
+                              {can('stores.manage') && (
+                                <button
+                                  type="button"
+                                  className="link-button danger"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setError('');
+                                    setDialog({ kind: 'clear', feature: f });
+                                  }}
+                                >
+                                  إزالة
+                                </button>
+                              )}
                             </div>
                           </>
                         ) : (
@@ -484,23 +499,25 @@ export function StorePage() {
         </section>
       )}
 
-      <section className="table-card" aria-labelledby="h-history">
-        <div className="card-head">
-          <h2 id="h-history">آخر إجراءات الأدمن على هذا المتجر</h2>
-          <Link to={`/audit?store=${storeId}`}>كل سجله ←</Link>
-        </div>
-        {history.length === 0 ? (
-          <p className="empty flat">لم يفعل أحد شيئًا بهذا المتجر بعد.</p>
-        ) : (
-          <ol className="audit-list flat">
-            {history.map((e) => (
-              <AuditRow key={e.id} entry={e} me={me} features={features} withDate />
-            ))}
-          </ol>
-        )}
-      </section>
+      {can('audit.read') && (
+        <section className="table-card" aria-labelledby="h-history">
+          <div className="card-head">
+            <h2 id="h-history">آخر إجراءات الأدمن على هذا المتجر</h2>
+            <Link to={`/audit?store=${storeId}`}>كل سجله ←</Link>
+          </div>
+          {history.length === 0 ? (
+            <p className="empty flat">لم يفعل أحد شيئًا بهذا المتجر بعد.</p>
+          ) : (
+            <ol className="audit-list flat">
+              {history.map((e) => (
+                <AuditRow key={e.id} entry={e} me={me} features={features} withDate />
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
-      {store && (
+      {store && can('stores.manage') && (
         <details className="card plan-fold danger-zone">
           <summary>{suspended ? 'إعادة تفعيل المتجر' : 'منطقة خطرة: إيقاف المتجر'}</summary>
           <form

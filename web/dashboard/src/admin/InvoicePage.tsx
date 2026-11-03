@@ -21,6 +21,7 @@ import {
 } from './billing';
 import { ConsoleLayout } from './ConsoleLayout';
 import { dateTimeAr } from './lib';
+import { useCan } from './session';
 
 // Settle records an open invoice as paid by a transfer that arrived: its
 // stores renew as on any payment, and the admin log keeps the reason.
@@ -74,6 +75,7 @@ export function InvoicePage() {
   const [d, setD] = useState<InvoiceDetail | null>(null);
   const [error, setError] = useState('');
   const [settled, setSettled] = useState(false);
+  const can = useCan();
 
   useEffect(() => {
     let live = true;
@@ -120,7 +122,7 @@ export function InvoicePage() {
       </div>
       {settled && <p role="status" className="notice ok">سُجّلت الفاتورة مدفوعة.</p>}
 
-      <div className={inv.status === 'open' ? 'invoice-grid' : 'invoice-grid one'}>
+      <div className={inv.status === 'open' && can('billing.manage') ? 'invoice-grid' : 'invoice-grid one'}>
         <section className="table-card" aria-labelledby="h-lines">
           <div className="card-head">
             <h2 id="h-lines">البنود</h2>
@@ -158,7 +160,7 @@ export function InvoicePage() {
             </tbody>
           </table>
         </section>
-        {inv.status === 'open' && (
+        {inv.status === 'open' && can('billing.manage') && (
           <Settle
             id={inv.id}
             onSettled={(next) => {

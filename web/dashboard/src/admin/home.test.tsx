@@ -3,13 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { testAdmin } from '../test/admin';
 import { mockAPI, type Call } from '../test/api';
 import { Gate } from './Console';
 import { attention, greeting, initial, type AdminHealth } from './lib';
 import { refreshEvery } from './Overview';
 import { AdminSessionContext, type AdminSession, type AdminState } from './session';
 
-const admin = { id: '01M5ADMIN000000000000000AA', email: 'owner@iftahonline.com', name: 'أحمد' };
+const admin = testAdmin({ id: '01M5ADMIN000000000000000AA', email: 'owner@iftahonline.com', name: 'أحمد' });
 const store = '01M5STORE0000000000000000A';
 
 // healthy is a platform where nothing needs the owner.

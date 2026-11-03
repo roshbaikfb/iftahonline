@@ -6,6 +6,7 @@ import { toMinor } from '../lib/amounts';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { useCatalog } from './catalog';
+import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
 import {
   byCode,
@@ -41,28 +42,30 @@ export function PlanEditorPage() {
 
   return (
     <ConsoleLayout>
-      <nav className="crumbs" aria-label="مسار الصفحة">
-        <Link to="/plans">الباقات</Link> / {isNew ? 'باقة جديدة' : (group?.head.name_ar ?? code)}
-      </nav>
-      {error && <p role="alert">{error}</p>}
-      {!loaded ? (
-        <p className="muted">جارٍ التحميل…</p>
-      ) : !isNew && !group ? (
-        <p className="empty">
-          لا توجد باقة بهذا الكود. <Link to="/plans">عودة إلى الباقات</Link>
-        </p>
-      ) : (
-        <Editor
-          key={code}
-          versions={group?.versions ?? []}
-          head={group?.head}
-          features={features}
-          onCreated={async (created) => {
-            await reload();
-            void navigate(`/plans/${created}`);
-          }}
-        />
-      )}
+      <Editable p="catalog.manage">
+        <nav className="crumbs" aria-label="مسار الصفحة">
+          <Link to="/plans">الباقات</Link> / {isNew ? 'باقة جديدة' : (group?.head.name_ar ?? code)}
+        </nav>
+        {error && <p role="alert">{error}</p>}
+        {!loaded ? (
+          <p className="muted">جارٍ التحميل…</p>
+        ) : !isNew && !group ? (
+          <p className="empty">
+            لا توجد باقة بهذا الكود. <Link to="/plans">عودة إلى الباقات</Link>
+          </p>
+        ) : (
+          <Editor
+            key={code}
+            versions={group?.versions ?? []}
+            head={group?.head}
+            features={features}
+            onCreated={async (created) => {
+              await reload();
+              void navigate(`/plans/${created}`);
+            }}
+          />
+        )}
+      </Editable>
     </ConsoleLayout>
   );
 }

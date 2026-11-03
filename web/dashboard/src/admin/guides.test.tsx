@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { testAdmin } from '../test/admin';
 import { mockAPI } from '../test/api';
 import { Gate } from './Console';
 import { guideFromForm, slugOK, type Guide } from './guides';
 import { AdminSessionContext, type AdminSession } from './session';
 
-const admin = { id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' };
+const admin = testAdmin({ id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' });
 const id = '01M9GUIDE00000000000000001';
 
 function renderAt(path: string) {

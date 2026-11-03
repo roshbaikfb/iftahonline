@@ -8,6 +8,7 @@ import { ConsoleLayout } from './ConsoleLayout';
 import { Dialog } from './Dialog';
 import { useCatalog } from './catalog';
 import { byCode, facts, featureKindLabel, headline, kindLabel, otherPrices, stores, subscribersOf, type Feature } from './plans';
+import { useCan } from './session';
 
 // PlansPage is the plan catalog (the approved mockup): one card per plan
 // as merchants see them, and the features catalog in its own tab. A plan
@@ -19,6 +20,7 @@ export function PlansPage() {
   const groups = byCode(plans).sort((a, b) => a.head.sort - b.head.sort);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
+  const can = useCan();
 
   return (
     <ConsoleLayout>
@@ -31,7 +33,7 @@ export function PlansPage() {
               : 'كل ما يمكن أن تمنحه باقة. الميزة الجديدة تظهر في الباقات للعرض فقط حتى يدعمها النظام.'}
           </p>
         </div>
-        {tab === 'plans' ? (
+        {!can('catalog.manage') ? null : tab === 'plans' ? (
           <Link className="button primary" to="/plans/new">
             باقة جديدة
           </Link>
@@ -114,8 +116,8 @@ export function PlansPage() {
                   <span className="muted small">
                     الإصدار <bdi>v{head.version}</bdi> · {stores(subscribersOf(versions))}
                   </span>
-                  <Link to={`/plans/${code}`} aria-label={`تعديل ${head.name_ar}`}>
-                    تعديل ←
+                  <Link to={`/plans/${code}`} aria-label={`${can('catalog.manage') ? 'تعديل' : 'عرض'} ${head.name_ar}`}>
+                    {can('catalog.manage') ? 'تعديل ←' : 'عرض ←'}
                   </Link>
                 </div>
               </li>
