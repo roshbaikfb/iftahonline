@@ -1,25 +1,35 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
 
-import { api, type components } from '../api/client';
+import { api } from '../api/client';
 import { problemMessage } from '../lib/problem';
+import { dayOf, describe, type Entry, type Family } from './audit';
 import { ConsoleLayout } from './ConsoleLayout';
-import { dateTimeAr, details } from './lib';
-
-type Entry = components['schemas']['AdminAuditEntry'];
+import type { Feature } from './plans';
+import { useAdmin } from './session';
 
 // fetchPage reads a page of the log after cursor.
 function fetchPage(cursor: string) {
   return api.GET('/admin/v1/audit-log', { params: { query: cursor ? { limit: 50, cursor } : { limit: 50 } } });
 }
 
-// AuditPage is the admin log, newest first: who did what, to what, and
-// why. It is append-only.
+const glyph: Record<Family, string> = { store: 'م', billing: 'ب', content: 'ح', security: 'د' };
+const time = (iso: string) => new Date(iso).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
+
+// AuditPage is the admin log (the approved mockup), newest first and by
+// day: what was done in words, to what (a link where the console shows
+// it), why, and who. It is append-only.
 export function AuditPage() {
+  const { state } = useAdmin();
+  const me = state.kind === 'signed-in' ? state.admin.id : '';
   const [items, setItems] = useState<Entry[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
   const [cursor, setCursor] = useState('');
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
   const show = useCallback((r: Awaited<ReturnType<typeof fetchPage>>, more: boolean) => {
+    setLoaded(true);
     if (r.error) {
       setError(problemMessage(r.error));
       return;
@@ -31,8 +41,10 @@ export function AuditPage() {
 
   useEffect(() => {
     let live = true;
-    void fetchPage('').then((r) => {
-      if (live) show(r, false);
+    void Promise.all([fetchPage(''), api.GET('/admin/v1/features')]).then(([r, f]) => {
+      if (!live) return;
+      show(r, false);
+      if (f.data) setFeatures(f.data.items);
     });
     return () => {
       live = false;
@@ -43,46 +55,71 @@ export function AuditPage() {
     show(await fetchPage(cursor), true);
   }
 
+  const now = new Date();
+  const days: { title: string; rows: Entry[] }[] = [];
+  for (const e of items) {
+    const title = dayOf(e.occurred_at, now);
+    const last = days.at(-1);
+    if (last?.title === title) last.rows.push(e);
+    else days.push({ title, rows: [e] });
+  }
+
   return (
     <ConsoleLayout>
-      <h1>سجل الأدمن</h1>
-      {error && <p role="alert">{error}</p>}
-      <section className="table-card" aria-label="سجل الأدمن">
-        <div className="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">الوقت</th>
-                <th scope="col">الإجراء</th>
-                <th scope="col">على</th>
-                <th scope="col">التفاصيل</th>
-                <th scope="col">الشبكة</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((e) => (
-                <tr key={e.id}>
-                  <td className="muted">{dateTimeAr(e.occurred_at)}</td>
-                  <td className="ltr">{e.action}</td>
-                  <td className="ltr">
-                    {e.target_type} {e.target_id}
-                  </td>
-                  <td className="wrap-cell">{details(e.metadata)}</td>
-                  <td className="ltr muted">{e.ip_prefix}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="page-head">
+        <div>
+          <h1>سجل الأدمن</h1>
+          <p className="muted">كل ما فعله فريق الكونسول، الأحدث أولًا، ومعه السبب. لا يُعدَّل ولا يُحذف.</p>
         </div>
-        {items.length === 0 && <p className="empty flat">لا شيء بعد.</p>}
-        {cursor && (
-          <p className="foot">
-            <button type="button" className="button" onClick={() => void more()}>
-              المزيد
-            </button>
-          </p>
-        )}
-      </section>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {loaded && items.length === 0 && !error && <p className="empty">لا شيء في السجل بعد.</p>}
+      {days.map((d) => (
+        <section key={d.title} className="audit-day" aria-label={d.title}>
+          <h2>{d.title}</h2>
+          <ol className="audit-list">
+            {d.rows.map((e) => {
+              const x = describe(e, me, features);
+              return (
+                <li key={e.id}>
+                  <span className={`audit-mark ${x.danger ? 'danger' : x.family}`} aria-hidden="true">
+                    {x.danger ? '!' : glyph[x.family]}
+                  </span>
+                  <div className="audit-body">
+                    <p className="audit-what">
+                      <strong>{x.label}</strong>
+                      {x.target && (
+                        <>
+                          {' — '}
+                          {x.target.to ? <Link to={x.target.to}>{x.target.text}</Link> : <span>{x.target.text}</span>}
+                        </>
+                      )}
+                    </p>
+                    {x.reason && <p className="audit-reason">السبب: {x.reason}</p>}
+                    {x.chips.length > 0 && (
+                      <ul className="audit-chips">
+                        {x.chips.map((c) => (
+                          <li key={c}>{c}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="audit-meta">
+                    <time dateTime={e.occurred_at}>{time(e.occurred_at)}</time>
+                    <span>{x.who}</span>
+                    {e.ip_prefix && <span className="ltr">{e.ip_prefix}</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ))}
+      {cursor && (
+        <button type="button" className="secondary audit-more" onClick={() => void more()}>
+          عرض الأقدم
+        </button>
+      )}
     </ConsoleLayout>
   );
 }
