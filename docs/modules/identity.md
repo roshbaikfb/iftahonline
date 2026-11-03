@@ -47,6 +47,10 @@ identity. Identity's sign-up depends on tenancy, not the other way around.
 ## Exported helpers
 
 - `NewAuditRecorder` writes the audit log for other modules.
+- `OwnerContactTx(ctx, tx)` reads the store's owner for the console's
+  store page: name, email (and whether it is verified), phone, and their
+  last use of the dashboard (support sessions left out). Shown to admins,
+  never logged; `ok` is false for a store without an owner.
 - `CountStaff(ctx, tx)` counts the store's seats (members and open
   invitations) in its tenant transaction: the usage meter (ADR-0061).
 - `StaffEmails(db, roles…)` lists the store's members' emails for those
