@@ -460,6 +460,51 @@ func (e AdminPaymentOutcome) Valid() bool {
 	}
 }
 
+// Defines values for AdminPermission.
+const (
+	AuditRead     AdminPermission = "audit.read"
+	BillingManage AdminPermission = "billing.manage"
+	BillingRead   AdminPermission = "billing.read"
+	CatalogManage AdminPermission = "catalog.manage"
+	CatalogRead   AdminPermission = "catalog.read"
+	ContactsRead  AdminPermission = "contacts.read"
+	ContentManage AdminPermission = "content.manage"
+	ContentRead   AdminPermission = "content.read"
+	StoresManage  AdminPermission = "stores.manage"
+	StoresRead    AdminPermission = "stores.read"
+	TeamManage    AdminPermission = "team.manage"
+)
+
+// Valid indicates whether the value is a known member of the AdminPermission enum.
+func (e AdminPermission) Valid() bool {
+	switch e {
+	case AuditRead:
+		return true
+	case BillingManage:
+		return true
+	case BillingRead:
+		return true
+	case CatalogManage:
+		return true
+	case CatalogRead:
+		return true
+	case ContactsRead:
+		return true
+	case ContentManage:
+		return true
+	case ContentRead:
+		return true
+	case StoresManage:
+		return true
+	case StoresRead:
+		return true
+	case TeamManage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminPlanFeeCurrency.
 const (
 	AdminPlanFeeCurrencyAED AdminPlanFeeCurrency = "AED"
@@ -559,6 +604,33 @@ func (e AdminRevenueCurrency) Valid() bool {
 	case AdminRevenueCurrencyEGP:
 		return true
 	case AdminRevenueCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminRole.
+const (
+	AdminRoleContent    AdminRole = "content"
+	AdminRoleFinance    AdminRole = "finance"
+	AdminRoleOperations AdminRole = "operations"
+	AdminRoleOwner      AdminRole = "owner"
+	AdminRoleViewer     AdminRole = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the AdminRole enum.
+func (e AdminRole) Valid() bool {
+	switch e {
+	case AdminRoleContent:
+		return true
+	case AdminRoleFinance:
+		return true
+	case AdminRoleOperations:
+		return true
+	case AdminRoleOwner:
+		return true
+	case AdminRoleViewer:
 		return true
 	default:
 		return false
@@ -1763,6 +1835,9 @@ type AdminPaymentPage struct {
 	NextCursor *string        `json:"next_cursor,omitempty"`
 }
 
+// AdminPermission defines model for AdminPermission.
+type AdminPermission string
+
 // AdminPlan defines model for AdminPlan.
 type AdminPlan struct {
 	// Active On sale.
@@ -1854,6 +1929,12 @@ type AdminProfile struct {
 	Id          ULID       `json:"id"`
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 	Name        string     `json:"name"`
+
+	// Permissions What the role grants (ADR-0077); the console hides what is not here, and the server refuses it (403).
+	Permissions []AdminPermission `json:"permissions"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
 }
 
 // AdminReason defines model for AdminReason.
@@ -1883,6 +1964,9 @@ type AdminRevenue struct {
 
 // AdminRevenueCurrency defines model for AdminRevenue.Currency.
 type AdminRevenueCurrency string
+
+// AdminRole owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+type AdminRole string
 
 // AdminSettleInput defines model for AdminSettleInput.
 type AdminSettleInput struct {

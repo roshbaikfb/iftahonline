@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -168,11 +169,17 @@ func withCookie(v string) func(*http.Request) {
 	return func(r *http.Request) { r.AddCookie(&http.Cookie{Name: "__Host-asid", Value: v}) }
 }
 
-// login creates an admin and signs in, returning the session cookie.
+// login creates an owner and signs in, returning the session cookie.
 func (f fixture) login(t *testing.T) string {
 	t.Helper()
+	return f.loginAs(t, "owner")
+}
+
+// loginAs creates an admin in role and signs in.
+func (f fixture) loginAs(t *testing.T, role string) string {
+	t.Helper()
 	email := "ops-" + strings.ToLower(f.ids.New().String()[16:]) + "@iftahonline.com"
-	c, err := f.mod.CreateAdmin(t.Context(), email, "Ops", adminPW)
+	c, err := f.mod.CreateAdmin(t.Context(), email, "Ops", adminPW, role)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1059,5 +1066,62 @@ func TestConsoleInvoicesAndPayments(t *testing.T) {
 	if r.status != http.StatusOK || r.header.Get("Content-Type") != "text/csv" || !strings.Contains(r.header.Get("Content-Disposition"), "invoices-") ||
 		!strings.Contains(r.raw, number+",") || !strings.Contains(r.raw, "Nile Agency,2098-01,SAR,100.00,15.00%,15.00,115.00,paid,") {
 		t.Fatalf("export = %d %v %q", r.status, r.header, r.raw)
+	}
+}
+
+// TestConsoleRoles: each role reaches what it may and gets 403 for the
+// rest (ADR-0077); /me tells the console what to show; a store owner's
+// contact is left out for a role without contacts.read.
+func TestConsoleRoles(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	storeID := f.store(t)
+	sess := map[string]string{}
+	for _, role := range []string{"owner", "operations", "finance", "content", "viewer"} {
+		sess[role] = f.loginAs(t, role)
+	}
+
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/me", "", withCookie(sess["finance"]))
+	if perms, _ := r.body["permissions"].([]any); r.status != http.StatusOK || r.body["role"] != "finance" || len(perms) != 5 || perms[2] != "billing.manage" {
+		t.Fatalf("me = %d %v", r.status, r.body)
+	}
+
+	suspend := "/admin/v1/stores/" + storeID + "/suspend"
+	settle := "/admin/v1/invoices/" + f.ids.New().String() + "/settle"
+	type call struct{ method, path, body string }
+	calls := map[string]call{
+		"stores":   {http.MethodGet, "/admin/v1/stores", ""},
+		"suspend":  {http.MethodPost, suspend, `{"reason":"role check"}`},
+		"invoices": {http.MethodGet, "/admin/v1/invoices", ""},
+		"settle":   {http.MethodPost, settle, `{"reference":"T-1","reason":"role check"}`},
+		"export":   {http.MethodGet, "/admin/v1/invoices/export", ""},
+		"plans":    {http.MethodGet, "/admin/v1/plans", ""},
+		"site":     {http.MethodGet, "/admin/v1/site", ""},
+		"faq":      {http.MethodPost, "/admin/v1/site/faqs", `{}`},
+		"audit":    {http.MethodGet, "/admin/v1/audit-log", ""},
+		"health":   {http.MethodGet, "/admin/v1/health", ""},
+	}
+	allowed := map[string][]string{ // the rest must be 403
+		"owner":      {"stores", "suspend", "invoices", "settle", "export", "plans", "site", "faq", "audit", "health"},
+		"operations": {"stores", "suspend", "invoices", "plans", "health"},
+		"finance":    {"stores", "invoices", "settle", "export", "plans", "health"},
+		"content":    {"site", "faq", "health"},
+		"viewer":     {"stores", "invoices", "plans", "site", "health"},
+	}
+	for role, ok := range allowed {
+		for name, c := range calls {
+			got := f.do(t, c.method, adminHost, c.path, c.body, withCookie(sess[role]), sameOrigin)
+			if refused := got.status == http.StatusForbidden; refused == slices.Contains(ok, name) {
+				t.Errorf("%s %s = %d %v", role, name, got.status, got.body)
+			}
+		}
+	}
+
+	// The owner's contact: owners and operations only.
+	for role, want := range map[string]bool{"owner": true, "operations": true, "finance": false, "viewer": false} {
+		r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+storeID+"/profile", "", withCookie(sess[role]))
+		if _, has := r.body["owner"]; r.status != http.StatusOK || has != want {
+			t.Errorf("%s profile = %d, owner shown %v", role, r.status, has)
+		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
@@ -31,10 +32,12 @@ type Profiler func(ctx context.Context) (StoreProfile, error)
 
 var errNoProfile = errs.Unavailable(0, errors.New("admin: store profiles are not wired"))
 
-// StoreProfile is store id's owner and numbers. An unknown store is 404.
+// StoreProfile is store id's owner and numbers, the owner left out for a
+// role without contacts.read. An unknown store is 404.
 // Nothing here is logged: the owner's contact is for the admin's eyes.
 func (s *Service) StoreProfile(ctx context.Context, id tenant.StoreID) (StoreProfile, error) {
-	if _, ok := IdentityFrom(ctx); !ok {
+	who, ok := IdentityFrom(ctx)
+	if !ok {
 		return StoreProfile{}, errNoSession
 	}
 	if s.d.Profile == nil {
@@ -43,5 +46,9 @@ func (s *Service) StoreProfile(ctx context.Context, id tenant.StoreID) (StorePro
 	if _, _, err := s.d.Directory.Store(ctx, id); err != nil {
 		return StoreProfile{}, err
 	}
-	return s.d.Profile(tenant.WithStore(ctx, id))
+	p, err := s.d.Profile(tenant.WithStore(ctx, id))
+	if err == nil && !who.Can(domain.PermContactsRead) {
+		p.Owner = nil // the owner's contact is for owners and operations only (ADR-0077)
+	}
+	return p, err
 }

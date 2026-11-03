@@ -27,7 +27,7 @@ func Mount(mux *http.ServeMux, svc *app.Service, scope func(http.Handler) http.H
 	badRequest := func(w http.ResponseWriter, r *http.Request, err error) {
 		resp.Write(w, r, errs.BadRequest("invalid request", err))
 	}
-	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc}, nil, StrictHTTPServerOptions{
+	strict := NewStrictHandlerWithOptions(&Handlers{svc: svc}, []StrictMiddlewareFunc{authorize}, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: badRequest, ResponseErrorHandlerFunc: resp.Write,
 	})
 	HandlerWithOptions(strict, StdHTTPServerOptions{
@@ -50,7 +50,13 @@ func sessionCookie(token string, maxAge int) string {
 }
 
 func profile(a domain.Admin) AdminProfile {
-	return AdminProfile{Id: a.ID.String(), Email: a.Email, Name: a.Name, LastLoginAt: a.LastLoginAt}
+	perms := a.Role.Permissions()
+	out := AdminProfile{Id: a.ID.String(), Email: a.Email, Name: a.Name, LastLoginAt: a.LastLoginAt, Role: AdminRole(a.Role),
+		Permissions: make([]AdminPermission, len(perms))}
+	for i, p := range perms {
+		out.Permissions[i] = AdminPermission(p)
+	}
+	return out
 }
 
 // AdminLogin implements StrictServerInterface.

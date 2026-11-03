@@ -377,6 +377,12 @@ func TestAdminCLI(t *testing.T) {
 		}
 	}
 
+	out.Reset()
+	if code = run([]string{"admin", "create", "--email", "f" + email, "--name", "Finance", "--role", "finance"}, strings.NewReader("a long admin passphrase\n"),
+		&out, lookup); code != 0 {
+		t.Fatalf("create with a role = %d\n%s", code, out.String())
+	}
+
 	for name, tc := range map[string]struct {
 		args  []string
 		stdin string
@@ -384,6 +390,7 @@ func TestAdminCLI(t *testing.T) {
 		"duplicate":     {[]string{"admin", "create", "--email", email, "--name", "Again"}, "a long admin passphrase\n"},
 		"weak password": {[]string{"admin", "create", "--email", "x" + email, "--name", "Weak"}, "short\n"},
 		"no flags":      {[]string{"admin", "create"}, ""},
+		"unknown role":  {[]string{"admin", "create", "--email", "r" + email, "--name", "Role", "--role", "root"}, "a long admin passphrase\n"},
 		"no subcommand": {[]string{"admin"}, ""},
 	} {
 		var buf bytes.Buffer

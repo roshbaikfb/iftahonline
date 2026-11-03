@@ -27,6 +27,7 @@ type Admin struct {
 	TOTPSecret   []byte // sealed
 	TOTPLastStep int64
 	Active       bool
+	Role         Role
 	CreatedAt    time.Time
 	LastLoginAt  *time.Time
 }

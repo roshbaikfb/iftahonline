@@ -18,6 +18,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
@@ -140,8 +141,13 @@ func code(t *testing.T, secret string, at time.Time) string {
 
 func (f fixture) createAdmin(t *testing.T) (app.Created, string) {
 	t.Helper()
+	return f.createAdminAs(t, domain.RoleOwner)
+}
+
+func (f fixture) createAdminAs(t *testing.T, role domain.Role) (app.Created, string) {
+	t.Helper()
 	email := "ops-" + strings.ToLower(f.ids.New().String()[16:]) + "@iftahonline.com"
-	c, err := f.cli.CreateAdmin(t.Context(), " "+strings.ToUpper(email)+" ", "Ops", adminPW)
+	c, err := f.cli.CreateAdmin(t.Context(), " "+strings.ToUpper(email)+" ", "Ops", adminPW, role)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,18 +173,19 @@ func TestCreateAdmin(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	c, email := f.createAdmin(t)
-	if c.Admin.Email != email || !c.Admin.Active || len(c.Secret) != 32 || !strings.HasPrefix(c.URI, "otpauth://totp/iftahonline%20admin:") {
+	if c.Admin.Email != email || !c.Admin.Active || c.Admin.Role != domain.RoleOwner || len(c.Secret) != 32 || !strings.HasPrefix(c.URI, "otpauth://totp/iftahonline%20admin:") {
 		t.Fatalf("created = %+v", c)
 	}
-	if _, err := f.cli.CreateAdmin(t.Context(), email, "Dup", adminPW); !errs.Is(err, errs.KindConflict) {
+	if _, err := f.cli.CreateAdmin(t.Context(), email, "Dup", adminPW, domain.RoleOwner); !errs.Is(err, errs.KindConflict) {
 		t.Fatalf("duplicate: %v", err)
 	}
-	for name, args := range map[string][3]string{
-		"bad email":      {"nope", "A", adminPW},
-		"empty name":     {"x@y.co", " ", adminPW},
-		"short password": {"x@y.co", "A", "13 chars here"},
+	for name, args := range map[string][4]string{
+		"bad email":      {"nope", "A", adminPW, "owner"},
+		"empty name":     {"x@y.co", " ", adminPW, "owner"},
+		"short password": {"x@y.co", "A", "13 chars here", "owner"},
+		"unknown role":   {"x@y.co", "A", adminPW, "root"},
 	} {
-		if _, err := f.cli.CreateAdmin(t.Context(), args[0], args[1], args[2]); !errs.Is(err, errs.KindValidation) {
+		if _, err := f.cli.CreateAdmin(t.Context(), args[0], args[1], args[2], domain.Role(args[3])); !errs.Is(err, errs.KindValidation) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -237,7 +244,12 @@ func TestLoginNeedsPasswordAndTOTP(t *testing.T) {
 
 func (f fixture) signedIn(t *testing.T) (context.Context, app.Created) {
 	t.Helper()
-	c, email := f.createAdmin(t)
+	return f.signedInAs(t, domain.RoleOwner)
+}
+
+func (f fixture) signedInAs(t *testing.T, role domain.Role) (context.Context, app.Created) {
+	t.Helper()
+	c, email := f.createAdminAs(t, role)
 	res, err := f.svc.Login(f.device(t), email, adminPW, code(t, c.Secret, time.Now()))
 	if err != nil {
 		t.Fatal(err)

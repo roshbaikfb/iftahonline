@@ -31,12 +31,13 @@ func noRows(err error) error {
 
 func toAdmin(r admindb.PlatformAdmin) domain.Admin {
 	return domain.Admin{ID: r.ID, Email: r.Email, Name: r.Name, PasswordHash: r.PasswordHash, TOTPSecret: r.TotpSecret,
-		TOTPLastStep: r.TotpLastStep, Active: r.Status == "active", CreatedAt: r.CreatedAt, LastLoginAt: r.LastLoginAt}
+		TOTPLastStep: r.TotpLastStep, Active: r.Status == "active", Role: domain.Role(r.Role), CreatedAt: r.CreatedAt, LastLoginAt: r.LastLoginAt}
 }
 
 // InsertAdmin creates an admin with a sealed TOTP seed.
-func InsertAdmin(ctx context.Context, db DB, id ulid.ID, email, name, hash string, sealedTOTP []byte) (domain.Admin, error) {
-	row, err := admindb.New(db).InsertAdmin(ctx, admindb.InsertAdminParams{ID: id, Email: email, Name: name, PasswordHash: hash, TotpSecret: sealedTOTP})
+func InsertAdmin(ctx context.Context, db DB, id ulid.ID, email, name, hash string, sealedTOTP []byte, role domain.Role) (domain.Admin, error) {
+	row, err := admindb.New(db).InsertAdmin(ctx, admindb.InsertAdminParams{ID: id, Email: email, Name: name, PasswordHash: hash, TotpSecret: sealedTOTP,
+		Role: string(role)})
 	if err != nil {
 		if postgres.IsUniqueViolation(err, "") {
 			return domain.Admin{}, ErrEmailTaken
@@ -87,6 +88,7 @@ type Session struct {
 	CreatedAt, LastSeen time.Time
 	ExpiresAt           time.Time
 	AdminActive         bool
+	Role                domain.Role
 }
 
 // InsertSession opens a session.
@@ -107,7 +109,7 @@ func SessionByToken(ctx context.Context, db DB, t authtoken.Token) (Session, err
 		return Session{}, noRows(err)
 	}
 	return Session{ID: r.ID, AdminID: r.AdminID, CreatedAt: r.CreatedAt, LastSeen: r.LastSeenAt, ExpiresAt: r.ExpiresAt,
-		AdminActive: r.AdminStatus == "active"}, nil
+		AdminActive: r.AdminStatus == "active", Role: domain.Role(r.AdminRole)}, nil
 }
 
 // TouchSession slides the expiry.

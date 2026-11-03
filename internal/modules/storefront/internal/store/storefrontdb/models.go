@@ -696,6 +696,7 @@ type PlatformAdmin struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	LastLoginAt  pgtype.Timestamptz
+	Role         string
 }
 
 type Product struct {
