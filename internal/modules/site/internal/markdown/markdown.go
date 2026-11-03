@@ -23,7 +23,8 @@ type Renderer struct{ md goldmark.Markdown }
 func New() *Renderer {
 	return &Renderer{md: goldmark.New(
 		goldmark.WithExtensions(extension.Table, extension.Strikethrough),
-		goldmark.WithParserOptions(parser.WithAutoHeadingID(), parser.WithASTTransformers(util.Prioritized(demote{}, 100))),
+		goldmark.WithParserOptions(parser.WithAutoHeadingID(),
+			parser.WithASTTransformers(util.Prioritized(demote{}, 100), util.Prioritized(codeLang{}, 100))),
 		// No html.WithUnsafe: raw HTML is left out and javascript:,
 		// vbscript:, file: and data: links are dropped.
 	)}
@@ -49,4 +50,35 @@ func (demote) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
 		}
 		return ast.WalkContinue, nil
 	})
+}
+
+// codeLang drops a fenced code block's language unless it is a plain
+// name (letters, digits and + - _ . #). goldmark writes the language
+// into a class attribute up to the first space only, so a tab would
+// carry the rest of the line in with it.
+type codeLang struct{}
+
+func (codeLang) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	src := reader.Source()
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) { //nolint:errcheck // the walker returns none
+		// The info's first word, read here and not through Language(),
+		// which keeps what it read the first time.
+		if c, ok := n.(*ast.FencedCodeBlock); ok && entering && c.Info != nil {
+			word, _, _ := bytes.Cut(bytes.TrimSpace(c.Info.Segment.Value(src)), []byte(" "))
+			if !plainName(word) {
+				c.Info = nil
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+}
+
+func plainName(b []byte) bool {
+	for _, c := range b {
+		plain := 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || bytes.IndexByte([]byte("+-_.#"), c) >= 0
+		if !plain {
+			return false
+		}
+	}
+	return true
 }

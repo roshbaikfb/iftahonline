@@ -21,6 +21,8 @@ func TestHTML(t *testing.T) {
 		{"raw HTML is left out", "قبل <script>alert(1)</script> بعد\n\n<div onclick=\"x()\">x</div>", []string{"قبل"}, []string{"<script", "onclick", "<div"}},
 		{"dangerous links are dropped", "[x](javascript:alert(1)) [y](data:text/html,hi) ![z](vbscript:msgbox)", nil, []string{"javascript:", "data:text/html", "vbscript:"}},
 		{"text is escaped", "1 < 2 & \"quoted\"", []string{"1 &lt; 2 &amp; &quot;quoted&quot;"}, nil},
+		{"a code block keeps a plain language", "```go\nx := 1\n```", []string{`<code class="language-go">`}, nil},
+		{"a language that is not a plain name is dropped", "```js\tonload=x\nx\n```", []string{"<pre><code>x"}, []string{"class=", "onload"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
