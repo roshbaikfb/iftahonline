@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
+import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
 import { dateTimeAr } from './lib';
 
@@ -64,79 +65,81 @@ export function AgenciesPage() {
 
   return (
     <ConsoleLayout>
-      <h1>الوكالات</h1>
-      {error && <p role="alert">{error}</p>}
-      <section className="table-card" aria-labelledby="h-agencies">
-        <div className="card-head">
-          <h2 id="h-agencies">كل الوكالات</h2>
-        </div>
-        {agencies.length === 0 ? (
-          <p className="empty flat">لا توجد وكالات بعد.</p>
-        ) : (
-          <div className="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">الوكالة</th>
-                  <th scope="col">العملة</th>
-                  <th scope="col">الباقة</th>
-                  <th scope="col">المتاجر</th>
-                  <th scope="col">أنشئت</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agencies.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <Link to={`/agencies/${a.id}`}>{a.name}</Link>
-                    </td>
-                    <td>{a.currency}</td>
-                    <td className="ltr">{a.plan_code}</td>
-                    <td>{a.stores}</td>
-                    <td className="muted">{dateTimeAr(a.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <Editable p="catalog.manage">
+        <h1>الوكالات</h1>
+        {error && <p role="alert">{error}</p>}
+        <section className="table-card" aria-labelledby="h-agencies">
+          <div className="card-head">
+            <h2 id="h-agencies">كل الوكالات</h2>
           </div>
-        )}
-      </section>
+          {agencies.length === 0 ? (
+            <p className="empty flat">لا توجد وكالات بعد.</p>
+          ) : (
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">الوكالة</th>
+                    <th scope="col">العملة</th>
+                    <th scope="col">الباقة</th>
+                    <th scope="col">المتاجر</th>
+                    <th scope="col">أنشئت</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agencies.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <Link to={`/agencies/${a.id}`}>{a.name}</Link>
+                      </td>
+                      <td>{a.currency}</td>
+                      <td className="ltr">{a.plan_code}</td>
+                      <td>{a.stores}</td>
+                      <td className="muted">{dateTimeAr(a.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-      <form className="card" onSubmit={(e) => void create(e)} aria-label="وكالة جديدة">
-        <h2>وكالة جديدة</h2>
-        <div className="inline-form">
-          <label className="grow">
-            <span className="field-label">الاسم</span>
-            <input name="name" required maxLength={120} />
-          </label>
-          <label>
-            <span className="field-label">العملة</span>
-            <select name="currency" defaultValue="EGP">
-              <option value="EGP">EGP</option>
-              <option value="SAR">SAR</option>
-              <option value="AED">AED</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">باقة الوكالة</span>
-            <select name="plan_code" required>
-              {plans.map((p) => (
-                <option key={p.code} value={p.code}>
-                  {p.name_ar}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grow">
-            <span className="field-label">السبب</span>
-            <input name="reason" required minLength={3} maxLength={500} />
-          </label>
-          <button type="submit" className="button primary" disabled={busy || plans.length === 0}>
-            إنشاء الوكالة
-          </button>
-        </div>
-        {plans.length === 0 && <p className="warn-note">لا توجد باقة وكالة معروضة للبيع.</p>}
-      </form>
+        <form className="card" onSubmit={(e) => void create(e)} aria-label="وكالة جديدة">
+          <h2>وكالة جديدة</h2>
+          <div className="inline-form">
+            <label className="grow">
+              <span className="field-label">الاسم</span>
+              <input name="name" required maxLength={120} />
+            </label>
+            <label>
+              <span className="field-label">العملة</span>
+              <select name="currency" defaultValue="EGP">
+                <option value="EGP">EGP</option>
+                <option value="SAR">SAR</option>
+                <option value="AED">AED</option>
+              </select>
+            </label>
+            <label>
+              <span className="field-label">باقة الوكالة</span>
+              <select name="plan_code" required>
+                {plans.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name_ar}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grow">
+              <span className="field-label">السبب</span>
+              <input name="reason" required minLength={3} maxLength={500} />
+            </label>
+            <button type="submit" className="button primary" disabled={busy || plans.length === 0}>
+              إنشاء الوكالة
+            </button>
+          </div>
+          {plans.length === 0 && <p className="warn-note">لا توجد باقة وكالة معروضة للبيع.</p>}
+        </form>
+      </Editable>
     </ConsoleLayout>
   );
 }

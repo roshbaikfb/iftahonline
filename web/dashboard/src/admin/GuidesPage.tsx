@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { problemMessage } from '../lib/problem';
+import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
 import { guideFromForm, guideStatusLabel, slugOK, type Guide, type GuideSummary } from './guides';
 import { dateTimeAr } from './lib';
@@ -27,53 +28,55 @@ export function GuidesPage() {
 
   return (
     <ConsoleLayout>
-      <div className="card-head bare">
-        <div>
-          <h1>الأدلة</h1>
-          <p className="muted">مقالات الموقع على ‎/guides‎. تُكتب بصيغة Markdown، بالعربية والإنجليزية اختياريًا، وتظهر على الموقع حين تُنشر.</p>
+      <Editable p="content.manage">
+        <div className="card-head bare">
+          <div>
+            <h1>الأدلة</h1>
+            <p className="muted">مقالات الموقع على ‎/guides‎. تُكتب بصيغة Markdown، بالعربية والإنجليزية اختياريًا، وتظهر على الموقع حين تُنشر.</p>
+          </div>
+          <Link className="button primary" to="/guides/new">
+            دليل جديد
+          </Link>
         </div>
-        <Link className="button primary" to="/guides/new">
-          دليل جديد
-        </Link>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      {guides && (
-        <section className="table-card" aria-label="الأدلة">
-          {guides.length === 0 ? (
-            <p className="empty flat">لا توجد أدلة بعد.</p>
-          ) : (
-            <div className="scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">الدليل</th>
-                    <th scope="col">الحالة</th>
-                    <th scope="col">بالإنجليزية</th>
-                    <th scope="col">آخر تعديل</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {guides.map((g) => (
-                    <tr key={g.id}>
-                      <td>
-                        <Link to={`/guides/${g.id}`}>
-                          <strong>{g.title_ar}</strong>
-                        </Link>
-                        <small className="muted ltr"> /guides/{g.slug}</small>
-                      </td>
-                      <td>
-                        <span className={`status ${g.status === 'published' ? 'store-active' : 'store-closed'}`}>{guideStatusLabel[g.status]}</span>
-                      </td>
-                      <td>{g.has_en ? 'نعم' : '—'}</td>
-                      <td className="muted">{dateTimeAr(g.updated_at)}</td>
+        {error && <p role="alert">{error}</p>}
+        {guides && (
+          <section className="table-card" aria-label="الأدلة">
+            {guides.length === 0 ? (
+              <p className="empty flat">لا توجد أدلة بعد.</p>
+            ) : (
+              <div className="scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">الدليل</th>
+                      <th scope="col">الحالة</th>
+                      <th scope="col">بالإنجليزية</th>
+                      <th scope="col">آخر تعديل</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
+                  </thead>
+                  <tbody>
+                    {guides.map((g) => (
+                      <tr key={g.id}>
+                        <td>
+                          <Link to={`/guides/${g.id}`}>
+                            <strong>{g.title_ar}</strong>
+                          </Link>
+                          <small className="muted ltr"> /guides/{g.slug}</small>
+                        </td>
+                        <td>
+                          <span className={`status ${g.status === 'published' ? 'store-active' : 'store-closed'}`}>{guideStatusLabel[g.status]}</span>
+                        </td>
+                        <td>{g.has_en ? 'نعم' : '—'}</td>
+                        <td className="muted">{dateTimeAr(g.updated_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+      </Editable>
     </ConsoleLayout>
   );
 }
@@ -173,101 +176,103 @@ export function GuideEditor() {
 
   return (
     <ConsoleLayout>
-      <div>
-        <p className="muted small">
-          <Link to="/guides">الأدلة</Link> / {isNew ? 'دليل جديد' : guide?.title_ar}
-        </p>
-        <h1>{isNew ? 'دليل جديد' : 'تعديل الدليل'}</h1>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
-      <form ref={formRef} key={guide?.id ?? 'new'} className="card faq-form" onSubmit={(e) => void save(e)} aria-label="الدليل">
-        <div className="inline-form">
-          <label className="grow">
-            <span className="field-label">العنوان بالعربية</span>
-            <input name="title_ar" required minLength={5} maxLength={120} defaultValue={guide?.title_ar ?? ''} />
-          </label>
-          <label className="grow">
-            <span className="field-label">الرابط (بالإنجليزية)</span>
-            <input name="slug" required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="reduce-fake-orders" defaultValue={guide?.slug ?? ''} dir="ltr" />
-          </label>
-          <label>
-            <span className="field-label">الحالة</span>
-            <select name="status" defaultValue={guide?.status ?? 'draft'}>
-              <option value="draft">مسودة (لا يظهر)</option>
-              <option value="published">منشور</option>
-            </select>
-          </label>
+      <Editable p="content.manage">
+        <div>
+          <p className="muted small">
+            <Link to="/guides">الأدلة</Link> / {isNew ? 'دليل جديد' : guide?.title_ar}
+          </p>
+          <h1>{isNew ? 'دليل جديد' : 'تعديل الدليل'}</h1>
         </div>
-        <label>
-          <span className="field-label">الملخص (يظهر في القائمة ولجوجل)</span>
-          <textarea name="summary_ar" required minLength={20} maxLength={300} rows={2} defaultValue={guide?.summary_ar ?? ''} />
-        </label>
-        <div className="guide-editor">
-          <label>
-            <span className="field-label">نص الدليل (Markdown: ## عنوان، - نقطة، **عريض**، [رابط](https://…))</span>
-            <textarea
-              name="body_ar"
-              required
-              minLength={50}
-              maxLength={40000}
-              rows={22}
-              defaultValue={guide?.body_ar ?? ''}
-              onChange={(e) => {
-                setBodyAr(e.currentTarget.value);
-              }}
-            />
-          </label>
-          <section className="guide-preview" aria-label="معاينة">
-            <span className="field-label">معاينة كما يظهر في الموقع</span>
-            {/* The server's renderer: no raw HTML, no script links (S4c). */}
-            {preview ? <div className="prose" dangerouslySetInnerHTML={{ __html: preview }} /> : <p className="muted">اكتب لترى المعاينة.</p>}
-          </section>
-        </div>
-        <details>
-          <summary>النسخة الإنجليزية (اختيارية: بدونها لا يظهر الدليل في الموقع الإنجليزي)</summary>
-          <div className="faq-form">
-            <label>
-              <span className="field-label">العنوان بالإنجليزية</span>
-              <input name="title_en" maxLength={120} defaultValue={guide?.title_en ?? ''} dir="ltr" />
+        {error && <p role="alert">{error}</p>}
+        {notice && <p role="status">{notice}</p>}
+        <form ref={formRef} key={guide?.id ?? 'new'} className="card faq-form" onSubmit={(e) => void save(e)} aria-label="الدليل">
+          <div className="inline-form">
+            <label className="grow">
+              <span className="field-label">العنوان بالعربية</span>
+              <input name="title_ar" required minLength={5} maxLength={120} defaultValue={guide?.title_ar ?? ''} />
+            </label>
+            <label className="grow">
+              <span className="field-label">الرابط (بالإنجليزية)</span>
+              <input name="slug" required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="reduce-fake-orders" defaultValue={guide?.slug ?? ''} dir="ltr" />
             </label>
             <label>
-              <span className="field-label">الملخص بالإنجليزية</span>
-              <textarea name="summary_en" maxLength={300} rows={2} defaultValue={guide?.summary_en ?? ''} dir="ltr" />
-            </label>
-            <label>
-              <span className="field-label">النص بالإنجليزية</span>
-              <textarea name="body_en" maxLength={40000} rows={10} defaultValue={guide?.body_en ?? ''} dir="ltr" />
+              <span className="field-label">الحالة</span>
+              <select name="status" defaultValue={guide?.status ?? 'draft'}>
+                <option value="draft">مسودة (لا يظهر)</option>
+                <option value="published">منشور</option>
+              </select>
             </label>
           </div>
-        </details>
-        <div className="inline-form">
-          {guide?.cover_url && <img src={guide.cover_url} alt="" className="person-thumb" />}
-          <label className="grow">
-            <span className="field-label">صورة الغلاف (اختيارية، 1200×630 الأفضل)</span>
-            <input name="cover" type="file" accept="image/png,image/jpeg,image/webp" />
+          <label>
+            <span className="field-label">الملخص (يظهر في القائمة ولجوجل)</span>
+            <textarea name="summary_ar" required minLength={20} maxLength={300} rows={2} defaultValue={guide?.summary_ar ?? ''} />
           </label>
-          {guide?.cover_url && (
-            <label className="check">
-              <input type="checkbox" name="remove_cover" /> احذف الغلاف الحالي
+          <div className="guide-editor">
+            <label>
+              <span className="field-label">نص الدليل (Markdown: ## عنوان، - نقطة، **عريض**، [رابط](https://…))</span>
+              <textarea
+                name="body_ar"
+                required
+                minLength={50}
+                maxLength={40000}
+                rows={22}
+                defaultValue={guide?.body_ar ?? ''}
+                onChange={(e) => {
+                  setBodyAr(e.currentTarget.value);
+                }}
+              />
             </label>
-          )}
-        </div>
-        <div className="inline-form">
-          <label className="grow">
-            <span className="field-label">السبب (إجباري)</span>
-            <input name="reason" required minLength={3} maxLength={500} />
-          </label>
-          <button type="submit" className="button primary" disabled={busy}>
-            حفظ
-          </button>
-          {guide && (
-            <button type="button" className="button" onClick={() => void remove()}>
-              حذف
+            <section className="guide-preview" aria-label="معاينة">
+              <span className="field-label">معاينة كما يظهر في الموقع</span>
+              {/* The server's renderer: no raw HTML, no script links (S4c). */}
+              {preview ? <div className="prose" dangerouslySetInnerHTML={{ __html: preview }} /> : <p className="muted">اكتب لترى المعاينة.</p>}
+            </section>
+          </div>
+          <details>
+            <summary>النسخة الإنجليزية (اختيارية: بدونها لا يظهر الدليل في الموقع الإنجليزي)</summary>
+            <div className="faq-form">
+              <label>
+                <span className="field-label">العنوان بالإنجليزية</span>
+                <input name="title_en" maxLength={120} defaultValue={guide?.title_en ?? ''} dir="ltr" />
+              </label>
+              <label>
+                <span className="field-label">الملخص بالإنجليزية</span>
+                <textarea name="summary_en" maxLength={300} rows={2} defaultValue={guide?.summary_en ?? ''} dir="ltr" />
+              </label>
+              <label>
+                <span className="field-label">النص بالإنجليزية</span>
+                <textarea name="body_en" maxLength={40000} rows={10} defaultValue={guide?.body_en ?? ''} dir="ltr" />
+              </label>
+            </div>
+          </details>
+          <div className="inline-form">
+            {guide?.cover_url && <img src={guide.cover_url} alt="" className="person-thumb" />}
+            <label className="grow">
+              <span className="field-label">صورة الغلاف (اختيارية، 1200×630 الأفضل)</span>
+              <input name="cover" type="file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+            {guide?.cover_url && (
+              <label className="check">
+                <input type="checkbox" name="remove_cover" /> احذف الغلاف الحالي
+              </label>
+            )}
+          </div>
+          <div className="inline-form">
+            <label className="grow">
+              <span className="field-label">السبب (إجباري)</span>
+              <input name="reason" required minLength={3} maxLength={500} />
+            </label>
+            <button type="submit" className="button primary" disabled={busy}>
+              حفظ
             </button>
-          )}
-        </div>
-      </form>
+            {guide && (
+              <button type="button" className="button" onClick={() => void remove()}>
+                حذف
+              </button>
+            )}
+          </div>
+        </form>
+      </Editable>
     </ConsoleLayout>
   );
 }

@@ -32,3 +32,13 @@ export function useAdmin(): AdminSession {
   if (!s) throw new Error('useAdmin outside the console');
   return s;
 }
+
+export type Permission = components['schemas']['AdminPermission'];
+
+// useCan answers what the signed-in admin's role allows (ADR-0077). The
+// server refuses the rest; the console hides it so nobody meets a 403.
+export function useCan(): (p: Permission) => boolean {
+  const { state } = useAdmin();
+  const granted = state.kind === 'signed-in' ? state.admin.permissions : [];
+  return (p) => granted.includes(p);
+}

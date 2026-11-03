@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
 
-import { useAdmin } from './session';
+import { useAdmin, useCan, type Permission } from './session';
 
 // icons are stroke paths on a 24px grid, one per screen.
 const icons = {
@@ -17,32 +17,32 @@ const icons = {
   audit: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4',
 };
 
-const groups: { title: string; items: { to: string; label: string; icon: keyof typeof icons; end?: boolean }[] }[] = [
+const groups: { title: string; items: { to: string; label: string; icon: keyof typeof icons; end?: boolean; need?: Permission }[] }[] = [
   {
     title: 'المنصة',
     items: [
       { to: '/', label: 'الرئيسية', icon: 'home', end: true },
-      { to: '/stores', label: 'المتاجر', icon: 'stores' },
+      { to: '/stores', label: 'المتاجر', icon: 'stores', need: 'stores.read' },
     ],
   },
   {
     title: 'الإيراد',
     items: [
-      { to: '/billing', label: 'الفواتير والمدفوعات', icon: 'billing' },
-      { to: '/plans', label: 'الباقات والمميزات', icon: 'plans' },
-      { to: '/founding', label: 'التجار المؤسسون', icon: 'founding' },
-      { to: '/agencies', label: 'الوكالات', icon: 'agencies' },
+      { to: '/billing', label: 'الفواتير والمدفوعات', icon: 'billing', need: 'billing.read' },
+      { to: '/plans', label: 'الباقات والمميزات', icon: 'plans', need: 'catalog.read' },
+      { to: '/founding', label: 'التجار المؤسسون', icon: 'founding', need: 'catalog.read' },
+      { to: '/agencies', label: 'الوكالات', icon: 'agencies', need: 'catalog.read' },
     ],
   },
   {
     title: 'المحتوى',
     items: [
-      { to: '/site', label: 'الموقع التعريفي', icon: 'site' },
-      { to: '/guides', label: 'الأدلة', icon: 'guides' },
-      { to: '/ads', label: 'الإعلانات', icon: 'ads' },
+      { to: '/site', label: 'الموقع التعريفي', icon: 'site', need: 'content.read' },
+      { to: '/guides', label: 'الأدلة', icon: 'guides', need: 'content.read' },
+      { to: '/ads', label: 'الإعلانات', icon: 'ads', need: 'content.read' },
     ],
   },
-  { title: 'الأمان', items: [{ to: '/audit', label: 'سجل الأدمن', icon: 'audit' }] },
+  { title: 'الأمان', items: [{ to: '/audit', label: 'سجل الأدمن', icon: 'audit', need: 'audit.read' }] },
 ];
 
 function Icon({ d, size = 18 }: { d: string; size?: number }) {
@@ -58,6 +58,9 @@ function Icon({ d, size = 18 }: { d: string; size?: number }) {
 // for a store's dashboard. On phones a top bar opens it as a drawer.
 export function ConsoleLayout({ children }: { children: ReactNode }) {
   const { state, signOut } = useAdmin();
+  const can = useCan();
+  // Each admin sees only the sections the role opens (ADR-0077).
+  const shown = groups.map((g) => ({ ...g, items: g.items.filter((n) => !n.need || can(n.need)) })).filter((g) => g.items.length > 0);
   const admin = state.kind === 'signed-in' ? state.admin : null;
   const [open, setOpen] = useState(false);
 
@@ -108,7 +111,7 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
             <Icon d="M6 6l12 12M18 6L6 18" size={20} />
           </button>
         </div>
-        {groups.map((g) => (
+        {shown.map((g) => (
           <div key={g.title} className="console-group">
             <div className="console-group-title">{g.title}</div>
             {g.items.map((n) => (

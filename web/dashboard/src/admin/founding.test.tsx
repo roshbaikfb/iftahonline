@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { testAdmin } from '../test/admin';
 import { mockAPI } from '../test/api';
 import { Gate } from './Console';
 import { memberState, percent, seatsLeft, toBps, type FoundingMember } from './founding';
 import { AdminSessionContext, type AdminSession } from './session';
 
-const admin = { id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' };
+const admin = testAdmin({ id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' });
 
 function renderFounding() {
   const state = { kind: 'signed-in', admin } as const;

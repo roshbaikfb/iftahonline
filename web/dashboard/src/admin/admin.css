@@ -1739,3 +1739,11 @@ button.chip.on:hover:not(:disabled) {
     flex: 1 1 100%;
   }
 }
+
+/* What a role may only read (ADR-0077): its forms, disabled. */
+fieldset.read-only {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}

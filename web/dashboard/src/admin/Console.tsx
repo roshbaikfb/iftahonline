@@ -6,6 +6,7 @@ import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
 import { BillingPage } from './BillingPage';
+import { Need } from './Can';
 import { FoundingPage } from './FoundingPage';
 import { GuideEditor, GuidesPage } from './GuidesPage';
 import { InvoicePage } from './InvoicePage';
@@ -24,20 +25,20 @@ export function ConsoleRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Overview />} />
-      <Route path="/stores" element={<StoresPage />} />
-      <Route path="/stores/:storeId" element={<StorePage />} />
-      <Route path="/billing" element={<BillingPage />} />
-      <Route path="/billing/invoices/:invoiceId" element={<InvoicePage />} />
-      <Route path="/plans" element={<PlansPage />} />
-      <Route path="/plans/:code" element={<PlanEditorPage />} />
-      <Route path="/agencies" element={<AgenciesPage />} />
-      <Route path="/agencies/:agencyId" element={<AgencyPage />} />
-      <Route path="/ads" element={<AdsPage />} />
-      <Route path="/site" element={<SitePage />} />
-      <Route path="/founding" element={<FoundingPage />} />
-      <Route path="/guides" element={<GuidesPage />} />
-      <Route path="/guides/:id" element={<GuideEditor />} />
-      <Route path="/audit" element={<AuditPage />} />
+      <Route path="/stores" element={<Need p="stores.read"><StoresPage /></Need>} />
+      <Route path="/stores/:storeId" element={<Need p="stores.read"><StorePage /></Need>} />
+      <Route path="/billing" element={<Need p="billing.read"><BillingPage /></Need>} />
+      <Route path="/billing/invoices/:invoiceId" element={<Need p="billing.read"><InvoicePage /></Need>} />
+      <Route path="/plans" element={<Need p="catalog.read"><PlansPage /></Need>} />
+      <Route path="/plans/:code" element={<Need p="catalog.read"><PlanEditorPage /></Need>} />
+      <Route path="/agencies" element={<Need p="catalog.read"><AgenciesPage /></Need>} />
+      <Route path="/agencies/:agencyId" element={<Need p="catalog.read"><AgencyPage /></Need>} />
+      <Route path="/ads" element={<Need p="content.read"><AdsPage /></Need>} />
+      <Route path="/site" element={<Need p="content.read"><SitePage /></Need>} />
+      <Route path="/founding" element={<Need p="catalog.read"><FoundingPage /></Need>} />
+      <Route path="/guides" element={<Need p="content.read"><GuidesPage /></Need>} />
+      <Route path="/guides/:id" element={<Need p="content.read"><GuideEditor /></Need>} />
+      <Route path="/audit" element={<Need p="audit.read"><AuditPage /></Need>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

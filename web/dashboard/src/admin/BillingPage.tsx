@@ -30,6 +30,7 @@ import {
 import { ConsoleLayout } from './ConsoleLayout';
 import { Dialog } from './Dialog';
 import { count, dateTimeAr } from './lib';
+import { useCan } from './session';
 
 const statuses: { value: InvoiceState | ''; label: string }[] = [
   { value: '', label: 'الكل' },
@@ -167,6 +168,7 @@ function Invoices() {
 
   const now = new Date();
   const status = query.status ?? '';
+  const can = useCan();
   return (
     <section className="table-card billing-list" aria-label="الفواتير">
       <div className="billing-bar">
@@ -202,9 +204,11 @@ function Invoices() {
           <button type="submit" className="secondary">
             بحث
           </button>
-          <a className="button secondary" href={exportHref(query)} download>
-            تصدير CSV
-          </a>
+          {can('billing.manage') && (
+            <a className="button secondary" href={exportHref(query)} download>
+              تصدير CSV
+            </a>
+          )}
         </form>
       </div>
       {error && <p role="alert">{error}</p>}
@@ -288,6 +292,7 @@ function Payments() {
   }
 
   const outcome = query.outcome ?? '';
+  const can = useCan();
   return (
     <section className="table-card billing-list" aria-label="المدفوعات">
       <div className="billing-bar">
@@ -364,7 +369,7 @@ function Payments() {
                     </td>
                     <td className="b-total num">{money(p.amount_minor, p.currency)}</td>
                     <td className="b-action">
-                      {waiting && (
+                      {waiting && can('billing.manage') && (
                         <button
                           type="button"
                           className="secondary"

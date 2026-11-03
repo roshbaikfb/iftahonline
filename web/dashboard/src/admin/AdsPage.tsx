@@ -19,6 +19,7 @@ import {
   type Country,
   type Placement,
 } from './ads';
+import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
 
 function fetchAds() {
@@ -134,191 +135,193 @@ export function AdsPage() {
 
   return (
     <ConsoleLayout>
-      <div>
-        <h1>الإعلانات في المتاجر المجانية</h1>
-        <p className="muted">تظهر في المتاجر على الباقة المجانية فقط: الرئيسية وصفحات التصنيف والمنتج. أبدًا في السلة والدفع والطلبات.</p>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      <Editable p="content.manage">
+        <div>
+          <h1>الإعلانات في المتاجر المجانية</h1>
+          <p className="muted">تظهر في المتاجر على الباقة المجانية فقط: الرئيسية وصفحات التصنيف والمنتج. أبدًا في السلة والدفع والطلبات.</p>
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {notice && <p role="status">{notice}</p>}
 
-      {settings && (
-        <form className="card ads-sources" onSubmit={(e) => void saveSettings(e)} aria-labelledby="h-sources">
-          <h2 id="h-sources">مصدر الإعلان في كل مكان</h2>
-          <p className="muted small">
-            في كل مكان نعرض بانرًا من بانراتنا إن وُجد واحد نشط له، وإلا إعلان Google إن كان مفعّلًا، وإلا لا شيء (يبقى المكان فارغًا ولا يُحجز).
-          </p>
-          <div className="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">المكان</th>
-                  <th scope="col">المقاس</th>
-                  <th scope="col">بانرات نشطة</th>
-                  <th scope="col">Google AdSense (رقم الوحدة)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {placements.map((p) => (
-                  <tr key={p.key}>
-                    <td>{p.name}</td>
-                    <td className="muted ltr">{p.size}</td>
-                    <td>{live[p.key]}</td>
-                    <td>
-                      <input
-                        name={`unit_${p.key}`}
-                        aria-label={`${p.name} — رقم وحدة AdSense`}
-                        defaultValue={settings.units[p.key] ?? ''}
-                        pattern="[0-9]{10}"
-                        inputMode="numeric"
-                        dir="ltr"
-                      />
-                    </td>
+        {settings && (
+          <form className="card ads-sources" onSubmit={(e) => void saveSettings(e)} aria-labelledby="h-sources">
+            <h2 id="h-sources">مصدر الإعلان في كل مكان</h2>
+            <p className="muted small">
+              في كل مكان نعرض بانرًا من بانراتنا إن وُجد واحد نشط له، وإلا إعلان Google إن كان مفعّلًا، وإلا لا شيء (يبقى المكان فارغًا ولا يُحجز).
+            </p>
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">المكان</th>
+                    <th scope="col">المقاس</th>
+                    <th scope="col">بانرات نشطة</th>
+                    <th scope="col">Google AdSense (رقم الوحدة)</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {placements.map((p) => (
+                    <tr key={p.key}>
+                      <td>{p.name}</td>
+                      <td className="muted ltr">{p.size}</td>
+                      <td>{live[p.key]}</td>
+                      <td>
+                        <input
+                          name={`unit_${p.key}`}
+                          aria-label={`${p.name} — رقم وحدة AdSense`}
+                          defaultValue={settings.units[p.key] ?? ''}
+                          pattern="[0-9]{10}"
+                          inputMode="numeric"
+                          dir="ltr"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="inline-form">
+              <label className="grow">
+                <span className="field-label">رقم الناشر في AdSense</span>
+                <input name="publisher_id" defaultValue={settings.publisher_id} pattern="ca-pub-[0-9]{16}" placeholder="ca-pub-0000000000000000" dir="ltr" />
+              </label>
+              <label className="check">
+                <input type="checkbox" name="adsense_enabled" defaultChecked={settings.adsense_enabled} /> تفعيل إعلانات Google
+              </label>
+              <label className="grow">
+                <span className="field-label">السبب (إجباري)</span>
+                <input name="reason" required minLength={3} maxLength={500} />
+              </label>
+              <button type="submit" className="button primary" disabled={busy}>
+                حفظ الإعدادات
+              </button>
+            </div>
+            <p className="muted small">
+              يُنشر ‎/ads.txt‎ تلقائيًا على كل دومين متجر مجاني: <code dir="ltr">{settings.ads_txt.trim() || 'google.com, pub-…, DIRECT, f08c47fec0942fa0'}</code>
+            </p>
+          </form>
+        )}
+
+        <section className="table-card" aria-labelledby="h-banners">
+          <div className="card-head">
+            <h2 id="h-banners">بانراتنا</h2>
+            <span className="muted small">نعدّ النقرات فقط، بدون تتبع للزائر.</span>
           </div>
-          <div className="inline-form">
+          {banners.length === 0 ? (
+            <p className="empty flat">لا توجد بانرات بعد.</p>
+          ) : (
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">البانر</th>
+                    <th scope="col">المكان</th>
+                    <th scope="col">الدولة</th>
+                    <th scope="col">الفترة</th>
+                    <th scope="col">الوزن</th>
+                    <th scope="col">نقرات 30 يومًا</th>
+                    <th scope="col">الحالة</th>
+                    <th scope="col">
+                      <span className="visually-hidden">إجراء</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {banners.map((b) => {
+                    const st = bannerState(b, now);
+                    return (
+                      <tr key={b.id}>
+                        <td>
+                          <div className="ad-banner-cell">
+                            {b.image_url ? (
+                              <img className="ad-thumb" src={b.image_url} alt="" width={64} height={32} loading="lazy" />
+                            ) : (
+                              <span className="ad-thumb" />
+                            )}
+                            <span>
+                              <strong>{b.title}</strong>
+                              <small className="muted ltr">{b.link_url}</small>
+                            </span>
+                          </div>
+                        </td>
+                        <td>{placementName(b.placement)}</td>
+                        <td>{countryName(b.country)}</td>
+                        <td className="muted">{period(b)}</td>
+                        <td>{b.weight}</td>
+                        <td>
+                          <strong>{b.clicks.toLocaleString('en-US')}</strong>
+                        </td>
+                        <td>
+                          <span className={`status ad-${st}`}>{bannerStateLabel[st]}</span>
+                        </td>
+                        <td>
+                          <button type="button" className="link-button" onClick={() => void setActive(b, !b.active)}>
+                            {b.active ? 'إيقاف' : 'تشغيل'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <form className="inline-form foot" onSubmit={(e) => void addBanner(e)} aria-label="بانر جديد">
             <label className="grow">
-              <span className="field-label">رقم الناشر في AdSense</span>
-              <input name="publisher_id" defaultValue={settings.publisher_id} pattern="ca-pub-[0-9]{16}" placeholder="ca-pub-0000000000000000" dir="ltr" />
-            </label>
-            <label className="check">
-              <input type="checkbox" name="adsense_enabled" defaultChecked={settings.adsense_enabled} /> تفعيل إعلانات Google
+              <span className="field-label">العنوان (للكونسول وقارئ الشاشة)</span>
+              <input name="title" required maxLength={120} />
             </label>
             <label className="grow">
-              <span className="field-label">السبب (إجباري)</span>
+              <span className="field-label">الصورة (WebP/PNG/JPEG، تُعاد ترميزها)</span>
+              <input name="image" type="file" required accept="image/png,image/jpeg,image/webp" />
+            </label>
+            <label className="grow">
+              <span className="field-label">الرابط (https)</span>
+              <input name="link_url" type="url" required pattern="https://.*" maxLength={500} placeholder="https://iftahonline.com/start" dir="ltr" />
+            </label>
+            <label>
+              <span className="field-label">المكان</span>
+              <select name="placement" defaultValue="home_top">
+                {placements.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.name} {p.size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="field-label">الدولة</span>
+              <select name="country" defaultValue="">
+                <option value="">كل الدول</option>
+                {countries.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="field-label">من</span>
+              <input name="starts_at" type="date" required />
+            </label>
+            <label>
+              <span className="field-label">إلى (اختياري)</span>
+              <input name="ends_at" type="date" />
+            </label>
+            <label>
+              <span className="field-label">الوزن (1–100)</span>
+              <input name="weight" type="number" required min={1} max={100} defaultValue={10} />
+            </label>
+            <label className="grow">
+              <span className="field-label">السبب</span>
               <input name="reason" required minLength={3} maxLength={500} />
             </label>
             <button type="submit" className="button primary" disabled={busy}>
-              حفظ الإعدادات
+              إضافة البانر
             </button>
-          </div>
-          <p className="muted small">
-            يُنشر ‎/ads.txt‎ تلقائيًا على كل دومين متجر مجاني: <code dir="ltr">{settings.ads_txt.trim() || 'google.com, pub-…, DIRECT, f08c47fec0942fa0'}</code>
-          </p>
-        </form>
-      )}
-
-      <section className="table-card" aria-labelledby="h-banners">
-        <div className="card-head">
-          <h2 id="h-banners">بانراتنا</h2>
-          <span className="muted small">نعدّ النقرات فقط، بدون تتبع للزائر.</span>
-        </div>
-        {banners.length === 0 ? (
-          <p className="empty flat">لا توجد بانرات بعد.</p>
-        ) : (
-          <div className="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">البانر</th>
-                  <th scope="col">المكان</th>
-                  <th scope="col">الدولة</th>
-                  <th scope="col">الفترة</th>
-                  <th scope="col">الوزن</th>
-                  <th scope="col">نقرات 30 يومًا</th>
-                  <th scope="col">الحالة</th>
-                  <th scope="col">
-                    <span className="visually-hidden">إجراء</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {banners.map((b) => {
-                  const st = bannerState(b, now);
-                  return (
-                    <tr key={b.id}>
-                      <td>
-                        <div className="ad-banner-cell">
-                          {b.image_url ? (
-                            <img className="ad-thumb" src={b.image_url} alt="" width={64} height={32} loading="lazy" />
-                          ) : (
-                            <span className="ad-thumb" />
-                          )}
-                          <span>
-                            <strong>{b.title}</strong>
-                            <small className="muted ltr">{b.link_url}</small>
-                          </span>
-                        </div>
-                      </td>
-                      <td>{placementName(b.placement)}</td>
-                      <td>{countryName(b.country)}</td>
-                      <td className="muted">{period(b)}</td>
-                      <td>{b.weight}</td>
-                      <td>
-                        <strong>{b.clicks.toLocaleString('en-US')}</strong>
-                      </td>
-                      <td>
-                        <span className={`status ad-${st}`}>{bannerStateLabel[st]}</span>
-                      </td>
-                      <td>
-                        <button type="button" className="link-button" onClick={() => void setActive(b, !b.active)}>
-                          {b.active ? 'إيقاف' : 'تشغيل'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <form className="inline-form foot" onSubmit={(e) => void addBanner(e)} aria-label="بانر جديد">
-          <label className="grow">
-            <span className="field-label">العنوان (للكونسول وقارئ الشاشة)</span>
-            <input name="title" required maxLength={120} />
-          </label>
-          <label className="grow">
-            <span className="field-label">الصورة (WebP/PNG/JPEG، تُعاد ترميزها)</span>
-            <input name="image" type="file" required accept="image/png,image/jpeg,image/webp" />
-          </label>
-          <label className="grow">
-            <span className="field-label">الرابط (https)</span>
-            <input name="link_url" type="url" required pattern="https://.*" maxLength={500} placeholder="https://iftahonline.com/start" dir="ltr" />
-          </label>
-          <label>
-            <span className="field-label">المكان</span>
-            <select name="placement" defaultValue="home_top">
-              {placements.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.name} {p.size}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">الدولة</span>
-            <select name="country" defaultValue="">
-              <option value="">كل الدول</option>
-              {countries.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">من</span>
-            <input name="starts_at" type="date" required />
-          </label>
-          <label>
-            <span className="field-label">إلى (اختياري)</span>
-            <input name="ends_at" type="date" />
-          </label>
-          <label>
-            <span className="field-label">الوزن (1–100)</span>
-            <input name="weight" type="number" required min={1} max={100} defaultValue={10} />
-          </label>
-          <label className="grow">
-            <span className="field-label">السبب</span>
-            <input name="reason" required minLength={3} maxLength={500} />
-          </label>
-          <button type="submit" className="button primary" disabled={busy}>
-            إضافة البانر
-          </button>
-        </form>
-      </section>
+          </form>
+        </section>
+      </Editable>
     </ConsoleLayout>
   );
 }

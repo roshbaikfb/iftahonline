@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { testAdmin } from '../test/admin';
 import { mockAPI, type Call } from '../test/api';
 import { attemptsText, daysText, exportHref, invoiceNote, invoiceQuery, paymentQuery, sums, type Invoice, type InvoiceDetail, type Payment, type Summary } from './billing';
 import { Gate } from './Console';
 import { AdminSessionContext, type AdminSession, type AdminState } from './session';
 
-const admin = { id: '01M5ADMIN000000000000000AA', email: 'owner@iftahonline.com', name: 'أحمد' };
+const admin = testAdmin({ id: '01M5ADMIN000000000000000AA', email: 'owner@iftahonline.com', name: 'أحمد' });
 const store = '01M5STORE0000000000000000A';
 const agency = '01M5AGNCY0000000000000000A';
 const now = new Date('2026-11-11T10:00:00Z');

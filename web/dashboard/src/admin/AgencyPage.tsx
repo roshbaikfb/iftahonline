@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
+import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
 
 type Detail = components['schemas']['AdminAgencyDetail'];
@@ -65,61 +66,63 @@ export function AgencyPage() {
   const a = detail?.agency;
   return (
     <ConsoleLayout>
-      <Link to="/agencies">→ الوكالات</Link>
-      {error && <p role="alert">{error}</p>}
-      {notice && (
-        <p role="status" className="ok-note">
-          {notice}
-        </p>
-      )}
-      {a && (
-        <>
-          <div className="page-head">
-            <div>
-              <h1>{a.name}</h1>
-              <p className="muted">
-                {a.currency} · باقة <span className="ltr">{a.plan_code}</span> · {a.stores} متجر · فاتورة واحدة شهريًا
-              </p>
-            </div>
-          </div>
-          <section className="table-card" aria-labelledby="h-members">
-            <div className="card-head wrap">
-              <h2 id="h-members">متاجر الوكالة</h2>
-              <span className="muted small">لضم متجر افتح صفحته من «الحالة والمتاجر».</span>
-            </div>
-            {detail.store_ids.length === 0 ? (
-              <p className="empty flat">لا متاجر بعد.</p>
-            ) : (
-              <div className="scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">المتجر</th>
-                      <th scope="col">
-                        <span className="visually-hidden">إجراء</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.store_ids.map((s) => (
-                      <tr key={s}>
-                        <td>
-                          <Link to={`/stores/${s}`}>{names.get(s) ?? s}</Link>
-                        </td>
-                        <td>
-                          <button type="button" className="link-button danger" disabled={busy} onClick={() => void remove(s)}>
-                            إخراج من الوكالة
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      <Editable p="catalog.manage">
+        <Link to="/agencies">→ الوكالات</Link>
+        {error && <p role="alert">{error}</p>}
+        {notice && (
+          <p role="status" className="ok-note">
+            {notice}
+          </p>
+        )}
+        {a && (
+          <>
+            <div className="page-head">
+              <div>
+                <h1>{a.name}</h1>
+                <p className="muted">
+                  {a.currency} · باقة <span className="ltr">{a.plan_code}</span> · {a.stores} متجر · فاتورة واحدة شهريًا
+                </p>
               </div>
-            )}
-          </section>
-        </>
-      )}
+            </div>
+            <section className="table-card" aria-labelledby="h-members">
+              <div className="card-head wrap">
+                <h2 id="h-members">متاجر الوكالة</h2>
+                <span className="muted small">لضم متجر افتح صفحته من «الحالة والمتاجر».</span>
+              </div>
+              {detail.store_ids.length === 0 ? (
+                <p className="empty flat">لا متاجر بعد.</p>
+              ) : (
+                <div className="scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">المتجر</th>
+                        <th scope="col">
+                          <span className="visually-hidden">إجراء</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.store_ids.map((s) => (
+                        <tr key={s}>
+                          <td>
+                            <Link to={`/stores/${s}`}>{names.get(s) ?? s}</Link>
+                          </td>
+                          <td>
+                            <button type="button" className="link-button danger" disabled={busy} onClick={() => void remove(s)}>
+                              إخراج من الوكالة
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </Editable>
     </ConsoleLayout>
   );
 }

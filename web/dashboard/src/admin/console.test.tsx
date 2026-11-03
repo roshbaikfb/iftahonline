@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { testAdmin } from '../test/admin';
 import { mockAPI, type Call } from '../test/api';
 import { Gate } from './Console';
 import { waited } from './lib';
@@ -10,7 +11,7 @@ import { AdminSessionContext, type AdminSession, type AdminState } from './sessi
 
 const store = '01M5STORE0000000000000000A';
 const invoice = '01M7INVOICE000000000000001';
-const admin = { id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' };
+const admin = testAdmin({ id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' });
 
 function renderConsole(state: AdminState, path = '/', session: Partial<AdminSession> = {}) {
   const value: AdminSession = { state, signedIn: vi.fn(), signOut: vi.fn(() => Promise.resolve()), ...session };
@@ -267,5 +268,62 @@ describe('console', () => {
     await user.type(within(support).getByLabelText('السبب'), 'abc');
     await user.click(within(support).getByRole('button', { name: 'افتح جلسة الدعم' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('reason too short');
+  });
+});
+
+describe('roles (ADR-0077)', () => {
+  const as = (role: Parameters<typeof testAdmin>[1]): AdminState => ({ kind: 'signed-in', admin: testAdmin({}, role) });
+  const nav = () => within(screen.getByRole('navigation', { name: 'قائمة الكونسول' }));
+
+  it('shows each role only its sections, and says so on a page it may not open', async () => {
+    const calls = consoleRoutes({ 'GET /admin/v1/metrics': () => ({ status: 200, body: { computed_at: '', errors: [] } }) });
+    renderConsole(as('content'), '/');
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(nav().getByRole('link', { name: 'الموقع التعريفي' })).toBeInTheDocument();
+    for (const name of ['المتاجر', 'الفواتير والمدفوعات', 'الباقات والمميزات', 'سجل الأدمن']) {
+      expect(nav().queryByRole('link', { name })).not.toBeInTheDocument();
+    }
+    // The home does not ask for what the role may not read.
+    await waitFor(() => {
+      expect(calls.some((c) => c.path === '/admin/v1/health')).toBe(true);
+    });
+    expect(calls.map((c) => c.path)).not.toEqual(expect.arrayContaining(['/admin/v1/billing/duplicates']));
+    expect(calls.some((c) => ['/admin/v1/founding', '/admin/v1/stores'].includes(c.path))).toBe(false);
+  });
+
+  it('refuses a page to a role without it', async () => {
+    consoleRoutes();
+    renderConsole(as('viewer'), '/audit');
+    expect(await screen.findByRole('heading', { name: 'لا تملك صلاحية هذه الصفحة' })).toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'سجل الأدمن' })).not.toBeInTheDocument();
+  });
+
+  it('shows finance the store’s billing actions but not its owner or support sessions', async () => {
+    consoleRoutes();
+    renderConsole(as('finance'), `/stores/${store}`);
+    expect(await screen.findByRole('form', { name: 'تسجيل INV-2026-000184 مدفوعة' })).toBeInTheDocument();
+    expect(screen.getByText('بيانات التواصل للمالك وفريق العمليات فقط.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'جلسة دعم بحساب صاحب المتجر' })).not.toBeInTheDocument();
+    expect(screen.queryByText('منطقة خطرة: إيقاف المتجر')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'استثناء جديد' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ضمّه للوكالة' })).toBeInTheDocument();
+  });
+
+  it('shows operations the store’s actions but not its billing ones', async () => {
+    consoleRoutes();
+    renderConsole(as('operations'), `/stores/${store}`);
+    expect(await screen.findByRole('region', { name: 'جلسة دعم بحساب صاحب المتجر' })).toBeInTheDocument();
+    expect(await screen.findByText('mona@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'تسجيل INV-2026-000184 مدفوعة' })).not.toBeInTheDocument();
+    expect(screen.getByText('ضمّ المتجر لوكالة للمالك والمالية.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'آخر إجراءات الأدمن على هذا المتجر' })).not.toBeInTheDocument();
+  });
+
+  it('lets a viewer read an editor page with its form disabled', async () => {
+    consoleRoutes();
+    renderConsole(as('viewer'), '/founding');
+    expect(await screen.findByRole('note')).toHaveTextContent('عرض فقط');
+    const form = await screen.findByRole('form', { name: /البرنامج|التجار المؤسسون/ });
+    for (const b of within(form).getAllByRole('button')) expect(b).toBeDisabled();
   });
 });
