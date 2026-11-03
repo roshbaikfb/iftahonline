@@ -73,6 +73,15 @@ function consoleRoutes(over: Record<string, (c: Call) => { status: number; body?
       },
     }),
     'GET /admin/v1/founding': () => ({ status: 200, body: { program: { enabled: true, seats: 100, discount_bps: 2000 }, members: [] } }),
+    [`GET /admin/v1/stores/${store}/profile`]: () => ({
+      status: 200,
+      body: {
+        owner: { name: 'منى أحمد', email: 'mona@example.com', email_verified: false, phone: '+201012345678', last_seen_at: '2026-11-02T10:00:00Z' },
+        orders_30d: 37,
+        last_order_at: '2026-11-03T08:00:00Z',
+        products: 1200,
+      },
+    }),
     'GET /admin/v1/agencies': () => ({ status: 200, body: { items: [{ id: 'AG1', name: 'وكالة النيل', currency: 'EGP', plan_code: 'agency', stores: 12, created_at: '' }] } }),
     ...over,
   });
@@ -163,6 +172,15 @@ describe('console', () => {
     expect(body(`/admin/v1/stores/${store}/impersonate`)).toEqual({ reason: 'تذكرة 4821', minutes: 30, write: false });
     expect(await screen.findByRole('link', { name: 'افتح جلسة الدعم في الداشبورد' })).toHaveAttribute('href', 'https://app.iftahonline.com/impersonate#code=C');
 
+    const owner = screen.getByRole('region', { name: 'صاحب المتجر' });
+    expect(within(owner).getByText('منى أحمد')).toBeInTheDocument();
+    expect(within(owner).getByRole('link', { name: 'mona@example.com' })).toHaveAttribute('href', 'mailto:mona@example.com');
+    expect(within(owner).getByText(/غير مؤكد/)).toBeInTheDocument();
+    expect(within(owner).getByRole('link', { name: 'اتصال' })).toHaveAttribute('href', 'tel:+201012345678');
+    expect(within(owner).getByRole('link', { name: 'واتساب' })).toHaveAttribute('href', 'https://wa.me/201012345678');
+    const numbers = screen.getByRole('region', { name: 'أرقام المتجر' });
+    expect(numbers).toHaveTextContent(/طلبات آخر 30 يومًا\s*37/);
+    expect(numbers).toHaveTextContent(/المنتجات\s*1,200/);
     const history = screen.getByRole('region', { name: 'آخر إجراءات الأدمن على هذا المتجر' });
     expect(within(history).getByRole('link', { name: 'كل سجله ←' })).toHaveAttribute('href', `/audit?store=${store}`);
     expect(calls.find((c) => c.path === '/admin/v1/audit-log')?.search.get('store')).toBe(store);
@@ -211,10 +229,18 @@ describe('console', () => {
       'GET /admin/v1/features': () => ({ status: 200, body: { items: [{ key: 'products', kind: 'count', name_ar: 'المنتجات', name_en: 'Products', sort: 30, enforced: true }] } }),
       [`PUT /admin/v1/stores/${store}/entitlements/products`]: () => ({ status: 200, body: {} }),
       [`POST /admin/v1/stores/${store}/reactivate`]: () => ({ status: 200, body: {} }),
+      [`GET /admin/v1/stores/${store}/profile`]: () => ({ status: 200, body: { owner: { name: 'منى', email: 'm@x.com', email_verified: true }, orders_30d: 0, products: 0 } }),
     });
     renderConsole({ kind: 'signed-in', admin }, `/stores/${store}`);
     const user = userEvent.setup();
     const body = (path: string) => calls.find((c) => c.method !== 'GET' && c.path === path)?.body;
+
+    // No phone, no sign-in, no order yet: each said so.
+    const owner = await screen.findByRole('region', { name: 'صاحب المتجر' });
+    expect(await within(owner).findByText('لم يضف رقمًا')).toBeInTheDocument();
+    expect(within(owner).getByText('لم يدخل بعد')).toBeInTheDocument();
+    expect(within(owner).queryByText(/غير مؤكد/)).toBeNull();
+    expect(screen.getByRole('region', { name: 'أرقام المتجر' })).toHaveTextContent('لا طلبات بعد');
 
     await user.click(await screen.findByRole('button', { name: 'استثناء جديد' }));
     const add = screen.getByRole('dialog', { name: 'استثناء جديد لـ «متجر الأناقة»' });
