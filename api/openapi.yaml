@@ -2133,6 +2133,31 @@ paths:
               schema: { $ref: "#/components/schemas/AdminHealth" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/metrics:
+    get:
+      tags: [admin]
+      operationId: adminGetMetrics
+      summary: Revenue and growth for the console's home
+      description: |
+        Monthly recurring revenue by currency: every active subscription
+        that renews, at the price its next renewal is charged (the plan
+        and cycle it renews into, in its account's currency, a founding
+        member's discount taken off), an annual one divided by 12, an
+        agency's flat price once per agency, before VAT. Trials, past-due
+        subscriptions, ones cancelled at the period's end, and
+        pay-as-you-sell fees are not in it (ADR-0075). New stores of the
+        last 7 and 30 days, and per Cairo day. A section that could not be
+        read is absent and named in `errors`.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The figures.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminMetrics" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/agencies:
     get:
       tags: [admin]
@@ -5827,6 +5852,42 @@ components:
         errors:
           type: array
           items: { type: string, enum: [database, redis, stores, billing, jobs] }
+    AdminMetrics:
+      type: object
+      required: [computed_at, errors]
+      properties:
+        computed_at: { type: string, format: date-time }
+        revenue:
+          type: array
+          description: One entry per currency with paying accounts, EGP then SAR then AED.
+          items: { $ref: "#/components/schemas/AdminRevenue" }
+        new_stores: { $ref: "#/components/schemas/AdminNewStores" }
+        errors:
+          type: array
+          items: { type: string, enum: [revenue, new_stores] }
+    AdminRevenue:
+      type: object
+      required: [currency, mrr_minor, accounts]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        mrr_minor: { type: integer, format: int64, description: Monthly recurring revenue in minor units, before VAT. }
+        accounts: { type: integer, format: int64, description: The paying accounts it comes from (an agency is one). }
+    AdminNewStores:
+      type: object
+      required: [last_7d, last_30d, daily]
+      properties:
+        last_7d: { type: integer, format: int64, description: Stores created in the last 7 Cairo days, today included. }
+        last_30d: { type: integer, format: int64 }
+        daily:
+          type: array
+          description: The last 30 Cairo days, oldest first, today last.
+          items: { $ref: "#/components/schemas/AdminDayCount" }
+    AdminDayCount:
+      type: object
+      required: [day, count]
+      properties:
+        day: { type: string, format: date }
+        count: { type: integer, format: int64 }
     AdminStoreCounts:
       type: object
       required: [active, held, suspended, closed, total]

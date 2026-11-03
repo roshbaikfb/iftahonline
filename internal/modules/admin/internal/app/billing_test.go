@@ -31,6 +31,28 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+// TestMetrics: the console's revenue and new stores (ADR-0075), and the
+// page still answering without billing.
+func TestMetrics(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, _ := f.signedIn(t)
+	f.createStore(t)
+
+	m, err := f.svc.Metrics(ctx)
+	if err != nil || len(m.Errors) != 0 || m.Revenue == nil || m.NewStores == nil || m.NewStores.Last30 < 1 || len(m.NewStores.Daily) != 30 || m.ComputedAt.IsZero() {
+		t.Fatalf("metrics = %+v, %v", m, err)
+	}
+	if _, err = f.svc.Metrics(t.Context()); !errs.Is(err, errs.KindUnauthenticated) {
+		t.Fatalf("not signed in: %v", err)
+	}
+	bare := f.withoutBilling()
+	m, err = bare.Metrics(ctx)
+	if err != nil || m.Revenue != nil || m.NewStores == nil || !slices.Equal(m.Errors, []string{"revenue"}) {
+		t.Fatalf("without billing = %+v, %v", m, err)
+	}
+}
+
 func TestStoreBillingAndSettle(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

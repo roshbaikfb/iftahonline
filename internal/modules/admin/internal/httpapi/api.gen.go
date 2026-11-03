@@ -252,6 +252,24 @@ func (e AdminHealthErrors) Valid() bool {
 	}
 }
 
+// Defines values for AdminMetricsErrors.
+const (
+	NewStores AdminMetricsErrors = "new_stores"
+	Revenue   AdminMetricsErrors = "revenue"
+)
+
+// Valid indicates whether the value is a known member of the AdminMetricsErrors enum.
+func (e AdminMetricsErrors) Valid() bool {
+	switch e {
+	case NewStores:
+		return true
+	case Revenue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminPlanFeeCurrency.
 const (
 	AdminPlanFeeCurrencyAED AdminPlanFeeCurrency = "AED"
@@ -330,6 +348,27 @@ func (e AdminPlanPriceCycle) Valid() bool {
 	case AdminPlanPriceCycleAnnual:
 		return true
 	case AdminPlanPriceCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminRevenueCurrency.
+const (
+	AdminRevenueCurrencyAED AdminRevenueCurrency = "AED"
+	AdminRevenueCurrencyEGP AdminRevenueCurrency = "EGP"
+	AdminRevenueCurrencySAR AdminRevenueCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminRevenueCurrency enum.
+func (e AdminRevenueCurrency) Valid() bool {
+	switch e {
+	case AdminRevenueCurrencyAED:
+		return true
+	case AdminRevenueCurrencyEGP:
+		return true
+	case AdminRevenueCurrencySAR:
 		return true
 	default:
 		return false
@@ -963,6 +1002,12 @@ type AdminBillingHealth struct {
 	Trialing        int64 `json:"trialing"`
 }
 
+// AdminDayCount defines model for AdminDayCount.
+type AdminDayCount struct {
+	Count int64              `json:"count"`
+	Day   openapi_types.Date `json:"day"`
+}
+
 // AdminDuplicatePayment defines model for AdminDuplicatePayment.
 type AdminDuplicatePayment struct {
 	AmountMinor int64                         `json:"amount_minor"`
@@ -1136,6 +1181,29 @@ type AdminLoginRequest struct {
 	Password string `json:"password"`
 }
 
+// AdminMetrics defines model for AdminMetrics.
+type AdminMetrics struct {
+	ComputedAt time.Time            `json:"computed_at"`
+	Errors     []AdminMetricsErrors `json:"errors"`
+	NewStores  *AdminNewStores      `json:"new_stores,omitempty"`
+
+	// Revenue One entry per currency with paying accounts, EGP then SAR then AED.
+	Revenue *[]AdminRevenue `json:"revenue,omitempty"`
+}
+
+// AdminMetricsErrors defines model for AdminMetrics.Errors.
+type AdminMetricsErrors string
+
+// AdminNewStores defines model for AdminNewStores.
+type AdminNewStores struct {
+	// Daily The last 30 Cairo days, oldest first, today last.
+	Daily   []AdminDayCount `json:"daily"`
+	Last30d int64           `json:"last_30d"`
+
+	// Last7d Stores created in the last 7 Cairo days
+	Last7d int64 `json:"last_7d"`
+}
+
 // AdminOverride defines model for AdminOverride.
 type AdminOverride struct {
 	// Active False once expired.
@@ -1265,6 +1333,19 @@ type AdminRefundInput struct {
 	// Reference The gateway's refund.
 	Reference string `json:"reference"`
 }
+
+// AdminRevenue defines model for AdminRevenue.
+type AdminRevenue struct {
+	// Accounts The paying accounts it comes from (an agency is one).
+	Accounts int64                `json:"accounts"`
+	Currency AdminRevenueCurrency `json:"currency"`
+
+	// MrrMinor Monthly recurring revenue in minor units
+	MrrMinor int64 `json:"mrr_minor"`
+}
+
+// AdminRevenueCurrency defines model for AdminRevenue.Currency.
+type AdminRevenueCurrency string
 
 // AdminSettleInput defines model for AdminSettleInput.
 type AdminSettleInput struct {
@@ -2088,6 +2169,9 @@ type ServerInterface interface {
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(w http.ResponseWriter, r *http.Request)
+	// AdminGetMetrics Revenue and growth for the console's home
+	// (GET /admin/v1/metrics)
+	AdminGetMetrics(w http.ResponseWriter, r *http.Request)
 	// AdminListPlans Every version of every plan
 	// (GET /admin/v1/plans)
 	AdminListPlans(w http.ResponseWriter, r *http.Request)
@@ -2608,6 +2692,20 @@ func (siw *ServerInterfaceWrapper) AdminMe(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetMetrics operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetMetrics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetMetrics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3644,6 +3742,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/metrics", wrapper.AdminGetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminListAgencies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminCreateAgency)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}", wrapper.AdminGetAgency)
@@ -4498,6 +4597,44 @@ type AdminMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminMedefaultApplicationProblemPlusJSONResponse) VisitAdminMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetMetricsRequestObject struct {
+}
+
+type AdminGetMetricsResponseObject interface {
+	VisitAdminGetMetricsResponse(w http.ResponseWriter) error
+}
+
+type AdminGetMetrics200JSONResponse AdminMetrics
+
+func (response AdminGetMetrics200JSONResponse) VisitAdminGetMetricsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetMetricsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetMetricsdefaultApplicationProblemPlusJSONResponse) VisitAdminGetMetricsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5885,6 +6022,9 @@ type StrictServerInterface interface {
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(ctx context.Context, request AdminMeRequestObject) (AdminMeResponseObject, error)
+	// AdminGetMetrics Revenue and growth for the console's home
+	// (GET /admin/v1/metrics)
+	AdminGetMetrics(ctx context.Context, request AdminGetMetricsRequestObject) (AdminGetMetricsResponseObject, error)
 	// AdminListPlans Every version of every plan
 	// (GET /admin/v1/plans)
 	AdminListPlans(ctx context.Context, request AdminListPlansRequestObject) (AdminListPlansResponseObject, error)
@@ -6618,6 +6758,30 @@ func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminMeResponseObject); ok {
 		if err := validResponse.VisitAdminMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetMetrics operation middleware
+func (sh *strictHandler) AdminGetMetrics(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetMetricsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetMetrics(ctx, request.(AdminGetMetricsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetMetrics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetMetricsResponseObject); ok {
+		if err := validResponse.VisitAdminGetMetricsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

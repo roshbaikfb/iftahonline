@@ -34,6 +34,33 @@ func (h *Handlers) AdminHealth(ctx context.Context, _ AdminHealthRequestObject) 
 	return out, nil
 }
 
+// AdminGetMetrics implements StrictServerInterface.
+func (h *Handlers) AdminGetMetrics(ctx context.Context, _ AdminGetMetricsRequestObject) (AdminGetMetricsResponseObject, error) {
+	m, err := h.svc.Metrics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := AdminGetMetrics200JSONResponse{ComputedAt: m.ComputedAt, Errors: make([]AdminMetricsErrors, len(m.Errors))}
+	for i, e := range m.Errors {
+		out.Errors[i] = AdminMetricsErrors(e)
+	}
+	if m.Revenue != nil {
+		rev := make([]AdminRevenue, len(m.Revenue))
+		for i, r := range m.Revenue {
+			rev[i] = AdminRevenue{Currency: AdminRevenueCurrency(r.Currency), MrrMinor: r.MRRMinor, Accounts: r.Accounts}
+		}
+		out.Revenue = &rev
+	}
+	if n := m.NewStores; n != nil {
+		daily := make([]AdminDayCount, len(n.Daily))
+		for i, d := range n.Daily {
+			daily[i] = AdminDayCount{Day: openapi_types.Date{Time: d.Day}, Count: d.Count}
+		}
+		out.NewStores = &AdminNewStores{Last7d: n.Last7, Last30d: n.Last30, Daily: daily}
+	}
+	return out, nil
+}
+
 // AdminGetStoreBilling implements StrictServerInterface.
 func (h *Handlers) AdminGetStoreBilling(ctx context.Context, req AdminGetStoreBillingRequestObject) (AdminGetStoreBillingResponseObject, error) {
 	id, err := storeID(req.StoreId)
