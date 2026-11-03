@@ -34,6 +34,30 @@ func current(ctx context.Context) (ulid.ID, error) {
 	return id.ID, nil
 }
 
+// Activity is the current store's orders lately, for the console.
+type Activity struct {
+	Since       int64     // placed since the time asked
+	LastOrderAt time.Time // zero: never
+}
+
+// StoreActivity counts the current store's orders since since and finds
+// its last one, in one query on the primary key.
+func StoreActivity(ctx context.Context, tx Tx, since time.Time) (Activity, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return Activity{}, err
+	}
+	r, err := ordersdb.New(tx).StoreActivity(ctx, ordersdb.StoreActivityParams{Since: since, StoreID: store})
+	if err != nil {
+		return Activity{}, fmt.Errorf("orders store: activity: %w", err)
+	}
+	a := Activity{Since: r.SinceCount}
+	if r.LastOrderAt.Year() > 1 {
+		a.LastOrderAt = r.LastOrderAt
+	}
+	return a, nil
+}
+
 // Insert writes a new order with its lines.
 func Insert(ctx context.Context, tx Tx, o domain.Order, linesHash [32]byte) error {
 	store, err := current(ctx)

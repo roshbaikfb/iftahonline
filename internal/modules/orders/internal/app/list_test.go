@@ -15,6 +15,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -350,5 +351,47 @@ func TestBefore(t *testing.T) {
 		if _, err := f.svc.Before(f.ctxA, ulid.ID{}, bad); err == nil {
 			t.Fatalf("limit %d must fail", bad)
 		}
+	}
+}
+
+// TestStoreActivity: the console's count of a store's orders since a
+// time and its last order, on the store's own orders only.
+func TestStoreActivity(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	v := f.product(t, f.storeA, "منتج", 1000, 100)
+	place := func() domain.Order {
+		t.Helper()
+		p, err := f.svc.PlaceOrder(f.ctxA, merchantOrder(domain.LineInput{VariantID: v, Qty: 1}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Order
+	}
+	first := place()
+	f.env.Advance(40 * 24 * time.Hour)
+	place()
+	last := place()
+
+	read := func(ctx context.Context, since time.Time) store.Activity {
+		t.Helper()
+		var a store.Activity
+		if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) (txErr error) {
+			a, txErr = store.StoreActivity(ctx, tx, since)
+			return txErr
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	got := read(f.ctxA, last.CreatedAt.Add(-30*24*time.Hour))
+	if got.Since != 2 || !got.LastOrderAt.Equal(last.CreatedAt) {
+		t.Fatalf("activity = %+v; want 2 since, last %v", got, last.CreatedAt)
+	}
+	if all := read(f.ctxA, first.CreatedAt); all.Since != 3 {
+		t.Fatalf("all = %+v", all)
+	}
+	if none := read(f.ctxB, first.CreatedAt); none.Since != 0 || !none.LastOrderAt.IsZero() {
+		t.Fatalf("store B = %+v", none)
 	}
 }

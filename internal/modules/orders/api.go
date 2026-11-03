@@ -6,11 +6,13 @@ package orders
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/orders/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -168,6 +170,16 @@ type Shop interface {
 // CodeOf is the short reference of an order shown to merchants and
 // shoppers (Order.Code).
 func CodeOf(id ulid.ID) string { return domain.CodeOf(id) }
+
+// Activity is a store's orders lately, for the console: placed since a
+// time, and when the last one was.
+type Activity = store.Activity
+
+// ActivityTx reads the store-in-ctx's orders since since, and its last
+// order's time, in its tenant transaction tx (one query).
+func ActivityTx(ctx context.Context, tx pgx.Tx, since time.Time) (Activity, error) {
+	return store.StoreActivity(ctx, tx, since)
+}
 
 // MaxBestsellers is the most products Bestsellers returns.
 const MaxBestsellers = app.MaxBestsellers
