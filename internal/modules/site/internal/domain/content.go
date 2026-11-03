@@ -186,4 +186,6 @@ type Content struct {
 	FAQs         []FAQ
 	People       []Person
 	Testimonials []Testimonial
+	// Guides are the published, newest first, whole.
+	Guides []Guide
 }

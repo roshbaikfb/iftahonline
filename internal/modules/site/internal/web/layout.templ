@@ -17,7 +17,9 @@ templ layout(p *pageCtx, body templ.Component) {
 			} else {
 				<link rel="canonical" href={ p.url(p.l) }/>
 				<link rel="alternate" hreflang="ar" href={ p.url(arabic) }/>
-				<link rel="alternate" hreflang="en" href={ p.url(english) }/>
+				if !p.arabicOnly {
+					<link rel="alternate" hreflang="en" href={ p.url(english) }/>
+				}
 				<link rel="alternate" hreflang="x-default" href={ p.url(arabic) }/>
 				<meta property="og:type" content="website"/>
 				<meta property="og:site_name" content={ p.c.brand }/>
@@ -82,7 +84,7 @@ templ brand(p *pageCtx) {
 
 // langSwitch links the same page in the other language.
 templ langSwitch(p *pageCtx) {
-	<a class="lang" href={ templ.SafeURL(p.other().at(p.path)) } hreflang={ p.t.OtherLang } lang={ p.t.OtherLang }>{ p.t.OtherLangName }</a>
+	<a class="lang" href={ templ.SafeURL(p.switchTo()) } hreflang={ p.t.OtherLang } lang={ p.t.OtherLang }>{ p.t.OtherLangName }</a>
 }
 
 templ siteHeader(p *pageCtx) {
@@ -92,6 +94,9 @@ templ siteHeader(p *pageCtx) {
 			<nav class="nav" aria-label={ p.t.MainMenu }>
 				<a href={ templ.SafeURL(p.l.at("/features")) } { current(p.path, "/features")... }>{ p.t.Features }</a>
 				<a href={ templ.SafeURL(p.l.at("/pricing")) } { current(p.path, "/pricing")... }>{ p.t.Pricing }</a>
+				if p.guides {
+					<a href={ templ.SafeURL(p.l.at("/guides")) } { current(p.path, "/guides")... }>{ p.t.Guides }</a>
+				}
 				<a href={ templ.SafeURL(p.l.at("/faq")) } { current(p.path, "/faq")... }>{ p.t.FAQ }</a>
 				<a href={ templ.SafeURL(p.l.at("/about")) } { current(p.path, "/about")... }>{ p.t.About }</a>
 			</nav>
@@ -107,6 +112,9 @@ templ siteHeader(p *pageCtx) {
 				<nav aria-label={ p.t.Menu }>
 					<a href={ templ.SafeURL(p.l.at("/features")) }>{ p.t.Features }</a>
 					<a href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.Pricing }</a>
+					if p.guides {
+						<a href={ templ.SafeURL(p.l.at("/guides")) }>{ p.t.Guides }</a>
+					}
 					<a href={ templ.SafeURL(p.l.at("/faq")) }>{ p.t.FAQ }</a>
 					<a href={ templ.SafeURL(p.l.at("/about")) }>{ p.t.About }</a>
 					<a href={ templ.SafeURL(p.login) }>{ p.t.SignIn }</a>
@@ -133,6 +141,9 @@ templ siteFooter(p *pageCtx) {
 			<nav aria-label={ p.t.Platform }>
 				<strong>{ p.t.Platform }</strong>
 				<a href={ templ.SafeURL(p.l.at("/pricing")) }>{ p.t.Pricing }</a>
+				if p.guides {
+					<a href={ templ.SafeURL(p.l.at("/guides")) }>{ p.t.Guides }</a>
+				}
 				<a href={ templ.SafeURL(p.l.at("/faq")) }>{ p.t.FAQ }</a>
 				<a href={ templ.SafeURL(p.l.at("/about")) }>{ p.t.About }</a>
 			</nav>

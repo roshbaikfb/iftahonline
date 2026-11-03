@@ -2258,6 +2258,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/site/guides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The site's guides, newest first, without their bodies */
+        get: operations["adminListSiteGuides"];
+        put?: never;
+        /**
+         * Write a guide
+         * @description Markdown, Arabic required and English optional (as one). Published
+         *     now, it is dated now. At most 200 guides. Recorded in the admin
+         *     log once saved.
+         */
+        post: operations["adminCreateSiteGuide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/guides/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render Markdown as the site would
+         * @description Safe HTML (no raw HTML, no script links); nothing is saved.
+         */
+        post: operations["adminPreviewSiteGuide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/site/guides/{guide_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guide_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        /** One guide, whole */
+        get: operations["adminGetSiteGuide"];
+        /**
+         * Rewrite, publish or unpublish a guide
+         * @description It keeps the date it was first published. Recorded in the admin log once saved.
+         */
+        put: operations["adminUpdateSiteGuide"];
+        post?: never;
+        /** Remove a guide and its cover */
+        delete: operations["adminDeleteSiteGuide"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/duplicates": {
         parameters: {
             query?: never;
@@ -4792,6 +4859,58 @@ export interface components {
             lost_at?: string;
             /** @enum {string} */
             lost_reason?: "cancelled" | "unpaid";
+        };
+        AdminSiteGuideSummary: {
+            id: components["schemas"]["ULID"];
+            slug: string;
+            /** @enum {string} */
+            status: "draft" | "published";
+            title_ar: string;
+            summary_ar: string;
+            has_en: boolean;
+            cover_url: string;
+            /**
+             * Format: date-time
+             * @description Absent until first published.
+             */
+            published_at?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminSiteGuide: {
+            id: components["schemas"]["ULID"];
+            slug: string;
+            /** @enum {string} */
+            status: "draft" | "published";
+            title_ar: string;
+            summary_ar: string;
+            /** @description Markdown. */
+            body_ar: string;
+            title_en: string;
+            summary_en: string;
+            body_en: string;
+            cover_url: string;
+            /** Format: date-time */
+            published_at?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminSiteGuideInput: {
+            /** @description The address: /guides/{slug}. */
+            slug: string;
+            /** @enum {string} */
+            status: "draft" | "published";
+            title_ar: string;
+            summary_ar: string;
+            body_ar: string;
+            title_en?: string;
+            summary_en?: string;
+            body_en?: string;
+            /** @description A new cover */
+            upload_key?: string;
+            remove_cover?: boolean;
+            /** @description Kept in the admin audit log. */
+            reason: string;
         };
         AdminDuplicatePayment: {
             id: components["schemas"]["ULID"];
@@ -10119,6 +10238,156 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminFoundingProgram"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListSiteGuides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every guide. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminSiteGuideSummary"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreateSiteGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteGuideInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteGuide"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminPreviewSiteGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    markdown: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The HTML. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        html: string;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetSiteGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guide_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guide. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteGuide"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateSiteGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guide_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSiteGuideInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSiteGuide"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteSiteGuide: {
+        parameters: {
+            query: {
+                reason: string;
+            };
+            header?: never;
+            path: {
+                guide_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

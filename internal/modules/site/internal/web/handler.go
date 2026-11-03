@@ -19,6 +19,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/markdown"
 )
 
 //go:embed assets/dist/site.css
@@ -60,6 +61,7 @@ type Deps struct {
 // Site serves the platform's website.
 type Site struct {
 	d     Deps
+	md    *markdown.Renderer
 	plans *planCache
 	seats *seatsCache
 	css   string // the inline stylesheet: the brand faces, then site.css
@@ -84,7 +86,7 @@ func New(d Deps) (*Site, error) {
 	}
 	csp := "default-src 'none'; style-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; font-src 'self'; img-src " + img + "; " +
 		"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-	return &Site{d: d, plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, seats: &seatsCache{src: d.Plans, now: d.Now},
+	return &Site{d: d, md: markdown.New(), plans: &planCache{src: d.Plans, now: d.Now, got: map[string]cachedOffers{}}, seats: &seatsCache{src: d.Plans, now: d.Now},
 		css: css, csp: csp}, nil
 }
 
@@ -127,7 +129,7 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.text(w, r, "text/plain; charset=utf-8", s.robots())
 		return
 	case "/sitemap.xml":
-		s.text(w, r, "application/xml; charset=utf-8", s.sitemap())
+		s.text(w, r, "application/xml; charset=utf-8", s.sitemap(r.Context()))
 		return
 	case "/llms.txt":
 		s.text(w, r, "text/markdown; charset=utf-8", s.llms(r.Context(), false))
@@ -158,6 +160,8 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p := s.page(r.Context(), l, "/about", l.t.AboutTitle, l.t.AboutDesc)
 		p.jsonLD = []any{s.organizationLD(p), s.aboutLD(p), s.breadcrumbLD(l, crumb{l.t.About, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, aboutPage(p))
+	case "/guides":
+		s.guidesIndex(w, r, l)
 	case "/privacy", "/terms":
 		lp := l.c.privacy
 		if path == "/terms" {
@@ -167,6 +171,9 @@ func (s *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.jsonLD = []any{s.breadcrumbLD(l, crumb{lp.name, path})}
 		s.write(w, r, http.StatusOK, cachePage, p, legalPageView(p, lp))
 	default:
+		if slug, ok := isGuide(path); ok && s.guide(w, r, l, slug) {
+			return
+		}
 		if slug, ok := strings.CutPrefix(path, "/features/"); ok {
 			if f, ok := l.c.featureBySlug(slug); ok {
 				s.feature(w, r, l, f)
@@ -276,6 +283,10 @@ type pageCtx struct {
 	intl, intlDisplay string // the international WhatsApp's link
 	socials           []socialLink
 	faqs              []faq // in the page's language
+	// arabicOnly is a page with no English version (a guide not
+	// translated): no English alternate. guides says the language has
+	// published guides (the menu links them).
+	arabicOnly, guides bool
 	// founding is the founding-merchants program while it invites
 	// merchants (home and pricing); nil hides its section.
 	founding *foundingView
@@ -340,6 +351,7 @@ func (s *Site) page(ctx context.Context, l *language, path, title, description s
 		p.story = domain.Paragraphs(ct.Identity.Story.En)
 	}
 	p.founders, p.team = s.peopleIn(l, ct.People)
+	p.guides = len(guidesIn(l, ct.Guides)) > 0
 	for _, k := range domain.Socials() {
 		if u := set.Socials[k]; u != "" {
 			p.socials = append(p.socials, socialLink{socialNames[k], u})
@@ -397,6 +409,15 @@ func (p *pageCtx) other() *language {
 		return arabic
 	}
 	return english
+}
+
+// switchTo is the page in the other language: an Arabic-only page sends
+// English readers to the English guides.
+func (p *pageCtx) switchTo() string {
+	if p.arabicOnly && p.l == arabic {
+		return english.at("/guides")
+	}
+	return p.other().at(p.path)
 }
 
 func (s *Site) headers(w http.ResponseWriter, cacheControl string) {

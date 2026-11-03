@@ -55,14 +55,15 @@ var arCopy = siteCopy{ //nolint:gochecknoglobals // constant copy
 
 // texts are a language's short words: labels, headings, buttons, titles.
 type texts struct {
-	Skip, ChatUs, StartFree, SignIn, Menu, MainMenu, Features, Pricing, FAQ, About, Home, Crumbs string
-	FooterTagline, Platform, Contact, WhatsApp, Rights, Legal, OtherLang, OtherLangName          string
-	Arrow, WhatsAppHello                                                                         string
-	WhatsAppIntl, Email, FollowUs, CompanyNo                                                     string
-	OurStory, FoundersEyebrow, FoundersH2, CoFounder, TeamEyebrow, TeamH2                        string
-	ReviewsEyebrow, ReviewsH2, WatchVideo, VideoLead                                             string
-	FoundingTag, FoundingH2, FoundingLead, FoundingJoin, FoundingFine, SeatsLeft, SeatsOf        string
-	FoundingTerms                                                                                [5]string
+	Skip, ChatUs, StartFree, SignIn, Menu, MainMenu, Features, Pricing, FAQ, About, Home, Crumbs        string
+	FooterTagline, Platform, Contact, WhatsApp, Rights, Legal, OtherLang, OtherLangName                 string
+	Arrow, WhatsAppHello                                                                                string
+	WhatsAppIntl, Email, FollowUs, CompanyNo                                                            string
+	OurStory, FoundersEyebrow, FoundersH2, CoFounder, TeamEyebrow, TeamH2                               string
+	ReviewsEyebrow, ReviewsH2, WatchVideo, VideoLead                                                    string
+	FoundingTag, FoundingH2, FoundingLead, FoundingJoin, FoundingFine, SeatsLeft, SeatsOf               string
+	FoundingTerms                                                                                       [5]string
+	Guides, GuidesTitle, GuidesDesc, GuidesH1, GuidesLead, MoreGuides, PublishedOn, UpdatedOn, NoGuides string
 
 	HomeTitle, HomeDesc, PricingTitle, PricingDesc, FAQTitle, FAQDesc string
 	FeaturesTitle, FeaturesDesc, AboutTitle, AboutDesc, NotFoundTitle string
@@ -114,6 +115,10 @@ var arTexts = texts{ //nolint:gochecknoglobals // constant copy
 	OurStory: "قصتنا", FoundersEyebrow: "المؤسسون", FoundersH2: "من أسّس افتح أونلاين", CoFounder: "شريك مؤسس",
 	TeamEyebrow: "فريق العمل", TeamH2: "فريق افتح أونلاين", ReviewsEyebrow: "آراء التجار", ReviewsH2: "ماذا يقول التجار عن افتح أونلاين",
 	WatchVideo: "شاهد كيف تعمل افتح أونلاين", VideoLead: "جولة سريعة في المنصة، من إنشاء المتجر إلى أول طلب مؤكد.",
+	Guides: "الأدلة", GuidesTitle: "أدلة التجارة الإلكترونية والدفع عند الاستلام | افتح أونلاين",
+	GuidesDesc: "أدلة عملية لتجار مصر والخليج: تقليل الطلبات الوهمية، وتأكيد الطلبات على واتساب، وحساب الربح الصافي، والشحن والتحصيل، وبدء متجرك الإلكتروني.",
+	GuidesH1:   "أدلة لتاجر الدفع عند الاستلام", GuidesLead: "خطوات عملية من واقع السوق، لتبيع أكثر وتخسر أقل.",
+	MoreGuides: "أدلة أخرى", PublishedOn: "نُشر في", UpdatedOn: "آخر تحديث", NoGuides: "لا توجد أدلة منشورة بعد.",
 	FoundingTag: "برنامج التجار المؤسسين", FoundingH2: "كن من أول %d تاجر، واحتفظ بخصم %s مدى الحياة",
 	FoundingLead: "للتجار الذين يشتركون الآن في باقة شهرية أو سنوية. المقاعد محدودة، ولا تعود لأحد بعد حجزها.",
 	FoundingJoin: "انضم الآن", SeatsLeft: "مقعد متبقٍ", SeatsOf: "من %d مقعد",

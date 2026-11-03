@@ -39,6 +39,10 @@ type (
 	Testimonial = domain.Testimonial
 	// Upload is where the console's browser posts an image.
 	Upload = app.Upload
+	// Guide is one of the site's guides (S4c).
+	Guide = domain.Guide
+	// GuideStatus is a guide's draft or published.
+	GuideStatus = domain.GuideStatus
 )
 
 // The site's images and the kinds of people.
@@ -47,6 +51,8 @@ const (
 	ShareImage = domain.ShareImage
 	Founder    = domain.Founder
 	Team       = domain.Team
+	Draft      = domain.Draft
+	Published  = domain.Published
 )
 
 // The networks.
@@ -101,6 +107,18 @@ type Console interface {
 	DeleteTestimonial(ctx context.Context, id ulid.ID) error
 	// ImageURL is an image's signed URL for the console's thumbnails.
 	ImageURL(key string, size int, format string) string
+
+	// Guides are every guide, newest first, without their bodies; Guide
+	// is one, whole.
+	Guides(ctx context.Context) ([]Guide, error)
+	Guide(ctx context.Context, id ulid.ID) (Guide, error)
+	// CreateGuide and UpdateGuide take an uploaded cover as the people's
+	// photos; a guide published is dated then, and keeps that date.
+	CreateGuide(ctx context.Context, g Guide, uploadKey string) (Guide, error)
+	UpdateGuide(ctx context.Context, g Guide, uploadKey string, removeCover bool) (Guide, error)
+	DeleteGuide(ctx context.Context, id ulid.ID) error
+	// Preview is Markdown as the site would show it (safe HTML).
+	Preview(ctx context.Context, markdown string) (string, error)
 }
 
 var _ Console = (*app.Service)(nil)

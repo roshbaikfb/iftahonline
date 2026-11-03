@@ -261,6 +261,22 @@ address { font-style: normal; color: var(--muted); text-align: left; align-self:
 .seats progress::-webkit-progress-value { background: #4ade80; }
 .seats progress::-moz-progress-bar { background: #4ade80; }
 
+/* Guides (S4c) */
+.guide-card img { width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 14px; margin-bottom: 6px; }
+.guide-card h2 { font-size: 21px; letter-spacing: 0; }
+.guide-cover { width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 20px; margin-bottom: 28px; }
+.guide-body { line-height: 1.85; }
+.guide-body h2 { font-size: 28px; margin-top: 44px; }
+.guide-body h3 { font-size: 21px; margin-top: 30px; }
+.guide-body p, .guide-body li { font-size: 18px; color: #1e293b; }
+.guide-body ul, .guide-body ol { padding-inline-start: 24px; display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.guide-body a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.guide-body blockquote { margin: 20px 0; padding: 14px 20px; border-inline-start: 4px solid var(--green); background: var(--soft); border-radius: 10px; }
+.guide-body blockquote p { margin: 0; }
+.guide-body table { min-width: 0; margin: 18px 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: block; overflow-x: auto; }
+.guide-body code { font-family: ui-monospace, monospace; background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size: .92em; }
+.guide-body hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+
 /* Tools, steps, trust */
 .bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .tile { padding: 28px; border-radius: 20px; background: var(--soft); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
@@ -382,6 +398,8 @@ tbody th { font-weight: 500; }
   .feature-text h2, .story h2 { font-size: 26px; }
   .founder { flex-direction: column; padding: 22px; }
   .founding { padding: 24px 18px; }
+  .guide-body h2 { font-size: 24px; }
+  .guide-body p, .guide-body li { font-size: 17px; }
   .founding-text h2 { font-size: 26px; }
   .tile.wide { grid-column: auto; }
   .move { padding: 24px 18px; }

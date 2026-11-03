@@ -272,3 +272,63 @@ func (s *Service) DeleteSiteTestimonial(ctx context.Context, id ulid.ID, rawReas
 	}
 	return c.DeleteTestimonial(ctx, id)
 }
+
+// SiteGuides are every guide, newest first, without their bodies.
+func (s *Service) SiteGuides(ctx context.Context) ([]site.Guide, error) {
+	_, c, err := s.site(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.Guides(ctx)
+}
+
+// SiteGuide is one guide, whole.
+func (s *Service) SiteGuide(ctx context.Context, id ulid.ID) (site.Guide, error) {
+	_, c, err := s.site(ctx)
+	if err != nil {
+		return site.Guide{}, err
+	}
+	return c.Guide(ctx, id)
+}
+
+func guideTarget(g site.Guide) (string, map[string]any) {
+	return g.ID.String(), map[string]any{"slug": g.Slug, "status": string(g.Status)}
+}
+
+// CreateSiteGuide adds a guide, recorded once saved.
+func (s *Service) CreateSiteGuide(ctx context.Context, g site.Guide, uploadKey, rawReason string) (site.Guide, error) {
+	return recorded(ctx, s, rawReason, "site.guide_created", "site_guide",
+		func(c site.Console) (site.Guide, error) { return c.CreateGuide(ctx, g, uploadKey) }, guideTarget)
+}
+
+// UpdateSiteGuide rewrites (or publishes) a guide, recorded once saved.
+func (s *Service) UpdateSiteGuide(ctx context.Context, g site.Guide, uploadKey string, removeCover bool, rawReason string) (site.Guide, error) {
+	return recorded(ctx, s, rawReason, "site.guide_updated", "site_guide",
+		func(c site.Console) (site.Guide, error) { return c.UpdateGuide(ctx, g, uploadKey, removeCover) }, guideTarget)
+}
+
+// DeleteSiteGuide removes a guide, recorded first.
+func (s *Service) DeleteSiteGuide(ctx context.Context, id ulid.ID, rawReason string) error {
+	who, c, err := s.site(ctx)
+	if err != nil {
+		return err
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return err
+	}
+	if err = s.audit(ctx, &who.AdminID, "site.guide_deleted", "site_guide", id.String(), map[string]any{"reason": reason}); err != nil {
+		return err
+	}
+	return c.DeleteGuide(ctx, id)
+}
+
+// PreviewGuide is Markdown as the site would show it; nothing is saved
+// or recorded.
+func (s *Service) PreviewGuide(ctx context.Context, src string) (string, error) {
+	_, c, err := s.site(ctx)
+	if err != nil {
+		return "", err
+	}
+	return c.Preview(ctx, src)
+}

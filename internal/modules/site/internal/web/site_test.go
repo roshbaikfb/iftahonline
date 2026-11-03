@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
@@ -635,3 +636,83 @@ func TestFoundingSection(t *testing.T) {
 		t.Fatalf("seats unreadable: %d", rec.Code)
 	}
 }
+
+// TestGuides: the guides the console published, on the site: the index
+// in each language (English shows those written in English), a guide's
+// page with its safe HTML, its Article data and its trail, the menu's
+// link, the sitemap (an Arabic-only guide has no English alternate) and
+// llms.txt.
+func TestGuides(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	published := time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC)
+	f.content.set(func(c *domain.Content) {
+		c.Guides = []domain.Guide{
+			{Slug: "reduce-fake-orders", Status: domain.Published, TitleAr: "كيف تقلل الطلبات الوهمية", SummaryAr: "خطوات عملية لتقليل رفض الاستلام.",
+				BodyAr: "# أولًا\n\nاتصل بالعميل.\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))", TitleEn: "Reduce fake orders",
+				SummaryEn: "Practical steps to cut refused deliveries.", BodyEn: "# First\n\nCall the customer.", CoverKey: "platform/site/COVER.jpeg",
+				PublishedAt: published, UpdatedAt: published.Add(48 * time.Hour)},
+			{Slug: "net-profit", Status: domain.Published, TitleAr: "كيف تحسب ربحك الصافي", SummaryAr: "الربح ليس المبيعات.", BodyAr: "## التكاليف\n\nنص.",
+				PublishedAt: published.Add(-24 * time.Hour), UpdatedAt: published.Add(-24 * time.Hour)},
+		}
+	}, nil)
+
+	index := f.get(t, "/guides").Body.String()
+	wantContains(t, index, "<h1>أدلة لتاجر الدفع عند الاستلام</h1>", `href="/guides/reduce-fake-orders"`, `href="/guides/net-profit"`,
+		"3 نوفمبر 2026", "قراءة في دقيقة", `<a href="/guides" aria-current="page">الأدلة</a>`)
+	en := f.get(t, "/en/guides").Body.String()
+	wantContains(t, en, `href="/en/guides/reduce-fake-orders"`, "Reduce fake orders", "3 November 2026", "1 min read")
+	if strings.Contains(en, "/guides/net-profit") {
+		t.Error("an Arabic-only guide on the English site")
+	}
+
+	page := f.get(t, "/guides/reduce-fake-orders")
+	body := page.Body.String()
+	if page.Code != http.StatusOK {
+		t.Fatalf("guide: %d", page.Code)
+	}
+	wantContains(t, body, "<h1>كيف تقلل الطلبات الوهمية</h1>", `<h2 id="`, "اتصل بالعميل.", `<time datetime="2026-11-03">3 نوفمبر 2026</time>`,
+		"آخر تحديث", `src="https://img.iftahonline.com/sig/1200/platform/site/COVER.jpeg.webp"`,
+		`<meta property="og:image" content="https://img.iftahonline.com/sig/1200/platform/site/COVER.jpeg.jpg">`,
+		`<link rel="alternate" hreflang="en" href="https://iftahonline.com/en/guides/reduce-fake-orders">`, `href="/guides/net-profit"`)
+	for _, bad := range []string{"<script>alert", "javascript:alert"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("the guide renders %q", bad)
+		}
+	}
+	data := ld(t, body)
+	art := data["Article"]
+	if art == nil || art["headline"] != "كيف تقلل الطلبات الوهمية" || art["datePublished"] != "2026-11-03T09:00:00Z" || art["dateModified"] != "2026-11-05T09:00:00Z" ||
+		art["inLanguage"] != "ar" || art["image"] == nil {
+		t.Fatalf("Article = %v", art)
+	}
+	if trail := data["BreadcrumbList"]["itemListElement"].([]any); len(trail) != 3 {
+		t.Fatalf("trail = %v", trail)
+	}
+
+	// Arabic only: no English alternate, the switch goes to the English
+	// guides; its English address is not found.
+	arOnly := f.get(t, "/guides/net-profit").Body.String()
+	if strings.Contains(arOnly, `hreflang="en"`) && !strings.Contains(arOnly, `href="/en/guides" hreflang="en"`) {
+		t.Error("an English alternate for an Arabic-only guide")
+	}
+	wantContains(t, arOnly, `href="/en/guides" hreflang="en" lang="en">English</a>`, "<h1>كيف تحسب ربحك الصافي</h1>")
+	for _, path := range []string{"/en/guides/net-profit", "/guides/nope", "/guides/net-profit/x"} {
+		if rec := f.get(t, path); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: %d", path, rec.Code)
+		}
+	}
+	wantContains(t, f.get(t, "/en/guides/reduce-fake-orders").Body.String(), "<h1>Reduce fake orders</h1>", "Call the customer.")
+
+	sitemap := f.get(t, "/sitemap.xml").Body.String()
+	wantContains(t, sitemap, "<loc>https://iftahonline.com/guides/reduce-fake-orders</loc>", "<loc>https://iftahonline.com/en/guides/reduce-fake-orders</loc>",
+		`<loc>https://iftahonline.com/guides/net-profit</loc><lastmod>`+updatedDate+`</lastmod><xhtml:link rel="alternate" hreflang="ar" href="https://iftahonline.com/guides/net-profit"/><xhtml:link rel="alternate" hreflang="x-default"`)
+	if strings.Contains(sitemap, "/en/guides/net-profit") {
+		t.Error("an Arabic-only guide's English address in the sitemap")
+	}
+	wantContains(t, f.get(t, "/llms.txt").Body.String(), "[كيف تقلل الطلبات الوهمية](https://iftahonline.com/guides/reduce-fake-orders)",
+		"[Reduce fake orders](https://iftahonline.com/en/guides/reduce-fake-orders)")
+}
+
+// updatedDate is the sitemap's lastmod (content.go's updated).
+const updatedDate = "2026-11-02"

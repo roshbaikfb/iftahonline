@@ -831,3 +831,60 @@ func TestConsoleFounding(t *testing.T) {
 		t.Fatalf("off = %d", r.status)
 	}
 }
+
+// TestConsoleSiteGuides: the guides from the console (S4c).
+func TestConsoleSiteGuides(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/site/guides", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	body := `{"slug":"reduce-fake-orders","status":"draft","title_ar":"كيف تقلل الطلبات الوهمية","summary_ar":"خطوات عملية لتقليل رفض الاستلام.",` +
+		`"body_ar":"# أولًا\n\nاتصل بالعميل قبل الشحن، وأكد العنوان والمبلغ.","reason":"the first guide"}`
+	if r := f.do(t, http.MethodPost, adminHost, "/admin/v1/site/guides", body, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	r := f.do(t, http.MethodPost, adminHost, "/admin/v1/site/guides", body, withCookie(sess), sameOrigin)
+	if r.status != http.StatusCreated || r.body["status"] != "draft" || r.body["published_at"] != nil {
+		t.Fatalf("create = %d %v", r.status, r.body)
+	}
+	one := "/admin/v1/site/guides/" + r.body["id"].(string)
+	publish := strings.Replace(body, `"status":"draft"`, `"status":"published"`, 1)
+	if r = f.do(t, http.MethodPut, adminHost, one, publish, withCookie(sess), sameOrigin); r.status != http.StatusOK || r.body["published_at"] == nil {
+		t.Fatalf("publish = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, one, "", withCookie(sess)); r.status != http.StatusOK || !strings.HasPrefix(r.body["body_ar"].(string), "# أولًا") {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/site/guides", "", withCookie(sess)); len(r.body["items"].([]any)) != 1 {
+		t.Fatalf("list = %v", r.body)
+	}
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/site/guides/preview", `{"markdown":"# عنوان\n\n<script>x</script>"}`, withCookie(sess), sameOrigin)
+	if html, _ := r.body["html"].(string); r.status != http.StatusOK || !strings.Contains(html, "<h2") || strings.Contains(html, "<script") {
+		t.Fatalf("preview = %d %v", r.status, r.body)
+	}
+
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPost, "/admin/v1/site/guides", body, http.StatusConflict},
+		{http.MethodPost, "/admin/v1/site/guides", strings.Replace(body, "reduce-fake-orders", "Fake Orders", 1), http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/guides", strings.Replace(body, `"title_ar":"كيف تقلل الطلبات الوهمية",`, `"title_ar":"كيف تقلل الطلبات","title_en":"Only a title",`, 1), http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/site/guides", ``, http.StatusBadRequest},
+		{http.MethodPost, "/admin/v1/site/guides/preview", ``, http.StatusBadRequest},
+		{http.MethodGet, "/admin/v1/site/guides/junk", "", http.StatusNotFound},
+		{http.MethodGet, "/admin/v1/site/guides/" + f.ids.New().String(), "", http.StatusNotFound},
+		{http.MethodPut, "/admin/v1/site/guides/" + f.ids.New().String(), publish, http.StatusNotFound},
+		{http.MethodDelete, one, "", http.StatusBadRequest},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+	if r = f.do(t, http.MethodDelete, adminHost, one+"?reason=rewritten", "", withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("delete = %d", r.status)
+	}
+}

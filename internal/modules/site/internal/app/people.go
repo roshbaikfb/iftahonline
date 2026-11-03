@@ -192,16 +192,19 @@ type items[T any] struct {
 	insert            func(context.Context, store.Tx, T) error
 	update            func(context.Context, store.Tx, T) (bool, error)
 	remove            func(context.Context, store.Tx, ulid.ID) (bool, error)
+	// prepare, when set, finishes an entry about to be saved from the
+	// one it replaces (zero when new): a guide's publishing date.
+	prepare func(v, had *T, now time.Time)
 }
 
 func peopleItems() items[domain.Person] {
 	return items[domain.Person]{domain.MaxPeople, errTooManyPeople, errPersonNotFound,
-		store.People, store.Person, store.InsertPerson, store.UpdatePerson, store.DeletePerson}
+		store.People, store.Person, store.InsertPerson, store.UpdatePerson, store.DeletePerson, nil}
 }
 
 func reviewItems() items[domain.Testimonial] {
 	return items[domain.Testimonial]{domain.MaxTestimonials, errTooManyReviews, errReviewNotFound,
-		store.Testimonials, store.Testimonial, store.InsertTestimonial, store.UpdateTestimonial, store.DeleteTestimonial}
+		store.Testimonials, store.Testimonial, store.InsertTestimonial, store.UpdateTestimonial, store.DeleteTestimonial, nil}
 }
 
 // create adds an entry with a new ID, with an uploaded photo or none.
@@ -222,6 +225,10 @@ func create[T any, P entry[T]](ctx context.Context, s *Service, it items[T], v T
 		return zero, it.tooMany
 	}
 	id, photo := P(&v).Keys()
+	if it.prepare != nil {
+		var none T
+		it.prepare(&v, &none, s.d.Now())
+	}
 	if *photo, err = s.photo(ctx, "", uploadKey, false); err != nil {
 		return zero, err
 	}
@@ -253,6 +260,9 @@ func edit[T any, P entry[T]](ctx context.Context, s *Service, it items[T], v T, 
 		return zero, it.notFound
 	}
 	_, old := P(&had).Keys()
+	if it.prepare != nil {
+		it.prepare(&v, &had, s.d.Now())
+	}
 	if *photo, err = s.photo(ctx, *old, uploadKey, removePhoto); err != nil {
 		return zero, err
 	}

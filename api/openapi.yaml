@@ -2712,6 +2712,135 @@ paths:
               schema: { $ref: "#/components/schemas/AdminFoundingProgram" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/site/guides:
+    get:
+      tags: [admin]
+      operationId: adminListSiteGuides
+      summary: The site's guides, newest first, without their bodies
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: Every guide.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminSiteGuideSummary" }
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [admin]
+      operationId: adminCreateSiteGuide
+      summary: Write a guide
+      description: |
+        Markdown, Arabic required and English optional (as one). Published
+        now, it is dated now. At most 200 guides. Recorded in the admin
+        log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteGuideInput" }
+      responses:
+        "201":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteGuide" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/guides/preview:
+    post:
+      tags: [admin]
+      operationId: adminPreviewSiteGuide
+      summary: Render Markdown as the site would
+      description: Safe HTML (no raw HTML, no script links); nothing is saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markdown]
+              properties:
+                markdown: { type: string, maxLength: 40000 }
+      responses:
+        "200":
+          description: The HTML.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [html]
+                properties:
+                  html: { type: string }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/site/guides/{guide_id}:
+    parameters:
+      - name: guide_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ULID" }
+    get:
+      tags: [admin]
+      operationId: adminGetSiteGuide
+      summary: One guide, whole
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The guide.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteGuide" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [admin]
+      operationId: adminUpdateSiteGuide
+      summary: Rewrite, publish or unpublish a guide
+      description: It keeps the date it was first published. Recorded in the admin log once saved.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSiteGuideInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSiteGuide" }
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [admin]
+      operationId: adminDeleteSiteGuide
+      summary: Remove a guide and its cover
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: reason
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/billing/duplicates:
     get:
       tags: [admin]
@@ -5608,6 +5737,50 @@ components:
         joined_at: { type: string, format: date-time }
         lost_at: { type: string, format: date-time, description: Absent while a member. }
         lost_reason: { type: string, enum: [cancelled, unpaid] }
+    AdminSiteGuideSummary:
+      type: object
+      required: [id, slug, status, title_ar, summary_ar, has_en, cover_url, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        slug: { type: string }
+        status: { type: string, enum: [draft, published] }
+        title_ar: { type: string }
+        summary_ar: { type: string }
+        has_en: { type: boolean }
+        cover_url: { type: string }
+        published_at: { type: string, format: date-time, description: Absent until first published. }
+        updated_at: { type: string, format: date-time }
+    AdminSiteGuide:
+      type: object
+      required: [id, slug, status, title_ar, summary_ar, body_ar, title_en, summary_en, body_en, cover_url, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        slug: { type: string }
+        status: { type: string, enum: [draft, published] }
+        title_ar: { type: string }
+        summary_ar: { type: string }
+        body_ar: { type: string, description: Markdown. }
+        title_en: { type: string }
+        summary_en: { type: string }
+        body_en: { type: string }
+        cover_url: { type: string }
+        published_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AdminSiteGuideInput:
+      type: object
+      required: [slug, status, title_ar, summary_ar, body_ar, reason]
+      properties:
+        slug: { type: string, maxLength: 80, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", description: "The address: /guides/{slug}." }
+        status: { type: string, enum: [draft, published] }
+        title_ar: { type: string, minLength: 5, maxLength: 120 }
+        summary_ar: { type: string, minLength: 20, maxLength: 300 }
+        body_ar: { type: string, minLength: 50, maxLength: 40000 }
+        title_en: { type: string, maxLength: 120 }
+        summary_en: { type: string, maxLength: 300 }
+        body_en: { type: string, maxLength: 40000 }
+        upload_key: { type: string, maxLength: 200, description: A new cover, posted first; absent keeps the current one. }
+        remove_cover: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminDuplicatePayment:
       type: object
       required: [id, store_id, invoice_number, currency, amount_minor, gateway, reference, created_at]
