@@ -40,7 +40,17 @@ group('describe', () => {
     [
       'invoice.settled',
       { target_type: 'invoice', target_id: 'INV1', metadata: { reference: 'TRX-1', store } },
-      { label: 'سجّل فاتورة مدفوعة بتحويل', family: 'billing', target: { text: 'فاتورة المتجر', to: `/stores/${store}` }, chips: ['المرجع: TRX-1'] },
+      { label: 'سجّل فاتورة مدفوعة بتحويل', family: 'billing', target: { text: 'فاتورة المتجر', to: '/billing/invoices/INV1' }, chips: ['المرجع: TRX-1'] },
+    ],
+    [
+      'invoice.settled',
+      { target_type: 'invoice', target_id: 'INV2', metadata: { reference: 'TRX-2', account: 'A1', number: 'INV-2026-000183' } },
+      { label: 'سجّل فاتورة مدفوعة بتحويل', family: 'billing', target: { text: 'فاتورة INV-2026-000183', to: '/billing/invoices/INV2' }, chips: ['المرجع: TRX-2'] },
+    ],
+    [
+      'billing.invoices_exported',
+      { target_type: 'invoice', target_id: '', metadata: { status: 'overdue', currency: '', q: 'النيل' } },
+      { label: 'صدّر الفواتير (CSV)', family: 'billing', target: { text: 'الفواتير', to: '/billing' }, chips: ['متأخرة', 'بحث: النيل'] },
     ],
     [
       'site.guide_updated',
@@ -69,7 +79,7 @@ group('describe', () => {
     expect(describe(entry('store.suspended', { store_name: 'متجر الأناقة', metadata: { slug: 'alanaqa' } }), me).target).toEqual({ text: 'متجر الأناقة', to: `/stores/${store}` });
     expect(describe(entry('invoice.settled', { target_type: 'invoice', target_id: 'I1', store_name: 'متجر الأناقة', metadata: { store } }), me).target).toEqual({
       text: 'فاتورة «متجر الأناقة»',
-      to: `/stores/${store}`,
+      to: '/billing/invoices/I1',
     });
     const system = entry('admin.created');
     delete system.admin_id;

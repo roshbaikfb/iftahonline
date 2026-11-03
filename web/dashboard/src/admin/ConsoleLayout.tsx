@@ -7,6 +7,7 @@ import { useAdmin } from './session';
 const icons = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
   stores: 'M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6',
+  billing: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
   plans: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5',
   founding: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
   agencies: 'M6 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 20c0-3 3-5 6-5s6 2 6 5M16 4a3 3 0 0 1 0 6M21 20c0-2.5-1.5-4.2-3.5-4.8',
@@ -27,6 +28,7 @@ const groups: { title: string; items: { to: string; label: string; icon: keyof t
   {
     title: 'الإيراد',
     items: [
+      { to: '/billing', label: 'الفواتير والمدفوعات', icon: 'billing' },
       { to: '/plans', label: 'الباقات والمميزات', icon: 'plans' },
       { to: '/founding', label: 'التجار المؤسسون', icon: 'founding' },
       { to: '/agencies', label: 'الوكالات', icon: 'agencies' },
