@@ -4905,7 +4905,13 @@ button.prov[aria-pressed='true'] {
   color: var(--navy);
   cursor: pointer;
 }
-.link-button.danger {
+.link-button:hover:not(:disabled) {
+  background: none;
+  color: var(--navy);
+  text-decoration: underline;
+}
+.link-button.danger,
+.link-button.danger:hover:not(:disabled) {
   color: var(--red);
 }
 .ltr {
