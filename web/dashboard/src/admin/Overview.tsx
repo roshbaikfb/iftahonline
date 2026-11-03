@@ -5,16 +5,28 @@ import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
 import { ConsoleLayout } from './ConsoleLayout';
 import { DuplicatePayments } from './DuplicatePayments';
+import { Growth } from './Growth';
 import { attention, count, dateTimeAr, fetchStores, greeting, healthGroups, waiting, type AdminHealth, type Duplicate } from './lib';
 import { useAdmin } from './session';
 import { StoreCell, StoreStatusPill } from './StoresPage';
 
 type Summary = components['schemas']['AdminStoreSummary'];
 type Founding = components['schemas']['AdminFounding'];
+type Metrics = components['schemas']['AdminMetrics'];
 
 // refreshEvery is how often the home reads the health check again while
 // the tab is visible.
 export const refreshEvery = 60_000;
+
+// fetchMetrics reads the revenue and new stores; null when it fails.
+async function fetchMetrics(): Promise<Metrics | null> {
+  try {
+    const { data } = await api.GET('/admin/v1/metrics');
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
 const today = () => new Date().toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -30,6 +42,8 @@ export function Overview() {
   const [founding, setFounding] = useState<Founding | null>(null);
   const [stores, setStores] = useState<Summary[]>([]);
   const [details, setDetails] = useState(false);
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [metricsFailed, setMetricsFailed] = useState(false);
   const [error, setError] = useState('');
 
   const loadHealth = useCallback(async () => {
@@ -41,6 +55,18 @@ export function Overview() {
     if (err) setError(problemMessage(err));
   }, []);
 
+  // The revenue and new stores are read on opening and on «تحديث الآن»,
+  // not every minute: they change slowly.
+  const showMetrics = useCallback((m: Metrics | null) => {
+    if (m) setMetrics(m);
+    setMetricsFailed(!m);
+  }, []);
+
+  const refresh = async () => {
+    const [, m] = await Promise.all([loadHealth(), fetchMetrics()]);
+    showMetrics(m);
+  };
+
   useEffect(() => {
     let live = true;
     void Promise.all([
@@ -48,8 +74,10 @@ export function Overview() {
       api.GET('/admin/v1/billing/duplicates'),
       api.GET('/admin/v1/founding'),
       fetchStores({ query: '', status: '' }, '', 5),
-    ]).then(([h, d, f, st]) => {
+      fetchMetrics(),
+    ]).then(([h, d, f, st, m]) => {
       if (!live) return;
+      showMetrics(m);
       if (h.data) setHealth(h.data);
       if (h.error) setError(problemMessage(h.error));
       if (d.data) setDuplicates(d.data.items);
@@ -59,7 +87,7 @@ export function Overview() {
     return () => {
       live = false;
     };
-  }, []);
+  }, [showMetrics]);
 
   // The health check is read again every minute while the tab is seen.
   useEffect(() => {
@@ -102,7 +130,7 @@ export function Overview() {
             {health && ` · آخر فحص ${time(health.checked_at)}`} · يتحدّث كل دقيقة
           </p>
         </div>
-        <button type="button" className="button secondary" onClick={() => void loadHealth()}>
+        <button type="button" className="button secondary" onClick={() => void refresh()}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" />
           </svg>
@@ -176,17 +204,7 @@ export function Overview() {
         </div>
       </section>
 
-      <section className="revenue-slot" aria-label="الإيراد">
-        <div>
-          <span className="muted">الإيراد الشهري المتكرر</span>
-          <strong>— ج.م · — ر.س · — د.إ</strong>
-        </div>
-        <div>
-          <span className="muted">متاجر جديدة</span>
-          <strong>— آخر 7 أيام · — آخر 30 يومًا</strong>
-        </div>
-        <p>تصل هذه الأرقام مع تحديث الخادم التالي.</p>
-      </section>
+      <Growth metrics={metrics} failed={metricsFailed} />
 
       {health && (
         <section className="card systems" aria-labelledby="h-systems">

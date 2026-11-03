@@ -17,6 +17,17 @@ const stores = { active: 4812, held: 0, suspended: 6, closed: 141, total: 4959 }
 const billing = { trialing: 512, active: 2904, past_due: 0, suspended: 0, cancelled: 1, invoices_open: 214, invoices_overdue: 0 };
 const jobs = { available: 23, running: 8, retryable: 0, discarded_24h: 0, oldest_available_seconds: 12 };
 const healthy: AdminHealth = { checked_at: '2026-11-03T09:00:00Z', database: true, redis: true, errors: [], stores, billing, jobs };
+// days are the last 30 Cairo days, two stores today and one 3 days ago.
+const days = Array.from({ length: 30 }, (_, i) => ({ day: `2026-${i < 27 ? '10' : '11'}-${String(i < 27 ? 5 + i : i - 26).padStart(2, '0')}`, count: i === 29 ? 2 : i === 26 ? 1 : 0 }));
+const metrics = {
+  computed_at: '2026-11-03T09:00:00Z',
+  errors: [],
+  revenue: [
+    { currency: 'EGP', mrr_minor: 1245000, accounts: 31 },
+    { currency: 'SAR', mrr_minor: 99000, accounts: 4 },
+  ],
+  new_stores: { last_7d: 3, last_30d: 3, daily: days },
+};
 const storeRow = {
   store: { id: store, slug: 'alanaqa', name: 'متجر الأناقة', status: 'active', plan: 'pro', currency: 'EGP', locale: 'ar', timezone: 'Africa/Cairo', created_at: '2026-10-28T10:00:00Z', updated_at: '' },
   primary_host: 'alanaqa.iftahonline.com',
@@ -39,6 +50,7 @@ function routes(over: Record<string, (c: Call) => { status: number; body?: unkno
     'GET /admin/v1/health': () => ({ status: 200, body: healthy }),
     'GET /admin/v1/billing/duplicates': () => ({ status: 200, body: { items: [] } }),
     'GET /admin/v1/founding': () => ({ status: 200, body: { program: { enabled: true, seats: 100, discount_bps: 2000 }, members: Array.from({ length: 12 }, (_, i) => ({ store_id: `S${String(i)}` })) } }),
+    'GET /admin/v1/metrics': () => ({ status: 200, body: metrics }),
     'GET /admin/v1/stores': (c) => ({ status: 200, body: c.search.get('cursor') ? { items: [] } : { items: [storeRow], next_cursor: 'c1' } }),
     [`GET /admin/v1/stores/${store}`]: () => ({ status: 200, body: { store: storeRow.store, domains: [] } }),
     ...over,
@@ -119,10 +131,49 @@ describe('console home', () => {
     expect(await screen.findByText('البرنامج متوقف')).toBeInTheDocument();
   });
 
+  it('shows the monthly revenue per currency and the new stores day by day', async () => {
+    routes();
+    renderAt();
+    const growth = await screen.findByRole('region', { name: 'الإيراد والنمو' });
+    await waitFor(() => {
+      expect(growth).toHaveTextContent('12,450 ج.م');
+    });
+    expect(growth).toHaveTextContent(/من 31 حساب/);
+    expect(growth).toHaveTextContent(/990 ر\.س\s*من 4 حساب/);
+    expect(growth).toHaveTextContent(/3 آخر 7 أيام · 3 آخر 30 يومًا/);
+    const spark = within(growth).getByRole('img', { name: /المتاجر الجديدة يومًا بيوم/ });
+    expect(spark.getAttribute('aria-label')).toMatch(/، 1، 0، 0، 2$/);
+    expect(spark.querySelectorAll('rect')).toHaveLength(30);
+  });
+
+  it('says when nothing pays yet, and when a section could not be read', async () => {
+    routes({ 'GET /admin/v1/metrics': () => ({ status: 200, body: { computed_at: metrics.computed_at, errors: ['new_stores'], revenue: [] } }) });
+    renderAt();
+    const growth = await screen.findByRole('region', { name: 'الإيراد والنمو' });
+    expect(await within(growth).findByText('لا اشتراكات مدفوعة بعد')).toBeInTheDocument();
+    expect(within(growth).getByText('تعذّرت القراءة')).toBeInTheDocument();
+    expect(within(growth).queryByRole('img')).toBeNull();
+  });
+
+  it('says the figures could not be read when the request fails, and reads them again on «تحديث الآن»', async () => {
+    let n = 0;
+    routes({ 'GET /admin/v1/metrics': () => (++n === 1 ? { status: 500, body: { title: 'Internal', status: 500 } } : { status: 200, body: metrics }) });
+    renderAt();
+    const growth = await screen.findByRole('region', { name: 'الإيراد والنمو' });
+    await waitFor(() => {
+      expect(within(growth).getAllByText('تعذّرت القراءة')).toHaveLength(2);
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'تحديث الآن' }));
+    await waitFor(() => {
+      expect(growth).toHaveTextContent('12,450 ج.م');
+    });
+    expect(n).toBe(2);
+  });
+
   it('reads the health again on «تحديث الآن» and every minute', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let n = 0;
-    routes({ 'GET /admin/v1/health': () => ({ status: 200, body: ++n > 1 ? { ...healthy, redis: false } : healthy }) });
+    const calls = routes({ 'GET /admin/v1/health': () => ({ status: 200, body: ++n > 1 ? { ...healthy, redis: false } : healthy }) });
     renderAt();
     await screen.findByText('كل شيء يعمل. لا شيء ينتظرك الآن.');
 
@@ -131,6 +182,8 @@ describe('console home', () => {
     });
     expect(await screen.findByText('Redis لا يرد')).toBeInTheDocument();
     expect(n).toBe(2);
+    // The revenue changes slowly: not read again every minute.
+    expect(calls.filter((c) => c.path === '/admin/v1/metrics')).toHaveLength(1);
 
     await userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) }).click(screen.getByRole('button', { name: 'تحديث الآن' }));
     await waitFor(() => {

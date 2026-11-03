@@ -311,29 +311,58 @@ body {
   block-size: 100%;
   background: var(--green);
 }
-.revenue-slot {
+.growth {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem 1.5rem;
+}
+.growth > div {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.1rem;
-  border: 1.5px dashed var(--field);
-  border-radius: var(--radius-card);
-  background: #fbfcfe;
+  gap: 0.3rem;
 }
-.revenue-slot div {
-  display: grid;
-  gap: 0.2rem;
+.growth strong {
+  font-size: 1.25rem;
+  line-height: 1.35;
 }
-.revenue-slot strong {
-  color: #94a3b8;
-  font-size: 1.15rem;
-}
-.revenue-slot p {
-  margin: 0;
+.growth strong small {
   color: var(--subtle);
   font-size: 0.85rem;
-  text-align: center;
+  font-weight: 500;
+}
+.growth strong.unread {
+  color: var(--subtle);
+  font-size: 1rem;
+}
+.mrr {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mrr li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.mrr small {
+  color: var(--subtle);
+}
+.spark {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+.spark svg {
+  inline-size: 100%;
+  block-size: 3.5rem;
+}
+.spark rect {
+  fill: var(--green);
+}
+.spark rect.none {
+  fill: var(--line);
 }
 .systems {
   gap: 1rem;
@@ -474,11 +503,8 @@ body {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .revenue-slot {
+  .growth {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .revenue-slot p {
-    text-align: start;
   }
   .latest-stores li > .small {
     display: none;
