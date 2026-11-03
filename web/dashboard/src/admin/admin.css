@@ -803,12 +803,6 @@ td.wrap-cell {
   background: #ede9fe;
   color: #5b21b6;
 }
-.slot {
-  padding: 0 0.35rem;
-  border: 1px dashed var(--field);
-  border-radius: 0.35rem;
-  white-space: nowrap;
-}
 .plan-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));

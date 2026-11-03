@@ -6,16 +6,7 @@ import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { ConsoleLayout } from './ConsoleLayout';
 import { useCatalog } from './catalog';
-import { byCode, facts, featureKindLabel, headline, kindLabel, otherPrices, type Feature } from './plans';
-
-// The seat for the subscribers count, filled by the next server change.
-export function SubscribersSlot() {
-  return (
-    <span className="slot" title="يصل العدد مع تحديث الخادم التالي">
-      — مشترك
-    </span>
-  );
-}
+import { byCode, facts, featureKindLabel, headline, kindLabel, otherPrices, stores, subscribersOf, type Feature } from './plans';
 
 // PlansPage is the plan catalog (the approved mockup): one card per plan
 // as merchants see them, and the features catalog in its own tab. A plan
@@ -87,7 +78,7 @@ export function PlansPage() {
 
       {tab === 'plans' ? (
         <ul className="plan-cards">
-          {groups.map(({ code, head }) => {
+          {groups.map(({ code, head, versions }) => {
             const h = headline(head);
             const others = otherPrices(head);
             return (
@@ -120,7 +111,7 @@ export function PlansPage() {
                 </ul>
                 <div className="plan-card-foot">
                   <span className="muted small">
-                    الإصدار v{head.version} · <SubscribersSlot />
+                    الإصدار <bdi>v{head.version}</bdi> · {stores(subscribersOf(versions))}
                   </span>
                   <Link to={`/plans/${code}`} aria-label={`تعديل ${head.name_ar}`}>
                     تعديل ←

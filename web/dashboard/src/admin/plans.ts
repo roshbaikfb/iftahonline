@@ -175,3 +175,16 @@ export function facts(p: Plan, features: Feature[], n = 3): string[] {
   out.push(p.trial_days > 0 ? `تجربة ${String(p.trial_days)} يومًا` : 'بلا تجربة');
   return out;
 }
+
+// subscribersOf are the stores on any version of a plan: all of them
+// renew into its next version.
+export const subscribersOf = (versions: Plan[]) => versions.reduce((n, v) => n + v.subscribers, 0);
+
+// stores writes a count of subscribers in Arabic.
+export function stores(n: number): string {
+  if (n === 0) return 'لا مشتركين';
+  if (n === 1) return 'مشترك واحد';
+  if (n === 2) return 'مشتركان';
+  const text = n.toLocaleString('en-US');
+  return n <= 10 ? `${text} مشتركين` : `${text} مشتركًا`;
+}

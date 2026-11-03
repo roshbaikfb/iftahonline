@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockAPI, type Call } from '../test/api';
 import { Gate } from './Console';
 import { details } from './lib';
-import { byCode, draftFrom, facts, headline, otherPrices, saving, toInput, type Feature, type Plan } from './plans';
+import { byCode, draftFrom, facts, headline, otherPrices, saving, stores, toInput, type Feature, type Plan } from './plans';
 import { AdminSessionContext, type AdminSession } from './session';
 
 const admin = { id: '01M5ADMIN000000000000000AA', email: 'ops@iftahonline.com', name: 'سارة' };
@@ -37,6 +37,7 @@ function plan(over: Partial<Plan>): Plan {
     public: true,
     sort: 40,
     active: true,
+    subscribers: 0,
     prices: [
       { currency: 'EGP', cycle: 'monthly', amount_minor: 59900 },
       { currency: 'EGP', cycle: 'annual', amount_minor: 599000 },
@@ -54,8 +55,8 @@ function plan(over: Partial<Plan>): Plan {
 }
 
 const plans = [
-  plan({}),
-  plan({ id: '01M8PLAN0000000000000000AB', version: 0, active: false }),
+  plan({ subscribers: 20 }),
+  plan({ id: '01M8PLAN0000000000000000AB', version: 0, active: false, subscribers: 3 }),
   plan({ id: '01M8PLAN0000000000000000AC', code: 'free', kind: 'free', name_ar: 'المجانية', name_en: 'Free', trial_days: 0, prices: [], sort: 10 }),
   plan({ id: '01M8PLAN0000000000000000AD', code: 'agency', kind: 'agency', name_ar: 'وكالة', name_en: 'Agency' }),
 ];
@@ -156,6 +157,26 @@ describe('plan cards helpers', () => {
   });
 });
 
+describe('subscribers', () => {
+  it.each([
+    [0, 'لا مشتركين'],
+    [1, 'مشترك واحد'],
+    [2, 'مشتركان'],
+    [7, '7 مشتركين'],
+    [23, '23 مشتركًا'],
+    [1200, '1,200 مشتركًا'],
+  ])('stores(%i) = %s', (n, want) => {
+    expect(stores(n)).toBe(want);
+  });
+
+  it('counts the stores on every version of a plan, and says so where it matters', async () => {
+    routes();
+    renderAt('/plans');
+    const pro = (await screen.findByRole('heading', { name: /برو/ })).closest('li');
+    expect(pro).toHaveTextContent('23 مشتركًا');
+  });
+});
+
 describe('plans screen', () => {
   it('shows a card per plan as merchants see them, in their order', async () => {
     routes();
@@ -177,6 +198,8 @@ describe('plans screen', () => {
     const user = userEvent.setup();
     const editor = await screen.findByRole('form', { name: 'إصدار جديد من برو' });
     expect(within(editor).getByText('يوفّر شهرين')).toBeInTheDocument();
+    expect(editor).toHaveTextContent('على الباقة الآن 23 مشتركًا. ينتقل كلٌّ منهم إلى v2 عند تجديده القادم');
+    expect(screen.getByText('سجل الإصدارات').closest('details')).toHaveTextContent('v1 · 20 مشتركًا');
     const egp = within(editor).getByLabelText('EGP شهري');
     await user.clear(egp);
     await user.type(egp, '649');
@@ -200,6 +223,7 @@ describe('plans screen', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByText('منطقة خطرة: إيقاف بيع الباقة'));
     const zone = screen.getByRole('form', { name: 'إيقاف بيع الباقة' });
+    expect(zone).toHaveTextContent('من عليها الآن (23 مشتركًا) يبقون عليها');
     await user.type(within(zone).getByLabelText('السبب'), 'توقف البيع');
     await user.click(within(zone).getByRole('button', { name: 'أوقف بيع «برو»' }));
     expect(body(calls, 'POST', '/admin/v1/plans/pro/retire')).toEqual({ reason: 'توقف البيع' });

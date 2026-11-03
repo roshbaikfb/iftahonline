@@ -7,7 +7,6 @@ import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 import { useCatalog } from './catalog';
 import { ConsoleLayout } from './ConsoleLayout';
-import { SubscribersSlot } from './PlansPage';
 import {
   byCode,
   currencies,
@@ -19,6 +18,8 @@ import {
   paidKind,
   priceKey,
   saving,
+  stores,
+  subscribersOf,
   toInput,
   type Draft,
   type Feature,
@@ -77,6 +78,7 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
     setDraft((d) => ({ ...d, ...patch }));
   };
   const next = (current.versions[0]?.version ?? 0) + 1;
+  const subscribers = subscribersOf(current.versions);
   const sorted = [...features].sort((a, b) => a.sort - b.sort);
   const limits = sorted.filter((f) => f.kind !== 'flag');
   const flags = sorted.filter((f) => f.kind === 'flag');
@@ -336,7 +338,9 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
               'تظهر للتجار فور نشرها إن كانت معروضة.'
             ) : (
               <>
-                المشتركون الحاليون <SubscribersSlot /> ينتقلون إلى v{next} عند تجديدهم القادم، والجدد يشترونه من الآن.
+                {subscribers > 0
+                  ? `على الباقة الآن ${stores(subscribers)}. ينتقل كلٌّ منهم إلى v${String(next)} عند تجديده القادم، والجدد يشترونه من الآن.`
+                  : `لا مشتركين على الباقة الآن. الجدد يشترون v${String(next)} من الآن.`}
               </>
             )}
           </p>
@@ -349,7 +353,7 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
           <ul>
             {current.versions.map((v) => (
               <li key={v.id}>
-                v{v.version} {v.active && <span className="status store-active">على البيع الآن</span>}
+                <bdi>v{v.version}</bdi> <span className="muted">· {stores(v.subscribers)}</span> {v.active && <span className="status store-active">على البيع الآن</span>}
               </li>
             ))}
           </ul>
@@ -361,7 +365,10 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
         <details className="card plan-fold danger-zone">
           <summary>منطقة خطرة: إيقاف بيع الباقة</summary>
           <form onSubmit={(e) => void retire(e)} aria-label="إيقاف بيع الباقة">
-            <p className="muted">تختفي من صفحة الفوترة ولا يشتريها أحد بعد الآن. المشتركون الحاليون يبقون عليها حتى يغيّروها.</p>
+            <p className="muted">
+              تختفي من صفحة الفوترة ولا يشتريها أحد بعد الآن.{' '}
+              {subscribers > 0 ? `من عليها الآن (${stores(subscribers)}) يبقون عليها حتى يغيّروها.` : 'لا مشتركين عليها الآن.'}
+            </p>
             <label>
               <span className="field-label">السبب</span>
               <input name="reason" required minLength={3} maxLength={500} />
