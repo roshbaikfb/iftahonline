@@ -84,3 +84,4 @@ supersedes it.
 | [0076](0076-console-invoices-and-payments.md) | The console's invoices and payments | Accepted |
 | [0077](0077-console-roles.md) | Console roles | Accepted |
 | [0078](0078-console-team-and-invites.md) | The console's team and invite links | Accepted |
+| [0079](0079-console-search.md) | The console's search | Accepted |

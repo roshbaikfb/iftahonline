@@ -51,6 +51,11 @@ identity. Identity's sign-up depends on tenancy, not the other way around.
   store page: name, email (and whether it is verified), phone, and their
   last use of the dashboard (support sessions left out). Shown to admins,
   never logged; `ok` is false for a store without an owner.
+- `OwnerStores(ctx, db, email, phones)` lists the stores whose owner has
+  exactly this email or one of these E.164 phones, through
+  `app.owner_stores` (migration 00093, `app_admin` only, with an
+  `owner_lookup` policy on `store_memberships` for the function's owner):
+  store IDs for the console's search, never the contact (ADR-0079).
 - `CountStaff(ctx, tx)` counts the store's seats (members and open
   invitations) in its tenant transaction: the usage meter (ADR-0061).
 - `StaffEmails(db, roles…)` lists the store's members' emails for those
