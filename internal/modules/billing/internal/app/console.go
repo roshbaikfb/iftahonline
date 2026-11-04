@@ -358,7 +358,14 @@ const consoleZone = "Africa/Cairo"
 func (s *Service) Today(ctx context.Context) (t RevenueToday, err error) {
 	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
 		paying, txErr := store.Paying(ctx, tx)
+		if txErr != nil {
+			return txErr
+		}
 		t = domain.Today(paying)
+		names, txErr := store.PlanNamesByCode(ctx, tx)
+		for i, p := range t.Plans {
+			t.Plans[i].PlanName = names[p.PlanCode]
+		}
 		return txErr
 	})
 	return t, err

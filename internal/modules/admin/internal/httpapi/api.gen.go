@@ -2334,6 +2334,9 @@ type AdminPlanRevenue struct {
 	Currency AdminPlanRevenueCurrency `json:"currency"`
 	MrrMinor int64                    `json:"mrr_minor"`
 
+	// Name The plan's Arabic name; empty for a plan no longer on sale.
+	Name string `json:"name"`
+
 	// Plan The plan's code.
 	Plan string `json:"plan"`
 }

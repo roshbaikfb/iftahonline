@@ -46,3 +46,7 @@ SELECT account_id::uuid, kind::text, currency::text, plan_code::text, cycle::tex
        coalesce(founding_plan_code, '')::text AS founding_plan_code, coalesce(founding_cycle, '')::text AS founding_cycle,
        coalesce(founding_locked_minor, 0)::bigint AS founding_locked_minor
 FROM app.billing_paying();
+
+-- name: ActivePlanNames :many
+-- The plans on sale by code, for the console's growth page (ADR-0081).
+SELECT code, name_ar FROM plans WHERE status = 'active';

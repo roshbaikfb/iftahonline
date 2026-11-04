@@ -55,7 +55,7 @@ func (h *Handlers) AdminGetGrowth(ctx context.Context, _ AdminGetGrowthRequestOb
 	if g.Plans != nil {
 		plans := make([]AdminPlanRevenue, len(g.Plans))
 		for i, p := range g.Plans {
-			plans[i] = AdminPlanRevenue{Currency: AdminPlanRevenueCurrency(p.Currency), Plan: p.PlanCode, Accounts: p.Accounts, MrrMinor: p.MRRMinor}
+			plans[i] = AdminPlanRevenue{Currency: AdminPlanRevenueCurrency(p.Currency), Plan: p.PlanCode, Name: p.PlanName, Accounts: p.Accounts, MrrMinor: p.MRRMinor}
 		}
 		out.Plans = &plans
 	}

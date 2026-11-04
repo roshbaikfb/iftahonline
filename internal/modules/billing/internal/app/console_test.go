@@ -287,7 +287,9 @@ func TestGrowthFigures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(today.Accounts, account) || !slices.ContainsFunc(today.Plans, func(p app.PlanRevenue) bool { return p.Currency == "EGP" && p.PlanCode == "pro" && p.Accounts >= 2 }) {
+	if !slices.Contains(today.Accounts, account) || !slices.ContainsFunc(today.Plans, func(p app.PlanRevenue) bool {
+		return p.Currency == "EGP" && p.PlanCode == "pro" && p.PlanName == "برو" && p.Accounts >= 2
+	}) {
 		t.Fatalf("today = %d accounts, plans %+v", len(today.Accounts), today.Plans)
 	}
 }
