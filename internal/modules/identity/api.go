@@ -74,6 +74,13 @@ func OwnerContactTx(ctx context.Context, tx pgx.Tx) (OwnerContact, bool, error) 
 	return store.ReadOwnerContact(ctx, tx)
 }
 
+// OwnerStores lists the stores (at most 20) whose owner has exactly this
+// email (normalized) or one of these E.164 phones, on db, the console's
+// pool: store IDs only, never the contact (ADR-0079).
+func OwnerStores(ctx context.Context, db store.Tx, email string, phones []string) ([]ulid.ID, error) {
+	return store.OwnerStores(ctx, db, email, phones)
+}
+
 // CountStaff counts the store-in-ctx's team seats (members and pending
 // invitations) in its tenant transaction tx: the staff usage meter
 // (ADR-0061), the count the plan's limit admits against.

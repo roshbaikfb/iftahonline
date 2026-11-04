@@ -130,6 +130,9 @@ type Console interface {
 	// the card (a confirmed transfer, under reference); its stores
 	// settle as on any payment. Any other invoice is 404.
 	SettleInvoice(ctx context.Context, account, invoice ulid.ID, reference string) error
+	// PaymentsByReference lists the payment attempts whose gateway
+	// reference is exactly reference (at most 10), newest first.
+	PaymentsByReference(ctx context.Context, reference string) ([]ConsolePayment, error)
 }
 
 // DuplicatePayment is a payment of an invoice no longer open.

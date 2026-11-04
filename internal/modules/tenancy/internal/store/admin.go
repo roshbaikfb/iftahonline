@@ -47,6 +47,24 @@ func SearchDirectory(ctx context.Context, adminDB Tx, f DirectoryFilter) ([]Dire
 	if err != nil {
 		return nil, fmt.Errorf("tenancy store: directory: %w", err)
 	}
+	return toEntries(rows), nil
+}
+
+// DirectoryByID returns the stores with these IDs, newest first, in one
+// query; an unknown ID is left out.
+func DirectoryByID(ctx context.Context, adminDB Tx, ids []ulid.ID) ([]DirectoryEntry, error) {
+	rows, err := tenancydb.New(adminDB).AdminStoresByID(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("tenancy store: directory by id: %w", err)
+	}
+	same := make([]tenancydb.AdminSearchStoresRow, len(rows))
+	for i, r := range rows {
+		same[i] = tenancydb.AdminSearchStoresRow(r)
+	}
+	return toEntries(same), nil
+}
+
+func toEntries(rows []tenancydb.AdminSearchStoresRow) []DirectoryEntry {
 	out := make([]DirectoryEntry, len(rows))
 	for i, r := range rows {
 		out[i] = DirectoryEntry{PrimaryHost: r.PrimaryHost, Store: toStore(tenancydb.Store{
@@ -54,7 +72,7 @@ func SearchDirectory(ctx context.Context, adminDB Tx, f DirectoryFilter) ([]Dire
 			Locale: r.Locale, Timezone: r.Timezone, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, BillingHold: r.BillingHold,
 		})}
 	}
-	return out, nil
+	return out
 }
 
 // DirectoryStore returns one store and its domains.

@@ -98,6 +98,9 @@ type Directory interface {
 	// Names maps store IDs to their names, in one query; an unknown ID
 	// is left out.
 	Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error)
+	// Entries are the stores with these IDs, newest first, in one query;
+	// an unknown ID is left out.
+	Entries(ctx context.Context, ids []ulid.ID) ([]DirectoryEntry, error)
 }
 
 // StoreCounts are the platform's stores by state.

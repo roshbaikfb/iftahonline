@@ -117,7 +117,8 @@ const adminSearchStores = `-- name: AdminSearchStores :many
 SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
-WHERE ($1::text = '' OR s.slug::text LIKE $1::text || '%' OR s.name ILIKE '%' || $1::text || '%')
+WHERE ($1::text = '' OR s.slug::text LIKE $1::text || '%' OR s.name ILIKE '%' || $1::text || '%'
+       OR EXISTS (SELECT 1 FROM store_domains d WHERE d.store_id = s.id AND d.host::text LIKE lower($1::text) || '%'))
   AND ($2::text = '' OR s.status = $2::text)
   AND ($3::timestamptz IS NULL
        OR (s.created_at, s.id) < ($3::timestamptz, $4::uuid))
@@ -239,6 +240,62 @@ func (q *Queries) AdminStoreNames(ctx context.Context, ids []ulid.ID) ([]AdminSt
 	for rows.Next() {
 		var i AdminStoreNamesRow
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const adminStoresByID = `-- name: AdminStoresByID :many
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
+       coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
+FROM stores s
+WHERE s.id = ANY ($1::uuid[])
+ORDER BY s.created_at DESC, s.id DESC
+`
+
+type AdminStoresByIDRow struct {
+	ID          ulid.ID
+	Slug        string
+	Name        string
+	Status      string
+	Currency    string
+	Locale      string
+	Timezone    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BillingHold bool
+	PrimaryHost string
+}
+
+// Stores by ID in the directory's shape (the console's search, ADR-0079),
+// in one query.
+func (q *Queries) AdminStoresByID(ctx context.Context, ids []ulid.ID) ([]AdminStoresByIDRow, error) {
+	rows, err := q.db.Query(ctx, adminStoresByID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminStoresByIDRow{}
+	for rows.Next() {
+		var i AdminStoresByIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.Status,
+			&i.Currency,
+			&i.Locale,
+			&i.Timezone,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BillingHold,
+			&i.PrimaryHost,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

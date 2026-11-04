@@ -102,6 +102,25 @@ func ConsolePayments(ctx context.Context, tx Tx, f PaymentFilter) ([]ConsolePaym
 	if err != nil {
 		return nil, fmt.Errorf("billing store: console payments: %w", err)
 	}
+	return toPayments(rows), nil
+}
+
+// PaymentsByReference lists the payment attempts whose gateway reference
+// is exactly reference (at most limit), newest first.
+func PaymentsByReference(ctx context.Context, tx Tx, reference string, limit int) ([]ConsolePayment, error) {
+	rows, err := billingdb.New(tx).ConsoleAttemptsByReference(ctx, billingdb.ConsoleAttemptsByReferenceParams{Reference: reference,
+		Lim: int32(min(limit, 100))}) //nolint:gosec // bounded
+	if err != nil {
+		return nil, fmt.Errorf("billing store: payments by reference: %w", err)
+	}
+	same := make([]billingdb.ConsoleAttemptsRow, len(rows))
+	for i, r := range rows {
+		same[i] = billingdb.ConsoleAttemptsRow(r)
+	}
+	return toPayments(same), nil
+}
+
+func toPayments(rows []billingdb.ConsoleAttemptsRow) []ConsolePayment {
 	out := make([]ConsolePayment, len(rows))
 	for i, r := range rows {
 		p := ConsolePayment{ID: r.ID, Invoice: r.InvoiceID, Account: r.AccountID, CreatedAt: r.CreatedAt, InvoiceNumber: r.InvoiceNumber,
@@ -115,7 +134,7 @@ func ConsolePayments(ctx context.Context, tx Tx, f PaymentFilter) ([]ConsolePaym
 		}
 		out[i] = p
 	}
-	return out, nil
+	return out
 }
 
 // SummaryRow is one of app.billing_summary's counts: Kind open, overdue

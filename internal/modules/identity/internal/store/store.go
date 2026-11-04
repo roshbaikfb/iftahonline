@@ -344,3 +344,17 @@ func ListAudit(ctx context.Context, tx Tx, beforeAt *time.Time, beforeID *ulid.I
 	}
 	return out, nil
 }
+
+// OwnerStores lists the stores (at most 20) whose owner has exactly this
+// email or one of these E.164 phones, through app.owner_stores on db, the
+// console's pool: IDs only, never the contact (ADR-0079).
+func OwnerStores(ctx context.Context, db Tx, email string, phones []string) ([]ulid.ID, error) {
+	if phones == nil {
+		phones = []string{}
+	}
+	ids, err := identitydb.New(db).OwnerStores(ctx, identitydb.OwnerStoresParams{Email: email, Phones: phones})
+	if err != nil {
+		return nil, fmt.Errorf("identity store: owner stores: %w", err)
+	}
+	return ids, nil
+}

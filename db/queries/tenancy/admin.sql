@@ -6,7 +6,8 @@
 SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
-WHERE (@query::text = '' OR s.slug::text LIKE @query::text || '%' OR s.name ILIKE '%' || @query::text || '%')
+WHERE (@query::text = '' OR s.slug::text LIKE @query::text || '%' OR s.name ILIKE '%' || @query::text || '%'
+       OR EXISTS (SELECT 1 FROM store_domains d WHERE d.store_id = s.id AND d.host::text LIKE lower(@query::text) || '%'))
   AND (@status::text = '' OR s.status = @status::text)
   AND (sqlc.narg(before_at)::timestamptz IS NULL
        OR (s.created_at, s.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid))
@@ -40,3 +41,12 @@ ORDER BY 1;
 -- name: AdminStoreNames :many
 -- Store names by ID, for the admin log (ADR-0058): one query a page.
 SELECT id, name FROM stores WHERE id = ANY (@ids::uuid[]);
+
+-- name: AdminStoresByID :many
+-- Stores by ID in the directory's shape (the console's search, ADR-0079),
+-- in one query.
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
+       coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
+FROM stores s
+WHERE s.id = ANY (@ids::uuid[])
+ORDER BY s.created_at DESC, s.id DESC;

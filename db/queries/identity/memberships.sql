@@ -61,3 +61,8 @@ JOIN users u ON u.id = m.user_id
 WHERE m.store_id = @store_id AND m.role = 'owner'
 ORDER BY m.created_at
 LIMIT 1;
+
+-- name: OwnerStores :many
+-- The stores whose owner has exactly this email or phone, for the
+-- console's search (ADR-0079), through app.owner_stores: IDs only.
+SELECT store_id::uuid FROM app.owner_stores(@email::text, @phones::text[]);

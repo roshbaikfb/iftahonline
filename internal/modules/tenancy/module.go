@@ -122,6 +122,18 @@ func (a directoryAdapter) Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID
 	return a.d.Names(ctx, ids)
 }
 
+func (a directoryAdapter) Entries(ctx context.Context, ids []ulid.ID) ([]DirectoryEntry, error) {
+	es, err := a.d.Entries(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DirectoryEntry, len(es))
+	for i, e := range es {
+		out[i] = DirectoryEntry{Store: e.Store, PrimaryHost: e.PrimaryHost}
+	}
+	return out, nil
+}
+
 func (a directoryAdapter) NewStores(ctx context.Context, now time.Time) (NewStores, error) {
 	return a.d.NewStores(ctx, now)
 }

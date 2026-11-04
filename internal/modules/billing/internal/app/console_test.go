@@ -153,6 +153,20 @@ func TestConsoleInvoicesAndPayments(t *testing.T) {
 	if err != nil || !slices.ContainsFunc(p.Items, func(a app.ConsolePayment) bool { return a.Invoice == invoice && a.Reference == "TRX-77" }) {
 		t.Fatalf("manual payments = %d, %v", len(p.Items), err)
 	}
+	// The search finds a payment by its exact reference only (ADR-0079).
+	ref := "TRX-77-" + invoice.String()
+	if err = d.svc.SettleInvoice(t.Context(), account, d.ids.New(), ref); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("settle an unknown invoice: %v", err)
+	}
+	byRef, err := d.svc.PaymentsByReference(t.Context(), "TRX-77")
+	if err != nil || !slices.ContainsFunc(byRef, func(a app.ConsolePayment) bool { return a.Invoice == invoice && a.Outcome == "manual" }) {
+		t.Fatalf("by reference = %+v, %v", byRef, err)
+	}
+	for _, q := range []string{"TRX", " ", strings.Repeat("x", 121)} {
+		if got, refErr := d.svc.PaymentsByReference(t.Context(), q); refErr != nil || slices.ContainsFunc(got, func(a app.ConsolePayment) bool { return a.Invoice == invoice }) {
+			t.Errorf("%q = %+v, %v", q, got, refErr)
+		}
+	}
 	tot, err := d.svc.Totals(t.Context())
 	if err != nil {
 		t.Fatal(err)

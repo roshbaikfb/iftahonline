@@ -2079,6 +2079,37 @@ paths:
               schema: { $ref: "#/components/schemas/AdminInviteLink" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/search:
+    get:
+      tags: [admin]
+      operationId: adminSearch
+      summary: Search everything the admin's role reads
+      description: |
+        One query across the console (ADR-0079), at most 5 of each kind,
+        each source timed on its own (a slow one is named in `failed`, the
+        rest still answer). A kind the role may not read is empty:
+        stores (name, slug, domain), invoices (number start, store or
+        agency name), payments (the gateway's exact reference), agencies,
+        admins (owners only). An exact email or phone also finds the
+        stores its owner owns, for roles with contacts.read, and is
+        recorded in the admin log masked. `jump` is the page of the one
+        thing the query names exactly: a full invoice number, an ID, a
+        domain.
+      security:
+        - adminSessionCookie: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        "200":
+          description: What was found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSearchResult" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/me:
     get:
       tags: [admin]
@@ -5862,6 +5893,34 @@ components:
       properties:
         store: { $ref: "#/components/schemas/Store" }
         primary_host: { type: string }
+    AdminSearchResult:
+      type: object
+      required: [stores, owner_stores, invoices, payments, agencies, admins, failed]
+      properties:
+        jump: { type: string, description: "The console path (under /console) to open at once, when the query names one thing exactly." }
+        stores:
+          type: array
+          items: { $ref: "#/components/schemas/AdminStoreSummary" }
+        owner_stores:
+          type: array
+          description: The stores of the owner whose exact email or phone this is.
+          items: { $ref: "#/components/schemas/AdminStoreSummary" }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/AdminInvoice" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPayment" }
+        agencies:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAgency" }
+        admins:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTeamMember" }
+        failed:
+          type: array
+          description: Kinds that could not be read in time.
+          items: { type: string, enum: [stores, owners, invoices, payments, agencies, admins] }
     AdminStorePage:
       type: object
       required: [items]

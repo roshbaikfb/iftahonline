@@ -1749,6 +1749,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search everything the admin's role reads
+         * @description One query across the console (ADR-0079), at most 5 of each kind,
+         *     each source timed on its own (a slow one is named in `failed`, the
+         *     rest still answer). A kind the role may not read is empty:
+         *     stores (name, slug, domain), invoices (number start, store or
+         *     agency name), payments (the gateway's exact reference), agencies,
+         *     admins (owners only). An exact email or phone also finds the
+         *     stores its owner owns, for roles with contacts.read, and is
+         *     recorded in the admin log masked. `jump` is the page of the one
+         *     thing the query names exactly: a full invoice number, an ID, a
+         *     domain.
+         */
+        get: operations["adminSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/me": {
         parameters: {
             query?: never;
@@ -4949,6 +4978,19 @@ export interface components {
         AdminStoreSummary: {
             store: components["schemas"]["Store"];
             primary_host: string;
+        };
+        AdminSearchResult: {
+            /** @description The console path (under /console) to open at once, when the query names one thing exactly. */
+            jump?: string;
+            stores: components["schemas"]["AdminStoreSummary"][];
+            /** @description The stores of the owner whose exact email or phone this is. */
+            owner_stores: components["schemas"]["AdminStoreSummary"][];
+            invoices: components["schemas"]["AdminInvoice"][];
+            payments: components["schemas"]["AdminPayment"][];
+            agencies: components["schemas"]["AdminAgency"][];
+            admins: components["schemas"]["AdminTeamMember"][];
+            /** @description Kinds that could not be read in time. */
+            failed: ("stores" | "owners" | "invoices" | "payments" | "agencies" | "admins")[];
         };
         AdminStorePage: {
             items: components["schemas"]["AdminStoreSummary"][];
@@ -10251,6 +10293,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminInviteLink"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSearch: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was found. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSearchResult"];
                 };
             };
             default: components["responses"]["Problem"];

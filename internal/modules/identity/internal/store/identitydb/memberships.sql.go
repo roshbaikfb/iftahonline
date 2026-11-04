@@ -202,6 +202,37 @@ func (q *Queries) ListMyMemberships(ctx context.Context, userID ulid.ID) ([]List
 	return items, nil
 }
 
+const ownerStores = `-- name: OwnerStores :many
+SELECT store_id::uuid FROM app.owner_stores($1::text, $2::text[])
+`
+
+type OwnerStoresParams struct {
+	Email  string
+	Phones []string
+}
+
+// The stores whose owner has exactly this email or phone, for the
+// console's search (ADR-0079), through app.owner_stores: IDs only.
+func (q *Queries) OwnerStores(ctx context.Context, arg OwnerStoresParams) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, ownerStores, arg.Email, arg.Phones)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var store_id ulid.ID
+		if err := rows.Scan(&store_id); err != nil {
+			return nil, err
+		}
+		items = append(items, store_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setUserScope = `-- name: SetUserScope :exec
 SELECT set_config('app.user_id', ($1::uuid)::text, true)
 `

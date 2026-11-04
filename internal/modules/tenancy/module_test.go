@@ -273,6 +273,17 @@ func TestAdminDirectory(t *testing.T) {
 	if p, _ := dir.Search(ctx, "dir1-"+tag, "", "", 10); len(p.Items) != 1 {
 		t.Fatalf("slug prefix = %+v", p)
 	}
+	// A domain finds its store (the console's search, ADR-0079).
+	if p, _ := dir.Search(ctx, fmt.Sprintf("DIR2-%s.iftahonline", tag), "", "", 10); len(p.Items) != 1 || p.Items[0].Store.ID != ids[2] {
+		t.Fatalf("host prefix = %+v", p)
+	}
+	es, err := dir.Entries(ctx, []ulid.ID{ids[0].ID, ids[2].ID, ulid.NewGenerator().New()})
+	if err != nil || len(es) != 2 || es[0].Store.ID != ids[2] || es[1].Store.ID != ids[0] || es[0].PrimaryHost == "" {
+		t.Fatalf("entries = %+v, %v", es, err)
+	}
+	if es, err = dir.Entries(ctx, nil); err != nil || len(es) != 0 {
+		t.Fatalf("no ids = %+v, %v", es, err)
+	}
 	// LIKE wildcards in the query are literal.
 	if p, _ := dir.Search(ctx, "%"+tag, "", "", 10); len(p.Items) != 0 {
 		t.Fatalf("wildcard must be literal, got %d", len(p.Items))

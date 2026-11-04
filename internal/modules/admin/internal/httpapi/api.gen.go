@@ -673,6 +673,36 @@ func (e AdminRole) Valid() bool {
 	}
 }
 
+// Defines values for AdminSearchResultFailed.
+const (
+	AdminSearchResultFailedAdmins   AdminSearchResultFailed = "admins"
+	AdminSearchResultFailedAgencies AdminSearchResultFailed = "agencies"
+	AdminSearchResultFailedInvoices AdminSearchResultFailed = "invoices"
+	AdminSearchResultFailedOwners   AdminSearchResultFailed = "owners"
+	AdminSearchResultFailedPayments AdminSearchResultFailed = "payments"
+	AdminSearchResultFailedStores   AdminSearchResultFailed = "stores"
+)
+
+// Valid indicates whether the value is a known member of the AdminSearchResultFailed enum.
+func (e AdminSearchResultFailed) Valid() bool {
+	switch e {
+	case AdminSearchResultFailedAdmins:
+		return true
+	case AdminSearchResultFailedAgencies:
+		return true
+	case AdminSearchResultFailedInvoices:
+		return true
+	case AdminSearchResultFailedOwners:
+		return true
+	case AdminSearchResultFailedPayments:
+		return true
+	case AdminSearchResultFailedStores:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminSiteGuideStatus.
 const (
 	AdminSiteGuideStatusDraft     AdminSiteGuideStatus = "draft"
@@ -2091,6 +2121,27 @@ type AdminRoleInput struct {
 	Role AdminRole `json:"role"`
 }
 
+// AdminSearchResult defines model for AdminSearchResult.
+type AdminSearchResult struct {
+	Admins   []AdminTeamMember `json:"admins"`
+	Agencies []AdminAgency     `json:"agencies"`
+
+	// Failed Kinds that could not be read in time.
+	Failed   []AdminSearchResultFailed `json:"failed"`
+	Invoices []AdminInvoice            `json:"invoices"`
+
+	// Jump The console path (under /console) to open at once, when the query names one thing exactly.
+	Jump *string `json:"jump,omitempty"`
+
+	// OwnerStores The stores of the owner whose exact email or phone this is.
+	OwnerStores []AdminStoreSummary `json:"owner_stores"`
+	Payments    []AdminPayment      `json:"payments"`
+	Stores      []AdminStoreSummary `json:"stores"`
+}
+
+// AdminSearchResultFailed defines model for AdminSearchResult.Failed.
+type AdminSearchResultFailed string
+
 // AdminSettleInput defines model for AdminSettleInput.
 type AdminSettleInput struct {
 	// Reason Kept in the admin audit log.
@@ -2829,6 +2880,11 @@ type AdminListPaymentsParams struct {
 	Limit   *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// AdminSearchParams defines parameters for AdminSearch.
+type AdminSearchParams struct {
+	Q string `form:"q" json:"q"`
+}
+
 // AdminDeleteSiteFAQParams defines parameters for AdminDeleteSiteFAQ.
 type AdminDeleteSiteFAQParams struct {
 	// Reason Kept in the admin audit log.
@@ -3102,6 +3158,9 @@ type ServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(w http.ResponseWriter, r *http.Request, code string)
+	// AdminSearch Search everything the admin's role reads
+	// (GET /admin/v1/search)
+	AdminSearch(w http.ResponseWriter, r *http.Request, params AdminSearchParams)
 	// AdminGetSite The platform site's contact details and FAQ
 	// (GET /admin/v1/site)
 	AdminGetSite(w http.ResponseWriter, r *http.Request)
@@ -4097,6 +4156,39 @@ func (siw *ServerInterfaceWrapper) AdminRetirePlan(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRetirePlan(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSearch operation middleware
+func (siw *ServerInterfaceWrapper) AdminSearch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminSearchParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSearch(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5287,6 +5379,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/disable", wrapper.AdminDisableAdmin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/enable", wrapper.AdminEnableAdmin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/reset", wrapper.AdminResetAdmin)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/search", wrapper.AdminSearch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
@@ -6685,6 +6778,45 @@ type AdminRetirePlandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminRetirePlandefaultApplicationProblemPlusJSONResponse) VisitAdminRetirePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSearchRequestObject struct {
+	Params AdminSearchParams
+}
+
+type AdminSearchResponseObject interface {
+	VisitAdminSearchResponse(w http.ResponseWriter) error
+}
+
+type AdminSearch200JSONResponse AdminSearchResult
+
+func (response AdminSearch200JSONResponse) VisitAdminSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSearchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSearchdefaultApplicationProblemPlusJSONResponse) VisitAdminSearchResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8332,6 +8464,9 @@ type StrictServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(ctx context.Context, request AdminRetirePlanRequestObject) (AdminRetirePlanResponseObject, error)
+	// AdminSearch Search everything the admin's role reads
+	// (GET /admin/v1/search)
+	AdminSearch(ctx context.Context, request AdminSearchRequestObject) (AdminSearchResponseObject, error)
 	// AdminGetSite The platform site's contact details and FAQ
 	// (GET /admin/v1/site)
 	AdminGetSite(ctx context.Context, request AdminGetSiteRequestObject) (AdminGetSiteResponseObject, error)
@@ -9442,6 +9577,32 @@ func (sh *strictHandler) AdminRetirePlan(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRetirePlanResponseObject); ok {
 		if err := validResponse.VisitAdminRetirePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSearch operation middleware
+func (sh *strictHandler) AdminSearch(w http.ResponseWriter, r *http.Request, params AdminSearchParams) {
+	var request AdminSearchRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSearch(ctx, request.(AdminSearchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSearch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSearchResponseObject); ok {
+		if err := validResponse.VisitAdminSearchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

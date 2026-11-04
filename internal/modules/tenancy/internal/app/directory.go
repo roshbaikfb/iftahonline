@@ -125,6 +125,15 @@ func (d *StoreDirectory) NewStores(ctx context.Context, now time.Time) (domain.N
 	return domain.NewStoresFrom(byDay, local), nil
 }
 
+// Entries are the stores with these IDs, newest first, in one query (the
+// console's search, ADR-0079); an unknown ID is left out.
+func (d *StoreDirectory) Entries(ctx context.Context, ids []ulid.ID) ([]store.DirectoryEntry, error) {
+	if len(ids) == 0 {
+		return []store.DirectoryEntry{}, nil
+	}
+	return store.DirectoryByID(ctx, d.db, ids)
+}
+
 // Names maps store IDs to their names (the admin log), in one query.
 func (d *StoreDirectory) Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error) {
 	if len(ids) == 0 {
