@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -335,6 +336,102 @@ func (q *Queries) GetOpenInvite(ctx context.Context, id ulid.ID) (AdminInvite, e
 		&i.CancelledAt,
 	)
 	return i, err
+}
+
+const growthChurn = `-- name: GrowthChurn :many
+SELECT m.month,
+       (SELECT count(*) FROM admin_growth_paying p WHERE p.month = m.month)::bigint AS start,
+       (SELECT count(*) FROM admin_growth_paying p
+         WHERE p.month = n.month
+           AND NOT EXISTS (SELECT 1 FROM admin_growth_paying q WHERE q.month = m.month AND q.account_id = p.account_id))::bigint AS joined,
+       (SELECT count(*) FROM admin_growth_paying p
+         WHERE p.month = m.month
+           AND NOT EXISTS (SELECT 1 FROM admin_growth_paying q WHERE q.month = n.month AND q.account_id = p.account_id))::bigint AS lost
+FROM admin_growth_months m
+JOIN admin_growth_months n ON n.month = (m.month + interval '1 month')::date
+WHERE m.month >= $1::date
+  AND m.taken_on < m.month + $2::int
+  AND n.taken_on < n.month + $2::int
+ORDER BY m.month
+`
+
+type GrowthChurnParams struct {
+	Since     pgtype.Date
+	GraceDays int32
+}
+
+type GrowthChurnRow struct {
+	Month  pgtype.Date
+	Start  int64
+	Joined int64
+	Lost   int64
+}
+
+// Each month whose start and the next month's start were both read in
+// their first days: the accounts paying as it began, those that joined
+// by the next, and those lost by then.
+func (q *Queries) GrowthChurn(ctx context.Context, arg GrowthChurnParams) ([]GrowthChurnRow, error) {
+	rows, err := q.db.Query(ctx, growthChurn, arg.Since, arg.GraceDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GrowthChurnRow{}
+	for rows.Next() {
+		var i GrowthChurnRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.Start,
+			&i.Joined,
+			&i.Lost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const growthMRR = `-- name: GrowthMRR :many
+SELECT day, currency::text, mrr_minor, accounts
+FROM admin_growth_mrr
+WHERE day >= $1::date
+ORDER BY day, currency
+`
+
+type GrowthMRRRow struct {
+	Day      pgtype.Date
+	Currency string
+	MrrMinor int64
+	Accounts int64
+}
+
+func (q *Queries) GrowthMRR(ctx context.Context, since pgtype.Date) ([]GrowthMRRRow, error) {
+	rows, err := q.db.Query(ctx, growthMRR, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GrowthMRRRow{}
+	for rows.Next() {
+		var i GrowthMRRRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Currency,
+			&i.MrrMinor,
+			&i.Accounts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertAdmin = `-- name: InsertAdmin :one
@@ -1061,6 +1158,50 @@ func (q *Queries) SaveAlertState(ctx context.Context, arg SaveAlertStateParams) 
 	return err
 }
 
+const saveGrowthMRR = `-- name: SaveGrowthMRR :exec
+INSERT INTO admin_growth_mrr (day, currency, mrr_minor, accounts, taken_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (day, currency) DO UPDATE
+SET mrr_minor = excluded.mrr_minor, accounts = excluded.accounts, taken_at = excluded.taken_at
+`
+
+type SaveGrowthMRRParams struct {
+	Day      pgtype.Date
+	Currency string
+	MrrMinor int64
+	Accounts int64
+	TakenAt  time.Time
+}
+
+// The day's recurring revenue in one currency; a later reading the same
+// day replaces it (ADR-0081).
+func (q *Queries) SaveGrowthMRR(ctx context.Context, arg SaveGrowthMRRParams) error {
+	_, err := q.db.Exec(ctx, saveGrowthMRR,
+		arg.Day,
+		arg.Currency,
+		arg.MrrMinor,
+		arg.Accounts,
+		arg.TakenAt,
+	)
+	return err
+}
+
+const saveGrowthPaying = `-- name: SaveGrowthPaying :exec
+INSERT INTO admin_growth_paying (month, account_id)
+SELECT $1::date, unnest($2::uuid[])
+ON CONFLICT DO NOTHING
+`
+
+type SaveGrowthPayingParams struct {
+	Month    pgtype.Date
+	Accounts []ulid.ID
+}
+
+func (q *Queries) SaveGrowthPaying(ctx context.Context, arg SaveGrowthPayingParams) error {
+	_, err := q.db.Exec(ctx, saveGrowthPaying, arg.Month, arg.Accounts)
+	return err
+}
+
 const savePushSubscription = `-- name: SavePushSubscription :exec
 INSERT INTO admin_push_subscriptions (id, admin_id, endpoint, p256dh, auth, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -1137,6 +1278,25 @@ type SetAlertEmailParams struct {
 func (q *Queries) SetAlertEmail(ctx context.Context, arg SetAlertEmailParams) error {
 	_, err := q.db.Exec(ctx, setAlertEmail, arg.Enabled, arg.ID)
 	return err
+}
+
+const startGrowthMonth = `-- name: StartGrowthMonth :execrows
+INSERT INTO admin_growth_months (month, taken_on) VALUES ($1, $2)
+ON CONFLICT (month) DO NOTHING
+`
+
+type StartGrowthMonthParams struct {
+	Month   pgtype.Date
+	TakenOn pgtype.Date
+}
+
+// Records that the month's paying accounts are read, once a month.
+func (q *Queries) StartGrowthMonth(ctx context.Context, arg StartGrowthMonthParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startGrowthMonth, arg.Month, arg.TakenOn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const touchAdminSession = `-- name: TouchAdminSession :exec

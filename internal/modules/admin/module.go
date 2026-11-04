@@ -116,14 +116,20 @@ func NewWebPusher(publicKey, privateKey, subject string) *app.WebPusher {
 	return app.NewWebPusher(publicKey, privateKey, subject)
 }
 
-// RegisterWorkers adds the alerts' check (the worker role, ADR-0080).
+// RegisterWorkers adds the alerts' check (the worker role, ADR-0080)
+// and the growth page's reading (ADR-0081).
 func (m *Module) RegisterWorkers(w *river.Workers) error {
-	return river.AddWorkerSafely(w, &app.AlertsCheckWorker{Svc: m.svc})
+	if err := river.AddWorkerSafely(w, &app.AlertsCheckWorker{Svc: m.svc}); err != nil {
+		return err
+	}
+	return river.AddWorkerSafely(w, &app.GrowthSnapshotWorker{Svc: m.svc})
 }
 
 // PeriodicJobs are the module's schedule: the alerts' check every five
-// minutes.
-func (*Module) PeriodicJobs() []*river.PeriodicJob { return []*river.PeriodicJob{app.AlertsPeriodic()} }
+// minutes, and the growth page's reading every hour.
+func (*Module) PeriodicJobs() []*river.PeriodicJob {
+	return []*river.PeriodicJob{app.AlertsPeriodic(), app.GrowthPeriodic()}
+}
 
 // CreateAdmin adds a platform admin in role (owner, operations, finance,
 // content or viewer; the `platform admin create` CLI).

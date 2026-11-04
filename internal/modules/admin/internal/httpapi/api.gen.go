@@ -199,6 +199,27 @@ func (e AdminAlertSeverity) Valid() bool {
 	}
 }
 
+// Defines values for AdminCollectedSeriesCurrency.
+const (
+	AdminCollectedSeriesCurrencyAED AdminCollectedSeriesCurrency = "AED"
+	AdminCollectedSeriesCurrencyEGP AdminCollectedSeriesCurrency = "EGP"
+	AdminCollectedSeriesCurrencySAR AdminCollectedSeriesCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminCollectedSeriesCurrency enum.
+func (e AdminCollectedSeriesCurrency) Valid() bool {
+	switch e {
+	case AdminCollectedSeriesCurrencyAED:
+		return true
+	case AdminCollectedSeriesCurrencyEGP:
+		return true
+	case AdminCollectedSeriesCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminCurrencyTotalCurrency.
 const (
 	AdminCurrencyTotalCurrencyAED AdminCurrencyTotalCurrency = "AED"
@@ -214,6 +235,27 @@ func (e AdminCurrencyTotalCurrency) Valid() bool {
 	case AdminCurrencyTotalCurrencyEGP:
 		return true
 	case AdminCurrencyTotalCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminDayMRRCurrency.
+const (
+	AdminDayMRRCurrencyAED AdminDayMRRCurrency = "AED"
+	AdminDayMRRCurrencyEGP AdminDayMRRCurrency = "EGP"
+	AdminDayMRRCurrencySAR AdminDayMRRCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminDayMRRCurrency enum.
+func (e AdminDayMRRCurrency) Valid() bool {
+	switch e {
+	case AdminDayMRRCurrencyAED:
+		return true
+	case AdminDayMRRCurrencyEGP:
+		return true
+	case AdminDayMRRCurrencySAR:
 		return true
 	default:
 		return false
@@ -310,6 +352,33 @@ func (e AdminFoundingMemberLostReason) Valid() bool {
 	case AdminFoundingMemberLostReasonCancelled:
 		return true
 	case AdminFoundingMemberLostReasonUnpaid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminGrowthErrors.
+const (
+	AdminGrowthErrorsChurn     AdminGrowthErrors = "churn"
+	AdminGrowthErrorsCollected AdminGrowthErrors = "collected"
+	AdminGrowthErrorsMrr       AdminGrowthErrors = "mrr"
+	AdminGrowthErrorsPlans     AdminGrowthErrors = "plans"
+	AdminGrowthErrorsStores    AdminGrowthErrors = "stores"
+)
+
+// Valid indicates whether the value is a known member of the AdminGrowthErrors enum.
+func (e AdminGrowthErrors) Valid() bool {
+	switch e {
+	case AdminGrowthErrorsChurn:
+		return true
+	case AdminGrowthErrorsCollected:
+		return true
+	case AdminGrowthErrorsMrr:
+		return true
+	case AdminGrowthErrorsPlans:
+		return true
+	case AdminGrowthErrorsStores:
 		return true
 	default:
 		return false
@@ -670,6 +739,27 @@ func (e AdminPlanPriceCycle) Valid() bool {
 	case AdminPlanPriceCycleAnnual:
 		return true
 	case AdminPlanPriceCycleMonthly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPlanRevenueCurrency.
+const (
+	AdminPlanRevenueCurrencyAED AdminPlanRevenueCurrency = "AED"
+	AdminPlanRevenueCurrencyEGP AdminPlanRevenueCurrency = "EGP"
+	AdminPlanRevenueCurrencySAR AdminPlanRevenueCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminPlanRevenueCurrency enum.
+func (e AdminPlanRevenueCurrency) Valid() bool {
+	switch e {
+	case AdminPlanRevenueCurrencyAED:
+		return true
+	case AdminPlanRevenueCurrencyEGP:
+		return true
+	case AdminPlanRevenueCurrencySAR:
 		return true
 	default:
 		return false
@@ -1630,6 +1720,15 @@ type AdminBillingSummary struct {
 	Overdue    []AdminCurrencyTotal `json:"overdue"`
 }
 
+// AdminCollectedSeries defines model for AdminCollectedSeries.
+type AdminCollectedSeries struct {
+	Currency AdminCollectedSeriesCurrency `json:"currency"`
+	Months   []AdminMonthAmount           `json:"months"`
+}
+
+// AdminCollectedSeriesCurrency defines model for AdminCollectedSeries.Currency.
+type AdminCollectedSeriesCurrency string
+
 // AdminCurrencyTotal defines model for AdminCurrencyTotal.
 type AdminCurrencyTotal struct {
 	Count    int64                      `json:"count"`
@@ -1650,6 +1749,17 @@ type AdminDayCount struct {
 	Count int64              `json:"count"`
 	Day   openapi_types.Date `json:"day"`
 }
+
+// AdminDayMRR defines model for AdminDayMRR.
+type AdminDayMRR struct {
+	Accounts int64               `json:"accounts"`
+	Currency AdminDayMRRCurrency `json:"currency"`
+	Day      openapi_types.Date  `json:"day"`
+	MrrMinor int64               `json:"mrr_minor"`
+}
+
+// AdminDayMRRCurrency defines model for AdminDayMRR.Currency.
+type AdminDayMRRCurrency string
 
 // AdminDuplicatePayment defines model for AdminDuplicatePayment.
 type AdminDuplicatePayment struct {
@@ -1776,6 +1886,35 @@ type AdminFoundingProgram struct {
 	// Seats How many merchants can join; seats are never reused.
 	Seats int `json:"seats"`
 }
+
+// AdminGrowth defines model for AdminGrowth.
+type AdminGrowth struct {
+	// Churn Complete months only, oldest first; empty until the first one.
+	Churn *[]AdminMonthChurn `json:"churn,omitempty"`
+
+	// Collected One series per currency with any revenue in the window, EGP then SAR then AED; each lays a value on every month.
+	Collected  *[]AdminCollectedSeries `json:"collected,omitempty"`
+	ComputedAt time.Time               `json:"computed_at"`
+	Errors     []AdminGrowthErrors     `json:"errors"`
+
+	// Months The 12 months' first days, oldest first, this month last.
+	Months []openapi_types.Date `json:"months"`
+
+	// Mrr The recurring revenue per Cairo day and currency since recording began, oldest first.
+	Mrr *[]AdminDayMRR `json:"mrr,omitempty"`
+
+	// Paying The paying accounts today (an agency is one).
+	Paying *int64 `json:"paying,omitempty"`
+
+	// Plans Paying accounts and recurring revenue per plan and currency today, the most first in each currency.
+	Plans *[]AdminPlanRevenue `json:"plans,omitempty"`
+
+	// Stores Every month of the window.
+	Stores *[]AdminMonthStores `json:"stores,omitempty"`
+}
+
+// AdminGrowthErrors defines model for AdminGrowth.Errors.
+type AdminGrowthErrors string
 
 // AdminHealth defines model for AdminHealth.
 type AdminHealth struct {
@@ -1993,6 +2132,38 @@ type AdminMetrics struct {
 // AdminMetricsErrors defines model for AdminMetrics.Errors.
 type AdminMetricsErrors string
 
+// AdminMonthAmount defines model for AdminMonthAmount.
+type AdminMonthAmount struct {
+	// AmountMinor Before VAT.
+	AmountMinor int64              `json:"amount_minor"`
+	Invoices    int64              `json:"invoices"`
+	Month       openapi_types.Date `json:"month"`
+}
+
+// AdminMonthChurn defines model for AdminMonthChurn.
+type AdminMonthChurn struct {
+	// Joined Paying by the next month's start
+	Joined int64 `json:"joined"`
+
+	// Lost Paying at the month's start
+	Lost  int64              `json:"lost"`
+	Month openapi_types.Date `json:"month"`
+
+	// RateBps lost over start
+	RateBps int64 `json:"rate_bps"`
+
+	// Start Paying accounts as the month began.
+	Start int64 `json:"start"`
+}
+
+// AdminMonthStores defines model for AdminMonthStores.
+type AdminMonthStores struct {
+	// Converted Of those created
+	Converted int64              `json:"converted"`
+	Created   int64              `json:"created"`
+	Month     openapi_types.Date `json:"month"`
+}
+
 // AdminNewStores defines model for AdminNewStores.
 type AdminNewStores struct {
 	// Daily The last 30 Cairo days, oldest first, today last.
@@ -2156,6 +2327,19 @@ type AdminPlanPriceCurrency string
 
 // AdminPlanPriceCycle defines model for AdminPlanPrice.Cycle.
 type AdminPlanPriceCycle string
+
+// AdminPlanRevenue defines model for AdminPlanRevenue.
+type AdminPlanRevenue struct {
+	Accounts int64                    `json:"accounts"`
+	Currency AdminPlanRevenueCurrency `json:"currency"`
+	MrrMinor int64                    `json:"mrr_minor"`
+
+	// Plan The plan's code.
+	Plan string `json:"plan"`
+}
+
+// AdminPlanRevenueCurrency defines model for AdminPlanRevenue.Currency.
+type AdminPlanRevenueCurrency string
 
 // AdminProfile defines model for AdminProfile.
 type AdminProfile struct {
@@ -3249,6 +3433,9 @@ type ServerInterface interface {
 	// AdminSaveFounding Save the program's settings
 	// (PUT /admin/v1/founding)
 	AdminSaveFounding(w http.ResponseWriter, r *http.Request)
+	// AdminGetGrowth The console's growth page
+	// (GET /admin/v1/growth)
+	AdminGetGrowth(w http.ResponseWriter, r *http.Request)
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(w http.ResponseWriter, r *http.Request)
@@ -3931,6 +4118,20 @@ func (siw *ServerInterfaceWrapper) AdminSaveFounding(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSaveFounding(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetGrowth operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetGrowth(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetGrowth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5607,6 +5808,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/growth", wrapper.AdminGetGrowth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/metrics", wrapper.AdminGetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminListAgencies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminCreateAgency)
@@ -6540,6 +6742,44 @@ type AdminSaveFoundingdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminSaveFoundingdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFoundingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGrowthRequestObject struct {
+}
+
+type AdminGetGrowthResponseObject interface {
+	VisitAdminGetGrowthResponse(w http.ResponseWriter) error
+}
+
+type AdminGetGrowth200JSONResponse AdminGrowth
+
+func (response AdminGetGrowth200JSONResponse) VisitAdminGetGrowthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetGrowthdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetGrowthdefaultApplicationProblemPlusJSONResponse) VisitAdminGetGrowthResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8820,6 +9060,9 @@ type StrictServerInterface interface {
 	// AdminSaveFounding Save the program's settings
 	// (PUT /admin/v1/founding)
 	AdminSaveFounding(ctx context.Context, request AdminSaveFoundingRequestObject) (AdminSaveFoundingResponseObject, error)
+	// AdminGetGrowth The console's growth page
+	// (GET /admin/v1/growth)
+	AdminGetGrowth(ctx context.Context, request AdminGetGrowthRequestObject) (AdminGetGrowthResponseObject, error)
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(ctx context.Context, request AdminHealthRequestObject) (AdminHealthResponseObject, error)
@@ -9677,6 +9920,30 @@ func (sh *strictHandler) AdminSaveFounding(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSaveFoundingResponseObject); ok {
 		if err := validResponse.VisitAdminSaveFoundingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetGrowth operation middleware
+func (sh *strictHandler) AdminGetGrowth(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetGrowthRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetGrowth(ctx, request.(AdminGetGrowthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetGrowth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetGrowthResponseObject); ok {
+		if err := validResponse.VisitAdminGetGrowthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
