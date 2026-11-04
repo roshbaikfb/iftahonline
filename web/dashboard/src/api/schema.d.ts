@@ -2065,6 +2065,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/stores/{store_id}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A store's prepaid balance and its latest entries
+         * @description The balance pay-as-you-sell fees are taken from (ADR-0083), in the
+         *     store's currency; 0 for a store never invoiced. An agency's store
+         *     has none (409 agency_managed).
+         */
+        get: operations["adminGetStoreBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/balance/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add to a store's prepaid balance
+         * @description A confirmed transfer, a compensation or a correction. What the
+         *     balance owes is covered first. Opens the store's own account when
+         *     it has none; a store with no billing yet is 409 no_billing, an
+         *     agency's store 409 agency_managed. Recorded in the admin log first.
+         */
+        post: operations["adminCreditStoreBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/stores/{store_id}/profile": {
         parameters: {
             query?: never;
@@ -2784,6 +2833,33 @@ export interface paths {
          * @description Once; recorded first in the admin log, with the refund's reference.
          */
         post: operations["adminMarkDuplicateRefunded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How pay-as-you-sell merchants may pay their fees
+         * @description A prepaid balance and a card on file with a minimum, each on or off,
+         *     and the minimum per currency: the least top-up and the card's
+         *     threshold; the low-balance notice is at half of it (ADR-0083).
+         */
+        get: operations["adminGetCollectionSettings"];
+        /**
+         * Save the collection settings
+         * @description Turning a way off reaches only merchants who choose after it.
+         *     Recorded in the admin log first.
+         */
+        put: operations["adminSaveCollectionSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5597,6 +5673,83 @@ export interface components {
             seats: number;
             /** @description The discount new members keep, in basis points (2000 = 20%). */
             discount_bps: number;
+        };
+        AdminCollectionSettings: {
+            /** @description Merchants may pay their fees from a prepaid balance. */
+            prepaid_enabled: boolean;
+            /** @description Merchants may pay them by the card on file */
+            card_enabled: boolean;
+            /** @description One per currency. */
+            minimums: components["schemas"]["AdminCollectionMinimum"][];
+        };
+        AdminCollectionMinimum: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: int64 */
+            minimum_minor: number;
+        };
+        AdminCollectionSettingsInput: {
+            prepaid_enabled: boolean;
+            card_enabled: boolean;
+            minimums: components["schemas"]["AdminCollectionMinimum"][];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminStoreBalance: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /**
+             * Format: int64
+             * @description Negative when fees of delivered orders are owed.
+             */
+            balance_minor: number;
+            /**
+             * Format: int64
+             * @description The currency's minimum.
+             */
+            minimum_minor: number;
+            /**
+             * @description low: under half the minimum; debt: nothing left, or owed.
+             * @enum {string}
+             */
+            level: "ok" | "low" | "debt";
+            /**
+             * @description The way the account chose; absent until it chooses.
+             * @enum {string}
+             */
+            collection?: "balance" | "card";
+            entries: components["schemas"]["AdminBalanceEntry"][];
+        };
+        AdminBalanceEntry: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "topup" | "manual" | "fee" | "fee_refund";
+            /**
+             * Format: int64
+             * @description Signed; a fee is negative.
+             */
+            amount_minor: number;
+            /** Format: int64 */
+            balance_after_minor: number;
+            /**
+             * @description A manual entry's.
+             * @enum {string}
+             */
+            reason?: "transfer" | "compensation" | "correction";
+            reference?: string;
+            admin_id?: components["schemas"]["ULID"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminBalanceCreditInput: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** @enum {string} */
+            reason: "transfer" | "compensation" | "correction";
+            /** @description The transfer's number */
+            reference: string;
+            /** @description Kept in the admin audit log. */
+            note: string;
         };
         AdminFoundingInput: {
             enabled: boolean;
@@ -10940,6 +11093,56 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    adminGetStoreBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The balance and its latest 50 entries, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreBalance"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCreditStoreBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminBalanceCreditInput"];
+            };
+        };
+        responses: {
+            /** @description Added; the balance now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreBalance"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     adminGetStoreProfile: {
         parameters: {
             query?: never;
@@ -11937,6 +12140,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetCollectionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCollectionSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveCollectionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCollectionSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCollectionSettings"];
+                };
             };
             default: components["responses"]["Problem"];
         };

@@ -141,6 +141,12 @@ func NewCatalog(adminPool *pgxpool.Pool, ids *ulid.Generator) Catalog {
 	return app.NewCatalog(adminPool, ids)
 }
 
+// NewCollection is the console's collection settings on adminPool
+// (app_admin), the only role that may change them (ADR-0083).
+func NewCollection(adminPool *pgxpool.Pool) CollectionConsole {
+	return app.NewService(app.Deps{DB: adminPool})
+}
+
 // NewFounding is the founding-merchants program for the super-admin
 // console, on adminPool (app_admin): its settings and its members.
 func NewFounding(adminPool *pgxpool.Pool) Founding {

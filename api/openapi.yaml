@@ -2402,6 +2402,54 @@ paths:
               schema: { $ref: "#/components/schemas/Billing" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/balance:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStoreBalance
+      summary: A store's prepaid balance and its latest entries
+      description: |
+        The balance pay-as-you-sell fees are taken from (ADR-0083), in the
+        store's currency; 0 for a store never invoiced. An agency's store
+        has none (409 agency_managed).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The balance and its latest 50 entries, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreBalance" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/balance/credits:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [admin]
+      operationId: adminCreditStoreBalance
+      summary: Add to a store's prepaid balance
+      description: |
+        A confirmed transfer, a compensation or a correction. What the
+        balance owes is covered first. Opens the store's own account when
+        it has none; a store with no billing yet is 409 no_billing, an
+        agency's store 409 agency_managed. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminBalanceCreditInput" }
+      responses:
+        "200":
+          description: Added; the balance now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreBalance" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/profile:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -3293,6 +3341,47 @@ paths:
       responses:
         "204":
           description: Recorded.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/billing/collection:
+    get:
+      tags: [admin]
+      operationId: adminGetCollectionSettings
+      summary: How pay-as-you-sell merchants may pay their fees
+      description: |
+        A prepaid balance and a card on file with a minimum, each on or off,
+        and the minimum per currency: the least top-up and the card's
+        threshold; the low-balance notice is at half of it (ADR-0083).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCollectionSettings" }
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [admin]
+      operationId: adminSaveCollectionSettings
+      summary: Save the collection settings
+      description: |
+        Turning a way off reaches only merchants who choose after it.
+        Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCollectionSettingsInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCollectionSettings" }
         default:
           $ref: "#/components/responses/Problem"
   /admin/v1/billing/summary:
@@ -6536,6 +6625,66 @@ components:
         enabled: { type: boolean }
         seats: { type: integer, description: How many merchants can join; seats are never reused. }
         discount_bps: { type: integer, description: "The discount new members keep, in basis points (2000 = 20%)." }
+    AdminCollectionSettings:
+      type: object
+      required: [prepaid_enabled, card_enabled, minimums]
+      properties:
+        prepaid_enabled: { type: boolean, description: Merchants may pay their fees from a prepaid balance. }
+        card_enabled: { type: boolean, description: Merchants may pay them by the card on file, charged at the minimum or the month's end. }
+        minimums:
+          type: array
+          description: One per currency.
+          items: { $ref: "#/components/schemas/AdminCollectionMinimum" }
+    AdminCollectionMinimum:
+      type: object
+      required: [currency, minimum_minor]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        minimum_minor: { type: integer, format: int64, minimum: 100, maximum: 100000000 }
+    AdminCollectionSettingsInput:
+      type: object
+      required: [prepaid_enabled, card_enabled, minimums, reason]
+      properties:
+        prepaid_enabled: { type: boolean }
+        card_enabled: { type: boolean }
+        minimums:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items: { $ref: "#/components/schemas/AdminCollectionMinimum" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminStoreBalance:
+      type: object
+      required: [currency, balance_minor, minimum_minor, level, entries]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        balance_minor: { type: integer, format: int64, description: Negative when fees of delivered orders are owed. }
+        minimum_minor: { type: integer, format: int64, description: The currency's minimum. }
+        level: { type: string, enum: [ok, low, debt], description: "low: under half the minimum; debt: nothing left, or owed." }
+        collection: { type: string, enum: [balance, card], description: The way the account chose; absent until it chooses. }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/AdminBalanceEntry" }
+    AdminBalanceEntry:
+      type: object
+      required: [id, kind, amount_minor, balance_after_minor, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { type: string, enum: [topup, manual, fee, fee_refund] }
+        amount_minor: { type: integer, format: int64, description: Signed; a fee is negative. }
+        balance_after_minor: { type: integer, format: int64 }
+        reason: { type: string, enum: [transfer, compensation, correction], description: A manual entry's. }
+        reference: { type: string }
+        admin_id: { $ref: "#/components/schemas/ULID" }
+        created_at: { type: string, format: date-time }
+    AdminBalanceCreditInput:
+      type: object
+      required: [amount_minor, reason, reference, note]
+      properties:
+        amount_minor: { type: integer, format: int64, minimum: 1, maximum: 100000000 }
+        reason: { type: string, enum: [transfer, compensation, correction] }
+        reference: { type: string, minLength: 1, maxLength: 120, description: The transfer's number, or a note. }
+        note: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminFoundingInput:
       type: object
       required: [enabled, seats, discount_bps, reason]

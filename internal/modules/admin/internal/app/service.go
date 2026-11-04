@@ -104,6 +104,8 @@ type Deps struct {
 	Site site.Console
 	// Founding is the founding-merchants program; nil for the CLI.
 	Founding billing.Founding
+	// Collection is the collection settings; nil for the CLI.
+	Collection billing.CollectionConsole
 }
 
 // Service implements the console.

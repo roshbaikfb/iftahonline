@@ -149,6 +149,12 @@ type Console interface {
 	// PaymentsByReference lists the payment attempts whose gateway
 	// reference is exactly reference (at most 10), newest first.
 	PaymentsByReference(ctx context.Context, reference string) ([]ConsolePayment, error)
+	// StoreBalance is the store-in-ctx's prepaid balance and its latest
+	// entries (ADR-0083); an agency's store is a conflict.
+	StoreBalance(ctx context.Context) (Balance, error)
+	// CreditBalance adds c to the store-in-ctx's balance, by admin
+	// (already in the admin log), opening its account if it has none.
+	CreditBalance(ctx context.Context, c Credit, admin ulid.ID) (Balance, error)
 }
 
 // DuplicatePayment is a payment of an invoice no longer open.
@@ -319,6 +325,49 @@ type Founding interface {
 }
 
 var _ Founding = (*app.Service)(nil)
+
+// Collecting pay-as-you-sell fees (ADR-0083).
+type (
+	// CollectionSettings are which ways merchants may choose and the
+	// minimum per currency.
+	CollectionSettings = domain.CollectionSettings
+	// Collection is a way an account pays its fees.
+	Collection = domain.Collection
+	// Balance is a store's prepaid balance as the console shows it.
+	Balance = app.Balance
+	// BalanceEntry is one change to a balance.
+	BalanceEntry = app.BalanceEntry
+	// Credit is an amount the console adds to a balance.
+	Credit = domain.Credit
+)
+
+// Collections, levels, entry kinds and credit reasons.
+const (
+	CollectBalance = domain.CollectBalance
+	CollectCard    = domain.CollectCard
+	BalanceOK      = domain.BalanceOK
+	BalanceLow     = domain.BalanceLow
+	BalanceDebt    = domain.BalanceDebt
+)
+
+// ParseCredit checks a credit from input.
+func ParseCredit(amount int64, reason, reference string) (Credit, error) {
+	return domain.ParseCredit(amount, reason, reference)
+}
+
+// Currencies are the platform's, in the order the console shows them.
+func Currencies() []string { return domain.Currencies() }
+
+// CollectionConsole is the console's collection settings (NewCollection,
+// on the console's role).
+type CollectionConsole interface {
+	CollectionSettings(ctx context.Context) (CollectionSettings, error)
+	// SaveCollectionSettings checks and writes them; turning a way off
+	// reaches only accounts that choose after it.
+	SaveCollectionSettings(ctx context.Context, c CollectionSettings) error
+}
+
+var _ CollectionConsole = (*app.Service)(nil)
 
 // Catalog is the console's plan catalog. It runs as the console's role;
 // see NewCatalog.
