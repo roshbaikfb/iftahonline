@@ -110,6 +110,18 @@ The `api` and `worker` roles also need object storage and imgproxy
    for the worker, and restart both. The worker runs the console's alerts
    check every 5 minutes and emails them over the same SMTP settings
    (ADR-0080); `ADMIN_HOST` there makes the links in those emails.
+   For mobile notifications, also give both roles the same VAPID key
+   pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, base64url). Make it
+   once and keep the private key in the secret manager; a new pair
+   makes every device subscribe again:
+
+   ```sh
+   openssl ecparam -name prime256v1 -genkey -noout -out vapid.pem
+   b64u() { base64 -w0 | tr '+/' '-_' | tr -d '='; }
+   openssl ec -in vapid.pem -outform DER | tail -c +8 | head -c 32 | b64u  # VAPID_PRIVATE_KEY
+   openssl ec -in vapid.pem -pubout -outform DER | tail -c 65 | b64u        # VAPID_PUBLIC_KEY
+   shred -u vapid.pem
+   ```
 2. Point `ADMIN_HOST` (default `admin.<PLATFORM_BASE_DOMAIN>`) at the api
    behind the edge.
 3. Restrict that hostname at the edge to the operators' IP ranges.

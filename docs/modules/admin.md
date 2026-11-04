@@ -23,6 +23,7 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/health` | Database and Redis checks, and counts: stores by state, subscriptions by status, open and overdue invoices, the job queue (ADR-0058). A failed section is absent and named in `errors`; the page still answers |
 | `GET /admin/v1/metrics` | Monthly recurring revenue per currency and new stores (last 7 and 30 Cairo days, and per day) for the home (ADR-0075). Read on opening and on «تحديث الآن», not every minute. A failed section is absent and named in `errors` |
 | `GET /admin/v1/search?q=` | One query across what the role reads (ADR-0079): stores (name, slug, domain), the stores of an owner by exact email or phone (contacts.read; logged masked as `admin.searched_owner`), invoices, payments by exact reference, agencies, admins; 5 of each, each source timed on its own (`failed`); `jump` for an exact invoice number, ID or domain |
+| `GET /admin/v1/push`, `POST /admin/v1/push/subscriptions`, `POST /admin/v1/push/subscriptions/remove` | The admin's mobile notifications (ADR-0080): the public key and device count; turn a device on or off |
 | `GET /admin/v1/alerts`, `PUT /admin/v1/alerts/email` | The alerts the role hears of (ADR-0080): open, and resolved in the last 30 days, each in words with its page; the admin's own email switch |
 | `GET /admin/v1/audit-log` | The admin log, newest first: each entry with its admin's name and, for a store or its invoice, the store's (through the directory, one query a page). Filters: `admin`, `family` (store, billing, content, security: action prefixes), `store` (its actions and its invoices', indexed in migration 00089), `from` and `to` (Cairo days, `to` included) |
 | `GET /admin/v1/admins` | The console's admins (name, email, active) for the log's filter; no secrets |
@@ -114,6 +115,14 @@ Every change asks for a reason.
   - Each email sent is recorded in `admin_alert_deliveries`. One that fails
     is tried again at the next check, and one not sent within a day is
     dropped.
+- **Mobile notifications (Web Push):**
+  - Any admin turns them on per device (`admin_push_subscriptions`,
+    migration 00095); the same admins as the email are told, on the same
+    events, recorded as channel `push`.
+  - Endpoints are accepted and reached only on the push services' hosts
+    (`pushEndpointOK`), through `platform/safehttp`.
+  - Off without `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`; a device the push
+    service no longer knows is forgotten.
 
 ## Tables (migration 00014)
 
@@ -205,5 +214,6 @@ owner, use SQL as `app_admin` or the owner:
 | The team: invite, look up and accept (once, code claimed); renew, cancel and expire; role, disable (sessions end), enable, reset (locked out until the link); not yourself; the last owner; over HTTP with no session for the invitee | `TestInviteAdmin`, `TestRenewAndCancelInvite`, `TestExpiredInvite`, `TestTeamChanges`, `domain.TestLeavesAnOwner`, `TestConsoleTeam` |
 | Search: per role, jumps, validation; the owner lookup (phone and email, masked in the log, never for finance, never for a name) | `TestSearch`, `TestSearchOwner`, `TestConsoleSearch` |
 | Alerts: two checks each way, unknown sections, who is told once, a failed email retried, email off, amber resolutions silent, the role's list; over HTTP | `domain.TestStep`, `TestSignals`, `TestAlertAudience`, `TestAlerts`, `TestConsoleAlerts` |
+| Push: only the push services' hosts, keys checked, off without keys, sent once per event to every device, a gone device forgotten; over HTTP | `TestPushEndpointOK`, `TestSubscribePush`, `TestAlerts`, `TestConsolePush` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
