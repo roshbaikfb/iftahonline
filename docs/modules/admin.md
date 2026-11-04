@@ -123,6 +123,13 @@ Every change asks for a reason.
     (`pushEndpointOK`), through `platform/safehttp`.
   - Off without `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`; a device the push
     service no longer knows is forgotten.
+- **In the console** (`web/dashboard/src/admin/AlertsPage.tsx`,
+  `alerts.ts`):
+  - `/console/alerts` shows the email switch and notifications on this
+    device, then the open and resolved alerts.
+  - The bell in the menu and the phone's top bar shows the open count.
+  - The service worker is `public/console-sw.js` (scope `/console`), with
+    `console.webmanifest` and the icons for the iPhone's home screen.
 
 ## Tables (migration 00014)
 
@@ -215,5 +222,6 @@ owner, use SQL as `app_admin` or the owner:
 | Search: per role, jumps, validation; the owner lookup (phone and email, masked in the log, never for finance, never for a name) | `TestSearch`, `TestSearchOwner`, `TestConsoleSearch` |
 | Alerts: two checks each way, unknown sections, who is told once, a failed email retried, email off, amber resolutions silent, the role's list; over HTTP | `domain.TestStep`, `TestSignals`, `TestAlertAudience`, `TestAlerts`, `TestConsoleAlerts` |
 | Push: only the push services' hosts, keys checked, off without keys, sent once per event to every device, a gone device forgotten; over HTTP | `TestPushEndpointOK`, `TestSubscribePush`, `TestAlerts`, `TestConsolePush` |
+| The alerts page: open and resolved with their pages, the bell's count, the email switch (reverted when refused), notifications turned on with the server key and off, a refused permission, no button without keys, support or permission, the iPhone note | `alerts.test.tsx` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |

@@ -130,6 +130,10 @@ The `api` and `worker` roles also need object storage and imgproxy
    `dist/index.html`. On `ADMIN_HOST`, route the traffic like this:
    - `/admin/v1/*` to the api;
    - `/assets/*` to the build's files;
+   - `/console-sw.js`, `/console.webmanifest` and `/console-icon-*.png`
+     to the build's files of the same names (the mobile notifications'
+     service worker and the home-screen app). Serve `/console-sw.js` with
+     `Cache-Control: no-cache`, so a new one reaches the devices;
    - every other path under `/console` to `dist/admin.html` (the
      console's own router reads the path).
 

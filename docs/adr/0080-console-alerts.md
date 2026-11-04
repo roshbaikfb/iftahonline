@@ -71,6 +71,15 @@ transaction.
     device the push service no longer knows (404/410) is forgotten.
   - Red alerts are sent with high urgency. The notification carries the
     alert's title, body and console page, nothing else.
+  - In the browser, the service worker `/console-sw.js` (scope `/console`)
+    shows it, tagged by the alert so its resolution replaces it, and a
+    click opens the console on that page (a path inside the console
+    only). It sits at the root because a worker's scope cannot reach above
+    its own folder.
+  - iPhones take web notifications only from a web app on the home
+    screen (iOS 16.4+), so the console has a manifest
+    (`/console.webmanifest`, standalone) and icons, and the alerts page
+    says how to add it.
 - **WhatsApp:** later, by the owner's decision.
 
 ### In the console
@@ -78,6 +87,15 @@ transaction.
 `GET /admin/v1/alerts` lists, for the signed-in admin's role, the open
 alerts and those resolved in the last 30 days. The server words each alert
 (title, body, page), the same words as the email.
+
+- **`/console/alerts`** shows how the alerts reach the admin (the email
+  switch, and notifications on this device), then the open alerts, each
+  with its page, then the resolved ones.
+- **The bell** in the menu and in the phone's top bar shows the open
+  count, read every minute while the tab is seen.
+- **The home** keeps its live «يحتاج انتباهك» cards from the health check.
+  They show what is wrong right now, a down database included, which no
+  alert can raise. The alerts are what was told to whom, after two checks.
 
 ## Consequences
 
