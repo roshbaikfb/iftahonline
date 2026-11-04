@@ -6,7 +6,8 @@ import { problemMessage } from '../lib/problem';
 import { ConsoleLayout } from './ConsoleLayout';
 import { DuplicatePayments } from './DuplicatePayments';
 import { Growth } from './Growth';
-import { attention, count, dateTimeAr, fetchStores, greeting, healthGroups, waiting, type AdminHealth, type Duplicate } from './lib';
+import { actionLabel, type Alert } from './alerts';
+import { count, dateTimeAr, fetchStores, greeting, healthGroups, type AdminHealth, type Duplicate } from './lib';
 import { useAdmin, useCan } from './session';
 import { StoreCell, StoreStatusPill } from './StoresPage';
 
@@ -45,15 +46,24 @@ export function Overview() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [metricsFailed, setMetricsFailed] = useState(false);
   const [error, setError] = useState('');
+  // The open alerts of the admin's role (ADR-0080); null while unread or
+  // when they could not be read.
+  const [alerts, setAlerts] = useState<Alert[] | null>(null);
+  const [alertsFailed, setAlertsFailed] = useState(false);
+  const showAlerts = useCallback((open: Alert[] | undefined) => {
+    setAlerts(open ?? null);
+    setAlertsFailed(!open);
+  }, []);
 
   const loadHealth = useCallback(async () => {
-    const { data, error: err } = await api.GET('/admin/v1/health');
+    const [{ data, error: err }, a] = await Promise.all([api.GET('/admin/v1/health'), api.GET('/admin/v1/alerts')]);
     if (data) {
       setHealth(data);
       setError('');
     }
     if (err) setError(problemMessage(err));
-  }, []);
+    showAlerts(a.data?.open);
+  }, [showAlerts]);
 
   // The revenue and new stores are read on opening and on «تحديث الآن»,
   // not every minute: they change slowly.
@@ -77,13 +87,15 @@ export function Overview() {
     const none = Promise.resolve({ data: undefined });
     void Promise.all([
       api.GET('/admin/v1/health'),
+      api.GET('/admin/v1/alerts'),
       canBilling ? api.GET('/admin/v1/billing/duplicates') : none,
       canCatalog ? api.GET('/admin/v1/founding') : none,
       canStores ? fetchStores({ query: '', status: '' }, '', 5) : none,
       fetchMetrics(),
-    ]).then(([h, d, f, st, m]) => {
+    ]).then(([h, a, d, f, st, m]) => {
       if (!live) return;
       showMetrics(m);
+      showAlerts(a.data?.open);
       if (h.data) setHealth(h.data);
       if (h.error) setError(problemMessage(h.error));
       if (d.data) setDuplicates(d.data.items);
@@ -93,7 +105,7 @@ export function Overview() {
     return () => {
       live = false;
     };
-  }, [showMetrics, canBilling, canCatalog, canStores]);
+  }, [showMetrics, showAlerts, canBilling, canCatalog, canStores]);
 
   // The health check is read again every minute while the tab is seen.
   useEffect(() => {
@@ -109,7 +121,6 @@ export function Overview() {
     setDuplicates((xs) => xs.map((x) => (x.id === id ? { ...x, refunded_at: new Date().toISOString(), refund_reference: reference } : x)));
   }, []);
 
-  const alerts = health ? attention(health, waiting(duplicates).length) : [];
   const s = health?.stores;
   const b = health?.billing;
   const j = health?.jobs;
@@ -148,30 +159,43 @@ export function Overview() {
       </div>
       {error && <p role="alert">{error}</p>}
 
-      {health && (
+      {(alerts !== null || alertsFailed) && (
         <section className="needs" aria-labelledby="h-attention">
           <h2 id="h-attention">
             يحتاج انتباهك{' '}
-            {alerts.length > 0 && (
+            {alerts && alerts.length > 0 && (
               <span className="needs-count" aria-label={`${String(alerts.length)} أمور`}>
                 {alerts.length}
               </span>
             )}
+            <Link to="/alerts" className="needs-all">
+              كل التنبيهات ←
+            </Link>
           </h2>
-          {alerts.length === 0 ? (
+          {alertsFailed ? (
+            <ul className="needs-list">
+              <li className="needs-card red">
+                <strong>
+                  <span className="dot" aria-hidden="true" />
+                  تعذّرت قراءة التنبيهات
+                </strong>
+                <p>قد تكون قاعدة البيانات لا ترد. تُعاد القراءة كل دقيقة.</p>
+              </li>
+            </ul>
+          ) : alerts?.length === 0 ? (
             <p className="all-good" role="status">
               كل شيء يعمل. لا شيء ينتظرك الآن.
             </p>
           ) : (
             <ul className="needs-list">
-              {alerts.map((a) => (
-                <li key={a.key} className={`needs-card ${a.tone}`}>
+              {alerts?.map((a) => (
+                <li key={a.id} className={`needs-card ${a.severity}`}>
                   <strong>
                     <span className="dot" aria-hidden="true" />
                     {a.title}
                   </strong>
                   <p>{a.body}</p>
-                  {a.link && (a.link.href.startsWith('/') ? <Link to={a.link.href}>{a.link.label}</Link> : <a href={a.link.href}>{a.link.label}</a>)}
+                  {a.path !== '/' && <Link to={a.path}>{actionLabel[a.kind]}</Link>}
                 </li>
               ))}
             </ul>

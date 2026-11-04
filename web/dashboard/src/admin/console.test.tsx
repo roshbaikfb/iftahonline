@@ -42,6 +42,11 @@ const storeRow = {
 function consoleRoutes(over: Record<string, (c: Call) => { status: number; body?: unknown }> = {}) {
   return mockAPI({
     'GET /admin/v1/health': () => ({ status: 200, body: health }),
+    // The server's open alert for the Redis the health finds down.
+    'GET /admin/v1/alerts': () => ({
+      status: 200,
+      body: { email: true, resolved: [], open: [{ id: 'AL1', kind: 'redis', severity: 'red', value: 0, title: 'Redis لا يرد', body: '', path: '/', opened_at: '', last_seen_at: '' }] },
+    }),
     'GET /admin/v1/stores': (c) => ({ status: 200, body: c.search.get('cursor') ? { items: [] } : { items: [storeRow], next_cursor: 'c1' } }),
     [`GET /admin/v1/stores/${store}`]: () => ({ status: 200, body: { store: storeRow.store, domains: [{ id: 'D1', host: 'alanaqa.iftahonline.com', kind: 'subdomain', status: 'verified', is_primary: true, created_at: '' }] } }),
     [`GET /admin/v1/stores/${store}/billing`]: () => ({
