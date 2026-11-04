@@ -106,8 +106,10 @@ The `api` and `worker` roles also need object storage and imgproxy
 
 ## Super-admin console
 
-1. Set `ADMIN_DATABASE_URL` (the `app_admin` role) for the api role, and
-   restart it.
+1. Set `ADMIN_DATABASE_URL` (the `app_admin` role) for the api role and
+   for the worker, and restart both. The worker runs the console's alerts
+   check every 5 minutes and emails them over the same SMTP settings
+   (ADR-0080); `ADMIN_HOST` there makes the links in those emails.
 2. Point `ADMIN_HOST` (default `admin.<PLATFORM_BASE_DOMAIN>`) at the api
    behind the edge.
 3. Restrict that hostname at the edge to the operators' IP ranges.
