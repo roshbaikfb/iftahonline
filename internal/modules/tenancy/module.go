@@ -138,6 +138,10 @@ func (a directoryAdapter) NewStores(ctx context.Context, now time.Time) (NewStor
 	return a.d.NewStores(ctx, now)
 }
 
+func (a directoryAdapter) StoresByMonth(ctx context.Context, since time.Time, converted []ulid.ID) ([]MonthStores, error) {
+	return a.d.StoresByMonth(ctx, since, converted)
+}
+
 // Resolver returns the host resolver.
 func (m *Module) Resolver() HostResolver { return m.resolver }
 

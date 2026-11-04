@@ -89,6 +89,13 @@ type (
 	Health = app.Health
 	// Revenue is the monthly recurring revenue in one currency.
 	Revenue = app.Revenue
+	// RevenueToday is what pays today, by currency and plan, with the
+	// paying accounts.
+	RevenueToday = app.RevenueToday
+	// PlanRevenue is one plan's share of the recurring revenue.
+	PlanRevenue = app.PlanRevenue
+	// MonthCollected is the revenue collected in one month and currency.
+	MonthCollected = app.MonthCollected
 )
 
 // Console is billing for the super-admin console.
@@ -101,6 +108,14 @@ type Console interface {
 	// as a month's share, an agency once; trials, past-due subscriptions
 	// and pay-as-you-sell fees are not in it.
 	Revenue(ctx context.Context) ([]Revenue, error)
+	// Today is Revenue's figure by currency and by plan, the most first,
+	// with the paying accounts (the console's growth page, ADR-0081).
+	Today(ctx context.Context) (RevenueToday, error)
+	// Collected is the revenue collected per Cairo month since since:
+	// paid invoices before VAT, per currency, oldest first.
+	Collected(ctx context.Context, since time.Time) ([]MonthCollected, error)
+	// Converted are the stores that paid a subscription since since.
+	Converted(ctx context.Context, since time.Time) ([]ulid.ID, error)
 	// Summary is the store in ctx's plan, status, card and open invoices.
 	Summary(ctx context.Context) (Summary, error)
 	// SettleStoreInvoice records an open invoice of the store-in-ctx's

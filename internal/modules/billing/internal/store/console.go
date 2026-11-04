@@ -181,3 +181,34 @@ func InvoiceLines(ctx context.Context, tx Tx, invoice ulid.ID) ([]InvoiceLine, e
 	}
 	return out, nil
 }
+
+// MonthCollected is the revenue collected in one month and currency.
+type MonthCollected struct {
+	Month         time.Time // the month's first day, midnight UTC
+	Currency      string
+	Invoices      int64
+	SubtotalMinor int64
+}
+
+// Collected is the revenue collected per month in tz since since: paid
+// invoices, before VAT (ADR-0081).
+func Collected(ctx context.Context, tx Tx, since time.Time, tz string) ([]MonthCollected, error) {
+	rows, err := billingdb.New(tx).ConsoleCollected(ctx, billingdb.ConsoleCollectedParams{Since: since, Tz: tz})
+	if err != nil {
+		return nil, fmt.Errorf("billing store: collected: %w", err)
+	}
+	out := make([]MonthCollected, len(rows))
+	for i, r := range rows {
+		out[i] = MonthCollected{Month: r.Month, Currency: r.Currency, Invoices: r.Invoices, SubtotalMinor: r.SubtotalMinor}
+	}
+	return out, nil
+}
+
+// Converted are the stores that paid a subscription since since.
+func Converted(ctx context.Context, tx Tx, since time.Time) ([]ulid.ID, error) {
+	ids, err := billingdb.New(tx).ConsoleConverted(ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: converted: %w", err)
+	}
+	return ids, nil
+}

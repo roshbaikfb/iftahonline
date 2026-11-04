@@ -95,6 +95,9 @@ type Directory interface {
 	// NewStores are the stores created in the last 30 Cairo days up to
 	// now: the last 7 and 30, and per day.
 	NewStores(ctx context.Context, now time.Time) (NewStores, error)
+	// StoresByMonth are the stores created per Cairo month since since,
+	// and how many of each month are in converted, in one query.
+	StoresByMonth(ctx context.Context, since time.Time, converted []ulid.ID) ([]MonthStores, error)
 	// Names maps store IDs to their names, in one query; an unknown ID
 	// is left out.
 	Names(ctx context.Context, ids []ulid.ID) (map[ulid.ID]string, error)
@@ -108,6 +111,9 @@ type StoreCounts = domain.StoreCounts
 
 // NewStores are the stores created lately, per day.
 type NewStores = domain.NewStores
+
+// MonthStores are the stores created in one month, and how many paid.
+type MonthStores = domain.MonthStores
 
 // DayCount is how many stores were created on one day.
 type DayCount = domain.DayCount

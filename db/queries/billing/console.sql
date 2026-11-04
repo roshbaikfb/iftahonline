@@ -31,3 +31,12 @@ SELECT id::uuid, created_at::timestamptz, invoice_id::uuid, invoice_number::text
        outcome::text, reason::text, reference::text, amount_minor::bigint, currency::text, (refunded_at IS NOT NULL)::bool AS refunded,
        coalesce(refunded_at, created_at)::timestamptz AS refunded_at
 FROM app.billing_attempts_by_reference(@reference::text, @lim::int);
+
+-- name: ConsoleCollected :many
+-- The revenue collected per month in @tz since @since (ADR-0081).
+SELECT month::date, currency::text, invoices::bigint, subtotal_minor::bigint
+FROM app.billing_collected(@since::timestamptz, @tz::text);
+
+-- name: ConsoleConverted :many
+-- The stores that paid a subscription since @since (ADR-0081).
+SELECT store_id::uuid FROM app.billing_converted(@since::timestamptz);

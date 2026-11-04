@@ -118,6 +118,21 @@ func NewStoresByDay(ctx context.Context, adminDB Tx, since time.Time, tz string)
 	return out, nil
 }
 
+// StoresByMonth are the stores created since since per month in tz, and
+// how many of them are in converted, in one query.
+func StoresByMonth(ctx context.Context, adminDB Tx, since time.Time, tz string, converted []ulid.ID) ([]domain.MonthStores, error) {
+	rows, err := tenancydb.New(adminDB).AdminStoresByMonth(ctx, tenancydb.AdminStoresByMonthParams{Tz: tz, Converted: converted, Since: since})
+	if err != nil {
+		return nil, fmt.Errorf("tenancy store: stores by month: %w", err)
+	}
+	out := make([]domain.MonthStores, len(rows))
+	for i, r := range rows {
+		m := r.Month.Time
+		out[i] = domain.MonthStores{Month: time.Date(m.Year(), m.Month(), 1, 0, 0, 0, 0, time.UTC), Created: r.Created, Converted: r.Converted}
+	}
+	return out, nil
+}
+
 // Names maps store IDs to their names, in one query; an unknown ID
 // is left out.
 func Names(ctx context.Context, adminDB Tx, ids []ulid.ID) (map[ulid.ID]string, error) {

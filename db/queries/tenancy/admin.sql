@@ -50,3 +50,15 @@ SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.creat
 FROM stores s
 WHERE s.id = ANY (@ids::uuid[])
 ORDER BY s.created_at DESC, s.id DESC;
+
+-- name: AdminStoresByMonth :many
+-- Stores created since @since per month in @tz, and how many of them are
+-- in @converted (the stores that paid), for the console's growth page
+-- (ADR-0081).
+SELECT date_trunc('month', created_at AT TIME ZONE @tz::text)::date AS month,
+       count(*)::bigint AS created,
+       count(*) FILTER (WHERE id = ANY (@converted::uuid[]))::bigint AS converted
+FROM stores
+WHERE created_at >= @since::timestamptz
+GROUP BY 1
+ORDER BY 1;

@@ -305,3 +305,48 @@ func (q *Queries) AdminStoresByID(ctx context.Context, ids []ulid.ID) ([]AdminSt
 	}
 	return items, nil
 }
+
+const adminStoresByMonth = `-- name: AdminStoresByMonth :many
+SELECT date_trunc('month', created_at AT TIME ZONE $1::text)::date AS month,
+       count(*)::bigint AS created,
+       count(*) FILTER (WHERE id = ANY ($2::uuid[]))::bigint AS converted
+FROM stores
+WHERE created_at >= $3::timestamptz
+GROUP BY 1
+ORDER BY 1
+`
+
+type AdminStoresByMonthParams struct {
+	Tz        string
+	Converted []ulid.ID
+	Since     time.Time
+}
+
+type AdminStoresByMonthRow struct {
+	Month     pgtype.Date
+	Created   int64
+	Converted int64
+}
+
+// Stores created since @since per month in @tz, and how many of them are
+// in @converted (the stores that paid), for the console's growth page
+// (ADR-0081).
+func (q *Queries) AdminStoresByMonth(ctx context.Context, arg AdminStoresByMonthParams) ([]AdminStoresByMonthRow, error) {
+	rows, err := q.db.Query(ctx, adminStoresByMonth, arg.Tz, arg.Converted, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminStoresByMonthRow{}
+	for rows.Next() {
+		var i AdminStoresByMonthRow
+		if err := rows.Scan(&i.Month, &i.Created, &i.Converted); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
@@ -87,5 +88,44 @@ func TestMRR(t *testing.T) {
 				t.Errorf("MRR = %+v; want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestToday (ADR-0081): the same revenue as MRR, each plan's share of it
+// per currency (the most first), and the paying accounts once each.
+func TestToday(t *testing.T) {
+	t.Parallel()
+	gen := ulid.NewGenerator()
+	a, b, c, agency := gen.New(), gen.New(), gen.New(), gen.New()
+	sub := func(account ulid.ID, currency, code string, cycle domain.Cycle, amount int64) domain.Paying {
+		return domain.Paying{Account: account, Kind: domain.KindSubscription, Currency: currency, PlanCode: code, Cycle: cycle, AmountMinor: amount}
+	}
+	agencyPlan := domain.Paying{Account: agency, Kind: domain.KindAgency, Currency: "EGP", PlanCode: "agency", Cycle: domain.Monthly, AmountMinor: 500000}
+	paying := []domain.Paying{
+		sub(a, "EGP", "merchant", domain.Monthly, 29900),
+		sub(b, "EGP", "pro", domain.Annual, 599000),
+		sub(c, "SAR", "pro", domain.Monthly, 9900),
+		agencyPlan, agencyPlan,
+		{Account: gen.New(), Kind: domain.KindFree, Currency: "EGP"},
+	}
+
+	got := domain.Today(paying)
+	if !reflect.DeepEqual(got.Revenue, domain.MRR(paying)) {
+		t.Fatalf("revenue = %+v; want MRR's %+v", got.Revenue, domain.MRR(paying))
+	}
+	want := []domain.PlanRevenue{
+		{Currency: "EGP", PlanCode: "agency", MRRMinor: 500000, Accounts: 1},
+		{Currency: "EGP", PlanCode: "pro", MRRMinor: 49917, Accounts: 1},
+		{Currency: "EGP", PlanCode: "merchant", MRRMinor: 29900, Accounts: 1},
+		{Currency: "SAR", PlanCode: "pro", MRRMinor: 9900, Accounts: 1},
+	}
+	if !reflect.DeepEqual(got.Plans, want) {
+		t.Fatalf("plans = %+v; want %+v", got.Plans, want)
+	}
+	if len(got.Accounts) != 4 || !slices.Contains(got.Accounts, agency) || slices.Contains(got.Accounts, ulid.ID{}) {
+		t.Fatalf("accounts = %v", got.Accounts)
+	}
+	if empty := domain.Today(nil); len(empty.Revenue) != 0 || len(empty.Plans) != 0 || len(empty.Accounts) != 0 {
+		t.Fatalf("none = %+v", empty)
 	}
 }

@@ -6,8 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
@@ -222,5 +225,69 @@ func TestConsolePages(t *testing.T) {
 	ps, err := d.svc.Payments(t.Context(), app.PaymentQuery{}, pf.NextCursor, 2)
 	if err != nil || len(ps.Items) == 0 || ps.Items[0].ID == pf.Items[1].ID || ps.Items[0].CreatedAt.After(pf.Items[1].CreatedAt) {
 		t.Fatalf("second payments = %+v, %v", ps, err)
+	}
+}
+
+// TestGrowthFigures (ADR-0081): a paid invoice counts in its Cairo month's
+// collected revenue before VAT, its store has converted and an unpaid one
+// has not, and Today names the paying accounts and plans.
+func TestGrowthFigures(t *testing.T) {
+	t.Parallel()
+	d := newDunning(t)
+	paid, unpaid := d.store(t), d.store(t)
+	period := "cycle, period_start, period_end='monthly', '2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z'"
+	d.subscribe(paid, t, "pro", "active", period)
+	d.subscribe(unpaid, t, "pro", "active", period)
+	account := d.invoiceOf(paid, t)
+	d.invoiceOf(unpaid, t)
+	if err := d.svc.SettleStoreInvoice(paid, d.invoiceID(t, account), "transfer-g"); err != nil {
+		t.Fatal(err)
+	}
+	var paidAt time.Time
+	var subtotal, total int64
+	if err := postgres.InTx(t.Context(), d.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(t.Context(), `SELECT set_config('app.account_id', $1::uuid::text, true)`, account); err != nil {
+			return err
+		}
+		return tx.QueryRow(t.Context(), `SELECT paid_at, subtotal_minor, total_minor FROM invoices`).Scan(&paidAt, &subtotal, &total)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if total <= subtotal {
+		t.Fatalf("the invoice has no VAT to leave out: %d, %d", subtotal, total)
+	}
+
+	cairo, err := time.LoadLocation("Africa/Cairo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := paidAt.In(cairo)
+	month := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, time.UTC)
+	rows, err := d.svc.Collected(t.Context(), paidAt.AddDate(0, -1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(rows, func(r app.MonthCollected) bool { return r.Month.Equal(month) && r.Currency == "EGP" })
+	if i < 0 || rows[i].Invoices < 1 || rows[i].SubtotalMinor < subtotal {
+		t.Fatalf("collected = %+v; want %v EGP with at least %d", rows, month, subtotal)
+	}
+
+	converted, err := d.svc.Converted(t.Context(), paidAt.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(converted, ulid.ID(storeOf(paid))) || slices.Contains(converted, ulid.ID(storeOf(unpaid))) {
+		t.Fatalf("converted = %v", converted)
+	}
+	if later, laterErr := d.svc.Converted(t.Context(), paidAt.Add(time.Second)); laterErr != nil || slices.Contains(later, ulid.ID(storeOf(paid))) {
+		t.Fatalf("converted after it paid = %v, %v", later, laterErr)
+	}
+
+	today, err := d.svc.Today(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(today.Accounts, account) || !slices.ContainsFunc(today.Plans, func(p app.PlanRevenue) bool { return p.Currency == "EGP" && p.PlanCode == "pro" && p.Accounts >= 2 }) {
+		t.Fatalf("today = %d accounts, plans %+v", len(today.Accounts), today.Plans)
 	}
 }
