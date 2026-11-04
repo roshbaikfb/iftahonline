@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 
 import { api } from '../api/client';
+import { AcceptInvite } from './AcceptInvite';
 import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
@@ -19,6 +20,7 @@ import { SitePage } from './SitePage';
 import { AdminSessionContext, fetchAdmin, type Admin, type AdminState } from './session';
 import { StorePage } from './StorePage';
 import { StoresPage } from './StoresPage';
+import { TeamPage } from './TeamPage';
 
 // ConsoleRoutes are the console's screens once an admin is signed in.
 export function ConsoleRoutes() {
@@ -39,13 +41,17 @@ export function ConsoleRoutes() {
       <Route path="/guides" element={<Need p="content.read"><GuidesPage /></Need>} />
       <Route path="/guides/:id" element={<Need p="content.read"><GuideEditor /></Need>} />
       <Route path="/audit" element={<Need p="audit.read"><AuditPage /></Need>} />
+      <Route path="/team" element={<Need p="team.manage"><TeamPage /></Need>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
-// Gate shows the login to visitors and the console to admins.
+// Gate shows the login to visitors and the console to admins. An invite
+// link opens its own page whoever is signed in (ADR-0078).
 export function Gate({ state }: { state: AdminState }) {
+  const { pathname } = useLocation();
+  if (pathname === '/invite' && state.kind !== 'loading') return <AcceptInvite />;
   switch (state.kind) {
     case 'loading':
       return <p role="status">جارٍ التحميل…</p>;

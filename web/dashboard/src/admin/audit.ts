@@ -1,6 +1,7 @@
 import type { components } from '../api/client';
 import { invoiceStatusLabel } from './billing';
 import { featureKindLabel, kindLabel, type Feature } from './plans';
+import { roleLabel, type Role } from './team';
 
 export type Entry = components['schemas']['AdminAuditEntry'];
 
@@ -18,6 +19,15 @@ const actions: Record<string, Action> = {
   'admin.created': { label: 'أضاف أدمن', family: 'security' },
   'admin.signed_in': { label: 'دخل الكونسول', family: 'security' },
   'admin.signed_out': { label: 'خرج من الكونسول', family: 'security' },
+  'admin.invited': { label: 'دعا أدمن جديدًا', family: 'security' },
+  'admin.invite_renewed': { label: 'أنشأ رابط دعوة جديدًا', family: 'security' },
+  'admin.invite_cancelled': { label: 'ألغى دعوة أدمن', family: 'security' },
+  'admin.joined': { label: 'قبل الدعوة وانضم للكونسول', family: 'security' },
+  'admin.role_changed': { label: 'غيّر دور أدمن', family: 'security' },
+  'admin.disabled': { label: 'أوقف أدمن', family: 'security', danger: true },
+  'admin.enabled': { label: 'أعاد تفعيل أدمن', family: 'security' },
+  'admin.reset': { label: 'أعاد ضبط مصادقة أدمن', family: 'security', danger: true },
+  'admin.reset_completed': { label: 'أعاد ضبط حسابه من الرابط', family: 'security' },
   'store.suspended': { label: 'أوقف متجرًا', family: 'store', danger: true },
   'store.reactivated': { label: 'أعاد تفعيل متجر', family: 'store' },
   'store.impersonated': { label: 'فتح جلسة دعم في متجر', family: 'store' },
@@ -81,6 +91,8 @@ export interface Described {
 function target(e: Entry): Described['target'] {
   const m = e.metadata;
   switch (e.target_type) {
+    case 'admin':
+      return { text: str(m['name']) || 'أدمن', to: '/team' };
     case 'store':
       return { text: e.store_name ?? (str(m['slug']) || 'صفحة المتجر'), to: `/stores/${e.target_id}` };
     case 'plan':
@@ -166,6 +178,14 @@ function chips(e: Entry, features: Feature[]): string[] {
         break;
       case 'reference':
         out.push(`المرجع: ${str(v)}`);
+        break;
+      case 'role':
+        out.push(roleLabel(str(v) as Role));
+        break;
+      case 'from':
+        break; // with "to"
+      case 'to':
+        out.push(`من ${roleLabel(str(e.metadata['from']) as Role)} إلى ${roleLabel(str(v) as Role)}`);
         break;
       case 'enabled':
         out.push(v === true ? 'البرنامج مفعّل' : 'البرنامج متوقف');

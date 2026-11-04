@@ -48,6 +48,16 @@ group('describe', () => {
       { label: 'سجّل فاتورة مدفوعة بتحويل', family: 'billing', target: { text: 'فاتورة INV-2026-000183', to: '/billing/invoices/INV2' }, chips: ['المرجع: TRX-2'] },
     ],
     [
+      'admin.role_changed',
+      { target_type: 'admin', target_id: 'A2', metadata: { reason: 'انتقل', name: 'سارة', from: 'operations', to: 'finance' } },
+      { label: 'غيّر دور أدمن', family: 'security', target: { text: 'سارة', to: '/team' }, chips: ['من العمليات والدعم إلى المالية'] },
+    ],
+    [
+      'admin.invited',
+      { target_type: 'admin', target_id: 'A3', metadata: { reason: 'انضمت', name: 'نور', role: 'content' } },
+      { label: 'دعا أدمن جديدًا', family: 'security', target: { text: 'نور', to: '/team' }, chips: ['المحتوى'] },
+    ],
+    [
       'billing.invoices_exported',
       { target_type: 'invoice', target_id: '', metadata: { status: 'overdue', currency: '', q: 'النيل' } },
       { label: 'صدّر الفواتير (CSV)', family: 'billing', target: { text: 'الفواتير', to: '/billing' }, chips: ['متأخرة', 'بحث: النيل'] },
