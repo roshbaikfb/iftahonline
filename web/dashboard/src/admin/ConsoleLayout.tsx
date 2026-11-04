@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { Link, NavLink } from 'react-router';
 
+import { useOpenAlerts } from './alerts';
 import { SearchPalette } from './SearchPalette';
 import { useAdmin, useCan, type Permission } from './session';
 
 // icons are stroke paths on a 24px grid, one per screen.
 const icons = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
+  alerts: 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0',
   stores: 'M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6',
   billing: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
   plans: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5',
@@ -24,6 +26,7 @@ const groups: { title: string; items: { to: string; label: string; icon: keyof t
     title: 'المنصة',
     items: [
       { to: '/', label: 'الرئيسية', icon: 'home', end: true },
+      { to: '/alerts', label: 'التنبيهات', icon: 'alerts' },
       { to: '/stores', label: 'المتاجر', icon: 'stores', need: 'stores.read' },
     ],
   },
@@ -72,6 +75,9 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
   const admin = state.kind === 'signed-in' ? state.admin : null;
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  // The bell's count: the open alerts of the admin's role (ADR-0080).
+  const alerts = useOpenAlerts();
+  const alertsLabel = alerts > 0 ? `التنبيهات، ${String(alerts)} مفتوحة` : 'التنبيهات';
 
   // Ctrl+K (⌘K) or "/" opens the search anywhere in the console, unless
   // the admin is typing in a field (ADR-0079).
@@ -118,6 +124,14 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
     <div className={open ? 'console open' : 'console'}>
       <header className="console-top">
         <span className="console-brand">{brand}</span>
+        <Link to="/alerts" className="console-toggle console-bell" aria-label={alertsLabel}>
+          <Icon d={icons.alerts} size={20} />
+          {alerts > 0 && (
+            <span className="alert-count" aria-hidden="true">
+              {alerts}
+            </span>
+          )}
+        </Link>
         <button type="button" className="console-toggle" aria-label="ابحث في كل شيء" onClick={search}>
           <Icon d="M11 18a7 7 0 1 0 0-14a7 7 0 0 0 0 14zM21 21l-4.3-4.3" size={20} />
         </button>
@@ -156,6 +170,11 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
               <NavLink key={n.to} to={n.to} end={n.end ?? false} className="console-item" onClick={close}>
                 <Icon d={icons[n.icon]} />
                 {n.label}
+                {n.icon === 'alerts' && alerts > 0 && (
+                  <span className="alert-count" aria-label={`${String(alerts)} مفتوحة`}>
+                    {alerts}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>

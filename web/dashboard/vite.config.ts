@@ -8,18 +8,20 @@ const apiTarget = process.env.VITE_API_PROXY ?? 'http://127.0.0.1:18080';
 const proxy = { '/v1': { target: apiTarget, changeOrigin: false }, '/admin/v1': { target: apiTarget, changeOrigin: false } };
 
 // The console (7f-3b) is a second page, admin.html, served under /console
-// on the console's host; dev and preview send /console/* to it.
+// on the console's host; dev and preview send /console and /console/* to
+// it (not its root files, /console-sw.js and the like).
+const consolePath = /^\/console(\/|\?|$)/;
 const consolePage: Plugin = {
   name: 'console-page',
   configureServer(server) {
     server.middlewares.use((req, _res, next) => {
-      if (req.url?.startsWith('/console')) req.url = '/admin.html';
+      if (consolePath.test(req.url ?? '')) req.url = '/admin.html';
       next();
     });
   },
   configurePreviewServer(server) {
     server.middlewares.use((req, _res, next) => {
-      if (req.url?.startsWith('/console')) req.url = '/admin.html';
+      if (consolePath.test(req.url ?? '')) req.url = '/admin.html';
       next();
     });
   },
