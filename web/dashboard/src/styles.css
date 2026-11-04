@@ -4942,6 +4942,14 @@ button.prov[aria-pressed='true'] {
 .bill-banner.late strong {
   color: #991b1b;
 }
+.bill-banner.free {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #78350f;
+}
+.bill-banner.free strong {
+  color: #92400e;
+}
 .bill-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));

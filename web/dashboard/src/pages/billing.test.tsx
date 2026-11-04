@@ -200,11 +200,29 @@ describe('Billing', () => {
   });
 
   it('shows a past-due store how to pay', async () => {
-    routes({ ...activeBilling, status: 'past_due', grace_until: '2026-11-15T00:00:00Z' });
+    routes({ ...activeBilling, status: 'past_due', grace_until: '2026-11-15T00:00:00Z', closes_at: '2026-12-15T00:00:00Z' });
     renderAt(`/stores/${store}/billing`);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('لم ننجح في تحصيل فاتورة أكتوبر 2026');
+    expect(alert).toHaveTextContent('قبل 15 نوفمبر 2026 حتى يبقى متجرك على باقته');
+    expect(alert).toHaveTextContent('يُغلق المتجر يوم 15 ديسمبر 2026');
     expect(within(alert).getByRole('button', { name: 'ادفع الآن 682.86 ج.م' })).toBeInTheDocument();
+  });
+
+  it('tells a lapsed store it is free until it closes, then closed (ADR-0082)', async () => {
+    routes({ ...activeBilling, status: 'suspended', closes_at: '2026-12-15T00:00:00Z' });
+    const { unmount } = renderAt(`/stores/${store}/billing`);
+    let alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('free');
+    expect(alert).toHaveTextContent('متجرك الآن على الباقة المجانية حتى تُدفع فاتورة أكتوبر 2026');
+    expect(alert).toHaveTextContent('يُغلق المتجر يوم 15 ديسمبر 2026');
+    unmount();
+
+    routes({ ...activeBilling, status: 'suspended', held: true });
+    renderAt(`/stores/${store}/billing`);
+    alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('late');
+    expect(alert).toHaveTextContent('متجرك مغلق ويرى العملاء صفحة صيانة');
   });
 
   it('is the owner’s alone', () => {
