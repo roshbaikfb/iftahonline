@@ -28,6 +28,7 @@ const actions: Record<string, Action> = {
   'admin.enabled': { label: 'أعاد تفعيل أدمن', family: 'security' },
   'admin.reset': { label: 'أعاد ضبط مصادقة أدمن', family: 'security', danger: true },
   'admin.reset_completed': { label: 'أعاد ضبط حسابه من الرابط', family: 'security' },
+  'admin.searched_owner': { label: 'بحث عن صاحب متجر برقمه أو إيميله', family: 'security' },
   'store.suspended': { label: 'أوقف متجرًا', family: 'store', danger: true },
   'store.reactivated': { label: 'أعاد تفعيل متجر', family: 'store' },
   'store.impersonated': { label: 'فتح جلسة دعم في متجر', family: 'store' },
@@ -181,6 +182,9 @@ function chips(e: Entry, features: Feature[]): string[] {
         break;
       case 'role':
         out.push(roleLabel(str(v) as Role));
+        break;
+      case 'query':
+        out.push(`«${str(v)}»`);
         break;
       case 'from':
         break; // with "to"

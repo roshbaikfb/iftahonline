@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
 
+import { SearchPalette } from './SearchPalette';
 import { useAdmin, useCan, type Permission } from './session';
 
 // icons are stroke paths on a 24px grid, one per screen.
@@ -70,6 +71,28 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
   const shown = groups.map((g) => ({ ...g, items: g.items.filter((n) => !n.need || can(n.need)) })).filter((g) => g.items.length > 0);
   const admin = state.kind === 'signed-in' ? state.admin : null;
   const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  // Ctrl+K (⌘K) or "/" opens the search anywhere in the console, unless
+  // the admin is typing in a field (ADR-0079).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+      if ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey)) {
+        e.preventDefault();
+        setOpen(false);
+        setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  const search = () => {
+    setOpen(false);
+    setSearching(true);
+  };
 
   // The drawer closes on Escape, and when a link in it is followed.
   useEffect(() => {
@@ -95,6 +118,9 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
     <div className={open ? 'console open' : 'console'}>
       <header className="console-top">
         <span className="console-brand">{brand}</span>
+        <button type="button" className="console-toggle" aria-label="ابحث في كل شيء" onClick={search}>
+          <Icon d="M11 18a7 7 0 1 0 0-14a7 7 0 0 0 0 14zM21 21l-4.3-4.3" size={20} />
+        </button>
         <button
           type="button"
           className="console-toggle"
@@ -118,6 +144,11 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
             <Icon d="M6 6l12 12M18 6L6 18" size={20} />
           </button>
         </div>
+        <button type="button" className="console-search" onClick={search}>
+          <Icon d="M11 18a7 7 0 1 0 0-14a7 7 0 0 0 0 14zM21 21l-4.3-4.3" size={16} />
+          <span>ابحث في كل شيء</span>
+          <kbd dir="ltr">Ctrl K</kbd>
+        </button>
         {shown.map((g) => (
           <div key={g.title} className="console-group">
             <div className="console-group-title">{g.title}</div>
@@ -141,6 +172,13 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
       </nav>
       {open && <button type="button" className="console-backdrop" aria-hidden="true" tabIndex={-1} onClick={close} />}
       <main className="console-main">{children}</main>
+      {searching && (
+        <SearchPalette
+          onClose={() => {
+            setSearching(false);
+          }}
+        />
+      )}
     </div>
   );
 }
