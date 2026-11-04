@@ -53,6 +53,11 @@ group('describe', () => {
       { label: 'غيّر دور أدمن', family: 'security', target: { text: 'سارة', to: '/team' }, chips: ['من العمليات والدعم إلى المالية'] },
     ],
     [
+      'admin.searched_owner',
+      { target_type: 'search', target_id: '', metadata: { query: '+20101••••678' } },
+      { label: 'بحث عن صاحب متجر برقمه أو إيميله', family: 'security', chips: ['«+20101••••678»'] },
+    ],
+    [
       'admin.invited',
       { target_type: 'admin', target_id: 'A3', metadata: { reason: 'انضمت', name: 'نور', role: 'content' } },
       { label: 'دعا أدمن جديدًا', family: 'security', target: { text: 'نور', to: '/team' }, chips: ['المحتوى'] },
