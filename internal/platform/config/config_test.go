@@ -356,6 +356,12 @@ func TestAdminConfig(t *testing.T) {
 	if err != nil || !strings.Contains(c.AdminDB.URL, "app_admin") || c.AdminDB.MaxConns != 4 {
 		t.Fatalf("admin db = %+v, %v", c.AdminDB, err)
 	}
+	// The worker reads it too: the console's alerts check runs there
+	// (ADR-0080).
+	w, err := config.Load(config.RoleWorker, env(with("ADMIN_DATABASE_URL", "postgres://app_admin:pw@db:5432/iftah")))
+	if err != nil || !strings.Contains(w.AdminDB.URL, "app_admin") {
+		t.Fatalf("worker admin db = %+v, %v", w.AdminDB, err)
+	}
 	// The admin CLI uses the admin role as its database, needs the
 	// keyring and hashing parameters, but no Redis or OTP pepper.
 	a, err := config.Load(config.RoleAdmin, env(map[string]string{
