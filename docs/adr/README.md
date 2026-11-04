@@ -88,3 +88,4 @@ supersedes it.
 | [0080](0080-console-alerts.md) | The console's alerts | Accepted |
 | [0081](0081-console-growth.md) | The console's growth page | Accepted |
 | [0082](0082-unpaid-stores-fall-back-to-free.md) | Unpaid stores fall back to the free plan before they close | Accepted |
+| [0083](0083-collecting-pay-as-you-sell-fees.md) | Collecting pay-as-you-sell fees: settings and prepaid balances | Accepted |

@@ -268,6 +268,29 @@ platform provider):
 |---|---|
 | `BILLING_PAYMOB_<CUR>_PUBLIC_KEY`, `…_CARD_INTEGRATION_ID`, `…_HMAC_SECRET` | The region's checkout: all three, on a region with the account's keys |
 
+## Collecting pay-as-you-sell fees (ADR-0083)
+
+- **Settings** (`billing_settings`, one row, written by `app_admin`):
+  - a prepaid balance on or off;
+  - the card with a minimum on or off;
+  - a minimum per currency (EGP 300, SAR 100, AED 100 to start).
+
+  Both ways start off. The console reads and saves them at
+  `/admin/v1/billing/collection` (`billing.NewCollection`).
+- **Balance:** `billing_accounts.balance_minor`, changed only under the
+  account row's lock. Each change is a `balance_entries` row (`topup`,
+  `manual`, `fee`, `fee_refund`) with the balance after it. It may go
+  negative through delivered orders.
+- **Levels:** `ok`, `low` (under half the minimum), `debt` (zero or
+  less).
+- **The console** (`Console.StoreBalance`, `Console.CreditBalance`):
+  - shows a store's balance and its latest 50 entries;
+  - adds to it with a reason, a reference and a note, recorded in the
+    admin log;
+  - opens the store's account when it has none.
+
+  Agencies' stores have no balance.
+
 ## The subscription lifecycle
 
 | From | Step | To |
