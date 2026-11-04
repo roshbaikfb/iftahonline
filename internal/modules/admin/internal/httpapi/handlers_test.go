@@ -1204,3 +1204,30 @@ func TestConsoleTeam(t *testing.T) {
 		t.Fatalf("a reset admin's session = %d", got.status)
 	}
 }
+
+// TestConsoleSearch: every admin searches, each kind filtered by role
+// (ADR-0079).
+func TestConsoleSearch(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	owner, content := f.loginAs(t, "owner"), f.loginAs(t, "content")
+	f.store(t)
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/search?q=Console", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/search?q=Console%20target", "", withCookie(owner))
+	stores, _ := r.body["stores"].([]any)
+	if r.status != http.StatusOK || len(stores) == 0 || r.body["invoices"] == nil || r.body["failed"] == nil {
+		t.Fatalf("owner = %d %v", r.status, r.body)
+	}
+	r = f.do(t, http.MethodGet, adminHost, "/admin/v1/search?q=Console%20target", "", withCookie(content))
+	if stores, _ = r.body["stores"].([]any); r.status != http.StatusOK || len(stores) != 0 {
+		t.Fatalf("content = %d %v", r.status, r.body)
+	}
+	for _, q := range []string{"?q=x", "?q=", ""} {
+		if got := f.do(t, http.MethodGet, adminHost, "/admin/v1/search"+q, "", withCookie(owner)); got.status != http.StatusUnprocessableEntity && got.status != http.StatusBadRequest {
+			t.Errorf("%q = %d", q, got.status)
+		}
+	}
+}

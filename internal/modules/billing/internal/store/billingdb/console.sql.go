@@ -95,6 +95,77 @@ func (q *Queries) ConsoleAttempts(ctx context.Context, arg ConsoleAttemptsParams
 	return items, nil
 }
 
+const consoleAttemptsByReference = `-- name: ConsoleAttemptsByReference :many
+SELECT id::uuid, created_at::timestamptz, invoice_id::uuid, invoice_number::text, account_id::uuid, account_kind::text,
+       account_name::text, (store_id IS NOT NULL)::bool AS has_store, coalesce(store_id, account_id)::uuid AS store_id, gateway::text,
+       outcome::text, reason::text, reference::text, amount_minor::bigint, currency::text, (refunded_at IS NOT NULL)::bool AS refunded,
+       coalesce(refunded_at, created_at)::timestamptz AS refunded_at
+FROM app.billing_attempts_by_reference($1::text, $2::int)
+`
+
+type ConsoleAttemptsByReferenceParams struct {
+	Reference string
+	Lim       int32
+}
+
+type ConsoleAttemptsByReferenceRow struct {
+	ID            ulid.ID
+	CreatedAt     time.Time
+	InvoiceID     ulid.ID
+	InvoiceNumber string
+	AccountID     ulid.ID
+	AccountKind   string
+	AccountName   string
+	HasStore      bool
+	StoreID       ulid.ID
+	Gateway       string
+	Outcome       string
+	Reason        string
+	Reference     string
+	AmountMinor   int64
+	Currency      string
+	Refunded      bool
+	RefundedAt    time.Time
+}
+
+func (q *Queries) ConsoleAttemptsByReference(ctx context.Context, arg ConsoleAttemptsByReferenceParams) ([]ConsoleAttemptsByReferenceRow, error) {
+	rows, err := q.db.Query(ctx, consoleAttemptsByReference, arg.Reference, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleAttemptsByReferenceRow{}
+	for rows.Next() {
+		var i ConsoleAttemptsByReferenceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InvoiceID,
+			&i.InvoiceNumber,
+			&i.AccountID,
+			&i.AccountKind,
+			&i.AccountName,
+			&i.HasStore,
+			&i.StoreID,
+			&i.Gateway,
+			&i.Outcome,
+			&i.Reason,
+			&i.Reference,
+			&i.AmountMinor,
+			&i.Currency,
+			&i.Refunded,
+			&i.RefundedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const consoleInvoices = `-- name: ConsoleInvoices :many
 SELECT id::uuid, number::text, account_id::uuid, account_kind::text, account_name::text, (store_id IS NOT NULL)::bool AS has_store,
        coalesce(store_id, account_id)::uuid AS store_id, period::date, currency::text, subtotal_minor::bigint, tax_bps::int,

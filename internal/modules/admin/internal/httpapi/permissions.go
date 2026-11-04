@@ -88,6 +88,9 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 
 	"AdminListAdmins": domain.PermAuditRead,
 	"AdminAuditLog":   domain.PermAuditRead,
+	// Every admin searches; each kind is filtered by its own permission
+	// inside (ADR-0079).
+	"AdminSearch": anyAdmin,
 
 	"AdminGetTeam":      domain.PermTeamManage,
 	"AdminInviteAdmin":  domain.PermTeamManage,

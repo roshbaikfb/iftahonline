@@ -70,6 +70,9 @@ type Deps struct {
 	// Profile reads a store's owner and numbers; nil refuses them (the
 	// CLI).
 	Profile Profiler
+	// OwnerStores finds a store owner's stores by exact email or phone
+	// for the search (ADR-0079); nil leaves that lookup out (the CLI).
+	OwnerStores OwnerStoresFunc
 	// DashboardURL is where the admin exchanges an impersonation code.
 	DashboardURL string
 	// Plans is billing's plan catalog on the console's role; Enforced

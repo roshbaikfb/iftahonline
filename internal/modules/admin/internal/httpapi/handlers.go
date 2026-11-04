@@ -116,10 +116,7 @@ func (h *Handlers) AdminListStores(ctx context.Context, req AdminListStoresReque
 	if err != nil {
 		return nil, err
 	}
-	out := AdminListStores200JSONResponse{Items: make([]AdminStoreSummary, len(page.Items))}
-	for i, e := range page.Items {
-		out.Items[i] = AdminStoreSummary{Store: toStore(e.Store), PrimaryHost: e.PrimaryHost}
-	}
+	out := AdminListStores200JSONResponse{Items: summaries(page.Items)}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
 	}

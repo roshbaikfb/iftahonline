@@ -24,3 +24,10 @@ FROM app.billing_summary(@now::timestamptz, @month_start::timestamptz, @week_ago
 -- name: ListInvoiceLines :many
 -- An invoice's lines, behind its account's wall.
 SELECT kind, description, quantity, amount_minor, line_store_id FROM invoice_lines WHERE invoice_id = @invoice_id ORDER BY line_no;
+
+-- name: ConsoleAttemptsByReference :many
+SELECT id::uuid, created_at::timestamptz, invoice_id::uuid, invoice_number::text, account_id::uuid, account_kind::text,
+       account_name::text, (store_id IS NOT NULL)::bool AS has_store, coalesce(store_id, account_id)::uuid AS store_id, gateway::text,
+       outcome::text, reason::text, reference::text, amount_minor::bigint, currency::text, (refunded_at IS NOT NULL)::bool AS refunded,
+       coalesce(refunded_at, created_at)::timestamptz AS refunded_at
+FROM app.billing_attempts_by_reference(@reference::text, @lim::int);

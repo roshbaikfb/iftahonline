@@ -23,8 +23,7 @@ func (h *Handlers) AdminGetTeam(ctx context.Context, _ AdminGetTeamRequestObject
 	}
 	out := AdminGetTeam200JSONResponse{Admins: make([]AdminTeamMember, len(t.Members)), Invites: make([]AdminInvite, len(t.Invites))}
 	for i, m := range t.Members {
-		out.Admins[i] = AdminTeamMember{Id: m.ID.String(), Name: m.Name, Email: m.Email, Role: AdminRole(m.Role), Active: m.Active,
-			Resetting: m.Resetting, CreatedAt: m.CreatedAt, LastLoginAt: m.LastLoginAt}
+		out.Admins[i] = toMember(m)
 	}
 	for i, inv := range t.Invites {
 		out.Invites[i] = toInvite(inv)

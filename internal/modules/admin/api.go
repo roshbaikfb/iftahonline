@@ -20,6 +20,10 @@ type OwnerContact = app.OwnerContact
 // Profiler reads the profile of the store in ctx.
 type Profiler = app.Profiler
 
+// OwnerStoresFunc finds a store owner's stores by exact email or phone
+// for the console's search (ADR-0079): store IDs only.
+type OwnerStoresFunc = app.OwnerStoresFunc
+
 // Impersonator opens a support session as the owner of the store in ctx
 // (ADR-0055). The console's wiring adapts the identity module to it.
 type Impersonator = app.Impersonator

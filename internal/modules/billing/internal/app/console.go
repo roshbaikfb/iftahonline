@@ -381,3 +381,17 @@ func (s *Service) Totals(ctx context.Context) (Totals, error) {
 	})
 	return t, nil
 }
+
+// PaymentsByReference lists the payment attempts whose gateway reference
+// is exactly reference (at most 10), newest first: the console's search.
+func (s *Service) PaymentsByReference(ctx context.Context, reference string) (out []ConsolePayment, err error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" || len(reference) > 120 {
+		return []ConsolePayment{}, nil
+	}
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.PaymentsByReference(ctx, tx, reference, 10)
+		return txErr
+	})
+	return out, err
+}

@@ -195,11 +195,11 @@ func TestOwnerContactTx(t *testing.T) {
 		ctx := tenant.WithStore(t.Context(), id)
 		var c identity.OwnerContact
 		var ok bool
-		if err := postgres.InTenantTx(ctx, pool, func(tx pgx.Tx) (txErr error) {
+		if readErr := postgres.InTenantTx(ctx, pool, func(tx pgx.Tx) (txErr error) {
 			c, ok, txErr = identity.OwnerContactTx(ctx, tx)
 			return txErr
-		}); err != nil {
-			t.Fatal(err)
+		}); readErr != nil {
+			t.Fatal(readErr)
 		}
 		return c, ok
 	}
@@ -224,5 +224,32 @@ func TestOwnerContactTx(t *testing.T) {
 	}
 	if _, ok = read(c); ok {
 		t.Fatal("a store without an owner gave one")
+	}
+
+	// The console's search (ADR-0079): an exact email or phone finds the
+	// stores its owner owns, on the console's pool only, IDs only.
+	adminPool, err := pgxpool.New(t.Context(), infra.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(adminPool.Close)
+	for name, tt := range map[string]struct {
+		email  string
+		phones []string
+		want   []ulid.ID
+	}{
+		"owner's email":     {"owner-a-" + suffix + "@example.com", nil, []ulid.ID{a.ID}},
+		"owner's phone":     {"", []string{"+966500000000", phone}, []ulid.ID{a.ID}},
+		"a manager's email": {"manager-a-" + suffix + "@example.com", nil, nil},
+		"another owner":     {"owner-b-" + suffix + "@example.com", nil, []ulid.ID{b.ID}},
+		"nothing":           {"", nil, nil},
+	} {
+		found, findErr := identity.OwnerStores(t.Context(), adminPool, tt.email, tt.phones)
+		if findErr != nil || len(found) != len(tt.want) || len(found) > 0 && found[0] != tt.want[0] {
+			t.Errorf("%s = %v, %v; want %v", name, found, findErr, tt.want)
+		}
+	}
+	if _, err = identity.OwnerStores(t.Context(), pool, "owner-a-"+suffix+"@example.com", nil); err == nil {
+		t.Fatal("the app role may not look owners up")
 	}
 }
