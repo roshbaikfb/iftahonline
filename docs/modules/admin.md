@@ -30,6 +30,9 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/admins` | The console's admins (name, email, active) for the log's filter; no secrets |
 | `GET /admin/v1/stores/{id}/profile` | A store's owner and numbers, read by `cmd/platform`'s `storeProfiler` from identity (`OwnerContactTx`), orders (`ActivityTx`) and catalog (`CountProducts`) in one tenant transaction. The owner's contact is returned in full to admins and never logged |
 | `GET /admin/v1/stores/{id}/billing` | The store's billing page: plan, status, period, card, open invoices |
+| `GET /admin/v1/stores/{id}/balance` | The store's prepaid balance, its level and its latest 50 entries (ADR-0083) |
+| `POST /admin/v1/stores/{id}/balance/credits` | Adds to the balance: `amount_minor`, `reason` (transfer, compensation, correction), `reference`, `note`. Recorded here first (`balance.credited`) |
+| `GET/PUT /admin/v1/billing/collection` | The collection settings: prepaid balance and card with a minimum, each on or off, and the minimum per currency. Saving needs a reason and is recorded first (`billing.collection_saved`) |
 | `POST /admin/v1/stores/{id}/invoices/{invoice}/settle` | A confirmed transfer: `reference` and `reason`. 404 unless it is an open invoice of the store's account. Recorded here first (`invoice.settled`) |
 | `GET /admin/v1/agencies`, `POST /admin/v1/agencies`, `GET /admin/v1/agencies/{id}` | Agency accounts (ADR-0059): name, currency and agency plan; the view lists its store IDs. Creation is recorded once it has an ID (`agency.created`) |
 | `POST /admin/v1/agencies/{id}/stores/{store_id}`, `POST …/{store_id}/remove` | A store joins (from no account, or from its own once that owes nothing: 409 `open_invoice`; the currency must match) or leaves onto the free plan. Recorded first (`store.agency_joined`, `store.agency_left`) |
