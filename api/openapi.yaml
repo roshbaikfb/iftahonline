@@ -2147,6 +2147,63 @@ paths:
           description: Saved.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/push:
+    get:
+      tags: [admin]
+      operationId: adminPushStatus
+      summary: What the console needs to turn mobile notifications on
+      description: |
+        The VAPID public key the browser subscribes with (absent when this
+        server sends no mobile notifications), and how many of the admin's
+        devices have them (ADR-0080).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPushStatus" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/push/subscriptions:
+    post:
+      tags: [admin]
+      operationId: adminSubscribePush
+      summary: Turn mobile notifications on in this browser or phone
+      description: |
+        The browser's PushSubscription. Only the big push services are
+        accepted (Google, Mozilla, Apple, Microsoft); the alerts reach the
+        device from the worker. 503 when this server sends none.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPushSubscription" }
+      responses:
+        "204":
+          description: On.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/push/subscriptions/remove:
+    post:
+      tags: [admin]
+      operationId: adminUnsubscribePush
+      summary: Turn mobile notifications off in this browser or phone
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPushEndpoint" }
+      responses:
+        "204":
+          description: Off.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/me:
     get:
       tags: [admin]
@@ -5989,6 +6046,28 @@ components:
       required: [enabled]
       properties:
         enabled: { type: boolean }
+    AdminPushStatus:
+      type: object
+      required: [devices]
+      properties:
+        public_key: { type: string, description: "The VAPID public key, base64url; absent: no mobile notifications on this server." }
+        devices: { type: integer, format: int64, description: The admin's devices with notifications on. }
+    AdminPushEndpoint:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, maxLength: 2048 }
+    AdminPushSubscription:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, maxLength: 2048 }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, maxLength: 100 }
+            auth: { type: string, maxLength: 32 }
     AdminStorePage:
       type: object
       required: [items]

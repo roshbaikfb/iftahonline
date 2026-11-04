@@ -732,6 +732,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			AdminPool: c.adminPool, Redis: c.rdb, Directory: ten.Directory(), Stores: ten.Service(), IDs: c.ids, Log: c.log,
 			Secrets: c.cfg.Secrets, Hashing: c.cfg.Identity, AdminHost: c.cfg.Tenancy.AdminHost, ClientIP: middleware.ClientIP,
 			Impersonate: impersonator(id), Profile: storeProfiler(c.pool, time.Now), DashboardURL: c.cfg.Mail.DashboardURL,
+			PushPublicKey: c.cfg.AdminPush.PublicKey,
 			OwnerStores: func(ctx context.Context, email string, phones []string) ([]ulid.ID, error) {
 				return identity.OwnerStores(ctx, c.adminPool, email, phones)
 			},
@@ -951,6 +952,14 @@ func runHTTP(ctx context.Context, cfg config.Config, log *slog.Logger, build ser
 	return server.Serve(ctx, server.NewServer(cfg.HTTP, handler, log), ln, health, cfg.HTTP, log)
 }
 
+// pusherFor is the console's Web Push sender, or none without keys.
+func pusherFor(p config.Push) admin.Pusher {
+	if !p.Enabled() {
+		return nil
+	}
+	return admin.NewWebPusher(p.PublicKey, p.PrivateKey, p.Subject)
+}
+
 func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build server.BuildInfo) error {
 	d, err := newDeps(ctx, cfg, build)
 	if err != nil {
@@ -1137,7 +1146,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 	if c.adminPool != nil {
 		console, consoleErr := admin.New(admin.Deps{AdminPool: c.adminPool, Redis: rdb, Directory: ten.Directory(), IDs: c.ids, Log: log,
 			Secrets: cfg.Secrets, Hashing: cfg.Identity, Billing: bill.Console(), Mailer: mailer.FromConfig(cfg.Mail, log),
-			ConsoleURL: "https://" + cfg.Tenancy.AdminHost + "/console"})
+			ConsoleURL: "https://" + cfg.Tenancy.AdminHost + "/console", Pusher: pusherFor(cfg.AdminPush)})
 		if consoleErr != nil {
 			return consoleErr
 		}

@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -139,12 +141,13 @@ func (s *Service) stepAlerts(ctx context.Context, readings map[domain.AlertKind]
 	})
 }
 
-// deliverAlerts sends each notice owed: an opening to every admin whose
-// role covers it, a red alert's resolution to those told of its opening.
-// A notice that fails is tried again at the next check; one not sent in
-// a day is dropped.
+// deliverAlerts sends each notice owed, on each channel the admin has:
+// an opening to every admin whose role covers it, a red alert's
+// resolution to those told of its opening on that channel. A notice that
+// fails is tried again at the next check; one not sent in a day is
+// dropped.
 func (s *Service) deliverAlerts(ctx context.Context) error {
-	if s.d.Mailer == nil {
+	if s.d.Mailer == nil && s.d.Pusher == nil {
 		return nil
 	}
 	alerts, err := store.AlertsToDeliver(ctx, s.d.DB, s.now().Add(-alertsDeliverIn))
@@ -154,6 +157,12 @@ func (s *Service) deliverAlerts(ctx context.Context) error {
 	people, err := store.Recipients(ctx, s.d.DB)
 	if err != nil {
 		return err
+	}
+	devices := map[ulid.ID][]store.PushDevice{}
+	if s.d.Pusher != nil {
+		if devices, err = store.PushDevices(ctx, s.d.DB); err != nil {
+			return err
+		}
 	}
 	ids := make([]ulid.ID, len(alerts))
 	for i, a := range alerts {
@@ -165,31 +174,84 @@ func (s *Service) deliverAlerts(ctx context.Context) error {
 	}
 	for _, a := range alerts {
 		for _, p := range people {
-			if !p.WantsEmail || !a.Kind.For(p.Role) {
+			if !a.Kind.For(p.Role) {
 				continue
 			}
-			opened := store.Delivery{Alert: a.ID, Admin: p.ID, Event: "opened", Channel: "email"}
-			d := opened
-			switch {
-			case a.ResolvedAt == nil:
-			case sent[opened]: // a red alert resolved: tell those told it opened
-				d.Event = "resolved"
-			default:
-				continue
+			var channels []string
+			if s.d.Mailer != nil && p.WantsEmail {
+				channels = append(channels, "email")
 			}
-			if sent[d] {
-				continue
+			if len(devices[p.ID]) > 0 {
+				channels = append(channels, "push")
 			}
-			if err = s.sendAlert(ctx, p, a, d.Event); err != nil {
-				s.d.Log.WarnContext(ctx, "admin: alert email failed", "alert", a.ID.String(), "admin", p.ID.String(), "err", err)
-				continue
-			}
-			if err = store.RecordDelivery(ctx, s.d.DB, d); err != nil {
-				return err
+			for _, ch := range channels {
+				d := store.Delivery{Alert: a.ID, Admin: p.ID, Event: "opened", Channel: ch}
+				if a.ResolvedAt != nil {
+					if !sent[d] { // never told it opened: nothing to tell now
+						continue
+					}
+					d.Event = "resolved"
+				}
+				if sent[d] {
+					continue
+				}
+				if ch == "email" {
+					err = s.sendAlert(ctx, p, a, d.Event)
+				} else {
+					err = s.pushAlert(ctx, devices[p.ID], a, d.Event)
+				}
+				if err != nil {
+					s.d.Log.WarnContext(ctx, "admin: alert notice failed", "channel", ch, "alert", a.ID.String(), "admin", p.ID.String(), "err", err)
+					continue
+				}
+				if err = store.RecordDelivery(ctx, s.d.DB, d); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+// pushAlert notifies every device of an admin; it counts as sent when
+// one took it. A device its push service no longer knows is forgotten.
+func (s *Service) pushAlert(ctx context.Context, devices []store.PushDevice, a store.Alert, event string) error {
+	text := alertText(a)
+	title := text.Title
+	if event == "resolved" {
+		title = "حُلّ: " + text.Title
+	}
+	payload, err := json.Marshal(map[string]string{"title": title, "body": text.Body, "path": text.Path, "tag": a.ID.String()})
+	if err != nil {
+		return err
+	}
+	var errsSeen []error
+	reached := false
+	for _, d := range devices {
+		cctx, cancel := context.WithTimeout(ctx, alertSendTime)
+		gone, pushErr := s.d.Pusher.Push(cctx, d, payload, a.Kind.Severity() == domain.SeverityRed)
+		cancel()
+		switch {
+		case gone:
+			if forgetErr := store.ForgetPushDevice(ctx, s.d.DB, d.ID); forgetErr != nil {
+				return forgetErr
+			}
+		case pushErr != nil:
+			errsSeen = append(errsSeen, pushErr)
+		default:
+			reached = true
+			if markErr := store.MarkPushSent(ctx, s.d.DB, d.ID); markErr != nil {
+				return markErr
+			}
+		}
+	}
+	if reached {
+		return nil
+	}
+	if len(errsSeen) == 0 {
+		return errors.New("admin: no device to notify")
+	}
+	return errors.Join(errsSeen...)
 }
 
 func (s *Service) sendAlert(ctx context.Context, p store.Recipient, a store.Alert, event string) error {

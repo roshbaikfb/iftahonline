@@ -95,6 +95,10 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 	// and chooses its own email (ADR-0080).
 	"AdminListAlerts":    anyAdmin,
 	"AdminSetAlertEmail": anyAdmin,
+	// Each admin turns notifications on or off in its own devices.
+	"AdminPushStatus":      anyAdmin,
+	"AdminSubscribePush":   anyAdmin,
+	"AdminUnsubscribePush": anyAdmin,
 
 	"AdminGetTeam":      domain.PermTeamManage,
 	"AdminInviteAdmin":  domain.PermTeamManage,

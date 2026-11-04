@@ -75,6 +75,11 @@ type Deps struct {
 	// sends none. ConsoleURL is the console's address in them.
 	Mailer     mailer.Mailer
 	ConsoleURL string
+	// Pusher sends the alerts' mobile notifications from the worker;
+	// PushPublicKey is the VAPID key the console's browsers subscribe
+	// with (the api). Either empty or nil: no mobile notifications.
+	Pusher        Pusher
+	PushPublicKey string
 	// OwnerStores finds a store owner's stores by exact email or phone
 	// for the search (ADR-0079); nil leaves that lookup out (the CLI).
 	OwnerStores OwnerStoresFunc
