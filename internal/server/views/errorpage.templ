@@ -1,28 +1,58 @@
 package views
 
-// ErrorPage is the storefront's minimal error document. It is bilingual
-// (Arabic first) and has no inline script or style, so it satisfies the
-// storefront CSP (script-src 'self'; style-src 'self').
-templ ErrorPage(status int, titleAR, titleEN, messageAR, messageEN string) {
+// ErrorView is one of the storefront's pages for a store that cannot be
+// shown (the approved mockup): Arabic first with an English line, an icon
+// by case, at most one link, and the platform's mark at the foot.
+type ErrorView struct {
+	Status  int
+	Tone    string // the icon's colour: amber, sky, slate or red
+	Icon    string // the icon's stroke path on a 24px grid
+	TitleAR string
+	BodyAR  string
+	EN      string // one English sentence
+	Link    *ErrorLink
+	Footer  string
+	CSS     string // the inline stylesheet, allowed by its hash in the CSP
+}
+
+// ErrorLink is the page's one way on: a button, or a quiet line.
+type ErrorLink struct {
+	Href, Label string
+	Button      bool
+}
+
+// ErrorPage renders v. Its only style is v.CSS, inline and named by its
+// hash in the response's CSP; it has no script.
+templ ErrorPage(v ErrorView) {
 	<!DOCTYPE html>
 	<html lang="ar" dir="rtl">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="robots" content="noindex"/>
-			<title>{ titleAR } · { titleEN }</title>
+			<title>{ v.TitleAR }</title>
+			@templ.Raw("<style>" + v.CSS + "</style>")
 		</head>
 		<body>
 			<main>
-				<h1>{ titleAR }</h1>
-				<p>{ messageAR }</p>
-				<hr/>
-				<section lang="en" dir="ltr">
-					<h2>{ titleEN }</h2>
-					<p>{ messageEN }</p>
-				</section>
-				<footer><small>iftahonline · { status }</small></footer>
+				<span class={ "icon", v.Tone } aria-hidden="true">
+					<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={ v.Icon }></path></svg>
+				</span>
+				<h1>{ v.TitleAR }</h1>
+				<p>{ v.BodyAR }</p>
+				if v.Link != nil {
+					if v.Link.Button {
+						<a class="button" href={ templ.SafeURL(v.Link.Href) }>{ v.Link.Label }</a>
+					} else {
+						<a class="quiet" href={ templ.SafeURL(v.Link.Href) }>{ v.Link.Label }</a>
+					}
+				}
+				<p class="en" lang="en" dir="ltr">{ v.EN }</p>
 			</main>
+			<footer>
+				<span class="mark" aria-hidden="true">ا</span>
+				<span>{ v.Footer }</span>
+			</footer>
 		</body>
 	</html>
 }

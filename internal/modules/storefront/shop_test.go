@@ -210,7 +210,7 @@ func newPlatform(t *testing.T) (platform, map[string]testkit.FakeMember) {
 	ship.Mount(apiMux, pol, scope, resp)
 	mkt.Mount(apiMux, pol, scope, resp)
 	shopMux := http.NewServeMux()
-	server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())(server.Routes{Mux: shopMux, Problems: resp, Log: log})
+	server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets(), server.Unavailable{SiteDomain: "iftahonline.com", DashboardURL: "https://app.iftahonline.com"})(server.Routes{Mux: shopMux, Problems: resp, Log: log})
 	return platform{api: apiMux, shop: shopMux, ten: ten, pool: pool}, members
 }
 
@@ -366,7 +366,7 @@ func TestTwoStoresTwoHosts(t *testing.T) {
 	if rec := p.visit(t, b.host, "/p/linen-shirt"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "قميص") {
 		t.Fatalf("A's product on B's host: %d", rec.Code)
 	}
-	if rec := p.visit(t, "nobody-"+tag+".iftahonline.com", "/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Store not found") {
+	if rec := p.visit(t, "nobody-"+tag+".iftahonline.com", "/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "There is no store at this address.") {
 		t.Fatalf("unknown host: %d", rec.Code)
 	}
 	// The second language is under its prefix on each store.

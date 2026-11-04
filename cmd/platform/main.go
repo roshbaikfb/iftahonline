@@ -884,7 +884,8 @@ func mountStorefront(ctx context.Context, c clients) (func(server.Routes), error
 	if err != nil {
 		return nil, err
 	}
-	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())
+	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets(),
+		server.Unavailable{SiteDomain: web.Domain(), DashboardURL: c.cfg.Mail.DashboardURL, FontFaces: faces})
 	platform := server.MountPlatformSite(web.Domain(), web.Handler(), storefront.AssetsPrefix, shop.Assets())
 	return func(rt server.Routes) {
 		stores(rt)
