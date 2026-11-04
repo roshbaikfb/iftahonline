@@ -131,7 +131,8 @@ func run(addr string, load bool) error {
 	if err != nil {
 		return err
 	}
-	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets())
+	stores := server.MountStorefront(ten.Resolver(), shop.Pages(), storefront.AssetsPrefix, shop.Assets(),
+		server.Unavailable{SiteDomain: "localhost", DashboardURL: "http://localhost:5173", FontFaces: faces})
 	siteMount := server.MountPlatformSite(platform.Domain(), platform.Handler(), storefront.AssetsPrefix, shop.Assets())
 	handler := server.NewHandler(server.Deps{
 		Log: log, IDs: ulid.NewGenerator(), Telemetry: tel, HTTP: httpCfg, Profile: middleware.ProfileStorefront,
