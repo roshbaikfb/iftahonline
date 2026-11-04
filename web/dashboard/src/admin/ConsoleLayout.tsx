@@ -15,6 +15,7 @@ const icons = {
   guides: 'M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM8 7h7',
   ads: 'M3 10v4h4l6 4V6l-6 4zM17 9a4 4 0 0 1 0 6',
   audit: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4',
+  team: 'M9 7a3 3 0 1 0 6 0a3 3 0 1 0-6 0M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6',
 };
 
 const groups: { title: string; items: { to: string; label: string; icon: keyof typeof icons; end?: boolean; need?: Permission }[] }[] = [
@@ -42,7 +43,13 @@ const groups: { title: string; items: { to: string; label: string; icon: keyof t
       { to: '/ads', label: 'الإعلانات', icon: 'ads', need: 'content.read' },
     ],
   },
-  { title: 'الأمان', items: [{ to: '/audit', label: 'سجل الأدمن', icon: 'audit', need: 'audit.read' }] },
+  {
+    title: 'الأمان',
+    items: [
+      { to: '/team', label: 'الفريق', icon: 'team', need: 'team.manage' },
+      { to: '/audit', label: 'سجل الأدمن', icon: 'audit', need: 'audit.read' },
+    ],
+  },
 ];
 
 function Icon({ d, size = 18 }: { d: string; size?: number }) {

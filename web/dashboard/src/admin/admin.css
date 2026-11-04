@@ -1747,3 +1747,280 @@ fieldset.read-only {
   margin: 0;
   padding: 0;
 }
+
+/* The team page and the invitee's page (ADR-0078, the approved mockup). */
+.status.role-owner {
+  background: #fde68a;
+  color: #422006;
+}
+.status.role-operations {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.status.role-finance,
+.status.team-on {
+  background: #dcfce7;
+  color: #166534;
+}
+.status.role-content {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+.status.team-wait {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status.team-off {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.team-table td {
+  vertical-align: middle;
+}
+.team-table tr.flagged td {
+  background: #fffbeb;
+}
+.team-person {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.team-person > span:last-child {
+  display: grid;
+}
+.team-person small {
+  color: var(--subtle);
+  font-size: 0.8rem;
+  text-align: start;
+}
+.team-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+.team-actions button {
+  min-block-size: 2.25rem;
+}
+.team-actions button.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.team-roles {
+  gap: 0.75rem;
+}
+.team-roles h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.team-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.team-roles-grid > div {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.team-roles-grid .status {
+  justify-self: start;
+}
+.team-roles-grid p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.role-choice {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.role-choice label.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+.role-choice label.radio:has(input:checked) {
+  border-color: var(--navy);
+  background: #f1f5fb;
+}
+.role-choice label.radio > span {
+  display: grid;
+  gap: 0.1rem;
+}
+.role-choice small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.invite-link {
+  display: flex;
+  gap: 0.5rem;
+}
+.invite-link label {
+  flex: 1;
+  min-inline-size: 0;
+}
+.invite-link input {
+  inline-size: 100%;
+  background: var(--tint);
+}
+.invite-page {
+  max-inline-size: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1rem;
+  display: grid;
+  gap: 1rem;
+}
+.invite-page h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+.invite-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.2rem;
+}
+.invite-steps {
+  display: grid;
+  gap: 0.9rem;
+}
+.invite-steps .card {
+  gap: 0.75rem;
+}
+.invite-steps h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+.invite-steps .two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.invite-steps label {
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: 0;
+  font-weight: 600;
+}
+.invite-steps label input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
+}
+.invite-steps > button {
+  justify-self: start;
+}
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.85rem;
+}
+.invite-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+.invite-qr img {
+  flex: none;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.invite-qr > div {
+  flex: 1 1 15rem;
+  min-inline-size: 0;
+}
+.invite-qr p {
+  margin: 0 0 0.5rem;
+}
+.invite-qr code {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  letter-spacing: 0.08em;
+}
+.invite-code {
+  max-inline-size: 16rem;
+}
+.invite-code input {
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+}
+@media (max-width: 56rem) {
+  .team-roles-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* On phones each admin is a card, its actions under it. */
+@media (max-width: 40rem) {
+  .team-table thead {
+    display: none;
+  }
+  .table-card table.team-table,
+  .team-table tbody {
+    display: block;
+    min-inline-size: 0;
+  }
+  .team-table tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+    border-block-start: 1px solid var(--line);
+  }
+  .team-table td {
+    padding: 0;
+    border: 0;
+  }
+  .team-table tr.flagged {
+    background: #fffbeb;
+  }
+  .team-table .t-who {
+    grid-column: 1 / -1;
+  }
+  .team-table .t-last {
+    font-size: 0.8rem;
+  }
+  .team-table .t-actions {
+    grid-column: 1 / -1;
+  }
+  .team-table .t-actions:empty {
+    display: none;
+  }
+  .team-actions {
+    justify-content: flex-start;
+  }
+  .team-actions button {
+    min-block-size: 2.75rem;
+  }
+  .team-roles-grid,
+  .invite-steps .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
