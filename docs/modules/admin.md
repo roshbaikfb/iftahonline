@@ -100,6 +100,7 @@ Every change asks for a reason.
 | `platform_admins` | `app_admin` SELECT, INSERT, UPDATE; **no access for `app_user`**. The TOTP seed is sealed (AAD `admin-totp:<id>`) |
 | `admin_sessions` | Same. Only SHA-256(token) is stored; 30-minute idle timeout, 8-hour cap |
 | `admin_audit_log` | `app_admin` SELECT, INSERT; append-only through a trigger (even for the owner) |
+| `admin_invites` | `app_admin` SELECT, INSERT, UPDATE; none for `app_user` (00092). Only SHA-256(token); the TOTP seed sealed for the admin it makes; one open invite per admin and per new email; 72 hours |
 | `stores`, `store_domains` | `app_admin` SELECT through the `admin_read` policies |
 
 ## Roles (ADR-0077)
@@ -122,8 +123,22 @@ Every change asks for a reason.
 - **The console:** `/me` returns the role and its permissions. The menu,
   the routes (`Need`), the action buttons, and an editor's forms
   (`Editable`, disabled under «عرض فقط») follow them.
-- **Changing a role:** until the team page, use SQL:
-  `UPDATE platform_admins SET role = 'finance' WHERE email = '…';`
+- **Changing a role:** from the team page (ADR-0078).
+
+## The team (ADR-0078)
+
+| Endpoint | What |
+|---|---|
+| `GET /admin/v1/team` | Every admin (role, active, resetting, last sign-in) and the open invites. `team.manage` |
+| `POST /admin/v1/team/invites` | Invite an email, name and role with a reason; the token is returned once. 409 for an admin's email or an open invite's |
+| `POST /admin/v1/team/invites/{id}/renew`, `…/cancel` | A new link (the old one stops working), or none |
+| `PUT /admin/v1/team/admins/{id}/role`, `POST …/disable`, `…/enable`, `…/reset` | Another admin only (409 `not_yourself`); never the last active owner (409 `last_owner`, owners locked in the transaction). Disabling ends its sessions; a reset disables it and returns a link to set a new password and authenticator |
+| `POST /admin/v1/invites/lookup`, `POST /admin/v1/invites/accept` | No session (Scope's public routes, throttled like sign-in). The invitee sees who invited them and the seed (text, `otpauth://`, a server-drawn SVG QR); accepting sets the password, checks a code and signs in. Any bad link is the same 404 |
+
+- **Audit first:** every change is in the admin log first, with its reason.
+  The invitee's `admin.joined` or `admin.reset_completed` comes from the
+  new admin.
+- **Email:** none yet. The console shows the link once to copy.
 
 ## Operations
 
@@ -149,12 +164,9 @@ read -rs PW && printf '%s\n' "$PW" | \
 
 ### Disabling an admin
 
-```sql
-UPDATE platform_admins SET status = 'disabled' WHERE email = '…';
-```
-
-Run this as `app_admin` or as the owner. Live sessions stop working on the
-next request.
+From the team page (ADR-0078): sessions end at once. Without a console
+owner, use SQL as `app_admin` or the owner:
+`UPDATE platform_admins SET status = 'disabled' WHERE email = '…';`
 
 ## Tests
 
@@ -168,5 +180,6 @@ next request.
 | `app_admin` cannot write stores or read users, audit logs or sessions; `app_user` cannot read `platform_admins` | `TestAdminDirectory` |
 | Invoices and payments: names, an agency's invoice settled, logged first without a store; the CSV (filters, Cairo times, formula-like names defused) logged with its filters; over HTTP with validation and cross-site refusal | `TestConsoleInvoices`, `TestExportInvoices`, `TestConsoleInvoicesAndPayments` |
 | Roles: every operation has a permission; each role over HTTP (403s, /me, the owner's contact) and in the console (menu, pages, buttons, read-only forms) | `TestEveryOperationHasAPermission`, `TestConsoleRoles`, `domain.TestRoles`, `console.test.tsx` «roles» |
+| The team: invite, look up and accept (once, code claimed); renew, cancel and expire; role, disable (sessions end), enable, reset (locked out until the link); not yourself; the last owner; over HTTP with no session for the invitee | `TestInviteAdmin`, `TestRenewAndCancelInvite`, `TestExpiredInvite`, `TestTeamChanges`, `domain.TestLeavesAnOwner`, `TestConsoleTeam` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
