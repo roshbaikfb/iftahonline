@@ -12,6 +12,19 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const cancelOpenInvites = `-- name: CancelOpenInvites :execrows
+UPDATE admin_invites SET cancelled_at = now() WHERE admin_id = $1 AND used_at IS NULL AND cancelled_at IS NULL
+`
+
+// Closes an admin's open invite (one at most), before a new one.
+func (q *Queries) CancelOpenInvites(ctx context.Context, adminID ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelOpenInvites, adminID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveAdminSession = `-- name: GetActiveAdminSession :one
 SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status, a.role AS admin_role
 FROM admin_sessions s
@@ -86,6 +99,78 @@ func (q *Queries) GetAdminByEmail(ctx context.Context, email string) (PlatformAd
 		&i.UpdatedAt,
 		&i.LastLoginAt,
 		&i.Role,
+	)
+	return i, err
+}
+
+const getInviteByToken = `-- name: GetInviteByToken :one
+SELECT i.id, i.token_hash, i.purpose, i.admin_id, i.email, i.name, i.role, i.totp_secret, i.invited_by, i.created_at, i.expires_at, i.used_at, i.cancelled_at, coalesce(b.name, '')::text AS invited_by_name
+FROM admin_invites i
+LEFT JOIN platform_admins b ON b.id = i.invited_by
+WHERE i.token_hash = $1
+`
+
+type GetInviteByTokenRow struct {
+	ID            ulid.ID
+	TokenHash     []byte
+	Purpose       string
+	AdminID       ulid.ID
+	Email         string
+	Name          string
+	Role          string
+	TotpSecret    []byte
+	InvitedBy     ulid.ID
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	UsedAt        *time.Time
+	CancelledAt   *time.Time
+	InvitedByName string
+}
+
+// An invite by its link, open or not: the caller tells why it fails.
+func (q *Queries) GetInviteByToken(ctx context.Context, tokenHash []byte) (GetInviteByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getInviteByToken, tokenHash)
+	var i GetInviteByTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.TokenHash,
+		&i.Purpose,
+		&i.AdminID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.TotpSecret,
+		&i.InvitedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CancelledAt,
+		&i.InvitedByName,
+	)
+	return i, err
+}
+
+const getOpenInvite = `-- name: GetOpenInvite :one
+SELECT id, token_hash, purpose, admin_id, email, name, role, totp_secret, invited_by, created_at, expires_at, used_at, cancelled_at FROM admin_invites WHERE id = $1 AND used_at IS NULL AND cancelled_at IS NULL
+`
+
+func (q *Queries) GetOpenInvite(ctx context.Context, id ulid.ID) (AdminInvite, error) {
+	row := q.db.QueryRow(ctx, getOpenInvite, id)
+	var i AdminInvite
+	err := row.Scan(
+		&i.ID,
+		&i.TokenHash,
+		&i.Purpose,
+		&i.AdminID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.TotpSecret,
+		&i.InvitedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CancelledAt,
 	)
 	return i, err
 }
@@ -199,6 +284,66 @@ func (q *Queries) InsertAdminSession(ctx context.Context, arg InsertAdminSession
 		&i.RevokedAt,
 	)
 	return i, err
+}
+
+const insertInvite = `-- name: InsertInvite :exec
+INSERT INTO admin_invites (id, token_hash, purpose, admin_id, email, name, role, totp_secret, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertInviteParams struct {
+	ID         ulid.ID
+	TokenHash  []byte
+	Purpose    string
+	AdminID    ulid.ID
+	Email      string
+	Name       string
+	Role       string
+	TotpSecret []byte
+	InvitedBy  ulid.ID
+	ExpiresAt  time.Time
+}
+
+func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) error {
+	_, err := q.db.Exec(ctx, insertInvite,
+		arg.ID,
+		arg.TokenHash,
+		arg.Purpose,
+		arg.AdminID,
+		arg.Email,
+		arg.Name,
+		arg.Role,
+		arg.TotpSecret,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const insertInvitedAdmin = `-- name: InsertInvitedAdmin :exec
+INSERT INTO platform_admins (id, email, name, password_hash, totp_secret, role)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertInvitedAdminParams struct {
+	ID           ulid.ID
+	Email        string
+	Name         string
+	PasswordHash string
+	TotpSecret   []byte
+	Role         string
+}
+
+func (q *Queries) InsertInvitedAdmin(ctx context.Context, arg InsertInvitedAdminParams) error {
+	_, err := q.db.Exec(ctx, insertInvitedAdmin,
+		arg.ID,
+		arg.Email,
+		arg.Name,
+		arg.PasswordHash,
+		arg.TotpSecret,
+		arg.Role,
+	)
+	return err
 }
 
 const jobHealth = `-- name: JobHealth :one
@@ -346,6 +491,131 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]ListAdminsRow, error) {
 	return items, nil
 }
 
+const listOpenInvites = `-- name: ListOpenInvites :many
+SELECT i.id, i.admin_id, i.email::text AS email, i.name, i.role, i.created_at, i.expires_at, coalesce(b.name, '')::text AS invited_by_name
+FROM admin_invites i
+LEFT JOIN platform_admins b ON b.id = i.invited_by
+WHERE i.purpose = 'join' AND i.used_at IS NULL AND i.cancelled_at IS NULL
+ORDER BY i.created_at DESC
+LIMIT 200
+`
+
+type ListOpenInvitesRow struct {
+	ID            ulid.ID
+	AdminID       ulid.ID
+	Email         string
+	Name          string
+	Role          string
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	InvitedByName string
+}
+
+// New admins invited and not joined yet, expired ones included.
+func (q *Queries) ListOpenInvites(ctx context.Context) ([]ListOpenInvitesRow, error) {
+	rows, err := q.db.Query(ctx, listOpenInvites)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenInvitesRow{}
+	for rows.Next() {
+		var i ListOpenInvitesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdminID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.InvitedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeam = `-- name: ListTeam :many
+SELECT a.id, a.name, a.email::text AS email, a.role, a.status, a.created_at, a.last_login_at,
+       EXISTS (SELECT 1 FROM admin_invites i WHERE i.admin_id = a.id AND i.purpose = 'reset'
+               AND i.used_at IS NULL AND i.cancelled_at IS NULL)::bool AS resetting
+FROM platform_admins a
+ORDER BY (a.status = 'active') DESC, a.name, a.id
+`
+
+type ListTeamRow struct {
+	ID          ulid.ID
+	Name        string
+	Email       string
+	Role        string
+	Status      string
+	CreatedAt   time.Time
+	LastLoginAt *time.Time
+	Resetting   bool
+}
+
+// The team page (ADR-0078): every admin with its role, state and last
+// sign-in, and whether a reset is waiting. No secrets.
+func (q *Queries) ListTeam(ctx context.Context) ([]ListTeamRow, error) {
+	rows, err := q.db.Query(ctx, listTeam)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeamRow{}
+	for rows.Next() {
+		var i ListTeamRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Role,
+			&i.Status,
+			&i.CreatedAt,
+			&i.LastLoginAt,
+			&i.Resetting,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockOwners = `-- name: LockOwners :many
+SELECT id FROM platform_admins WHERE role = 'owner' AND status = 'active' ORDER BY id FOR UPDATE
+`
+
+// The active owners, locked: the last one may not be demoted or disabled.
+func (q *Queries) LockOwners(ctx context.Context) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, lockOwners)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var id ulid.ID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordAdminLogin = `-- name: RecordAdminLogin :exec
 UPDATE platform_admins SET last_login_at = now() WHERE id = $1
 `
@@ -355,6 +625,26 @@ func (q *Queries) RecordAdminLogin(ctx context.Context, id ulid.ID) error {
 	return err
 }
 
+const resetAdminCredentials = `-- name: ResetAdminCredentials :execrows
+UPDATE platform_admins SET password_hash = $1, totp_secret = $2, totp_last_step = 0, status = 'active', updated_at = now()
+WHERE id = $3
+`
+
+type ResetAdminCredentialsParams struct {
+	PasswordHash string
+	TotpSecret   []byte
+	ID           ulid.ID
+}
+
+// A reset accepted: new password and seed, signed in from scratch.
+func (q *Queries) ResetAdminCredentials(ctx context.Context, arg ResetAdminCredentialsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resetAdminCredentials, arg.PasswordHash, arg.TotpSecret, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeAdminSession = `-- name: RevokeAdminSession :exec
 UPDATE admin_sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL
 `
@@ -362,6 +652,53 @@ UPDATE admin_sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NUL
 func (q *Queries) RevokeAdminSession(ctx context.Context, id ulid.ID) error {
 	_, err := q.db.Exec(ctx, revokeAdminSession, id)
 	return err
+}
+
+const revokeAdminSessions = `-- name: RevokeAdminSessions :execrows
+UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = $1 AND revoked_at IS NULL
+`
+
+// Every live session of an admin, when it is disabled or reset.
+func (q *Queries) RevokeAdminSessions(ctx context.Context, adminID ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAdminSessions, adminID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setAdminRole = `-- name: SetAdminRole :execrows
+UPDATE platform_admins SET role = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAdminRoleParams struct {
+	Role string
+	ID   ulid.ID
+}
+
+func (q *Queries) SetAdminRole(ctx context.Context, arg SetAdminRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAdminRole, arg.Role, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setAdminStatus = `-- name: SetAdminStatus :execrows
+UPDATE platform_admins SET status = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAdminStatusParams struct {
+	Status string
+	ID     ulid.ID
+}
+
+func (q *Queries) SetAdminStatus(ctx context.Context, arg SetAdminStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAdminStatus, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const touchAdminSession = `-- name: TouchAdminSession :exec
@@ -391,6 +728,19 @@ type UseAdminTOTPStepParams struct {
 // Atomic replay guard, as for merchants.
 func (q *Queries) UseAdminTOTPStep(ctx context.Context, arg UseAdminTOTPStepParams) (int64, error) {
 	result, err := q.db.Exec(ctx, useAdminTOTPStep, arg.Step, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const useInvite = `-- name: UseInvite :execrows
+UPDATE admin_invites SET used_at = now() WHERE id = $1 AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()
+`
+
+// Once: a second accept finds nothing.
+func (q *Queries) UseInvite(ctx context.Context, id ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, useInvite, id)
 	if err != nil {
 		return 0, err
 	}

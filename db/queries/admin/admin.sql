@@ -67,3 +67,66 @@ SELECT id, name, email::text AS email, status = 'active' AS active FROM platform
 -- River's queue for the health page (ADR-0058): counts only.
 SELECT available::bigint, running::bigint, retryable::bigint, discarded_24h::bigint, oldest_available_seconds::bigint
 FROM app.job_health(@now::timestamptz);
+
+-- name: ListTeam :many
+-- The team page (ADR-0078): every admin with its role, state and last
+-- sign-in, and whether a reset is waiting. No secrets.
+SELECT a.id, a.name, a.email::text AS email, a.role, a.status, a.created_at, a.last_login_at,
+       EXISTS (SELECT 1 FROM admin_invites i WHERE i.admin_id = a.id AND i.purpose = 'reset'
+               AND i.used_at IS NULL AND i.cancelled_at IS NULL)::bool AS resetting
+FROM platform_admins a
+ORDER BY (a.status = 'active') DESC, a.name, a.id;
+
+-- name: ListOpenInvites :many
+-- New admins invited and not joined yet, expired ones included.
+SELECT i.id, i.admin_id, i.email::text AS email, i.name, i.role, i.created_at, i.expires_at, coalesce(b.name, '')::text AS invited_by_name
+FROM admin_invites i
+LEFT JOIN platform_admins b ON b.id = i.invited_by
+WHERE i.purpose = 'join' AND i.used_at IS NULL AND i.cancelled_at IS NULL
+ORDER BY i.created_at DESC
+LIMIT 200;
+
+-- name: InsertInvite :exec
+INSERT INTO admin_invites (id, token_hash, purpose, admin_id, email, name, role, totp_secret, invited_by, expires_at)
+VALUES (@id, @token_hash, @purpose, @admin_id, @email, @name, @role, @totp_secret, @invited_by, @expires_at);
+
+-- name: CancelOpenInvites :execrows
+-- Closes an admin's open invite (one at most), before a new one.
+UPDATE admin_invites SET cancelled_at = now() WHERE admin_id = @admin_id AND used_at IS NULL AND cancelled_at IS NULL;
+
+-- name: GetOpenInvite :one
+SELECT * FROM admin_invites WHERE id = @id AND used_at IS NULL AND cancelled_at IS NULL;
+
+-- name: GetInviteByToken :one
+-- An invite by its link, open or not: the caller tells why it fails.
+SELECT i.*, coalesce(b.name, '')::text AS invited_by_name
+FROM admin_invites i
+LEFT JOIN platform_admins b ON b.id = i.invited_by
+WHERE i.token_hash = @token_hash;
+
+-- name: UseInvite :execrows
+-- Once: a second accept finds nothing.
+UPDATE admin_invites SET used_at = now() WHERE id = @id AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now();
+
+-- name: InsertInvitedAdmin :exec
+INSERT INTO platform_admins (id, email, name, password_hash, totp_secret, role)
+VALUES (@id, @email, @name, @password_hash, @totp_secret, @role);
+
+-- name: ResetAdminCredentials :execrows
+-- A reset accepted: new password and seed, signed in from scratch.
+UPDATE platform_admins SET password_hash = @password_hash, totp_secret = @totp_secret, totp_last_step = 0, status = 'active', updated_at = now()
+WHERE id = @id;
+
+-- name: LockOwners :many
+-- The active owners, locked: the last one may not be demoted or disabled.
+SELECT id FROM platform_admins WHERE role = 'owner' AND status = 'active' ORDER BY id FOR UPDATE;
+
+-- name: SetAdminRole :execrows
+UPDATE platform_admins SET role = @role, updated_at = now() WHERE id = @id;
+
+-- name: SetAdminStatus :execrows
+UPDATE platform_admins SET status = @status, updated_at = now() WHERE id = @id;
+
+-- name: RevokeAdminSessions :execrows
+-- Every live session of an admin, when it is disabled or reset.
+UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = @admin_id AND revoked_at IS NULL;

@@ -22,7 +22,8 @@ type ClientIPFunc func(context.Context) (netip.Addr, bool)
 //     route, so the console is invisible on store and API hosts.
 //   - Requests that change state must be same-origin (the session is a
 //     cookie; SameSite=Strict is the first line, this is the second).
-//   - Every route but login needs a live admin session (401).
+//   - Every route but login and an invite's needs a live admin session
+//     (401).
 func Scope(svc *app.Service, resp *problem.Responder, adminHost string, clientIP ClientIPFunc) func(http.Handler) http.Handler {
 	notFound := errs.NotFound("route_not_found", "no route for this path")
 	return func(next http.Handler) http.Handler {
@@ -41,7 +42,7 @@ func Scope(svc *app.Service, resp *problem.Responder, adminHost string, clientIP
 				meta.IP, _ = clientIP(ctx)
 			}
 			ctx = app.WithRequestMeta(ctx, meta)
-			if r.URL.Path != "/admin/v1/auth/login" {
+			if !publicRoutes[r.URL.Path] {
 				c, err := r.Cookie(CookieName)
 				if err != nil {
 					resp.Write(w, r, errs.Unauthenticated("admin authentication required"))
@@ -58,6 +59,14 @@ func Scope(svc *app.Service, resp *problem.Responder, adminHost string, clientIP
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// publicRoutes need no session: signing in, and an invitee who is not an
+// admin yet (ADR-0078). Both are throttled per address.
+var publicRoutes = map[string]bool{ //nolint:gochecknoglobals // a fixed set
+	"/admin/v1/auth/login":     true,
+	"/admin/v1/invites/lookup": true,
+	"/admin/v1/invites/accept": true,
 }
 
 func hostOnly(h string) string {

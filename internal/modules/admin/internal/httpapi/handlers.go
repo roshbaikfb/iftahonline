@@ -68,11 +68,13 @@ func (h *Handlers) AdminLogin(ctx context.Context, req AdminLoginRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	cookie := sessionCookie(string(res.Token), int(domain.SessionMaxLifetime.Seconds()))
-	return AdminLogin200JSONResponse{
-		Body:    AdminAuth{Admin: profile(res.Admin), ExpiresAt: res.Expires},
-		Headers: AdminLogin200ResponseHeaders{SetCookie: &cookie},
-	}, nil
+	body, cookie := signedIn(res)
+	return AdminLogin200JSONResponse{Body: body, Headers: AdminLogin200ResponseHeaders{SetCookie: &cookie}}, nil
+}
+
+// signedIn is a new session's answer and its cookie.
+func signedIn(res app.LoginResult) (AdminAuth, string) {
+	return AdminAuth{Admin: profile(res.Admin), ExpiresAt: res.Expires}, sessionCookie(string(res.Token), int(domain.SessionMaxLifetime.Seconds()))
 }
 
 // AdminLogout implements StrictServerInterface.

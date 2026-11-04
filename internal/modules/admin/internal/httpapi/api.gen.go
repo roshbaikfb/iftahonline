@@ -292,6 +292,42 @@ func (e AdminHealthErrors) Valid() bool {
 	}
 }
 
+// Defines values for AdminInvitePurpose.
+const (
+	AdminInvitePurposeJoin  AdminInvitePurpose = "join"
+	AdminInvitePurposeReset AdminInvitePurpose = "reset"
+)
+
+// Valid indicates whether the value is a known member of the AdminInvitePurpose enum.
+func (e AdminInvitePurpose) Valid() bool {
+	switch e {
+	case AdminInvitePurposeJoin:
+		return true
+	case AdminInvitePurposeReset:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminInviteViewPurpose.
+const (
+	AdminInviteViewPurposeJoin  AdminInviteViewPurpose = "join"
+	AdminInviteViewPurposeReset AdminInviteViewPurpose = "reset"
+)
+
+// Valid indicates whether the value is a known member of the AdminInviteViewPurpose enum.
+func (e AdminInviteViewPurpose) Valid() bool {
+	switch e {
+	case AdminInviteViewPurposeJoin:
+		return true
+	case AdminInviteViewPurposeReset:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminInvoiceAccountKind.
 const (
 	AdminInvoiceAccountKindAgency AdminInvoiceAccountKind = "agency"
@@ -1234,6 +1270,14 @@ func (e AdminListStoresParamsStatus) Valid() bool {
 	}
 }
 
+// AdminAcceptInvite defines model for AdminAcceptInvite.
+type AdminAcceptInvite struct {
+	// Code A current code from the authenticator.
+	Code     string `json:"code"`
+	Password string `json:"password"`
+	Token    string `json:"token"`
+}
+
 // AdminAdBanner defines model for AdminAdBanner.
 type AdminAdBanner struct {
 	Active bool `json:"active"`
@@ -1651,6 +1695,76 @@ type AdminImpersonationRequest struct {
 	Write *bool `json:"write,omitempty"`
 }
 
+// AdminInvite defines model for AdminInvite.
+type AdminInvite struct {
+	// AdminId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	AdminId   ULID      `json:"admin_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Email     string    `json:"email"`
+
+	// ExpiresAt Past it
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id            ULID               `json:"id"`
+	InvitedByName *string            `json:"invited_by_name,omitempty"`
+	Name          string             `json:"name"`
+	Purpose       AdminInvitePurpose `json:"purpose"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
+}
+
+// AdminInvitePurpose defines model for AdminInvite.Purpose.
+type AdminInvitePurpose string
+
+// AdminInviteInput defines model for AdminInviteInput.
+type AdminInviteInput struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
+}
+
+// AdminInviteLink defines model for AdminInviteLink.
+type AdminInviteLink struct {
+	Invite AdminInvite `json:"invite"`
+
+	// Token Shown once: the console's link is /console/invite#<token>.
+	Token string `json:"token"`
+}
+
+// AdminInviteToken defines model for AdminInviteToken.
+type AdminInviteToken struct {
+	Token string `json:"token"`
+}
+
+// AdminInviteView defines model for AdminInviteView.
+type AdminInviteView struct {
+	Email         string                 `json:"email"`
+	ExpiresAt     time.Time              `json:"expires_at"`
+	InvitedByName string                 `json:"invited_by_name"`
+	Name          string                 `json:"name"`
+	Purpose       AdminInviteViewPurpose `json:"purpose"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
+
+	// TotpQrSvg The otpauth URI as a QR code (SVG markup the server drew).
+	TotpQrSvg string `json:"totp_qr_svg"`
+
+	// TotpSecret The seed in base32
+	TotpSecret string `json:"totp_secret"`
+	TotpUri    string `json:"totp_uri"`
+}
+
+// AdminInviteViewPurpose defines model for AdminInviteView.Purpose.
+type AdminInviteViewPurpose string
+
 // AdminInvoice defines model for AdminInvoice.
 type AdminInvoice struct {
 	// AccountId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
@@ -1967,6 +2081,15 @@ type AdminRevenueCurrency string
 
 // AdminRole owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
 type AdminRole string
+
+// AdminRoleInput defines model for AdminRoleInput.
+type AdminRoleInput struct {
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
+}
 
 // AdminSettleInput defines model for AdminSettleInput.
 type AdminSettleInput struct {
@@ -2332,6 +2455,32 @@ type AdminStoreProfile struct {
 type AdminStoreSummary struct {
 	PrimaryHost string `json:"primary_host"`
 	Store       Store  `json:"store"`
+}
+
+// AdminTeam defines model for AdminTeam.
+type AdminTeam struct {
+	Admins []AdminTeamMember `json:"admins"`
+
+	// Invites New admins invited and not joined yet, newest first.
+	Invites []AdminInvite `json:"invites"`
+}
+
+// AdminTeamMember defines model for AdminTeamMember.
+type AdminTeamMember struct {
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+	Email     string    `json:"email"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id          ULID       `json:"id"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	Name        string     `json:"name"`
+
+	// Resetting A reset link waits for the admin
+	Resetting bool `json:"resetting"`
+
+	// Role owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	Role AdminRole `json:"role"`
 }
 
 // Billing defines model for Billing.
@@ -2756,6 +2905,12 @@ type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
 // AdminSaveFoundingJSONRequestBody defines body for AdminSaveFounding for application/json ContentType.
 type AdminSaveFoundingJSONRequestBody = AdminFoundingInput
 
+// AdminAcceptInviteJSONRequestBody defines body for AdminAcceptInvite for application/json ContentType.
+type AdminAcceptInviteJSONRequestBody = AdminAcceptInvite
+
+// AdminLookupInviteJSONRequestBody defines body for AdminLookupInvite for application/json ContentType.
+type AdminLookupInviteJSONRequestBody = AdminInviteToken
+
 // AdminSettleAccountInvoiceJSONRequestBody defines body for AdminSettleAccountInvoice for application/json ContentType.
 type AdminSettleAccountInvoiceJSONRequestBody = AdminSettleInput
 
@@ -2821,6 +2976,27 @@ type AdminReactivateStoreJSONRequestBody = AdminReason
 
 // AdminSuspendStoreJSONRequestBody defines body for AdminSuspendStore for application/json ContentType.
 type AdminSuspendStoreJSONRequestBody = AdminReason
+
+// AdminDisableAdminJSONRequestBody defines body for AdminDisableAdmin for application/json ContentType.
+type AdminDisableAdminJSONRequestBody = AdminReason
+
+// AdminEnableAdminJSONRequestBody defines body for AdminEnableAdmin for application/json ContentType.
+type AdminEnableAdminJSONRequestBody = AdminReason
+
+// AdminResetAdminJSONRequestBody defines body for AdminResetAdmin for application/json ContentType.
+type AdminResetAdminJSONRequestBody = AdminReason
+
+// AdminSetRoleJSONRequestBody defines body for AdminSetRole for application/json ContentType.
+type AdminSetRoleJSONRequestBody = AdminRoleInput
+
+// AdminInviteAdminJSONRequestBody defines body for AdminInviteAdmin for application/json ContentType.
+type AdminInviteAdminJSONRequestBody = AdminInviteInput
+
+// AdminCancelInviteJSONRequestBody defines body for AdminCancelInvite for application/json ContentType.
+type AdminCancelInviteJSONRequestBody = AdminReason
+
+// AdminRenewInviteJSONRequestBody defines body for AdminRenewInvite for application/json ContentType.
+type AdminRenewInviteJSONRequestBody = AdminReason
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -2890,6 +3066,12 @@ type ServerInterface interface {
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(w http.ResponseWriter, r *http.Request)
+	// AdminAcceptInvite Set the password, confirm the authenticator and sign in
+	// (POST /admin/v1/invites/accept)
+	AdminAcceptInvite(w http.ResponseWriter, r *http.Request)
+	// AdminLookupInvite What an invite link is for, and the authenticator seed to scan
+	// (POST /admin/v1/invites/lookup)
+	AdminLookupInvite(w http.ResponseWriter, r *http.Request)
 	// AdminListInvoices Every account's invoices, newest first
 	// (GET /admin/v1/invoices)
 	AdminListInvoices(w http.ResponseWriter, r *http.Request, params AdminListInvoicesParams)
@@ -3016,6 +3198,30 @@ type ServerInterface interface {
 	// AdminSuspendStore Suspend an active store (storefront answers 503)
 	// (POST /admin/v1/stores/{store_id}/suspend)
 	AdminSuspendStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminGetTeam The console's admins and open invites
+	// (GET /admin/v1/team)
+	AdminGetTeam(w http.ResponseWriter, r *http.Request)
+	// AdminDisableAdmin Disable another admin; its sessions end at once
+	// (POST /admin/v1/team/admins/{admin_id}/disable)
+	AdminDisableAdmin(w http.ResponseWriter, r *http.Request, adminId ULID)
+	// AdminEnableAdmin Enable a disabled admin again
+	// (POST /admin/v1/team/admins/{admin_id}/enable)
+	AdminEnableAdmin(w http.ResponseWriter, r *http.Request, adminId ULID)
+	// AdminResetAdmin Lock another admin out and give a link to set a new password and authenticator
+	// (POST /admin/v1/team/admins/{admin_id}/reset)
+	AdminResetAdmin(w http.ResponseWriter, r *http.Request, adminId ULID)
+	// AdminSetRole Change another admin's role
+	// (PUT /admin/v1/team/admins/{admin_id}/role)
+	AdminSetRole(w http.ResponseWriter, r *http.Request, adminId ULID)
+	// AdminInviteAdmin Invite a new admin
+	// (POST /admin/v1/team/invites)
+	AdminInviteAdmin(w http.ResponseWriter, r *http.Request)
+	// AdminCancelInvite Cancel an open invite
+	// (POST /admin/v1/team/invites/{invite_id}/cancel)
+	AdminCancelInvite(w http.ResponseWriter, r *http.Request, inviteId ULID)
+	// AdminRenewInvite A new link for an open invite; the old one stops working
+	// (POST /admin/v1/team/invites/{invite_id}/renew)
+	AdminRenewInvite(w http.ResponseWriter, r *http.Request, inviteId ULID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -3513,6 +3719,34 @@ func (siw *ServerInterfaceWrapper) AdminHealth(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminAcceptInvite operation middleware
+func (siw *ServerInterfaceWrapper) AdminAcceptInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminAcceptInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminLookupInvite operation middleware
+func (siw *ServerInterfaceWrapper) AdminLookupInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminLookupInvite(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4737,6 +4971,190 @@ func (siw *ServerInterfaceWrapper) AdminSuspendStore(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// AdminGetTeam operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetTeam(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetTeam(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDisableAdmin operation middleware
+func (siw *ServerInterfaceWrapper) AdminDisableAdmin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "admin_id" -------------
+	var adminId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "admin_id", r.PathValue("admin_id"), &adminId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "admin_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDisableAdmin(w, r, adminId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminEnableAdmin operation middleware
+func (siw *ServerInterfaceWrapper) AdminEnableAdmin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "admin_id" -------------
+	var adminId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "admin_id", r.PathValue("admin_id"), &adminId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "admin_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminEnableAdmin(w, r, adminId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminResetAdmin operation middleware
+func (siw *ServerInterfaceWrapper) AdminResetAdmin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "admin_id" -------------
+	var adminId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "admin_id", r.PathValue("admin_id"), &adminId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "admin_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminResetAdmin(w, r, adminId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetRole operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "admin_id" -------------
+	var adminId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "admin_id", r.PathValue("admin_id"), &adminId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "admin_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetRole(w, r, adminId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminInviteAdmin operation middleware
+func (siw *ServerInterfaceWrapper) AdminInviteAdmin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminInviteAdmin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCancelInvite operation middleware
+func (siw *ServerInterfaceWrapper) AdminCancelInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invite_id" -------------
+	var inviteId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invite_id", r.PathValue("invite_id"), &inviteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invite_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCancelInvite(w, r, inviteId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRenewInvite operation middleware
+func (siw *ServerInterfaceWrapper) AdminRenewInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invite_id" -------------
+	var inviteId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invite_id", r.PathValue("invite_id"), &inviteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invite_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRenewInvite(w, r, inviteId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -4859,6 +5277,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/auth/login", wrapper.AdminLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/auth/logout", wrapper.AdminLogout)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/invites/lookup", wrapper.AdminLookupInvite)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/invites/accept", wrapper.AdminAcceptInvite)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/team", wrapper.AdminGetTeam)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/invites", wrapper.AdminInviteAdmin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/invites/{invite_id}/renew", wrapper.AdminRenewInvite)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/invites/{invite_id}/cancel", wrapper.AdminCancelInvite)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/role", wrapper.AdminSetRole)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/disable", wrapper.AdminDisableAdmin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/enable", wrapper.AdminEnableAdmin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/reset", wrapper.AdminResetAdmin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
@@ -5772,6 +6200,94 @@ type AdminHealthdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminHealthdefaultApplicationProblemPlusJSONResponse) VisitAdminHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAcceptInviteRequestObject struct {
+	Body *AdminAcceptInviteJSONRequestBody
+}
+
+type AdminAcceptInviteResponseObject interface {
+	VisitAdminAcceptInviteResponse(w http.ResponseWriter) error
+}
+
+type AdminAcceptInvite200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type AdminAcceptInvite200JSONResponse struct {
+	Body    AdminAuth
+	Headers AdminAcceptInvite200ResponseHeaders
+}
+
+func (response AdminAcceptInvite200JSONResponse) VisitAdminAcceptInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminAcceptInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminAcceptInvitedefaultApplicationProblemPlusJSONResponse) VisitAdminAcceptInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminLookupInviteRequestObject struct {
+	Body *AdminLookupInviteJSONRequestBody
+}
+
+type AdminLookupInviteResponseObject interface {
+	VisitAdminLookupInviteResponse(w http.ResponseWriter) error
+}
+
+type AdminLookupInvite200JSONResponse AdminInviteView
+
+func (response AdminLookupInvite200JSONResponse) VisitAdminLookupInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminLookupInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminLookupInvitedefaultApplicationProblemPlusJSONResponse) VisitAdminLookupInviteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -7419,6 +7935,299 @@ func (response AdminSuspendStoredefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type AdminGetTeamRequestObject struct {
+}
+
+type AdminGetTeamResponseObject interface {
+	VisitAdminGetTeamResponse(w http.ResponseWriter) error
+}
+
+type AdminGetTeam200JSONResponse AdminTeam
+
+func (response AdminGetTeam200JSONResponse) VisitAdminGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetTeamdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetTeamdefaultApplicationProblemPlusJSONResponse) VisitAdminGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDisableAdminRequestObject struct {
+	AdminId ULID `json:"admin_id"`
+	Body    *AdminDisableAdminJSONRequestBody
+}
+
+type AdminDisableAdminResponseObject interface {
+	VisitAdminDisableAdminResponse(w http.ResponseWriter) error
+}
+
+type AdminDisableAdmin204Response struct {
+}
+
+func (response AdminDisableAdmin204Response) VisitAdminDisableAdminResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDisableAdmindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDisableAdmindefaultApplicationProblemPlusJSONResponse) VisitAdminDisableAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminEnableAdminRequestObject struct {
+	AdminId ULID `json:"admin_id"`
+	Body    *AdminEnableAdminJSONRequestBody
+}
+
+type AdminEnableAdminResponseObject interface {
+	VisitAdminEnableAdminResponse(w http.ResponseWriter) error
+}
+
+type AdminEnableAdmin204Response struct {
+}
+
+func (response AdminEnableAdmin204Response) VisitAdminEnableAdminResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminEnableAdmindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminEnableAdmindefaultApplicationProblemPlusJSONResponse) VisitAdminEnableAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetAdminRequestObject struct {
+	AdminId ULID `json:"admin_id"`
+	Body    *AdminResetAdminJSONRequestBody
+}
+
+type AdminResetAdminResponseObject interface {
+	VisitAdminResetAdminResponse(w http.ResponseWriter) error
+}
+
+type AdminResetAdmin200JSONResponse AdminInviteLink
+
+func (response AdminResetAdmin200JSONResponse) VisitAdminResetAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminResetAdmindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminResetAdmindefaultApplicationProblemPlusJSONResponse) VisitAdminResetAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetRoleRequestObject struct {
+	AdminId ULID `json:"admin_id"`
+	Body    *AdminSetRoleJSONRequestBody
+}
+
+type AdminSetRoleResponseObject interface {
+	VisitAdminSetRoleResponse(w http.ResponseWriter) error
+}
+
+type AdminSetRole204Response struct {
+}
+
+func (response AdminSetRole204Response) VisitAdminSetRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSetRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetRoledefaultApplicationProblemPlusJSONResponse) VisitAdminSetRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminInviteAdminRequestObject struct {
+	Body *AdminInviteAdminJSONRequestBody
+}
+
+type AdminInviteAdminResponseObject interface {
+	VisitAdminInviteAdminResponse(w http.ResponseWriter) error
+}
+
+type AdminInviteAdmin201JSONResponse AdminInviteLink
+
+func (response AdminInviteAdmin201JSONResponse) VisitAdminInviteAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminInviteAdmindefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminInviteAdmindefaultApplicationProblemPlusJSONResponse) VisitAdminInviteAdminResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCancelInviteRequestObject struct {
+	InviteId ULID `json:"invite_id"`
+	Body     *AdminCancelInviteJSONRequestBody
+}
+
+type AdminCancelInviteResponseObject interface {
+	VisitAdminCancelInviteResponse(w http.ResponseWriter) error
+}
+
+type AdminCancelInvite204Response struct {
+}
+
+func (response AdminCancelInvite204Response) VisitAdminCancelInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminCancelInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCancelInvitedefaultApplicationProblemPlusJSONResponse) VisitAdminCancelInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRenewInviteRequestObject struct {
+	InviteId ULID `json:"invite_id"`
+	Body     *AdminRenewInviteJSONRequestBody
+}
+
+type AdminRenewInviteResponseObject interface {
+	VisitAdminRenewInviteResponse(w http.ResponseWriter) error
+}
+
+type AdminRenewInvite200JSONResponse AdminInviteLink
+
+func (response AdminRenewInvite200JSONResponse) VisitAdminRenewInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRenewInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRenewInvitedefaultApplicationProblemPlusJSONResponse) VisitAdminRenewInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// AdminListAdmins The console's admins
@@ -7487,6 +8296,12 @@ type StrictServerInterface interface {
 	// AdminHealth The platform at a glance
 	// (GET /admin/v1/health)
 	AdminHealth(ctx context.Context, request AdminHealthRequestObject) (AdminHealthResponseObject, error)
+	// AdminAcceptInvite Set the password, confirm the authenticator and sign in
+	// (POST /admin/v1/invites/accept)
+	AdminAcceptInvite(ctx context.Context, request AdminAcceptInviteRequestObject) (AdminAcceptInviteResponseObject, error)
+	// AdminLookupInvite What an invite link is for, and the authenticator seed to scan
+	// (POST /admin/v1/invites/lookup)
+	AdminLookupInvite(ctx context.Context, request AdminLookupInviteRequestObject) (AdminLookupInviteResponseObject, error)
 	// AdminListInvoices Every account's invoices, newest first
 	// (GET /admin/v1/invoices)
 	AdminListInvoices(ctx context.Context, request AdminListInvoicesRequestObject) (AdminListInvoicesResponseObject, error)
@@ -7613,6 +8428,30 @@ type StrictServerInterface interface {
 	// AdminSuspendStore Suspend an active store (storefront answers 503)
 	// (POST /admin/v1/stores/{store_id}/suspend)
 	AdminSuspendStore(ctx context.Context, request AdminSuspendStoreRequestObject) (AdminSuspendStoreResponseObject, error)
+	// AdminGetTeam The console's admins and open invites
+	// (GET /admin/v1/team)
+	AdminGetTeam(ctx context.Context, request AdminGetTeamRequestObject) (AdminGetTeamResponseObject, error)
+	// AdminDisableAdmin Disable another admin; its sessions end at once
+	// (POST /admin/v1/team/admins/{admin_id}/disable)
+	AdminDisableAdmin(ctx context.Context, request AdminDisableAdminRequestObject) (AdminDisableAdminResponseObject, error)
+	// AdminEnableAdmin Enable a disabled admin again
+	// (POST /admin/v1/team/admins/{admin_id}/enable)
+	AdminEnableAdmin(ctx context.Context, request AdminEnableAdminRequestObject) (AdminEnableAdminResponseObject, error)
+	// AdminResetAdmin Lock another admin out and give a link to set a new password and authenticator
+	// (POST /admin/v1/team/admins/{admin_id}/reset)
+	AdminResetAdmin(ctx context.Context, request AdminResetAdminRequestObject) (AdminResetAdminResponseObject, error)
+	// AdminSetRole Change another admin's role
+	// (PUT /admin/v1/team/admins/{admin_id}/role)
+	AdminSetRole(ctx context.Context, request AdminSetRoleRequestObject) (AdminSetRoleResponseObject, error)
+	// AdminInviteAdmin Invite a new admin
+	// (POST /admin/v1/team/invites)
+	AdminInviteAdmin(ctx context.Context, request AdminInviteAdminRequestObject) (AdminInviteAdminResponseObject, error)
+	// AdminCancelInvite Cancel an open invite
+	// (POST /admin/v1/team/invites/{invite_id}/cancel)
+	AdminCancelInvite(ctx context.Context, request AdminCancelInviteRequestObject) (AdminCancelInviteResponseObject, error)
+	// AdminRenewInvite A new link for an open invite; the old one stops working
+	// (POST /admin/v1/team/invites/{invite_id}/renew)
+	AdminRenewInvite(ctx context.Context, request AdminRenewInviteRequestObject) (AdminRenewInviteResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -8268,6 +9107,68 @@ func (sh *strictHandler) AdminHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminHealthResponseObject); ok {
 		if err := validResponse.VisitAdminHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminAcceptInvite operation middleware
+func (sh *strictHandler) AdminAcceptInvite(w http.ResponseWriter, r *http.Request) {
+	var request AdminAcceptInviteRequestObject
+
+	var body AdminAcceptInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminAcceptInvite(ctx, request.(AdminAcceptInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminAcceptInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminAcceptInviteResponseObject); ok {
+		if err := validResponse.VisitAdminAcceptInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminLookupInvite operation middleware
+func (sh *strictHandler) AdminLookupInvite(w http.ResponseWriter, r *http.Request) {
+	var request AdminLookupInviteRequestObject
+
+	var body AdminLookupInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminLookupInvite(ctx, request.(AdminLookupInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminLookupInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminLookupInviteResponseObject); ok {
+		if err := validResponse.VisitAdminLookupInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9494,6 +10395,259 @@ func (sh *strictHandler) AdminSuspendStore(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSuspendStoreResponseObject); ok {
 		if err := validResponse.VisitAdminSuspendStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetTeam operation middleware
+func (sh *strictHandler) AdminGetTeam(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetTeamRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetTeam(ctx, request.(AdminGetTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetTeam")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetTeamResponseObject); ok {
+		if err := validResponse.VisitAdminGetTeamResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDisableAdmin operation middleware
+func (sh *strictHandler) AdminDisableAdmin(w http.ResponseWriter, r *http.Request, adminId ULID) {
+	var request AdminDisableAdminRequestObject
+
+	request.AdminId = adminId
+
+	var body AdminDisableAdminJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDisableAdmin(ctx, request.(AdminDisableAdminRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDisableAdmin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDisableAdminResponseObject); ok {
+		if err := validResponse.VisitAdminDisableAdminResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminEnableAdmin operation middleware
+func (sh *strictHandler) AdminEnableAdmin(w http.ResponseWriter, r *http.Request, adminId ULID) {
+	var request AdminEnableAdminRequestObject
+
+	request.AdminId = adminId
+
+	var body AdminEnableAdminJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminEnableAdmin(ctx, request.(AdminEnableAdminRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminEnableAdmin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminEnableAdminResponseObject); ok {
+		if err := validResponse.VisitAdminEnableAdminResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminResetAdmin operation middleware
+func (sh *strictHandler) AdminResetAdmin(w http.ResponseWriter, r *http.Request, adminId ULID) {
+	var request AdminResetAdminRequestObject
+
+	request.AdminId = adminId
+
+	var body AdminResetAdminJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminResetAdmin(ctx, request.(AdminResetAdminRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminResetAdmin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminResetAdminResponseObject); ok {
+		if err := validResponse.VisitAdminResetAdminResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetRole operation middleware
+func (sh *strictHandler) AdminSetRole(w http.ResponseWriter, r *http.Request, adminId ULID) {
+	var request AdminSetRoleRequestObject
+
+	request.AdminId = adminId
+
+	var body AdminSetRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetRole(ctx, request.(AdminSetRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetRoleResponseObject); ok {
+		if err := validResponse.VisitAdminSetRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminInviteAdmin operation middleware
+func (sh *strictHandler) AdminInviteAdmin(w http.ResponseWriter, r *http.Request) {
+	var request AdminInviteAdminRequestObject
+
+	var body AdminInviteAdminJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminInviteAdmin(ctx, request.(AdminInviteAdminRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminInviteAdmin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminInviteAdminResponseObject); ok {
+		if err := validResponse.VisitAdminInviteAdminResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCancelInvite operation middleware
+func (sh *strictHandler) AdminCancelInvite(w http.ResponseWriter, r *http.Request, inviteId ULID) {
+	var request AdminCancelInviteRequestObject
+
+	request.InviteId = inviteId
+
+	var body AdminCancelInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCancelInvite(ctx, request.(AdminCancelInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCancelInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCancelInviteResponseObject); ok {
+		if err := validResponse.VisitAdminCancelInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRenewInvite operation middleware
+func (sh *strictHandler) AdminRenewInvite(w http.ResponseWriter, r *http.Request, inviteId ULID) {
+	var request AdminRenewInviteRequestObject
+
+	request.InviteId = inviteId
+
+	var body AdminRenewInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRenewInvite(ctx, request.(AdminRenewInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRenewInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRenewInviteResponseObject); ok {
+		if err := validResponse.VisitAdminRenewInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

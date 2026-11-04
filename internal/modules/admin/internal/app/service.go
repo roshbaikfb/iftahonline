@@ -249,7 +249,11 @@ func (s *Service) Login(ctx context.Context, rawEmail, pw, code string) (LoginRe
 	if err = s.d.Limiter.Reset(ctx, failKey); err != nil {
 		s.d.Log.WarnContext(ctx, "admin: reset failures", "err", err)
 	}
+	return s.openSession(ctx, a)
+}
 
+// openSession signs admin a in on the caller's device.
+func (s *Service) openSession(ctx context.Context, a domain.Admin) (LoginResult, error) {
 	token, err := authtoken.New()
 	if err != nil {
 		return LoginResult{}, err

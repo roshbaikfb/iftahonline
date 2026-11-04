@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // Role is what a console admin may do (ADR-0077).
@@ -80,4 +81,10 @@ func (r Role) Can(p Permission) bool {
 		return slices.Contains([]Permission{PermStoresRead, PermBillingRead, PermCatalogRead, PermContentRead}, p)
 	}
 	return false
+}
+
+// LeavesAnOwner reports whether the console keeps an active owner once
+// admin id, one of owners or not, stops being one (ADR-0078).
+func LeavesAnOwner(owners []ulid.ID, id ulid.ID) bool {
+	return len(owners) > 1 || !slices.Contains(owners, id)
 }

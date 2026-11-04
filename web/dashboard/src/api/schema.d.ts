@@ -1540,6 +1540,215 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/invites/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What an invite link is for, and the authenticator seed to scan
+         * @description No session: the invitee is not an admin yet (ADR-0078). The token
+         *     comes from the link's fragment and travels in the body, never in a
+         *     URL. An unknown, used, cancelled or expired link is the same 404.
+         *     Throttled per address like sign-ins.
+         */
+        post: operations["adminLookupInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/invites/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the password, confirm the authenticator and sign in
+         * @description Once per link. A new admin is created in the invite's role; a reset
+         *     admin gets the new password and seed and is enabled again. The
+         *     code must come from the seed the lookup showed.
+         */
+        post: operations["adminAcceptInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The console's admins and open invites
+         * @description Permission: team.manage (owners).
+         */
+        get: operations["adminGetTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite a new admin
+         * @description Permission: team.manage. Recorded first in the admin log. The link's
+         *     token is returned once (only its hash is kept); it works for 72
+         *     hours. 409 when the email is an admin's or has an open invite.
+         */
+        post: operations["adminInviteAdmin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/invites/{invite_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new link for an open invite; the old one stops working */
+        post: operations["adminRenewInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/invites/{invite_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an open invite */
+        post: operations["adminCancelInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/admins/{admin_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change another admin's role
+         * @description Permission: team.manage. Never your own (409 not_yourself), and
+         *     never the last active owner's away from owner (409 last_owner).
+         *     It applies from the admin's next request.
+         */
+        put: operations["adminSetRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/admins/{admin_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable another admin; its sessions end at once */
+        post: operations["adminDisableAdmin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/admins/{admin_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a disabled admin again */
+        post: operations["adminEnableAdmin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/team/admins/{admin_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock another admin out and give a link to set a new password and authenticator
+         * @description For a lost phone. The admin is disabled and signed out until the link is used.
+         */
+        post: operations["adminResetAdmin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/me": {
         parameters: {
             query?: never;
@@ -4781,6 +4990,82 @@ export interface components {
         };
         AdminAdminList: {
             items: components["schemas"]["AdminAdminSummary"][];
+        };
+        AdminTeamMember: {
+            id: components["schemas"]["ULID"];
+            name: string;
+            email: string;
+            role: components["schemas"]["AdminRole"];
+            active: boolean;
+            /** @description A reset link waits for the admin */
+            resetting: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        AdminInvite: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            purpose: "join" | "reset";
+            admin_id: components["schemas"]["ULID"];
+            email: string;
+            name: string;
+            role: components["schemas"]["AdminRole"];
+            invited_by_name?: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Past it
+             */
+            expires_at: string;
+        };
+        AdminTeam: {
+            admins: components["schemas"]["AdminTeamMember"][];
+            /** @description New admins invited and not joined yet, newest first. */
+            invites: components["schemas"]["AdminInvite"][];
+        };
+        AdminInviteInput: {
+            email: string;
+            name: string;
+            role: components["schemas"]["AdminRole"];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminInviteLink: {
+            invite: components["schemas"]["AdminInvite"];
+            /** @description Shown once: the console's link is /console/invite#<token>. */
+            token: string;
+        };
+        AdminRoleInput: {
+            role: components["schemas"]["AdminRole"];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminInviteToken: {
+            token: string;
+        };
+        AdminAcceptInvite: {
+            token: string;
+            password: string;
+            /** @description A current code from the authenticator. */
+            code: string;
+        };
+        AdminInviteView: {
+            /** @enum {string} */
+            purpose: "join" | "reset";
+            name: string;
+            email: string;
+            role: components["schemas"]["AdminRole"];
+            invited_by_name: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description The seed in base32 */
+            totp_secret: string;
+            totp_uri: string;
+            /** @description The otpauth URI as a QR code (SVG markup the server drew). */
+            totp_qr_svg: string;
         };
         AdminAdminSummary: {
             id: components["schemas"]["ULID"];
@@ -9716,6 +10001,257 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminLookupInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminInviteToken"];
+            };
+        };
+        responses: {
+            /** @description The invite. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInviteView"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminAcceptInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAcceptInvite"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["AdminSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuth"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTeam"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminInviteAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminInviteInput"];
+            };
+        };
+        responses: {
+            /** @description Invited. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInviteLink"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRenewInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description The new link. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInviteLink"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCancelInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRoleInput"];
+            };
+        };
+        responses: {
+            /** @description Changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDisableAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminEnableAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Enabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminResetAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                admin_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description The reset link. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInviteLink"];
+                };
             };
             default: components["responses"]["Problem"];
         };
