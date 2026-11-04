@@ -32,6 +32,11 @@ func (s *Service) Health(ctx context.Context) (Health, error) {
 	if _, ok := IdentityFrom(ctx); !ok {
 		return Health{}, errNoSession
 	}
+	return s.readHealth(ctx), nil
+}
+
+// readHealth is Health without a session: the alerts' check reads it too.
+func (s *Service) readHealth(ctx context.Context) Health {
 	h := Health{CheckedAt: s.now().UTC()}
 	fail := func(section string, err error) {
 		s.d.Log.WarnContext(ctx, "admin: health check failed", "section", section, "err", err)
@@ -80,5 +85,5 @@ func (s *Service) Health(ctx context.Context) (Health, error) {
 		}
 		return err
 	})
-	return h, nil
+	return h
 }

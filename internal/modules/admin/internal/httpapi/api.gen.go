@@ -148,6 +148,57 @@ func (e AdminAgencyInputCurrency) Valid() bool {
 	}
 }
 
+// Defines values for AdminAlertKind.
+const (
+	AdminAlertKindDiscarded  AdminAlertKind = "discarded"
+	AdminAlertKindDuplicates AdminAlertKind = "duplicates"
+	AdminAlertKindHeld       AdminAlertKind = "held"
+	AdminAlertKindOverdue    AdminAlertKind = "overdue"
+	AdminAlertKindPastDue    AdminAlertKind = "past_due"
+	AdminAlertKindRedis      AdminAlertKind = "redis"
+	AdminAlertKindSlow       AdminAlertKind = "slow"
+)
+
+// Valid indicates whether the value is a known member of the AdminAlertKind enum.
+func (e AdminAlertKind) Valid() bool {
+	switch e {
+	case AdminAlertKindDiscarded:
+		return true
+	case AdminAlertKindDuplicates:
+		return true
+	case AdminAlertKindHeld:
+		return true
+	case AdminAlertKindOverdue:
+		return true
+	case AdminAlertKindPastDue:
+		return true
+	case AdminAlertKindRedis:
+		return true
+	case AdminAlertKindSlow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminAlertSeverity.
+const (
+	Amber AdminAlertSeverity = "amber"
+	Red   AdminAlertSeverity = "red"
+)
+
+// Valid indicates whether the value is a known member of the AdminAlertSeverity enum.
+func (e AdminAlertSeverity) Valid() bool {
+	switch e {
+	case Amber:
+		return true
+	case Red:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminCurrencyTotalCurrency.
 const (
 	AdminCurrencyTotalCurrencyAED AdminCurrencyTotalCurrency = "AED"
@@ -1471,6 +1522,47 @@ type AdminAgencyInputCurrency string
 // AdminAgencyList defines model for AdminAgencyList.
 type AdminAgencyList struct {
 	Items []AdminAgency `json:"items"`
+}
+
+// AdminAlert defines model for AdminAlert.
+type AdminAlert struct {
+	Body string `json:"body"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id         ULID           `json:"id"`
+	Kind       AdminAlertKind `json:"kind"`
+	LastSeenAt time.Time      `json:"last_seen_at"`
+	OpenedAt   time.Time      `json:"opened_at"`
+
+	// Path The console page (under /console) that acts on it.
+	Path       string             `json:"path"`
+	ResolvedAt *time.Time         `json:"resolved_at,omitempty"`
+	Severity   AdminAlertSeverity `json:"severity"`
+	Title      string             `json:"title"`
+
+	// Value The count, or the seconds the oldest job waits (slow).
+	Value int64 `json:"value"`
+}
+
+// AdminAlertKind defines model for AdminAlert.Kind.
+type AdminAlertKind string
+
+// AdminAlertSeverity defines model for AdminAlert.Severity.
+type AdminAlertSeverity string
+
+// AdminAlertEmail defines model for AdminAlertEmail.
+type AdminAlertEmail struct {
+	Enabled bool `json:"enabled"`
+}
+
+// AdminAlerts defines model for AdminAlerts.
+type AdminAlerts struct {
+	// Email The signed-in admin gets alerts by email.
+	Email bool         `json:"email"`
+	Open  []AdminAlert `json:"open"`
+
+	// Resolved Resolved in the last 30 days.
+	Resolved []AdminAlert `json:"resolved"`
 }
 
 // AdminAuditEntry defines model for AdminAuditEntry.
@@ -2949,6 +3041,9 @@ type AdminAddAgencyStoreJSONRequestBody = AdminReason
 // AdminRemoveAgencyStoreJSONRequestBody defines body for AdminRemoveAgencyStore for application/json ContentType.
 type AdminRemoveAgencyStoreJSONRequestBody = AdminReason
 
+// AdminSetAlertEmailJSONRequestBody defines body for AdminSetAlertEmail for application/json ContentType.
+type AdminSetAlertEmailJSONRequestBody = AdminAlertEmail
+
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
@@ -3089,6 +3184,12 @@ type ServerInterface interface {
 	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
 	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
 	AdminRemoveAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID)
+	// AdminListAlerts The alerts the admin's role hears of
+	// (GET /admin/v1/alerts)
+	AdminListAlerts(w http.ResponseWriter, r *http.Request)
+	// AdminSetAlertEmail Turn the signed-in admin's alert emails on or off
+	// (PUT /admin/v1/alerts/email)
+	AdminSetAlertEmail(w http.ResponseWriter, r *http.Request)
 	// AdminAuditLog Every admin action, newest first
 	// (GET /admin/v1/audit-log)
 	AdminAuditLog(w http.ResponseWriter, r *http.Request, params AdminAuditLogParams)
@@ -3503,6 +3604,34 @@ func (siw *ServerInterfaceWrapper) AdminRemoveAgencyStore(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRemoveAgencyStore(w, r, agencyId, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListAlerts operation middleware
+func (siw *ServerInterfaceWrapper) AdminListAlerts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListAlerts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSetAlertEmail operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetAlertEmail(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetAlertEmail(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5380,6 +5509,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/enable", wrapper.AdminEnableAdmin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/team/admins/{admin_id}/reset", wrapper.AdminResetAdmin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/search", wrapper.AdminSearch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/alerts", wrapper.AdminListAlerts)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/alerts/email", wrapper.AdminSetAlertEmail)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
@@ -5862,6 +5993,77 @@ type AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse) VisitAdminRemoveAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListAlertsRequestObject struct {
+}
+
+type AdminListAlertsResponseObject interface {
+	VisitAdminListAlertsResponse(w http.ResponseWriter) error
+}
+
+type AdminListAlerts200JSONResponse AdminAlerts
+
+func (response AdminListAlerts200JSONResponse) VisitAdminListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListAlertsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListAlertsdefaultApplicationProblemPlusJSONResponse) VisitAdminListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetAlertEmailRequestObject struct {
+	Body *AdminSetAlertEmailJSONRequestBody
+}
+
+type AdminSetAlertEmailResponseObject interface {
+	VisitAdminSetAlertEmailResponse(w http.ResponseWriter) error
+}
+
+type AdminSetAlertEmail204Response struct {
+}
+
+func (response AdminSetAlertEmail204Response) VisitAdminSetAlertEmailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSetAlertEmaildefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetAlertEmaildefaultApplicationProblemPlusJSONResponse) VisitAdminSetAlertEmailResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8395,6 +8597,12 @@ type StrictServerInterface interface {
 	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
 	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
 	AdminRemoveAgencyStore(ctx context.Context, request AdminRemoveAgencyStoreRequestObject) (AdminRemoveAgencyStoreResponseObject, error)
+	// AdminListAlerts The alerts the admin's role hears of
+	// (GET /admin/v1/alerts)
+	AdminListAlerts(ctx context.Context, request AdminListAlertsRequestObject) (AdminListAlertsResponseObject, error)
+	// AdminSetAlertEmail Turn the signed-in admin's alert emails on or off
+	// (PUT /admin/v1/alerts/email)
+	AdminSetAlertEmail(ctx context.Context, request AdminSetAlertEmailRequestObject) (AdminSetAlertEmailResponseObject, error)
 	// AdminAuditLog Every admin action, newest first
 	// (GET /admin/v1/audit-log)
 	AdminAuditLog(ctx context.Context, request AdminAuditLogRequestObject) (AdminAuditLogResponseObject, error)
@@ -8944,6 +9152,61 @@ func (sh *strictHandler) AdminRemoveAgencyStore(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRemoveAgencyStoreResponseObject); ok {
 		if err := validResponse.VisitAdminRemoveAgencyStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListAlerts operation middleware
+func (sh *strictHandler) AdminListAlerts(w http.ResponseWriter, r *http.Request) {
+	var request AdminListAlertsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListAlerts(ctx, request.(AdminListAlertsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListAlerts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListAlertsResponseObject); ok {
+		if err := validResponse.VisitAdminListAlertsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetAlertEmail operation middleware
+func (sh *strictHandler) AdminSetAlertEmail(w http.ResponseWriter, r *http.Request) {
+	var request AdminSetAlertEmailRequestObject
+
+	var body AdminSetAlertEmailJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetAlertEmail(ctx, request.(AdminSetAlertEmailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetAlertEmail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetAlertEmailResponseObject); ok {
+		if err := validResponse.VisitAdminSetAlertEmailResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

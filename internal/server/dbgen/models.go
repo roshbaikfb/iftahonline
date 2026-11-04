@@ -104,6 +104,31 @@ type AdSpend struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type AdminAlert struct {
+	ID         pgtype.UUID
+	Kind       string
+	Severity   string
+	Value      int64
+	OpenedAt   pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+	ResolvedAt pgtype.Timestamptz
+}
+
+type AdminAlertDelivery struct {
+	AlertID pgtype.UUID
+	AdminID pgtype.UUID
+	Event   string
+	Channel string
+	SentAt  pgtype.Timestamptz
+}
+
+type AdminAlertState struct {
+	Kind      string
+	Bad       int32
+	Good      int32
+	CheckedAt pgtype.Timestamptz
+}
+
 type AdminAuditLog struct {
 	ID         pgtype.UUID
 	OccurredAt pgtype.Timestamptz
@@ -711,6 +736,7 @@ type PlatformAdmin struct {
 	UpdatedAt    pgtype.Timestamptz
 	LastLoginAt  pgtype.Timestamptz
 	Role         string
+	AlertEmail   bool
 }
 
 type Product struct {

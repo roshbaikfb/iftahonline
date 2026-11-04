@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
@@ -19,6 +20,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/config"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/password"
 	"github.com/roshbaikfb/iftahonline/internal/platform/problem"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
@@ -64,7 +66,11 @@ type Deps struct {
 	Site site.Console
 	// Founding is the founding-merchants program; nil refuses it.
 	Founding billing.Founding
-	Limits   *app.Limits // tests
+	// Mailer sends the alerts' emails from the worker (ADR-0080), with
+	// links into ConsoleURL; nil sends none.
+	Mailer     mailer.Mailer
+	ConsoleURL string
+	Limits     *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -95,9 +101,19 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, Profile: d.Profile, OwnerStores: d.OwnerStores, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding})
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding,
+		Mailer: d.Mailer, ConsoleURL: d.ConsoleURL})
 	return &Module{svc: svc, deps: d}, nil
 }
+
+// RegisterWorkers adds the alerts' check (the worker role, ADR-0080).
+func (m *Module) RegisterWorkers(w *river.Workers) error {
+	return river.AddWorkerSafely(w, &app.AlertsCheckWorker{Svc: m.svc})
+}
+
+// PeriodicJobs are the module's schedule: the alerts' check every five
+// minutes.
+func (*Module) PeriodicJobs() []*river.PeriodicJob { return []*river.PeriodicJob{app.AlertsPeriodic()} }
 
 // CreateAdmin adds a platform admin in role (owner, operations, finance,
 // content or viewer; the `platform admin create` CLI).

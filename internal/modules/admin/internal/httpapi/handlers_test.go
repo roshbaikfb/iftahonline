@@ -1231,3 +1231,27 @@ func TestConsoleSearch(t *testing.T) {
 		}
 	}
 }
+
+// TestConsoleAlerts: every admin reads the alerts its role hears of and
+// chooses its own email (ADR-0080).
+func TestConsoleAlerts(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.loginAs(t, "content")
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/alerts", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/alerts", "", withCookie(sess))
+	if r.status != http.StatusOK || r.body["email"] != true || r.body["open"] == nil || r.body["resolved"] == nil {
+		t.Fatalf("alerts = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/alerts/email", `{"enabled":false}`, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("email off = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/alerts", "", withCookie(sess)); r.body["email"] != false {
+		t.Fatalf("after = %v", r.body)
+	}
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/alerts/email", `{"enabled":true}`, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+}

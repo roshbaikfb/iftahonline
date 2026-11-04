@@ -979,6 +979,16 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	go c.entitlements.Listen(ctx, rdb, log)
+	// The console's alerts run here when the console's pool is set
+	// (ADR-0080): the directory reads stores through it too.
+	if cfg.AdminDB.URL != "" {
+		adminPool, poolErr := postgres.NewPool(ctx, cfg.AdminDB, "iftahonline-worker-admin")
+		if poolErr != nil {
+			return poolErr
+		}
+		defer adminPool.Close()
+		c.adminPool = adminPool
+	}
 	if err = river.AddWorkerSafely(workers, c.events.Worker()); err != nil {
 		return fmt.Errorf("event bus: %w", err)
 	}
@@ -1124,6 +1134,18 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	periodic := slices.Concat(cat.PeriodicJobs(), bill.PeriodicJobs(), rsk.PeriodicJobs(), anl.PeriodicJobs())
+	if c.adminPool != nil {
+		console, consoleErr := admin.New(admin.Deps{AdminPool: c.adminPool, Redis: rdb, Directory: ten.Directory(), IDs: c.ids, Log: log,
+			Secrets: cfg.Secrets, Hashing: cfg.Identity, Billing: bill.Console(), Mailer: mailer.FromConfig(cfg.Mail, log),
+			ConsoleURL: "https://" + cfg.Tenancy.AdminHost + "/console"})
+		if consoleErr != nil {
+			return consoleErr
+		}
+		if err = console.RegisterWorkers(workers); err != nil {
+			return err
+		}
+		periodic = append(periodic, console.PeriodicJobs()...)
+	}
 	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), periodic...)
 	if err != nil {
 		return err
