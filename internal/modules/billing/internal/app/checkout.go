@@ -48,6 +48,10 @@ type Summary struct {
 	PeriodEnd              time.Time
 	GraceUntil             time.Time
 	CancelAtPeriodEnd      bool
+	// ClosesAt is when the storefront closes if still unpaid (ADR-0082);
+	// Held is whether it has.
+	ClosesAt time.Time
+	Held     bool
 	// A change waiting for the period's end (ADR-0060): the plan it moves
 	// to (names empty for the free plan after a cancellation) and cycle.
 	NextPlanNameAr, NextPlanNameEn string
@@ -96,6 +100,7 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 		}
 		out.Status, out.Cycle, out.TrialEndsAt, out.PeriodEnd = sub.Status, sub.Cycle, sub.TrialEndsAt, sub.PeriodEnd
 		out.GraceUntil, out.CancelAtPeriodEnd, out.NextCycle = sub.GraceUntil, sub.CancelAtPeriodEnd, sub.NextCycle
+		out.ClosesAt, out.Held = sub.ClosesAt(s.policy), sub.Held()
 		if !sub.NextPlanID.IsZero() {
 			if out.NextPlanNameAr, out.NextPlanNameEn, err = store.PlanNames(ctx, tx, sub.NextPlanID); err != nil {
 				return err

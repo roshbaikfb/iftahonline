@@ -12,18 +12,20 @@ func TestNoticeEmails(t *testing.T) {
 	t.Parallel()
 	retry := time.Date(2026, 11, 2, 3, 0, 0, 0, time.UTC)
 	failed := domain.Notice{Kind: domain.NoticePaymentFailed, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP",
-		RetryAt: retry, GraceUntil: retry.AddDate(0, 0, 6)}
+		RetryAt: retry, GraceUntil: retry.AddDate(0, 0, 6), ClosesAt: retry.AddDate(0, 1, 6)}
 	tests := []struct {
 		n             domain.Notice
 		locale        string
 		subject, text []string
 	}{
-		{failed, "ar", []string{"تعذّر الدفع"}, []string{"INV-2026-000007", "682.86 EGP", "2026-11-02", "2026-11-08"}},
-		{failed, "en", []string{"payment failed"}, []string{"682.86 EGP", "try again on 2026-11-02", "closes on 2026-11-08"}},
+		{failed, "ar", []string{"تعذّر الدفع"}, []string{"INV-2026-000007", "682.86 EGP", "2026-11-02", "الباقة المجانية يوم 2026-11-08", "يُغلق المتجر يوم 2026-12-08"}},
+		{failed, "en", []string{"payment failed"}, []string{"682.86 EGP", "try again on 2026-11-02", "free plan on 2026-11-08", "closes on 2026-12-08"}},
 		{domain.Notice{Kind: domain.NoticePaymentFailed, Invoice: "INV-2026-000008", TotalMinor: 100, Currency: "SAR"}, "en",
 			[]string{"payment failed"}, []string{"1.00 SAR"}},
-		{domain.Notice{Kind: domain.NoticeSuspended}, "ar", []string{"أُغلق المتجر"}, []string{"صفحة صيانة"}},
-		{domain.Notice{Kind: domain.NoticeSuspended}, "en", []string{"store closed"}, []string{"maintenance page"}},
+		{domain.Notice{Kind: domain.NoticeSuspended, ClosesAt: retry.AddDate(0, 1, 6)}, "ar", []string{"الباقة المجانية"}, []string{"إعلانات المنصة", "يُغلق المتجر يوم 2026-12-08"}},
+		{domain.Notice{Kind: domain.NoticeSuspended, ClosesAt: retry.AddDate(0, 1, 6)}, "en", []string{"free plan"}, []string{"stays open", "closes on 2026-12-08"}},
+		{domain.Notice{Kind: domain.NoticeHeld}, "ar", []string{"أُغلق المتجر"}, []string{"صفحة صيانة"}},
+		{domain.Notice{Kind: domain.NoticeHeld}, "en", []string{"store closed"}, []string{"maintenance page"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "ar", []string{"تم استلام الدفع"}, []string{"682.86 EGP"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "en", []string{"payment received"}, []string{"is paid"}},
 	}

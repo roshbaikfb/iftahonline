@@ -34,6 +34,7 @@ func JoinAgency(own Subscription, p Plan, peer *Subscription, now time.Time) Sub
 	}
 	s.PlanID, s.Status, s.Cycle = peer.PlanID, peer.Status, peer.Cycle
 	s.PeriodStart, s.PeriodEnd, s.GraceUntil, s.SuspendedAt = peer.PeriodStart, peer.PeriodEnd, peer.GraceUntil, peer.SuspendedAt
+	s.HeldAt = peer.HeldAt
 	s.CancelAtPeriodEnd = peer.CancelAtPeriodEnd
 	return s
 }
@@ -47,6 +48,8 @@ func LeaveAgency(own Subscription, free Plan) Subscription {
 	return s
 }
 
-// Held reports whether a store in s is held for billing: suspended for
-// an unpaid invoice, or cancelled after the retention (ADR-0051).
-func (s Subscription) Held() bool { return s.Status == Suspended || s.Status == Cancelled }
+// Held reports whether a store in s is held for billing: suspended
+// unpaid past its free days, then cancelled (ADR-0051, ADR-0082).
+func (s Subscription) Held() bool {
+	return (s.Status == Suspended || s.Status == Cancelled) && !s.HeldAt.IsZero()
+}

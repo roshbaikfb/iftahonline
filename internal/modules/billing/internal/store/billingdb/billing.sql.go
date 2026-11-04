@@ -223,7 +223,7 @@ func (q *Queries) GetPlanPrice(ctx context.Context, arg GetPlanPriceParams) (int
 
 const getSubscription = `-- name: GetSubscription :one
 SELECT s.plan_id, p.kind, s.status, s.cycle, s.trial_ends_at, s.period_start, s.period_end,
-       s.grace_until, s.suspended_at, s.cancel_at_period_end, s.trial_used, s.next_plan_id, s.next_cycle
+       s.grace_until, s.suspended_at, s.held_at, s.cancel_at_period_end, s.trial_used, s.next_plan_id, s.next_cycle
 FROM subscriptions s
 JOIN plans p ON p.id = s.plan_id
 WHERE s.store_id = $1
@@ -239,6 +239,7 @@ type GetSubscriptionRow struct {
 	PeriodEnd         *time.Time
 	GraceUntil        *time.Time
 	SuspendedAt       *time.Time
+	HeldAt            *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
 	NextPlanID        *ulid.ID
@@ -259,6 +260,7 @@ func (q *Queries) GetSubscription(ctx context.Context, storeID ulid.ID) (GetSubs
 		&i.PeriodEnd,
 		&i.GraceUntil,
 		&i.SuspendedAt,
+		&i.HeldAt,
 		&i.CancelAtPeriodEnd,
 		&i.TrialUsed,
 		&i.NextPlanID,
@@ -323,9 +325,9 @@ func (q *Queries) PeriodsEnded(ctx context.Context, now time.Time) ([]ulid.ID, e
 const saveSubscription = `-- name: SaveSubscription :exec
 UPDATE subscriptions SET plan_id = $1, status = $2, cycle = $3, trial_ends_at = $4,
   period_start = $5, period_end = $6, grace_until = $7, suspended_at = $8,
-  cancel_at_period_end = $9, trial_used = $10, next_plan_id = $11,
-  next_cycle = $12, updated_at = now()
-WHERE store_id = $13
+  held_at = $9, cancel_at_period_end = $10, trial_used = $11, next_plan_id = $12,
+  next_cycle = $13, updated_at = now()
+WHERE store_id = $14
 `
 
 type SaveSubscriptionParams struct {
@@ -337,6 +339,7 @@ type SaveSubscriptionParams struct {
 	PeriodEnd         *time.Time
 	GraceUntil        *time.Time
 	SuspendedAt       *time.Time
+	HeldAt            *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
 	NextPlanID        *ulid.ID
@@ -354,6 +357,7 @@ func (q *Queries) SaveSubscription(ctx context.Context, arg SaveSubscriptionPara
 		arg.PeriodEnd,
 		arg.GraceUntil,
 		arg.SuspendedAt,
+		arg.HeldAt,
 		arg.CancelAtPeriodEnd,
 		arg.TrialUsed,
 		arg.NextPlanID,

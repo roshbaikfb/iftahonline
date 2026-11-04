@@ -116,7 +116,7 @@ func PutSubscription(ctx context.Context, tx Tx, s domain.Subscription, account 
 	if err = billingdb.New(tx).PutSubscription(ctx, billingdb.PutSubscriptionParams{
 		StoreID: store, PlanID: s.PlanID, Status: string(s.Status), Cycle: cycleOf(s.Cycle),
 		TrialEndsAt: ptr(s.TrialEndsAt), PeriodStart: ptr(s.PeriodStart), PeriodEnd: ptr(s.PeriodEnd),
-		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt),
+		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt), HeldAt: ptr(s.HeldAt),
 		CancelAtPeriodEnd: s.CancelAtPeriodEnd, TrialUsed: s.TrialUsed, AccountID: account,
 		NextPlanID: idOf(s.NextPlanID), NextCycle: cycleOf(s.NextCycle),
 	}); err != nil {

@@ -107,16 +107,23 @@ func billingNotifier(ten *tenancy.Module, owners func(context.Context) ([]string
 func merchantNotice(n billing.Notice, store string) (messaging.MerchantKind, []string) {
 	switch n.Kind {
 	case billing.NoticePaymentFailed:
-		closes := billing.NoticeDate(n.GraceUntil)
-		if closes == "" {
-			closes = "-"
-		}
-		return messaging.MerchantPaymentFailed, []string{store, n.Invoice, n.Amount(), closes}
+		return messaging.MerchantPaymentFailed, []string{store, n.Invoice, n.Amount(), closes(n)}
 	case billing.NoticeSuspended:
+		return messaging.MerchantFree, []string{store, closes(n)}
+	case billing.NoticeHeld:
 		return messaging.MerchantSuspended, []string{store}
 	default:
 		return messaging.MerchantPaid, []string{store, n.Invoice, n.Amount()}
 	}
+}
+
+// closes is the day the notice's store closes if still unpaid (the
+// maintenance page, ADR-0082), "-" when it has none.
+func closes(n billing.Notice) string {
+	if d := billing.NoticeDate(n.ClosesAt); d != "" {
+		return d
+	}
+	return "-"
 }
 
 func (o ownerNotices) send(ctx context.Context, n billing.Notice, locale, store string) {

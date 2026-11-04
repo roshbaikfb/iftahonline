@@ -2843,14 +2843,20 @@ type Billing struct {
 	// Card The card on file; absent without one.
 	//
 	// Example: MasterCard •••• 2346
-	Card  *string       `json:"card,omitempty"`
-	Cycle *BillingCycle `json:"cycle,omitempty"`
+	Card *string `json:"card,omitempty"`
+
+	// ClosesAt Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082).
+	ClosesAt *time.Time    `json:"closes_at,omitempty"`
+	Cycle    *BillingCycle `json:"cycle,omitempty"`
 
 	// Founding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
 	Founding *BillingFounding `json:"founding,omitempty"`
 
-	// GraceUntil Past due: when the store closes unpaid.
+	// GraceUntil Past due: when the store moves to the free plan unpaid (ADR-0082).
 	GraceUntil *time.Time `json:"grace_until,omitempty"`
+
+	// Held The storefront shows the maintenance page until the invoice is paid.
+	Held *bool `json:"held,omitempty"`
 
 	// NextCycle The cycle of the next renewal when it changes.
 	NextCycle *BillingNextCycle `json:"next_cycle,omitempty"`

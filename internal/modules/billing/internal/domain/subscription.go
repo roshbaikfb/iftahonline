@@ -57,7 +57,7 @@ const (
 	Trialing  Status = "trialing"  // a paid plan's free trial
 	Active    Status = "active"    // the free plan, pay as you sell, or a paid period
 	PastDue   Status = "past_due"  // a renewal failed; the plan still applies until GraceUntil
-	Suspended Status = "suspended" // not paid after grace: the store is closed, its data kept
+	Suspended Status = "suspended" // not paid after grace: the free plan's grants, then held (ADR-0082)
 	Cancelled Status = "cancelled" // suspended past the retention: the data may be deleted
 )
 
@@ -79,12 +79,15 @@ var (
 // Policy is how long the lifecycle waits.
 type Policy struct {
 	Grace     time.Duration // from a failed renewal to suspension
+	FreeFor   time.Duration // from suspension, on the free plan, to the hold
 	Retention time.Duration // from suspension to cancellation
 }
 
-// DefaultPolicy is 7 days of grace and 90 days of kept data (approved
-// 2026-10-30).
-func DefaultPolicy() Policy { return Policy{Grace: 7 * 24 * time.Hour, Retention: 90 * 24 * time.Hour} }
+// DefaultPolicy is 7 days of grace, 30 days as a free store, and 90
+// days of kept data (approved 2026-10-30 and 2026-11-04).
+func DefaultPolicy() Policy {
+	return Policy{Grace: 7 * 24 * time.Hour, FreeFor: 30 * 24 * time.Hour, Retention: 90 * 24 * time.Hour}
+}
 
 // Subscription is a store's plan and where it stands. Zero times are
 // unset.
@@ -98,6 +101,7 @@ type Subscription struct {
 	PeriodEnd         time.Time
 	GraceUntil        time.Time
 	SuspendedAt       time.Time
+	HeldAt            time.Time // when a suspended store's storefront closed
 	CancelAtPeriodEnd bool
 	TrialUsed         bool // a store gets one trial
 	// A change the merchant scheduled (ADR-0060): the plan and cycle of
@@ -206,13 +210,14 @@ func (s Subscription) Settle(renewed bool) (Subscription, bool, error) {
 	}
 	switch s.Status {
 	case PastDue, Suspended, Cancelled:
-		s.Status, s.GraceUntil, s.SuspendedAt = Active, time.Time{}, time.Time{}
+		s.Status, s.GraceUntil, s.SuspendedAt, s.HeldAt = Active, time.Time{}, time.Time{}, time.Time{}
 		changed = true
 	}
 	return s, changed, nil
 }
 
-// Suspend closes a store whose grace ran out unpaid. Its data is kept.
+// Suspend moves a store whose grace ran out unpaid to the free plan's
+// grants; its storefront stays open until Hold (ADR-0082).
 func (s Subscription) Suspend(now time.Time) (Subscription, error) {
 	if s.Status != PastDue || now.Before(s.GraceUntil) {
 		return Subscription{}, refuse(s, "suspend")
@@ -221,13 +226,43 @@ func (s Subscription) Suspend(now time.Time) (Subscription, error) {
 	return s, nil
 }
 
+// HoldsAt is when a suspended store's storefront closes: FreeFor after
+// its suspension.
+func (s Subscription) HoldsAt(pol Policy) time.Time { return s.SuspendedAt.Add(pol.FreeFor) }
+
+// ClosesAt is when the storefront of a store still unpaid closes: the
+// grace's end plus FreeFor while past due, HoldsAt while suspended and
+// open; zero otherwise.
+func (s Subscription) ClosesAt(pol Policy) time.Time {
+	switch {
+	case s.Status == PastDue && !s.GraceUntil.IsZero():
+		return s.GraceUntil.Add(pol.FreeFor)
+	case s.Status == Suspended && s.HeldAt.IsZero():
+		return s.HoldsAt(pol)
+	}
+	return time.Time{}
+}
+
+// Hold closes the storefront of a store suspended, still unpaid, for
+// FreeFor: it shows the maintenance page; its data is kept.
+func (s Subscription) Hold(now time.Time, pol Policy) (Subscription, error) {
+	if s.Status != Suspended || !s.HeldAt.IsZero() || now.Before(s.HoldsAt(pol)) {
+		return Subscription{}, refuse(s, "hold")
+	}
+	s.HeldAt = now
+	return s, nil
+}
+
 // Close cancels a subscription suspended for the whole retention: its
-// data may then be deleted.
+// data may then be deleted. A store not held yet is held now.
 func (s Subscription) Close(now time.Time, pol Policy) (Subscription, error) {
 	if s.Status != Suspended || now.Before(s.SuspendedAt.Add(pol.Retention)) {
 		return Subscription{}, refuse(s, "close")
 	}
 	s.Status = Cancelled
+	if s.HeldAt.IsZero() {
+		s.HeldAt = now
+	}
 	return s, nil
 }
 

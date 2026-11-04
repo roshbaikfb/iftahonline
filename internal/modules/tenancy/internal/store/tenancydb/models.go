@@ -1261,6 +1261,7 @@ type Subscription struct {
 	RenewalPlanID     *ulid.ID
 	NextPlanID        *ulid.ID
 	NextCycle         pgtype.Text
+	HeldAt            *time.Time
 }
 
 type TaxRate struct {

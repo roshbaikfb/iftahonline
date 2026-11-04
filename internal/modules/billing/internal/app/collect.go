@@ -84,6 +84,15 @@ type SuspendArgs struct {
 // Kind implements river.JobArgs.
 func (SuspendArgs) Kind() string { return "billing.suspend" }
 
+// HoldArgs closes the storefront of a store suspended, unpaid, for its
+// free days.
+type HoldArgs struct {
+	jobs.TenantArgs
+}
+
+// Kind implements river.JobArgs.
+func (HoldArgs) Kind() string { return "billing.hold" }
+
 // CancelArgs cancels a store suspended for the whole retention.
 type CancelArgs struct {
 	jobs.TenantArgs
@@ -122,7 +131,8 @@ func (s *Service) SavePaymentMethod(ctx context.Context, account ulid.ID, gatewa
 
 // Dunning is the hourly run: open invoices whose attempt is due are
 // charged, stores whose grace ran out are suspended, stores suspended
-// for the retention are cancelled (ADR-0051).
+// for their free days are held, stores suspended for the retention are
+// cancelled (ADR-0051, ADR-0082).
 func (s *Service) Dunning(ctx context.Context) error {
 	if s.jobs == nil {
 		return errors.New("billing: no job inserter")
@@ -140,6 +150,8 @@ func (s *Service) Dunning(ctx context.Context) error {
 				_, err = s.jobs.InsertTx(ctx, tx, ChargeInvoiceArgs{AccountID: t.Account, InvoiceID: t.ID}, jobs.Unique())
 			case "suspend":
 				_, err = s.jobs.InsertTx(sctx, tx, SuspendArgs{TenantArgs: sid}, jobs.Unique())
+			case "hold":
+				_, err = s.jobs.InsertTx(sctx, tx, HoldArgs{TenantArgs: sid}, jobs.Unique())
 			case "cancel":
 				_, err = s.jobs.InsertTx(sctx, tx, CancelArgs{TenantArgs: sid}, jobs.Unique())
 			}
@@ -391,9 +403,10 @@ func (s *Service) failTx(ctx context.Context, tx pgx.Tx, inv store.OpenInvoice, 
 			if err = s.saveTx(sctx, tx, pd); err != nil {
 				return err
 			}
-			n.GraceUntil = pd.GraceUntil
-		} else {
-			n.GraceUntil = sub.GraceUntil
+			sub = pd
+		}
+		if sub.Status == domain.PastDue {
+			n.GraceUntil, n.ClosesAt = sub.GraceUntil, sub.ClosesAt(s.policy)
 		}
 		if err = s.notifyTx(sctx, tx, n); err != nil {
 			return err
@@ -402,8 +415,8 @@ func (s *Service) failTx(ctx context.Context, tx pgx.Tx, inv store.OpenInvoice, 
 	return nil
 }
 
-// Suspend closes the store in ctx when its grace ran out unpaid: its
-// storefront shows a maintenance page, its data is kept.
+// Suspend moves the store in ctx to the free plan's grants when its
+// grace ran out unpaid. Its storefront stays open until Hold (ADR-0082).
 func (s *Service) Suspend(ctx context.Context) error {
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		sub, ok, err := store.Subscription(ctx, tx)
@@ -420,10 +433,32 @@ func (s *Service) Suspend(ctx context.Context) error {
 		if err = s.saveTx(ctx, tx, next); err != nil {
 			return err
 		}
+		return s.notifyTx(ctx, tx, Notice{Kind: domain.NoticeSuspended, ClosesAt: next.ClosesAt(s.policy)})
+	})
+}
+
+// Hold closes the storefront of the store in ctx, suspended and unpaid
+// for its free days: it shows a maintenance page, its data is kept.
+func (s *Service) Hold(ctx context.Context) error {
+	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		sub, ok, err := store.Subscription(ctx, tx)
+		if err != nil || !ok {
+			return err
+		}
+		next, err := sub.Hold(s.now(), s.policy)
+		if errors.Is(err, domain.ErrTransition) {
+			return nil // paid or held meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		if err = s.saveTx(ctx, tx, next); err != nil {
+			return err
+		}
 		if err = s.hold(ctx, tx, true); err != nil {
 			return err
 		}
-		return s.notifyTx(ctx, tx, Notice{Kind: domain.NoticeSuspended})
+		return s.notifyTx(ctx, tx, Notice{Kind: domain.NoticeHeld})
 	})
 }
 
@@ -442,7 +477,10 @@ func (s *Service) Cancel(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return s.saveTx(ctx, tx, next)
+		if err = s.saveTx(ctx, tx, next); err != nil {
+			return err
+		}
+		return s.hold(ctx, tx, true) // a store its hold job missed is held now
 	})
 }
 
@@ -508,6 +546,17 @@ type SuspendWorker struct {
 // Work implements river.Worker.
 func (w *SuspendWorker) Work(ctx context.Context, _ *river.Job[SuspendArgs]) error {
 	return w.Svc.Suspend(ctx)
+}
+
+// HoldWorker runs HoldArgs.
+type HoldWorker struct {
+	river.WorkerDefaults[HoldArgs]
+	Svc *Service
+}
+
+// Work implements river.Worker.
+func (w *HoldWorker) Work(ctx context.Context, _ *river.Job[HoldArgs]) error {
+	return w.Svc.Hold(ctx)
 }
 
 // CancelWorker runs CancelArgs.

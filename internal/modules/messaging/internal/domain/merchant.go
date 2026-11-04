@@ -9,6 +9,7 @@ type MerchantKind string
 const (
 	MerchantPaymentFailed MerchantKind = "billing_payment_failed"   // store, invoice, amount, closing date
 	MerchantSuspended     MerchantKind = "billing_store_suspended"  // store
+	MerchantFree          MerchantKind = "billing_store_free"       // store, closing date
 	MerchantPaid          MerchantKind = "billing_payment_received" // store, invoice, amount
 )
 
@@ -20,6 +21,8 @@ func MerchantTemplate(k MerchantKind) (name string, params int, ok bool) {
 		return "billing_payment_failed_v1", 4, true
 	case MerchantSuspended:
 		return "billing_store_suspended_v1", 1, true
+	case MerchantFree:
+		return "billing_store_free_v1", 2, true
 	case MerchantPaid:
 		return "billing_payment_received_v1", 3, true
 	}

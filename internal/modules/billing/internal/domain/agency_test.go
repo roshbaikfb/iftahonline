@@ -29,8 +29,12 @@ func TestJoinAndLeaveAgency(t *testing.T) {
 		t.Fatalf("joined = %+v", joined)
 	}
 	peer.Status, peer.SuspendedAt = domain.Suspended, now
-	if held := domain.JoinAgency(domain.Subscription{}, plan, &peer, now); !held.Held() {
-		t.Fatalf("a suspended agency's new member is held: %+v", held)
+	if free := domain.JoinAgency(domain.Subscription{}, plan, &peer, now); free.Held() || free.Status != domain.Suspended {
+		t.Fatalf("a suspended agency's new member is free, not held, before its hold (ADR-0082): %+v", free)
+	}
+	peer.HeldAt = now
+	if held := domain.JoinAgency(domain.Subscription{}, plan, &peer, now); !held.Held() || !held.HeldAt.Equal(now) {
+		t.Fatalf("a held agency's new member is held: %+v", held)
 	}
 
 	free := domain.Plan{ID: ulid.ID{3}, Kind: domain.KindFree}

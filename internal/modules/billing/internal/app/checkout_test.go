@@ -100,7 +100,7 @@ func TestPayNowSavesTheCardAndRestores(t *testing.T) {
 	account := js[0].AccountID
 	// The renewal went unpaid through its grace: suspended and held.
 	if err := postgres.InTenantTx(ctx, d.pool, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE subscriptions SET status = 'suspended', suspended_at = '2026-11-08T00:00:00Z'`)
+		_, err := tx.Exec(ctx, `UPDATE subscriptions SET status = 'suspended', suspended_at = '2026-11-08T00:00:00Z', held_at = '2026-12-08T00:00:00Z'`)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,8 @@ func TestPayNowSavesTheCardAndRestores(t *testing.T) {
 	invoice := d.invoiceID(t, account)
 
 	sum, err := d.svc.Summary(ctx)
-	if err != nil || sum.Status != "suspended" || sum.Card != "" || len(sum.OpenInvoices) != 1 || sum.PlanNameEn != "Pro" {
+	if err != nil || sum.Status != "suspended" || sum.Card != "" || len(sum.OpenInvoices) != 1 || sum.PlanNameEn != "Pro" ||
+		!sum.Held || !sum.ClosesAt.IsZero() {
 		t.Fatalf("summary before = %+v, %v", sum, err)
 	}
 	link, err := d.svc.PayNow(ctx, invoice, app.Payer{})
