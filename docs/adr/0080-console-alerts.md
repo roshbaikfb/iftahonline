@@ -57,8 +57,20 @@ transaction.
   request. It carries the alert's words and the console link that acts on
   it. Each admin can turn alert emails off (`platform_admins.alert_email`,
   `PUT /admin/v1/alerts/email`).
-- **Mobile notifications** are Web Push from the console. They come in a
-  follow-up on the same deliveries table (channel `push`).
+- **Mobile notifications** are Web Push (RFC 8030/8291, VAPID per RFC
+  8292), recorded on the same deliveries table (channel `push`):
+  - An admin turns them on per device from the console
+    (`POST /admin/v1/push/subscriptions`); any admin may, and hears only
+    of their role's kinds. A device is stored in `admin_push_subscriptions`.
+  - The endpoint is the browser's word, so it is accepted and reached only
+    on the big push services' hosts (Google, Mozilla, Apple, Microsoft),
+    over https on 443, through `platform/safehttp`, without redirects.
+  - The worker sends from `VAPID_PRIVATE_KEY`; the api hands the console
+    `VAPID_PUBLIC_KEY`. Without the keys, push is off and only email goes.
+  - A notice counts as sent when any of the admin's devices took it. A
+    device the push service no longer knows (404/410) is forgotten.
+  - Red alerts are sent with high urgency. The notification carries the
+    alert's title, body and console page, nothing else.
 - **WhatsApp:** later, by the owner's decision.
 
 ### In the console
