@@ -2559,3 +2559,71 @@ fieldset.read-only {
     flex: none;
   }
 }
+
+/* Collection settings and a store's balance (ADR-0083, the approved
+   mockup). */
+.collection-form {
+  display: grid;
+  gap: 1rem;
+}
+.collection-form .card {
+  display: grid;
+  gap: 0.75rem;
+}
+.collection-form h2 {
+  margin: 0;
+}
+.minimums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+.minimums input {
+  inline-size: 100%;
+}
+.balance-amount {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.balance-amount.neg {
+  color: var(--red);
+}
+.status.balance-ok {
+  background: #f0fdf4;
+  color: var(--green);
+}
+.status.balance-low {
+  background: #fffbeb;
+  color: #b45309;
+}
+.status.balance-debt {
+  background: #fef2f2;
+  color: var(--red);
+}
+.balance-entries {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86rem;
+}
+.balance-entries li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-block-end: 1px solid var(--line);
+}
+.balance-entries li:last-child {
+  border-block-end: 0;
+}
+.balance-entries .plus {
+  color: var(--green);
+}
+.balance-entries span:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

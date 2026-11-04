@@ -13,6 +13,7 @@ const icons = {
   billing: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
   growth: 'M3 20h18M6 16l4-5 3 3 5-7',
   plans: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5',
+  collection: 'M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM3 7l12-3v3M16 13.5h2',
   founding: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
   agencies: 'M6 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 20c0-3 3-5 6-5s6 2 6 5M16 4a3 3 0 0 1 0 6M21 20c0-2.5-1.5-4.2-3.5-4.8',
   site: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18',
@@ -36,6 +37,7 @@ const groups: { title: string; items: { to: string; label: string; icon: keyof t
     items: [
       { to: '/billing', label: 'الفواتير والمدفوعات', icon: 'billing', need: 'billing.read' },
       { to: '/growth', label: 'النمو', icon: 'growth', need: 'billing.read' },
+      { to: '/collection', label: 'إعدادات التحصيل', icon: 'collection', need: 'billing.read' },
       { to: '/plans', label: 'الباقات والمميزات', icon: 'plans', need: 'catalog.read' },
       { to: '/founding', label: 'التجار المؤسسون', icon: 'founding', need: 'catalog.read' },
       { to: '/agencies', label: 'الوكالات', icon: 'agencies', need: 'catalog.read' },

@@ -49,6 +49,10 @@ function consoleRoutes(over: Record<string, (c: Call) => { status: number; body?
     }),
     'GET /admin/v1/stores': (c) => ({ status: 200, body: c.search.get('cursor') ? { items: [] } : { items: [storeRow], next_cursor: 'c1' } }),
     [`GET /admin/v1/stores/${store}`]: () => ({ status: 200, body: { store: storeRow.store, domains: [{ id: 'D1', host: 'alanaqa.iftahonline.com', kind: 'subdomain', status: 'verified', is_primary: true, created_at: '' }] } }),
+    [`GET /admin/v1/stores/${store}/balance`]: () => ({
+      status: 200,
+      body: { currency: 'EGP', balance_minor: 0, minimum_minor: 30000, level: 'debt', entries: [] },
+    }),
     [`GET /admin/v1/stores/${store}/billing`]: () => ({
       status: 200,
       body: {

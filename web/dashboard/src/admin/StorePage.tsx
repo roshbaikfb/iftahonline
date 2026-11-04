@@ -11,6 +11,7 @@ import { field } from '../session';
 import type { Entry } from './audit';
 import { AuditRow } from './AuditRow';
 import { ConsoleLayout } from './ConsoleLayout';
+import { BalanceCard } from './BalanceCard';
 import { Dialog } from './Dialog';
 import { dateTimeAr, initial, storeStatusLabel } from './lib';
 import { currencyName } from './plans';
@@ -346,6 +347,8 @@ export function StorePage() {
             )}
           </section>
         )}
+
+        {store && can('billing.read') && <BalanceCard storeId={storeId} storeName={store.name} />}
 
         <section className="card store-card" aria-labelledby="h-agency">
           <h2 id="h-agency">الوكالة</h2>
