@@ -126,12 +126,28 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.4rem;
     min-block-size: 3.5rem;
     padding: 0.5rem 1rem;
     background: #111827;
   }
   .console-top .console-brand {
+    margin-inline-end: auto;
     padding: 0;
+  }
+  .console-bell {
+    position: relative;
+    border-color: transparent;
+  }
+  .console-bell .alert-count {
+    position: absolute;
+    inset-block-start: 0.15rem;
+    inset-inline-end: 0.15rem;
+    min-inline-size: 1.1rem;
+    block-size: 1.1rem;
+    margin: 0;
+    padding: 0 0.25rem;
+    font-size: 0.68rem;
   }
   .console-toggle,
   .console-close {
@@ -2204,4 +2220,142 @@ fieldset.read-only {
 }
 .search-input input::-webkit-search-cancel-button {
   display: none;
+}
+
+/* The console's alerts (ADR-0080, the approved mockup). */
+.alert-count {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.35rem;
+  block-size: 1.35rem;
+  margin-inline-start: auto;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.delivery {
+  display: grid;
+  gap: 0.75rem;
+}
+.delivery h2,
+.alerts-open h2,
+.alerts-resolved h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+.delivery-ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+}
+.delivery-way {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.delivery-way > span {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1;
+}
+.delivery-way input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin: 0.15rem 0 0;
+}
+.delivery-way .muted,
+.delivery .small {
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.delivery .small {
+  margin: 0;
+}
+.delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.alerts-open {
+  display: grid;
+  gap: 0.6rem;
+}
+.alert-list,
+.alerts-resolved ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.alert-list {
+  gap: 0.6rem;
+}
+.alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-card);
+  background: #fffdf5;
+}
+.alert-card.red {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+.alert-card .dot {
+  flex: none;
+  margin-block-start: 0.45rem;
+  background: #d97706;
+}
+.alert-card.red .dot {
+  background: #dc2626;
+}
+.alert-card > div {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1;
+  min-inline-size: 0;
+}
+.alert-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.alert-card .button {
+  align-self: center;
+  white-space: nowrap;
+}
+.alerts-resolved {
+  display: grid;
+  gap: 0.5rem;
+}
+.alerts-resolved li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.7rem 0;
+  border-block-start: 1px solid #f1f5f9;
+}
+.alerts-resolved li > span:nth-child(2) {
+  flex: 1;
+}
+@media (max-width: 40rem) {
+  .alert-card {
+    flex-wrap: wrap;
+  }
+  .alert-card .button {
+    inline-size: 100%;
+  }
 }

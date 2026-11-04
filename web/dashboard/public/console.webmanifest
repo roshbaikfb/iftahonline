@@ -1,0 +1,15 @@
+{
+  "name": "iftahonline · الكونسول",
+  "short_name": "الكونسول",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/console",
+  "scope": "/console",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "/console-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/console-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

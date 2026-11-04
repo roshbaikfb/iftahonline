@@ -25,4 +25,10 @@ export default tseslint.config(
     files: ['eslint.config.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  // The console's service worker is served as is, outside the TS build.
+  {
+    files: ['public/**/*.js'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: { ...globals.serviceworker } },
+  },
 );

@@ -6,6 +6,7 @@ import { AcceptInvite } from './AcceptInvite';
 import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
+import { AlertsPage } from './AlertsPage';
 import { BillingPage } from './BillingPage';
 import { Need } from './Can';
 import { FoundingPage } from './FoundingPage';
@@ -27,6 +28,7 @@ export function ConsoleRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Overview />} />
+      <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/stores" element={<Need p="stores.read"><StoresPage /></Need>} />
       <Route path="/stores/:storeId" element={<Need p="stores.read"><StorePage /></Need>} />
       <Route path="/billing" element={<Need p="billing.read"><BillingPage /></Need>} />
