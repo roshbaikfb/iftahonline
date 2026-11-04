@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/netip"
@@ -599,5 +600,34 @@ func TestCaptcha(t *testing.T) {
 	}
 	if c, err = config.Load(config.RoleAPI, env(with("TURNSTILE_SECRET_KEY", "ts-secret"))); err != nil || c.Captcha.SecretKey != "" {
 		t.Fatalf("only the storefront holds the secret: %v", err)
+	}
+}
+
+// TestAdminPush: the console's Web Push keys come in pairs, each of its
+// size, with a contact; none turns mobile notifications off (ADR-0080).
+func TestAdminPush(t *testing.T) {
+	t.Parallel()
+	pub := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{4}, 65))
+	priv := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	c, err := config.Load(config.RoleWorker, env(with("VAPID_PUBLIC_KEY", pub, "VAPID_PRIVATE_KEY", priv)))
+	if err != nil || !c.AdminPush.Enabled() || c.AdminPush.Subject != "mailto:ops@iftahonline.com" {
+		t.Fatalf("push = %+v, %v", c.AdminPush, err)
+	}
+	if c, err = config.Load(config.RoleAPI, env(base())); err != nil || c.AdminPush.Enabled() {
+		t.Fatalf("none = %+v, %v", c.AdminPush, err)
+	}
+	for name, kv := range map[string][]string{
+		"public only":   {"VAPID_PUBLIC_KEY", pub},
+		"short private": {"VAPID_PUBLIC_KEY", pub, "VAPID_PRIVATE_KEY", priv[:20]},
+		"bad subject":   {"VAPID_PUBLIC_KEY", pub, "VAPID_PRIVATE_KEY", priv, "VAPID_SUBJECT", "ops@iftahonline.com"},
+	} {
+		if _, err = config.Load(config.RoleAPI, env(with(kv...))); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("x", "push", c.AdminPush, "config", c)
+	if strings.Contains(buf.String(), priv[:10]) {
+		t.Fatalf("the private key reached a log: %s", buf.String())
 	}
 }
