@@ -21,6 +21,7 @@ which builds on ADR-0005 §8 and ADR-0007 §5.
 | `GET /admin/v1/stores/{id}/entitlements` | The store's plan grants, its overrides and the effective grants (ADR-0057) |
 | `PUT /admin/v1/stores/{id}/entitlements/{feature}`, `POST …/{feature}/clear` | Per-store feature flags: a grant instead of the plan's, optionally until a date; only enforced features. Recorded here first (`store.feature_overridden`, `store.feature_override_cleared`) |
 | `GET /admin/v1/health` | Database and Redis checks, and counts: stores by state, subscriptions by status, open and overdue invoices, the job queue (ADR-0058). A failed section is absent and named in `errors`; the page still answers |
+| `GET /admin/v1/growth` | The growth page (ADR-0081, `billing.read`): the last 12 Cairo months of collected revenue, stores and conversion, recurring revenue per day, churn, and plans today; a failed section is named in `errors` |
 | `GET /admin/v1/metrics` | Monthly recurring revenue per currency and new stores (last 7 and 30 Cairo days, and per day) for the home (ADR-0075). Read on opening and on «تحديث الآن», not every minute. A failed section is absent and named in `errors` |
 | `GET /admin/v1/search?q=` | One query across what the role reads (ADR-0079): stores (name, slug, domain), the stores of an owner by exact email or phone (contacts.read; logged masked as `admin.searched_owner`), invoices, payments by exact reference, agencies, admins; 5 of each, each source timed on its own (`failed`); `jump` for an exact invoice number, ID or domain |
 | `GET /admin/v1/push`, `POST /admin/v1/push/subscriptions`, `POST /admin/v1/push/subscriptions/remove` | The admin's mobile notifications (ADR-0080): the public key and device count; turn a device on or off |
@@ -133,6 +134,21 @@ Every change asks for a reason.
   - The service worker is `public/console-sw.js` (scope `/console`), with
     `console.webmanifest` and the icons for the iPhone's home screen.
 
+## Growth (ADR-0081)
+
+- **The page:** `GET /admin/v1/growth` (`billing.read`) covers the last
+  12 Cairo months: collected revenue, stores and conversion, recurring
+  revenue per day, churn per complete month, and plans today. Each
+  section has its own timeout; a section that fails is named in `errors`.
+- **The reading:** `admin.growth_snapshot` runs every hour in the
+  worker. It keeps each day's latest recurring revenue per currency
+  (`admin_growth_mrr`), and each month's first set of paying accounts
+  (`admin_growth_paying`, `admin_growth_months`, migration 00096).
+- **Churn:** a month counts only when it and the next were both read in
+  their first `ChurnGraceDays` (3) days.
+- **Sources:** billing (`Today`, `Collected`, `Converted`) and tenancy
+  (`Directory.StoresByMonth`), through their interfaces only.
+
 ## Tables (migration 00014)
 
 | Table | Access |
@@ -225,5 +241,6 @@ owner, use SQL as `app_admin` or the owner:
 | Alerts: two checks each way, unknown sections, who is told once, a failed email retried, email off, amber resolutions silent, the role's list; over HTTP | `domain.TestStep`, `TestSignals`, `TestAlertAudience`, `TestAlerts`, `TestConsoleAlerts` |
 | Push: only the push services' hosts, keys checked, off without keys, sent once per event to every device, a gone device forgotten; over HTTP | `TestPushEndpointOK`, `TestSubscribePush`, `TestAlerts`, `TestConsolePush` |
 | The alerts page: open and resolved with their pages, the bell's count, the email switch (reverted when refused), notifications turned on with the server key and off, a refused permission, no button without keys, support or permission, the iPhone note; the home's cards from the server, unread alerts said | `alerts.test.tsx`, `home.test.tsx` |
+| Growth: the 12 Cairo months at a month's turn, empty months filled, churn's rate; the hourly reading (a day's latest, a month's first set), churn only for months read in their first days, every section read, those without billing named; over HTTP by role | `domain.TestGrowthWindow`, `TestFillMonths`, `TestChurnRate`, `TestGrowth`, `TestConsoleGrowth` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
