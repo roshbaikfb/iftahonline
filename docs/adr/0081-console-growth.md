@@ -78,7 +78,20 @@ rest still answers.
     read in their first 3 days (`ChurnGraceDays`). A worker down on the
     1st is caught up; a set read later in the month would misstate
     churn.
-- **The console:** the page is in PR (b), after the approved mockup.
+- **The console:** `/console/growth` («النمو», under الإيراد, for
+  `billing.read`) follows the approved mockup:
+  - one currency at a time, switched only among those with figures;
+  - four numbers for this month;
+  - bars per month, the month under way lighter, each with its figures
+    in a table under «عرض الأرقام»;
+  - the recurring revenue as a line since recording began;
+  - conversion for the six months before this one;
+  - churn as a table once a month is complete, and until then the
+    month it starts;
+  - each plan's share of the currency's revenue.
+
+  The bars are HTML and the line is SVG, with no chart library. The
+  home's growth block links to the page.
 
 ### Cost
 

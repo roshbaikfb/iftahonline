@@ -148,6 +148,10 @@ Every change asks for a reason.
   their first `ChurnGraceDays` (3) days.
 - **Sources:** billing (`Today`, `Collected`, `Converted`) and tenancy
   (`Directory.StoresByMonth`), through their interfaces only.
+- **In the console:** `/console/growth` (`web/dashboard/src/admin/GrowthPage.tsx`,
+  `growth.ts`), in the menu under الإيراد for `billing.read`. It shows
+  one currency at a time, bars and a line without a chart library, and
+  each chart's figures under «عرض الأرقام».
 
 ## Tables (migration 00014)
 
@@ -242,5 +246,6 @@ owner, use SQL as `app_admin` or the owner:
 | Push: only the push services' hosts, keys checked, off without keys, sent once per event to every device, a gone device forgotten; over HTTP | `TestPushEndpointOK`, `TestSubscribePush`, `TestAlerts`, `TestConsolePush` |
 | The alerts page: open and resolved with their pages, the bell's count, the email switch (reverted when refused), notifications turned on with the server key and off, a refused permission, no button without keys, support or permission, the iPhone note; the home's cards from the server, unread alerts said | `alerts.test.tsx`, `home.test.tsx` |
 | Growth: the 12 Cairo months at a month's turn, empty months filled, churn's rate; the hourly reading (a day's latest, a month's first set), churn only for months read in their first days, every section read, those without billing named; over HTTP by role | `domain.TestGrowthWindow`, `TestFillMonths`, `TestChurnRate`, `TestGrowth`, `TestConsoleGrowth` |
+| The growth page: this month's numbers, every chart, the currency switch (never converted), churn once complete, a section unread, nothing recorded yet, finance in and content out | `growth.test.tsx` |
 | The CLI | `TestAdminCLI` |
 | The real binary | `TestAPIServesConsoleOnlyOnAdminHost` |
