@@ -10,6 +10,8 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
+	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 )
 
@@ -47,6 +49,31 @@ func (m *fakeMail) to(addr string) []string {
 	return out
 }
 
+// fakePush records the notifications sent; a device whose endpoint ends
+// in /gone is gone.
+type fakePush struct {
+	mu   sync.Mutex
+	sent []string // endpoint + " " + payload
+}
+
+func (p *fakePush) Push(_ context.Context, d store.PushDevice, payload []byte, _ bool) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if strings.HasSuffix(d.Endpoint, "/gone") {
+		return true, nil
+	}
+	p.sent = append(p.sent, d.Endpoint+" "+string(payload))
+	return false, nil
+}
+
+func (p *fakePush) take() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := p.sent
+	p.sent = nil
+	return out
+}
+
 // TestAlerts (ADR-0080) walks a red and an amber alert through two
 // checks each way: who is told, once, of what; who reads them in the
 // console; a failed email is tried again; an email turned off is not
@@ -55,7 +82,8 @@ func TestAlerts(t *testing.T) {
 	f := newFixture(t)
 	mail := &fakeMail{fail: map[string]bool{}}
 	d := f.deps
-	d.Mailer, d.ConsoleURL = mail, "https://admin.iftahonline.com/console"
+	push := &fakePush{}
+	d.Mailer, d.ConsoleURL, d.Pusher, d.PushPublicKey = mail, "https://admin.iftahonline.com/console", push, "BPublicKey"
 	svc := app.NewService(d)
 
 	owner, ownerEmail := f.createAdminAs(t, domain.RoleOwner)
@@ -63,7 +91,20 @@ func TestAlerts(t *testing.T) {
 	_, contentEmail := f.createAdminAs(t, domain.RoleContent)
 	quiet, quietEmail := f.createAdminAs(t, domain.RoleOwner)
 	ownerCtx := f.signedInWith(t, owner, ownerEmail)
-	if err := svc.SetAlertEmail(f.signedInWith(t, quiet, quietEmail), false); err != nil {
+	quietCtx := f.signedInWith(t, quiet, quietEmail)
+	if err := svc.SetAlertEmail(quietCtx, false); err != nil {
+		t.Fatal(err)
+	}
+	// The owner turned notifications on in a phone and in a browser whose
+	// subscription later expired; the quiet owner, with email off, in one.
+	p256dh, auth := strings.Repeat("B", 87), strings.Repeat("A", 22)
+	phone := "https://fcm.googleapis.com/fcm/send/" + owner.Admin.ID.String()
+	for ctx, endpoint := range map[context.Context]string{ownerCtx: phone, quietCtx: "https://web.push.apple.com/" + quiet.Admin.ID.String()} {
+		if err := svc.SubscribePush(ctx, endpoint, p256dh, auth); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := svc.SubscribePush(ownerCtx, "https://updates.push.services.mozilla.com/"+owner.Admin.ID.String()+"/gone", p256dh, auth); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,16 +137,32 @@ func TestAlerts(t *testing.T) {
 	if got := mail.to(ownerEmail); !slices.Equal(got, []string{"[تنبيه] دفعات زائدة تحتاج استردادًا (2)"}) {
 		t.Fatalf("owner = %v", got)
 	}
+	// Push: the owner's phone and the quiet owner's device, once each; the
+	// gone browser is forgotten.
+	pushed := push.take()
+	mine := slices.DeleteFunc(slices.Clone(pushed), func(p string) bool {
+		return !strings.Contains(p, owner.Admin.ID.String()) && !strings.Contains(p, quiet.Admin.ID.String())
+	})
+	if len(mine) != 2 || !strings.Contains(mine[0]+mine[1], `"path":"/billing?tab=payments\u0026outcome=duplicate"`) {
+		t.Fatalf("pushed = %v", mine)
+	}
+	if st, err := svc.PushStatus(ownerCtx); err != nil || st.Devices != 1 || st.PublicKey != "BPublicKey" {
+		t.Fatalf("owner's devices = %+v, %v", st, err)
+	}
 	for name, addr := range map[string]string{"failed finance": financeEmail, "content": contentEmail, "email off": quietEmail} {
 		if got := mail.to(addr); len(got) != 0 {
 			t.Errorf("%s = %v", name, got)
 		}
 	}
-	// The failed one is sent at the next check, the others not again.
+	// The failed one is sent at the next check, the others not again
+	// (nor pushed again).
 	delete(mail.fail, financeEmail)
 	step(read(domain.AlertDuplicates, domain.Reading{Known: true, Firing: true, Value: 3}))
 	if got := mail.to(financeEmail); len(got) != 1 || len(mail.to(ownerEmail)) != 0 {
 		t.Fatalf("retry: finance %v", got)
+	}
+	if again := slices.DeleteFunc(push.take(), func(p string) bool { return !strings.Contains(p, owner.Admin.ID.String()) }); len(again) != 0 {
+		t.Fatalf("pushed again: %v", again)
 	}
 
 	page, err := svc.Alerts(ownerCtx)
@@ -132,6 +189,9 @@ func TestAlerts(t *testing.T) {
 	if got := mail.to(ownerEmail); !slices.Equal(got, []string{"[حُلّ] دفعات زائدة تحتاج استردادًا (3)"}) {
 		t.Fatalf("resolved = %v", got)
 	}
+	if got := slices.DeleteFunc(push.take(), func(p string) bool { return !strings.Contains(p, phone) }); len(got) != 1 || !strings.Contains(got[0], "حُلّ: ") {
+		t.Fatalf("resolved push = %v", got)
+	}
 	if got := mail.to(financeEmail); len(got) != 1 || len(mail.to(quietEmail)) != 0 {
 		t.Fatalf("finance resolved = %v", got)
 	}
@@ -154,8 +214,45 @@ func TestAlerts(t *testing.T) {
 	if _, err = svc.Alerts(t.Context()); err == nil {
 		t.Fatal("not signed in")
 	}
+	if err = svc.UnsubscribePush(ownerCtx, phone); err != nil {
+		t.Fatal(err)
+	}
+	if st, stErr := svc.PushStatus(ownerCtx); stErr != nil || st.Devices != 0 {
+		t.Fatalf("after unsubscribing = %+v, %v", st, stErr)
+	}
 	// A real check reads the platform and steps every kind.
 	if err = svc.CheckAlerts(t.Context()); err != nil {
 		t.Fatalf("check: %v", err)
+	}
+}
+
+// TestSubscribePush: a device is accepted only from a known push service
+// with its keys, and only when this server sends notifications.
+func TestSubscribePush(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, _ := f.signedIn(t)
+	d := f.deps
+	d.PushPublicKey = "BPublicKey"
+	svc := app.NewService(d)
+	p256dh, auth := strings.Repeat("B", 87), strings.Repeat("A", 22)
+	for name, err := range map[string]error{
+		"another host": svc.SubscribePush(ctx, "https://evil.example/push", p256dh, auth),
+		"plain http":   svc.SubscribePush(ctx, "http://fcm.googleapis.com/x", p256dh, auth),
+		"short key":    svc.SubscribePush(ctx, "https://fcm.googleapis.com/x", p256dh[:40], auth),
+		"bad auth":     svc.SubscribePush(ctx, "https://fcm.googleapis.com/x", p256dh, "!!"),
+	} {
+		if !errs.Is(err, errs.KindValidation) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if err := f.svc.SubscribePush(ctx, "https://fcm.googleapis.com/x", p256dh, auth); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("no keys on this server: %v", err)
+	}
+	if st, err := f.svc.PushStatus(ctx); err != nil || st.PublicKey != "" {
+		t.Fatalf("status without keys = %+v, %v", st, err)
+	}
+	if err := svc.SubscribePush(t.Context(), "https://fcm.googleapis.com/x", p256dh, auth); !errs.Is(err, errs.KindUnauthenticated) {
+		t.Fatalf("not signed in: %v", err)
 	}
 }

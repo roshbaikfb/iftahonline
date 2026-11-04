@@ -136,6 +136,44 @@ func (q *Queries) CancelOpenInvites(ctx context.Context, adminID ulid.ID) (int64
 	return result.RowsAffected(), nil
 }
 
+const countPushSubscriptions = `-- name: CountPushSubscriptions :one
+SELECT count(*)::bigint FROM admin_push_subscriptions WHERE admin_id = $1
+`
+
+func (q *Queries) CountPushSubscriptions(ctx context.Context, adminID ulid.ID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPushSubscriptions, adminID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deletePushEndpoint = `-- name: DeletePushEndpoint :exec
+DELETE FROM admin_push_subscriptions WHERE id = $1
+`
+
+// The push service says the device is gone.
+func (q *Queries) DeletePushEndpoint(ctx context.Context, id ulid.ID) error {
+	_, err := q.db.Exec(ctx, deletePushEndpoint, id)
+	return err
+}
+
+const deletePushSubscription = `-- name: DeletePushSubscription :execrows
+DELETE FROM admin_push_subscriptions WHERE admin_id = $1 AND endpoint = $2
+`
+
+type DeletePushSubscriptionParams struct {
+	AdminID  ulid.ID
+	Endpoint string
+}
+
+func (q *Queries) DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePushSubscription, arg.AdminID, arg.Endpoint)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveAdminSession = `-- name: GetActiveAdminSession :one
 SELECT s.id, s.admin_id, s.created_at, s.last_seen_at, s.expires_at, a.status AS admin_status, a.role AS admin_role
 FROM admin_sessions s
@@ -733,6 +771,48 @@ func (q *Queries) ListOpenInvites(ctx context.Context) ([]ListOpenInvitesRow, er
 	return items, nil
 }
 
+const listPushSubscriptions = `-- name: ListPushSubscriptions :many
+SELECT p.id, p.admin_id, p.endpoint, p.p256dh, p.auth
+FROM admin_push_subscriptions p JOIN platform_admins a ON a.id = p.admin_id AND a.status = 'active'
+ORDER BY p.admin_id, p.created_at
+LIMIT 1000
+`
+
+type ListPushSubscriptionsRow struct {
+	ID       ulid.ID
+	AdminID  ulid.ID
+	Endpoint string
+	P256dh   string
+	Auth     string
+}
+
+// Every active admin's devices, for the alerts' notices.
+func (q *Queries) ListPushSubscriptions(ctx context.Context) ([]ListPushSubscriptionsRow, error) {
+	rows, err := q.db.Query(ctx, listPushSubscriptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPushSubscriptionsRow{}
+	for rows.Next() {
+		var i ListPushSubscriptionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdminID,
+			&i.Endpoint,
+			&i.P256dh,
+			&i.Auth,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeam = `-- name: ListTeam :many
 SELECT a.id, a.name, a.email::text AS email, a.role, a.status, a.created_at, a.last_login_at,
        EXISTS (SELECT 1 FROM admin_invites i WHERE i.admin_id = a.id AND i.purpose = 'reset'
@@ -838,6 +918,15 @@ func (q *Queries) LockOwners(ctx context.Context) ([]ulid.ID, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const markPushSent = `-- name: MarkPushSent :exec
+UPDATE admin_push_subscriptions SET last_sent_at = now() WHERE id = $1
+`
+
+func (q *Queries) MarkPushSent(ctx context.Context, id ulid.ID) error {
+	_, err := q.db.Exec(ctx, markPushSent, id)
+	return err
 }
 
 const openAlert = `-- name: OpenAlert :exec
@@ -968,6 +1057,36 @@ func (q *Queries) SaveAlertState(ctx context.Context, arg SaveAlertStateParams) 
 		arg.Bad,
 		arg.Good,
 		arg.CheckedAt,
+	)
+	return err
+}
+
+const savePushSubscription = `-- name: SavePushSubscription :exec
+INSERT INTO admin_push_subscriptions (id, admin_id, endpoint, p256dh, auth, user_agent)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (endpoint) DO UPDATE SET admin_id = EXCLUDED.admin_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
+  user_agent = EXCLUDED.user_agent, created_at = now()
+`
+
+type SavePushSubscriptionParams struct {
+	ID        ulid.ID
+	AdminID   ulid.ID
+	Endpoint  string
+	P256dh    string
+	Auth      string
+	UserAgent string
+}
+
+// A device turned notifications on: its endpoint is its key, so turning
+// them on again (or under another admin) replaces it.
+func (q *Queries) SavePushSubscription(ctx context.Context, arg SavePushSubscriptionParams) error {
+	_, err := q.db.Exec(ctx, savePushSubscription,
+		arg.ID,
+		arg.AdminID,
+		arg.Endpoint,
+		arg.P256dh,
+		arg.Auth,
+		arg.UserAgent,
 	)
 	return err
 }

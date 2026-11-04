@@ -70,7 +70,12 @@ type Deps struct {
 	// links into ConsoleURL; nil sends none.
 	Mailer     mailer.Mailer
 	ConsoleURL string
-	Limits     *app.Limits // tests
+	// Pusher sends mobile notifications (the worker; NewWebPusher) and
+	// PushPublicKey is what browsers subscribe with (the api); empty or
+	// nil: none.
+	Pusher        app.Pusher
+	PushPublicKey string
+	Limits        *app.Limits // tests
 }
 
 // Module is the wired console.
@@ -102,8 +107,13 @@ func New(d Deps) (*Module, error) {
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, Profile: d.Profile, OwnerStores: d.OwnerStores, DashboardURL: d.DashboardURL,
 		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding,
-		Mailer: d.Mailer, ConsoleURL: d.ConsoleURL})
+		Mailer: d.Mailer, ConsoleURL: d.ConsoleURL, Pusher: d.Pusher, PushPublicKey: d.PushPublicKey})
 	return &Module{svc: svc, deps: d}, nil
+}
+
+// NewWebPusher sends Web Push signed with the VAPID keys (ADR-0080).
+func NewWebPusher(publicKey, privateKey, subject string) *app.WebPusher {
+	return app.NewWebPusher(publicKey, privateKey, subject)
 }
 
 // RegisterWorkers adds the alerts' check (the worker role, ADR-0080).

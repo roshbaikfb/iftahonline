@@ -20,6 +20,9 @@ type OwnerContact = app.OwnerContact
 // Profiler reads the profile of the store in ctx.
 type Profiler = app.Profiler
 
+// Pusher sends one Web Push notification to one device (ADR-0080).
+type Pusher = app.Pusher
+
 // OwnerStoresFunc finds a store owner's stores by exact email or phone
 // for the console's search (ADR-0079): store IDs only.
 type OwnerStoresFunc = app.OwnerStoresFunc

@@ -106,7 +106,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	mod, err := admin.New(admin.Deps{AdminPool: adminPool, Redis: rdb, Directory: ten.Directory(), Stores: ten.Service(),
-		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost,
+		IDs: ids, Log: log, Secrets: config.Secrets{Keyring: keyring}, AdminHost: adminHost, PushPublicKey: "BPublicKey",
 		Impersonate: func(_ context.Context, _ ulid.ID, _ string, d time.Duration, _ bool) (admin.Impersonation, error) {
 			return admin.Impersonation{Code: "c0de", CodeExpiresAt: time.Now().Add(time.Minute), ExpiresAt: time.Now().Add(d)}, nil
 		},
@@ -1253,5 +1253,42 @@ func TestConsoleAlerts(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/alerts/email", `{"enabled":true}`, withCookie(sess)); r.status != http.StatusForbidden {
 		t.Fatalf("cross-site = %d", r.status)
+	}
+}
+
+// TestConsolePush: any admin turns notifications on in a device of a
+// known push service, sees it counted, and turns it off.
+func TestConsolePush(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.loginAs(t, "viewer")
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/push", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/push", "", withCookie(sess))
+	if r.status != http.StatusOK || r.body["public_key"] != "BPublicKey" || r.body["devices"] != float64(0) {
+		t.Fatalf("status = %d %v", r.status, r.body)
+	}
+	keys := `"keys":{"p256dh":"` + strings.Repeat("B", 87) + `","auth":"` + strings.Repeat("A", 22) + `"}`
+	device := `{"endpoint":"https://fcm.googleapis.com/fcm/send/` + strings.Repeat("x", 20) + `",` + keys + `}`
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/push/subscriptions", `{"endpoint":"https://evil.example/p",`+keys+`}`,
+		withCookie(sess), sameOrigin); r.status != http.StatusUnprocessableEntity {
+		t.Fatalf("another host = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/push/subscriptions", device, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/push/subscriptions", device, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("subscribe = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/push", "", withCookie(sess)); r.body["devices"] != float64(1) {
+		t.Fatalf("after = %v", r.body)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/push/subscriptions/remove", `{"endpoint":"https://fcm.googleapis.com/fcm/send/`+strings.Repeat("x", 20)+`"}`,
+		withCookie(sess), sameOrigin); r.status != http.StatusNoContent {
+		t.Fatalf("remove = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/push", "", withCookie(sess)); r.body["devices"] != float64(0) {
+		t.Fatalf("after removing = %v", r.body)
 	}
 }

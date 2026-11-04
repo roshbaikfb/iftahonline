@@ -181,3 +181,31 @@ UPDATE platform_admins SET alert_email = @enabled::bool, updated_at = now() WHER
 
 -- name: GetAlertEmail :one
 SELECT alert_email FROM platform_admins WHERE id = @id;
+
+-- name: SavePushSubscription :exec
+-- A device turned notifications on: its endpoint is its key, so turning
+-- them on again (or under another admin) replaces it.
+INSERT INTO admin_push_subscriptions (id, admin_id, endpoint, p256dh, auth, user_agent)
+VALUES (@id, @admin_id, @endpoint, @p256dh, @auth, @user_agent)
+ON CONFLICT (endpoint) DO UPDATE SET admin_id = EXCLUDED.admin_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
+  user_agent = EXCLUDED.user_agent, created_at = now();
+
+-- name: DeletePushSubscription :execrows
+DELETE FROM admin_push_subscriptions WHERE admin_id = @admin_id AND endpoint = @endpoint;
+
+-- name: DeletePushEndpoint :exec
+-- The push service says the device is gone.
+DELETE FROM admin_push_subscriptions WHERE id = @id;
+
+-- name: CountPushSubscriptions :one
+SELECT count(*)::bigint FROM admin_push_subscriptions WHERE admin_id = @admin_id;
+
+-- name: ListPushSubscriptions :many
+-- Every active admin's devices, for the alerts' notices.
+SELECT p.id, p.admin_id, p.endpoint, p.p256dh, p.auth
+FROM admin_push_subscriptions p JOIN platform_admins a ON a.id = p.admin_id AND a.status = 'active'
+ORDER BY p.admin_id, p.created_at
+LIMIT 1000;
+
+-- name: MarkPushSent :exec
+UPDATE admin_push_subscriptions SET last_sent_at = now() WHERE id = @id;

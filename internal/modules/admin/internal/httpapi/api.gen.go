@@ -2173,6 +2173,29 @@ type AdminProfile struct {
 	Role AdminRole `json:"role"`
 }
 
+// AdminPushEndpoint defines model for AdminPushEndpoint.
+type AdminPushEndpoint struct {
+	Endpoint string `json:"endpoint"`
+}
+
+// AdminPushStatus defines model for AdminPushStatus.
+type AdminPushStatus struct {
+	// Devices The admin's devices with notifications on.
+	Devices int64 `json:"devices"`
+
+	// PublicKey The VAPID public key, base64url; absent: no mobile notifications on this server.
+	PublicKey *string `json:"public_key,omitempty"`
+}
+
+// AdminPushSubscription defines model for AdminPushSubscription.
+type AdminPushSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		Auth   string `json:"auth"`
+		P256dh string `json:"p256dh"`
+	} `json:"keys"`
+}
+
 // AdminReason defines model for AdminReason.
 type AdminReason struct {
 	// Reason Kept in the admin audit log.
@@ -3071,6 +3094,12 @@ type AdminPublishPlanJSONRequestBody = AdminPlanInput
 // AdminRetirePlanJSONRequestBody defines body for AdminRetirePlan for application/json ContentType.
 type AdminRetirePlanJSONRequestBody = AdminReason
 
+// AdminSubscribePushJSONRequestBody defines body for AdminSubscribePush for application/json ContentType.
+type AdminSubscribePushJSONRequestBody = AdminPushSubscription
+
+// AdminUnsubscribePushJSONRequestBody defines body for AdminUnsubscribePush for application/json ContentType.
+type AdminUnsubscribePushJSONRequestBody = AdminPushEndpoint
+
 // AdminCreateSiteFAQJSONRequestBody defines body for AdminCreateSiteFAQ for application/json ContentType.
 type AdminCreateSiteFAQJSONRequestBody = AdminSiteFAQInput
 
@@ -3259,6 +3288,15 @@ type ServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(w http.ResponseWriter, r *http.Request, code string)
+	// AdminPushStatus What the console needs to turn mobile notifications on
+	// (GET /admin/v1/push)
+	AdminPushStatus(w http.ResponseWriter, r *http.Request)
+	// AdminSubscribePush Turn mobile notifications on in this browser or phone
+	// (POST /admin/v1/push/subscriptions)
+	AdminSubscribePush(w http.ResponseWriter, r *http.Request)
+	// AdminUnsubscribePush Turn mobile notifications off in this browser or phone
+	// (POST /admin/v1/push/subscriptions/remove)
+	AdminUnsubscribePush(w http.ResponseWriter, r *http.Request)
 	// AdminSearch Search everything the admin's role reads
 	// (GET /admin/v1/search)
 	AdminSearch(w http.ResponseWriter, r *http.Request, params AdminSearchParams)
@@ -4285,6 +4323,48 @@ func (siw *ServerInterfaceWrapper) AdminRetirePlan(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRetirePlan(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminPushStatus operation middleware
+func (siw *ServerInterfaceWrapper) AdminPushStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminPushStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSubscribePush operation middleware
+func (siw *ServerInterfaceWrapper) AdminSubscribePush(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSubscribePush(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUnsubscribePush operation middleware
+func (siw *ServerInterfaceWrapper) AdminUnsubscribePush(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUnsubscribePush(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5511,6 +5591,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/search", wrapper.AdminSearch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/alerts", wrapper.AdminListAlerts)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/alerts/email", wrapper.AdminSetAlertEmail)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/push", wrapper.AdminPushStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/push/subscriptions", wrapper.AdminSubscribePush)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/push/subscriptions/remove", wrapper.AdminUnsubscribePush)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
@@ -6980,6 +7063,110 @@ type AdminRetirePlandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminRetirePlandefaultApplicationProblemPlusJSONResponse) VisitAdminRetirePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPushStatusRequestObject struct {
+}
+
+type AdminPushStatusResponseObject interface {
+	VisitAdminPushStatusResponse(w http.ResponseWriter) error
+}
+
+type AdminPushStatus200JSONResponse AdminPushStatus
+
+func (response AdminPushStatus200JSONResponse) VisitAdminPushStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminPushStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminPushStatusdefaultApplicationProblemPlusJSONResponse) VisitAdminPushStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSubscribePushRequestObject struct {
+	Body *AdminSubscribePushJSONRequestBody
+}
+
+type AdminSubscribePushResponseObject interface {
+	VisitAdminSubscribePushResponse(w http.ResponseWriter) error
+}
+
+type AdminSubscribePush204Response struct {
+}
+
+func (response AdminSubscribePush204Response) VisitAdminSubscribePushResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSubscribePushdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSubscribePushdefaultApplicationProblemPlusJSONResponse) VisitAdminSubscribePushResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUnsubscribePushRequestObject struct {
+	Body *AdminUnsubscribePushJSONRequestBody
+}
+
+type AdminUnsubscribePushResponseObject interface {
+	VisitAdminUnsubscribePushResponse(w http.ResponseWriter) error
+}
+
+type AdminUnsubscribePush204Response struct {
+}
+
+func (response AdminUnsubscribePush204Response) VisitAdminUnsubscribePushResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminUnsubscribePushdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUnsubscribePushdefaultApplicationProblemPlusJSONResponse) VisitAdminUnsubscribePushResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8672,6 +8859,15 @@ type StrictServerInterface interface {
 	// AdminRetirePlan Take a plan off sale
 	// (POST /admin/v1/plans/{code}/retire)
 	AdminRetirePlan(ctx context.Context, request AdminRetirePlanRequestObject) (AdminRetirePlanResponseObject, error)
+	// AdminPushStatus What the console needs to turn mobile notifications on
+	// (GET /admin/v1/push)
+	AdminPushStatus(ctx context.Context, request AdminPushStatusRequestObject) (AdminPushStatusResponseObject, error)
+	// AdminSubscribePush Turn mobile notifications on in this browser or phone
+	// (POST /admin/v1/push/subscriptions)
+	AdminSubscribePush(ctx context.Context, request AdminSubscribePushRequestObject) (AdminSubscribePushResponseObject, error)
+	// AdminUnsubscribePush Turn mobile notifications off in this browser or phone
+	// (POST /admin/v1/push/subscriptions/remove)
+	AdminUnsubscribePush(ctx context.Context, request AdminUnsubscribePushRequestObject) (AdminUnsubscribePushResponseObject, error)
 	// AdminSearch Search everything the admin's role reads
 	// (GET /admin/v1/search)
 	AdminSearch(ctx context.Context, request AdminSearchRequestObject) (AdminSearchResponseObject, error)
@@ -9840,6 +10036,92 @@ func (sh *strictHandler) AdminRetirePlan(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRetirePlanResponseObject); ok {
 		if err := validResponse.VisitAdminRetirePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminPushStatus operation middleware
+func (sh *strictHandler) AdminPushStatus(w http.ResponseWriter, r *http.Request) {
+	var request AdminPushStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminPushStatus(ctx, request.(AdminPushStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminPushStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminPushStatusResponseObject); ok {
+		if err := validResponse.VisitAdminPushStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSubscribePush operation middleware
+func (sh *strictHandler) AdminSubscribePush(w http.ResponseWriter, r *http.Request) {
+	var request AdminSubscribePushRequestObject
+
+	var body AdminSubscribePushJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSubscribePush(ctx, request.(AdminSubscribePushRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSubscribePush")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSubscribePushResponseObject); ok {
+		if err := validResponse.VisitAdminSubscribePushResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUnsubscribePush operation middleware
+func (sh *strictHandler) AdminUnsubscribePush(w http.ResponseWriter, r *http.Request) {
+	var request AdminUnsubscribePushRequestObject
+
+	var body AdminUnsubscribePushJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUnsubscribePush(ctx, request.(AdminUnsubscribePushRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUnsubscribePush")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUnsubscribePushResponseObject); ok {
+		if err := validResponse.VisitAdminUnsubscribePushResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

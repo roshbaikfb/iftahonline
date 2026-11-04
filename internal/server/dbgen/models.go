@@ -156,6 +156,17 @@ type AdminInvite struct {
 	CancelledAt pgtype.Timestamptz
 }
 
+type AdminPushSubscription struct {
+	ID         pgtype.UUID
+	AdminID    pgtype.UUID
+	Endpoint   string
+	P256dh     string
+	Auth       string
+	UserAgent  string
+	CreatedAt  pgtype.Timestamptz
+	LastSentAt pgtype.Timestamptz
+}
+
 type AdminSession struct {
 	ID         pgtype.UUID
 	AdminID    pgtype.UUID

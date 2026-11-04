@@ -1818,6 +1818,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the console needs to turn mobile notifications on
+         * @description The VAPID public key the browser subscribes with (absent when this
+         *     server sends no mobile notifications), and how many of the admin's
+         *     devices have them (ADR-0080).
+         */
+        get: operations["adminPushStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn mobile notifications on in this browser or phone
+         * @description The browser's PushSubscription. Only the big push services are
+         *     accepted (Google, Mozilla, Apple, Microsoft); the alerts reach the
+         *     device from the worker. 503 when this server sends none.
+         */
+        post: operations["adminSubscribePush"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/push/subscriptions/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn mobile notifications off in this browser or phone */
+        post: operations["adminUnsubscribePush"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/me": {
         parameters: {
             query?: never;
@@ -5063,6 +5124,25 @@ export interface components {
         };
         AdminAlertEmail: {
             enabled: boolean;
+        };
+        AdminPushStatus: {
+            /** @description The VAPID public key, base64url; absent: no mobile notifications on this server. */
+            public_key?: string;
+            /**
+             * Format: int64
+             * @description The admin's devices with notifications on.
+             */
+            devices: number;
+        };
+        AdminPushEndpoint: {
+            endpoint: string;
+        };
+        AdminPushSubscription: {
+            endpoint: string;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
         };
         AdminStorePage: {
             items: components["schemas"]["AdminStoreSummary"][];
@@ -10428,6 +10508,73 @@ export interface operations {
         };
         responses: {
             /** @description Saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminPushStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPushStatus"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSubscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPushSubscription"];
+            };
+        };
+        responses: {
+            /** @description On. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUnsubscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPushEndpoint"];
+            };
+        };
+        responses: {
+            /** @description Off. */
             204: {
                 headers: {
                     [name: string]: unknown;
