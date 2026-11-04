@@ -86,3 +86,5 @@ supersedes it.
 | [0078](0078-console-team-and-invites.md) | The console's team and invite links | Accepted |
 | [0079](0079-console-search.md) | The console's search | Accepted |
 | [0080](0080-console-alerts.md) | The console's alerts | Accepted |
+| [0081](0081-console-growth.md) | The console's growth page | Accepted |
+| [0082](0082-unpaid-stores-fall-back-to-free.md) | Unpaid stores fall back to the free plan before they close | Accepted |

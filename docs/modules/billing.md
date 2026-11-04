@@ -167,10 +167,12 @@ Identity's `OwnerTx` gives billing the owner through `Deps.Owner`.
 
 | Job | Does |
 |---|---|
-| `billing.dunning` | Hourly with `BILLING_COLLECTION_ENABLED=true`. Lists, through `app.dunning_due`, invoices to charge, stores to suspend and stores to cancel |
+| `billing.dunning` | Hourly with `BILLING_COLLECTION_ENABLED=true`. Lists, through `app.dunning_due`, invoices to charge, stores to suspend, to hold and to cancel |
 | `billing.charge_invoice` | Charges the account's card on file, outside a transaction, then records the attempt and settles or fails every store of the account |
-| `billing.suspend` / `billing.cancel` | The grace ran out: suspended and held (maintenance page). After 90 days: cancelled, data due for deletion (nothing deleted in P7) |
-| `billing.notify` | Emails the owners (payment failed with the retry and closing dates, suspended, paid), then sends the same on WhatsApp to their verified phones. WhatsApp is best effort and logged on failure (ADR-0054) |
+| `billing.suspend` | The grace ran out: suspended, on the free plan's grants, the storefront still open (ADR-0082) |
+| `billing.hold` | 30 days suspended and unpaid: held (`subscriptions.held_at`, `stores.billing_hold`), the maintenance page |
+| `billing.cancel` | 90 days after the suspension: cancelled (held if it was not), data due for deletion (nothing deleted in P7) |
+| `billing.notify` | Emails the owners (payment failed with the retry, free-plan and closing dates; suspended to the free plan with the closing date; held; paid), then sends the same on WhatsApp to their verified phones. WhatsApp is best effort and logged on failure (ADR-0054) |
 
 - **Retries.** A failed charge is retried 1, 3 and 5 days after the
   first failure.
@@ -274,8 +276,9 @@ platform provider):
 | trialing | the trial ends unpaid (`EndPeriod`) | free |
 | any | a payment (`Activate`) | active, for a period |
 | active (paid) | a renewal fails (`PaymentFailed`) | past_due; the plan applies 7 days more |
-| past_due | grace ends unpaid (`Suspend`) | suspended: store closed, data kept |
-| suspended | 90 days pass (`Close`) | cancelled: the data may be deleted |
+| past_due | grace ends unpaid (`Suspend`) | suspended: an ordinary free store, still open (ADR-0082) |
+| suspended | 30 days pass unpaid (`Hold`) | suspended and held: the maintenance page, data kept |
+| suspended | 90 days from the suspension (`Close`) | cancelled (and held): the data may be deleted |
 | active (paid) | the merchant cancels (`CancelAtEnd`), then the period ends (`EndPeriod`) | free |
 
 While a plan does not apply (trial over, suspended, cancelled), the
