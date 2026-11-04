@@ -15,7 +15,7 @@ Isolation rules: [ADR-0002](../adr/0002-shared-db-store-id-rls.md).
 | `Module.Mount` | Registers the HTTP API. It needs identity's membership middleware |
 | `Module.RegisterWorkers` | Registers the module's jobs with the worker |
 | `Module.ListenInvalidations` | Run by each storefront instance to receive cache invalidations |
-| `Module.Directory()` | The cross-tenant store directory on the console's pool: `Search` (name, slug's start, or a domain's start, ADR-0079), `Store`, `Entries` (stores by ID in one query, for the console's search), `Names`, `NewStores`, and `Counts` (stores by state, for the health page, ADR-0058) |
+| `Module.Directory()` | The cross-tenant store directory on the console's pool: `Search` (name, slug's start, or a domain's start, ADR-0079), `Store`, `Entries` (stores by ID in one query, for the console's search), `Names`, `NewStores`, `StoresByMonth` (stores per Cairo month and how many of them are in billing's converted list, one query, ADR-0081), and `Counts` (stores by state, for the health page, ADR-0058) |
 | `CountCustomDomains(ctx, tx)` | The store's custom domains in its tenant transaction: the usage meter (ADR-0061) |
 
 `CreateStoreTx` runs inside the caller's transaction (ADR-0007). The
