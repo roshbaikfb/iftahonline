@@ -107,6 +107,31 @@ type AdSpend struct {
 	CreatedAt   time.Time
 }
 
+type AdminAlert struct {
+	ID         ulid.ID
+	Kind       string
+	Severity   string
+	Value      int64
+	OpenedAt   time.Time
+	LastSeenAt time.Time
+	ResolvedAt *time.Time
+}
+
+type AdminAlertDelivery struct {
+	AlertID ulid.ID
+	AdminID ulid.ID
+	Event   string
+	Channel string
+	SentAt  time.Time
+}
+
+type AdminAlertState struct {
+	Kind      string
+	Bad       int32
+	Good      int32
+	CheckedAt time.Time
+}
+
 type AdminAuditLog struct {
 	ID         ulid.ID
 	OccurredAt time.Time
@@ -714,6 +739,7 @@ type PlatformAdmin struct {
 	UpdatedAt    time.Time
 	LastLoginAt  *time.Time
 	Role         string
+	AlertEmail   bool
 }
 
 type Product struct {

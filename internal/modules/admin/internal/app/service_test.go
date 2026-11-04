@@ -250,6 +250,19 @@ func (f fixture) signedIn(t *testing.T) (context.Context, app.Created) {
 func (f fixture) signedInAs(t *testing.T, role domain.Role) (context.Context, app.Created) {
 	t.Helper()
 	c, email := f.createAdminAs(t, role)
+	return f.signedInWith(t, c, email), c
+}
+
+// signedInWithRole is a new admin in role, signed in.
+func (f fixture) signedInWithRole(t *testing.T, role domain.Role) context.Context {
+	t.Helper()
+	ctx, _ := f.signedInAs(t, role)
+	return ctx
+}
+
+// signedInWith signs a created admin in.
+func (f fixture) signedInWith(t *testing.T, c app.Created, email string) context.Context {
+	t.Helper()
 	res, err := f.svc.Login(f.device(t), email, adminPW, code(t, c.Secret, time.Now()))
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +271,7 @@ func (f fixture) signedInAs(t *testing.T, role domain.Role) (context.Context, ap
 	if err != nil {
 		t.Fatal(err)
 	}
-	return app.WithIdentity(f.device(t), id), c
+	return app.WithIdentity(f.device(t), id)
 }
 
 func TestSuspendAndReactivate(t *testing.T) {

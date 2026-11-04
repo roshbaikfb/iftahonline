@@ -2110,6 +2110,43 @@ paths:
               schema: { $ref: "#/components/schemas/AdminSearchResult" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/alerts:
+    get:
+      tags: [admin]
+      operationId: adminListAlerts
+      summary: The alerts the admin's role hears of
+      description: |
+        Open ones and those resolved in the last 30 days, newest first
+        (ADR-0080). A check every 5 minutes opens an alert after two bad
+        checks in a row and resolves it after two clean ones. Each comes
+        in words, with the console page that acts on it.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The alerts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAlerts" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/alerts/email:
+    put:
+      tags: [admin]
+      operationId: adminSetAlertEmail
+      summary: Turn the signed-in admin's alert emails on or off
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAlertEmail" }
+      responses:
+        "204":
+          description: Saved.
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/me:
     get:
       tags: [admin]
@@ -5921,6 +5958,37 @@ components:
           type: array
           description: Kinds that could not be read in time.
           items: { type: string, enum: [stores, owners, invoices, payments, agencies, admins] }
+    AdminAlert:
+      type: object
+      required: [id, kind, severity, value, title, body, path, opened_at, last_seen_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { type: string, enum: [duplicates, discarded, slow, redis, overdue, held, past_due] }
+        severity: { type: string, enum: [red, amber] }
+        value: { type: integer, format: int64, description: "The count, or the seconds the oldest job waits (slow)." }
+        title: { type: string }
+        body: { type: string }
+        path: { type: string, description: The console page (under /console) that acts on it. }
+        opened_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+    AdminAlerts:
+      type: object
+      required: [open, resolved, email]
+      properties:
+        open:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAlert" }
+        resolved:
+          type: array
+          description: Resolved in the last 30 days.
+          items: { $ref: "#/components/schemas/AdminAlert" }
+        email: { type: boolean, description: The signed-in admin gets alerts by email. }
+    AdminAlertEmail:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
     AdminStorePage:
       type: object
       required: [items]

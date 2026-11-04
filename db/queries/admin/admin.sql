@@ -130,3 +130,54 @@ UPDATE platform_admins SET status = @status, updated_at = now() WHERE id = @id;
 -- name: RevokeAdminSessions :execrows
 -- Every live session of an admin, when it is disabled or reset.
 UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = @admin_id AND revoked_at IS NULL;
+
+-- name: ListAlertStates :many
+-- The latest checks' streaks per kind (ADR-0080).
+SELECT kind, bad, good FROM admin_alert_state ORDER BY kind;
+
+-- name: SaveAlertState :exec
+INSERT INTO admin_alert_state (kind, bad, good, checked_at) VALUES (@kind, @bad, @good, @checked_at)
+ON CONFLICT (kind) DO UPDATE SET bad = EXCLUDED.bad, good = EXCLUDED.good, checked_at = EXCLUDED.checked_at;
+
+-- name: LockOpenAlerts :many
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts WHERE resolved_at IS NULL ORDER BY kind FOR UPDATE;
+
+-- name: OpenAlert :exec
+INSERT INTO admin_alerts (id, kind, severity, value, opened_at, last_seen_at) VALUES (@id, @kind, @severity, @value, @at, @at);
+
+-- name: TouchAlert :exec
+UPDATE admin_alerts SET value = @value, last_seen_at = @at WHERE id = @id AND resolved_at IS NULL;
+
+-- name: ResolveAlert :exec
+UPDATE admin_alerts SET resolved_at = @at WHERE id = @id AND resolved_at IS NULL;
+
+-- name: ListAlerts :many
+-- Open alerts and those resolved since @since, newest first.
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts
+WHERE resolved_at IS NULL OR resolved_at >= @since
+ORDER BY (resolved_at IS NULL) DESC, opened_at DESC
+LIMIT 200;
+
+-- name: AlertsToDeliver :many
+-- Alerts opened since @since and still open, and red ones resolved since
+-- @since: what may still owe a notice.
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts
+WHERE (resolved_at IS NULL AND opened_at >= @since) OR (resolved_at >= @since AND severity = 'red')
+ORDER BY opened_at;
+
+-- name: AlertRecipients :many
+-- Active admins with how they want alerts.
+SELECT id, name, email::text AS email, role, alert_email FROM platform_admins WHERE status = 'active' ORDER BY id;
+
+-- name: AlertDeliveries :many
+SELECT alert_id, admin_id, event, channel FROM admin_alert_deliveries WHERE alert_id = ANY (@alert_ids::uuid[]);
+
+-- name: RecordAlertDelivery :exec
+INSERT INTO admin_alert_deliveries (alert_id, admin_id, event, channel) VALUES (@alert_id, @admin_id, @event, @channel)
+ON CONFLICT DO NOTHING;
+
+-- name: SetAlertEmail :exec
+UPDATE platform_admins SET alert_email = @enabled::bool, updated_at = now() WHERE id = @id;
+
+-- name: GetAlertEmail :one
+SELECT alert_email FROM platform_admins WHERE id = @id;

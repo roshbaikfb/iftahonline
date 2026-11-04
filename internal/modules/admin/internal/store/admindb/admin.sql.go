@@ -12,6 +12,117 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const alertDeliveries = `-- name: AlertDeliveries :many
+SELECT alert_id, admin_id, event, channel FROM admin_alert_deliveries WHERE alert_id = ANY ($1::uuid[])
+`
+
+type AlertDeliveriesRow struct {
+	AlertID ulid.ID
+	AdminID ulid.ID
+	Event   string
+	Channel string
+}
+
+func (q *Queries) AlertDeliveries(ctx context.Context, alertIds []ulid.ID) ([]AlertDeliveriesRow, error) {
+	rows, err := q.db.Query(ctx, alertDeliveries, alertIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlertDeliveriesRow{}
+	for rows.Next() {
+		var i AlertDeliveriesRow
+		if err := rows.Scan(
+			&i.AlertID,
+			&i.AdminID,
+			&i.Event,
+			&i.Channel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const alertRecipients = `-- name: AlertRecipients :many
+SELECT id, name, email::text AS email, role, alert_email FROM platform_admins WHERE status = 'active' ORDER BY id
+`
+
+type AlertRecipientsRow struct {
+	ID         ulid.ID
+	Name       string
+	Email      string
+	Role       string
+	AlertEmail bool
+}
+
+// Active admins with how they want alerts.
+func (q *Queries) AlertRecipients(ctx context.Context) ([]AlertRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, alertRecipients)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlertRecipientsRow{}
+	for rows.Next() {
+		var i AlertRecipientsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Role,
+			&i.AlertEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const alertsToDeliver = `-- name: AlertsToDeliver :many
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts
+WHERE (resolved_at IS NULL AND opened_at >= $1) OR (resolved_at >= $1 AND severity = 'red')
+ORDER BY opened_at
+`
+
+// Alerts opened since @since and still open, and red ones resolved since
+// @since: what may still owe a notice.
+func (q *Queries) AlertsToDeliver(ctx context.Context, since time.Time) ([]AdminAlert, error) {
+	rows, err := q.db.Query(ctx, alertsToDeliver, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminAlert{}
+	for rows.Next() {
+		var i AdminAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Severity,
+			&i.Value,
+			&i.OpenedAt,
+			&i.LastSeenAt,
+			&i.ResolvedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const cancelOpenInvites = `-- name: CancelOpenInvites :execrows
 UPDATE admin_invites SET cancelled_at = now() WHERE admin_id = $1 AND used_at IS NULL AND cancelled_at IS NULL
 `
@@ -58,7 +169,7 @@ func (q *Queries) GetActiveAdminSession(ctx context.Context, tokenHash []byte) (
 }
 
 const getAdmin = `-- name: GetAdmin :one
-SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role FROM platform_admins WHERE id = $1
+SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role, alert_email FROM platform_admins WHERE id = $1
 `
 
 func (q *Queries) GetAdmin(ctx context.Context, id ulid.ID) (PlatformAdmin, error) {
@@ -76,12 +187,13 @@ func (q *Queries) GetAdmin(ctx context.Context, id ulid.ID) (PlatformAdmin, erro
 		&i.UpdatedAt,
 		&i.LastLoginAt,
 		&i.Role,
+		&i.AlertEmail,
 	)
 	return i, err
 }
 
 const getAdminByEmail = `-- name: GetAdminByEmail :one
-SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role FROM platform_admins WHERE email = $1
+SELECT id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role, alert_email FROM platform_admins WHERE email = $1
 `
 
 func (q *Queries) GetAdminByEmail(ctx context.Context, email string) (PlatformAdmin, error) {
@@ -99,8 +211,20 @@ func (q *Queries) GetAdminByEmail(ctx context.Context, email string) (PlatformAd
 		&i.UpdatedAt,
 		&i.LastLoginAt,
 		&i.Role,
+		&i.AlertEmail,
 	)
 	return i, err
+}
+
+const getAlertEmail = `-- name: GetAlertEmail :one
+SELECT alert_email FROM platform_admins WHERE id = $1
+`
+
+func (q *Queries) GetAlertEmail(ctx context.Context, id ulid.ID) (bool, error) {
+	row := q.db.QueryRow(ctx, getAlertEmail, id)
+	var alert_email bool
+	err := row.Scan(&alert_email)
+	return alert_email, err
 }
 
 const getInviteByToken = `-- name: GetInviteByToken :one
@@ -179,7 +303,7 @@ const insertAdmin = `-- name: InsertAdmin :one
 
 INSERT INTO platform_admins (id, email, name, password_hash, totp_secret, role)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role
+RETURNING id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role, alert_email
 `
 
 type InsertAdminParams struct {
@@ -215,6 +339,7 @@ func (q *Queries) InsertAdmin(ctx context.Context, arg InsertAdminParams) (Platf
 		&i.UpdatedAt,
 		&i.LastLoginAt,
 		&i.Role,
+		&i.AlertEmail,
 	)
 	return i, err
 }
@@ -491,6 +616,73 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]ListAdminsRow, error) {
 	return items, nil
 }
 
+const listAlertStates = `-- name: ListAlertStates :many
+SELECT kind, bad, good FROM admin_alert_state ORDER BY kind
+`
+
+type ListAlertStatesRow struct {
+	Kind string
+	Bad  int32
+	Good int32
+}
+
+// The latest checks' streaks per kind (ADR-0080).
+func (q *Queries) ListAlertStates(ctx context.Context) ([]ListAlertStatesRow, error) {
+	rows, err := q.db.Query(ctx, listAlertStates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAlertStatesRow{}
+	for rows.Next() {
+		var i ListAlertStatesRow
+		if err := rows.Scan(&i.Kind, &i.Bad, &i.Good); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAlerts = `-- name: ListAlerts :many
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts
+WHERE resolved_at IS NULL OR resolved_at >= $1
+ORDER BY (resolved_at IS NULL) DESC, opened_at DESC
+LIMIT 200
+`
+
+// Open alerts and those resolved since @since, newest first.
+func (q *Queries) ListAlerts(ctx context.Context, since *time.Time) ([]AdminAlert, error) {
+	rows, err := q.db.Query(ctx, listAlerts, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminAlert{}
+	for rows.Next() {
+		var i AdminAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Severity,
+			&i.Value,
+			&i.OpenedAt,
+			&i.LastSeenAt,
+			&i.ResolvedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpenInvites = `-- name: ListOpenInvites :many
 SELECT i.id, i.admin_id, i.email::text AS email, i.name, i.role, i.created_at, i.expires_at, coalesce(b.name, '')::text AS invited_by_name
 FROM admin_invites i
@@ -591,6 +783,38 @@ func (q *Queries) ListTeam(ctx context.Context) ([]ListTeamRow, error) {
 	return items, nil
 }
 
+const lockOpenAlerts = `-- name: LockOpenAlerts :many
+SELECT id, kind, severity, value, opened_at, last_seen_at, resolved_at FROM admin_alerts WHERE resolved_at IS NULL ORDER BY kind FOR UPDATE
+`
+
+func (q *Queries) LockOpenAlerts(ctx context.Context) ([]AdminAlert, error) {
+	rows, err := q.db.Query(ctx, lockOpenAlerts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminAlert{}
+	for rows.Next() {
+		var i AdminAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Severity,
+			&i.Value,
+			&i.OpenedAt,
+			&i.LastSeenAt,
+			&i.ResolvedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockOwners = `-- name: LockOwners :many
 SELECT id FROM platform_admins WHERE role = 'owner' AND status = 'active' ORDER BY id FOR UPDATE
 `
@@ -616,12 +840,57 @@ func (q *Queries) LockOwners(ctx context.Context) ([]ulid.ID, error) {
 	return items, nil
 }
 
+const openAlert = `-- name: OpenAlert :exec
+INSERT INTO admin_alerts (id, kind, severity, value, opened_at, last_seen_at) VALUES ($1, $2, $3, $4, $5, $5)
+`
+
+type OpenAlertParams struct {
+	ID       ulid.ID
+	Kind     string
+	Severity string
+	Value    int64
+	At       time.Time
+}
+
+func (q *Queries) OpenAlert(ctx context.Context, arg OpenAlertParams) error {
+	_, err := q.db.Exec(ctx, openAlert,
+		arg.ID,
+		arg.Kind,
+		arg.Severity,
+		arg.Value,
+		arg.At,
+	)
+	return err
+}
+
 const recordAdminLogin = `-- name: RecordAdminLogin :exec
 UPDATE platform_admins SET last_login_at = now() WHERE id = $1
 `
 
 func (q *Queries) RecordAdminLogin(ctx context.Context, id ulid.ID) error {
 	_, err := q.db.Exec(ctx, recordAdminLogin, id)
+	return err
+}
+
+const recordAlertDelivery = `-- name: RecordAlertDelivery :exec
+INSERT INTO admin_alert_deliveries (alert_id, admin_id, event, channel) VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING
+`
+
+type RecordAlertDeliveryParams struct {
+	AlertID ulid.ID
+	AdminID ulid.ID
+	Event   string
+	Channel string
+}
+
+func (q *Queries) RecordAlertDelivery(ctx context.Context, arg RecordAlertDeliveryParams) error {
+	_, err := q.db.Exec(ctx, recordAlertDelivery,
+		arg.AlertID,
+		arg.AdminID,
+		arg.Event,
+		arg.Channel,
+	)
 	return err
 }
 
@@ -645,6 +914,20 @@ func (q *Queries) ResetAdminCredentials(ctx context.Context, arg ResetAdminCrede
 	return result.RowsAffected(), nil
 }
 
+const resolveAlert = `-- name: ResolveAlert :exec
+UPDATE admin_alerts SET resolved_at = $1 WHERE id = $2 AND resolved_at IS NULL
+`
+
+type ResolveAlertParams struct {
+	At *time.Time
+	ID ulid.ID
+}
+
+func (q *Queries) ResolveAlert(ctx context.Context, arg ResolveAlertParams) error {
+	_, err := q.db.Exec(ctx, resolveAlert, arg.At, arg.ID)
+	return err
+}
+
 const revokeAdminSession = `-- name: RevokeAdminSession :exec
 UPDATE admin_sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL
 `
@@ -665,6 +948,28 @@ func (q *Queries) RevokeAdminSessions(ctx context.Context, adminID ulid.ID) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const saveAlertState = `-- name: SaveAlertState :exec
+INSERT INTO admin_alert_state (kind, bad, good, checked_at) VALUES ($1, $2, $3, $4)
+ON CONFLICT (kind) DO UPDATE SET bad = EXCLUDED.bad, good = EXCLUDED.good, checked_at = EXCLUDED.checked_at
+`
+
+type SaveAlertStateParams struct {
+	Kind      string
+	Bad       int32
+	Good      int32
+	CheckedAt time.Time
+}
+
+func (q *Queries) SaveAlertState(ctx context.Context, arg SaveAlertStateParams) error {
+	_, err := q.db.Exec(ctx, saveAlertState,
+		arg.Kind,
+		arg.Bad,
+		arg.Good,
+		arg.CheckedAt,
+	)
+	return err
 }
 
 const setAdminRole = `-- name: SetAdminRole :execrows
@@ -701,6 +1006,20 @@ func (q *Queries) SetAdminStatus(ctx context.Context, arg SetAdminStatusParams) 
 	return result.RowsAffected(), nil
 }
 
+const setAlertEmail = `-- name: SetAlertEmail :exec
+UPDATE platform_admins SET alert_email = $1::bool, updated_at = now() WHERE id = $2
+`
+
+type SetAlertEmailParams struct {
+	Enabled bool
+	ID      ulid.ID
+}
+
+func (q *Queries) SetAlertEmail(ctx context.Context, arg SetAlertEmailParams) error {
+	_, err := q.db.Exec(ctx, setAlertEmail, arg.Enabled, arg.ID)
+	return err
+}
+
 const touchAdminSession = `-- name: TouchAdminSession :exec
 UPDATE admin_sessions SET last_seen_at = now(), expires_at = $1
 WHERE id = $2 AND revoked_at IS NULL
@@ -713,6 +1032,21 @@ type TouchAdminSessionParams struct {
 
 func (q *Queries) TouchAdminSession(ctx context.Context, arg TouchAdminSessionParams) error {
 	_, err := q.db.Exec(ctx, touchAdminSession, arg.ExpiresAt, arg.ID)
+	return err
+}
+
+const touchAlert = `-- name: TouchAlert :exec
+UPDATE admin_alerts SET value = $1, last_seen_at = $2 WHERE id = $3 AND resolved_at IS NULL
+`
+
+type TouchAlertParams struct {
+	Value int64
+	At    time.Time
+	ID    ulid.ID
+}
+
+func (q *Queries) TouchAlert(ctx context.Context, arg TouchAlertParams) error {
+	_, err := q.db.Exec(ctx, touchAlert, arg.Value, arg.At, arg.ID)
 	return err
 }
 

@@ -91,6 +91,10 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 	// Every admin searches; each kind is filtered by its own permission
 	// inside (ADR-0079).
 	"AdminSearch": anyAdmin,
+	// Every admin reads the alerts its role hears of (filtered inside)
+	// and chooses its own email (ADR-0080).
+	"AdminListAlerts":    anyAdmin,
+	"AdminSetAlertEmail": anyAdmin,
 
 	"AdminGetTeam":      domain.PermTeamManage,
 	"AdminInviteAdmin":  domain.PermTeamManage,

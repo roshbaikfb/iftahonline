@@ -29,6 +29,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/password"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ratelimit"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
@@ -70,6 +71,10 @@ type Deps struct {
 	// Profile reads a store's owner and numbers; nil refuses them (the
 	// CLI).
 	Profile Profiler
+	// Mailer sends the alerts' emails (ADR-0080) from the worker; nil
+	// sends none. ConsoleURL is the console's address in them.
+	Mailer     mailer.Mailer
+	ConsoleURL string
 	// OwnerStores finds a store owner's stores by exact email or phone
 	// for the search (ADR-0079); nil leaves that lookup out (the CLI).
 	OwnerStores OwnerStoresFunc

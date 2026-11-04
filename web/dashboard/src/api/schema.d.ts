@@ -1778,6 +1778,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The alerts the admin's role hears of
+         * @description Open ones and those resolved in the last 30 days, newest first
+         *     (ADR-0080). A check every 5 minutes opens an alert after two bad
+         *     checks in a row and resolves it after two clean ones. Each comes
+         *     in words, with the console page that acts on it.
+         */
+        get: operations["adminListAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/alerts/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turn the signed-in admin's alert emails on or off */
+        put: operations["adminSetAlertEmail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/me": {
         parameters: {
             query?: never;
@@ -4991,6 +5031,38 @@ export interface components {
             admins: components["schemas"]["AdminTeamMember"][];
             /** @description Kinds that could not be read in time. */
             failed: ("stores" | "owners" | "invoices" | "payments" | "agencies" | "admins")[];
+        };
+        AdminAlert: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "duplicates" | "discarded" | "slow" | "redis" | "overdue" | "held" | "past_due";
+            /** @enum {string} */
+            severity: "red" | "amber";
+            /**
+             * Format: int64
+             * @description The count, or the seconds the oldest job waits (slow).
+             */
+            value: number;
+            title: string;
+            body: string;
+            /** @description The console page (under /console) that acts on it. */
+            path: string;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            resolved_at?: string;
+        };
+        AdminAlerts: {
+            open: components["schemas"]["AdminAlert"][];
+            /** @description Resolved in the last 30 days. */
+            resolved: components["schemas"]["AdminAlert"][];
+            /** @description The signed-in admin gets alerts by email. */
+            email: boolean;
+        };
+        AdminAlertEmail: {
+            enabled: boolean;
         };
         AdminStorePage: {
             items: components["schemas"]["AdminStoreSummary"][];
@@ -10317,6 +10389,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminSearchResult"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The alerts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAlerts"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetAlertEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAlertEmail"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
