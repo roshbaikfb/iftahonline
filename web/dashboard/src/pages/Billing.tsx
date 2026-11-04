@@ -8,6 +8,7 @@ import {
   cycleLabel,
   dateAr,
   daysLeft,
+  lateText,
   leave,
   meterLabel,
   meterLevel,
@@ -161,14 +162,14 @@ export function Billing() {
         </div>
       )}
       {(billing?.status === 'past_due' || billing?.status === 'suspended') && firstOpen && (
-        <div className="bill-banner late" role="alert">
+        <div className={`bill-banner ${billing.status === 'suspended' && !billing.held ? 'free' : 'late'}`} role="alert">
           <div>
-            <strong>لم ننجح في تحصيل فاتورة {monthAr(firstOpen.period)}</strong>
-            <p>
-              {billing.status === 'suspended'
-                ? 'متجرك متوقف حتى تُدفع الفاتورة. بياناتك محفوظة.'
-                : `ادفعها قبل ${billing.grace_until ? dateAr(billing.grace_until) : ''} حتى لا يتوقف متجرك.`}
-            </p>
+            <strong>
+              {billing.status === 'suspended' && !billing.held
+                ? `متجرك الآن على الباقة المجانية حتى تُدفع فاتورة ${monthAr(firstOpen.period)}`
+                : `لم ننجح في تحصيل فاتورة ${monthAr(firstOpen.period)}`}
+            </strong>
+            <p>{lateText(billing)}</p>
           </div>
           <button type="button" className="button success" disabled={busy} onClick={() => void pay(firstOpen.id)}>
             ادفع الآن {money(firstOpen.total_minor, firstOpen.currency)}

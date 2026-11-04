@@ -39,6 +39,21 @@ export function dateAr(iso: string): string {
   });
 }
 
+// lateText is what an unpaid store's banner says (ADR-0082): past due
+// keeps its plan until the grace's end, then the free plan until
+// closes_at, then the maintenance page.
+export function lateText(b: Billing): string {
+  const closes = b.closes_at ? ` وإذا لم تُدفع يُغلق المتجر يوم ${dateAr(b.closes_at)}.` : '';
+  if (b.status === 'past_due') {
+    const grace = b.grace_until ? ` قبل ${dateAr(b.grace_until)}` : '';
+    return `ادفعها${grace} حتى يبقى متجرك على باقته، وإلا ينتقل إلى الباقة المجانية.${closes} بياناتك محفوظة.`;
+  }
+  if (b.held || b.status === 'cancelled') {
+    return 'متجرك مغلق ويرى العملاء صفحة صيانة حتى تُدفع الفاتورة. بياناتك محفوظة.';
+  }
+  return `متجرك يعمل، لكن تظهر فيه إعلانات المنصة، والدفع بالبطاقة والكوبونات والبكسلات متوقفة.${closes} بياناتك محفوظة.`;
+}
+
 // monthAr is an invoice's month: أكتوبر 2026.
 export function monthAr(isoDate: string): string {
   return new Date(`${isoDate.slice(0, 10)}T00:00:00Z`).toLocaleDateString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric', timeZone: 'UTC' });
