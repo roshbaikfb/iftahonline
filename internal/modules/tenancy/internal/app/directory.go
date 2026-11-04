@@ -125,6 +125,16 @@ func (d *StoreDirectory) NewStores(ctx context.Context, now time.Time) (domain.N
 	return domain.NewStoresFrom(byDay, local), nil
 }
 
+// StoresByMonth are the stores created per Cairo month since since, and
+// how many of each month are in converted, the stores that paid (the
+// console's growth page, ADR-0081).
+func (d *StoreDirectory) StoresByMonth(ctx context.Context, since time.Time, converted []ulid.ID) ([]domain.MonthStores, error) {
+	if converted == nil {
+		converted = []ulid.ID{}
+	}
+	return store.StoresByMonth(ctx, d.db, since, consoleZone, converted)
+}
+
 // Entries are the stores with these IDs, newest first, in one query (the
 // console's search, ADR-0079); an unknown ID is left out.
 func (d *StoreDirectory) Entries(ctx context.Context, ids []ulid.ID) ([]store.DirectoryEntry, error) {

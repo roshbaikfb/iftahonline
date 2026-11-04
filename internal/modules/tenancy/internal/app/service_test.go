@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -642,5 +643,67 @@ func TestSlugAvailability(t *testing.T) {
 		if err != nil || got.Available != c.available || got.Reason != c.reason || got.Slug != strings.ToLower(c.in) {
 			t.Errorf("SlugAvailability(%q) = %+v, %v; want available=%v reason=%q", c.in, got, err, c.available, c.reason)
 		}
+	}
+}
+
+// TestStoresByMonth: the console's growth page counts the stores of each
+// Cairo month and those of them that paid (ADR-0081). The stores are
+// dated in 2031, where no other test creates any, and put back at the end.
+func TestStoresByMonth(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	adminPool, err := pgxpool.New(t.Context(), infra.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(adminPool.Close)
+	dir := app.NewStoreDirectory(adminPool)
+	tag := f.slug("bm")
+	var stores []context.Context
+	var ids []ulid.ID
+	for i, at := range []string{
+		"2031-01-31T22:30:00Z", // 00:30 on 1 February in Cairo
+		"2031-01-31T21:30:00Z", // 23:30 on 31 January in Cairo
+		"2031-01-05T10:00:00Z",
+		"2031-03-02T10:00:00Z",
+	} {
+		ctx, _ := f.createStore(t, fmt.Sprintf("%s-%d", tag, i))
+		stores = append(stores, ctx)
+		id, _ := tenant.FromContext(ctx)
+		ids = append(ids, ulid.ID(id.ID))
+		if dateErr := postgres.InTenantTx(ctx, f.app, func(tx pgx.Tx) error {
+			_, execErr := tx.Exec(ctx, `UPDATE stores SET created_at = $1`, at)
+			return execErr
+		}); dateErr != nil {
+			t.Fatal(dateErr)
+		}
+	}
+	t.Cleanup(func() {
+		for _, ctx := range stores {
+			if dateErr := postgres.InTenantTx(context.WithoutCancel(ctx), f.app, func(tx pgx.Tx) error {
+				_, execErr := tx.Exec(context.WithoutCancel(ctx), `UPDATE stores SET created_at = now()`)
+				return execErr
+			}); dateErr != nil {
+				t.Error(dateErr)
+			}
+		}
+	})
+
+	since := time.Date(2030, 12, 31, 22, 0, 0, 0, time.UTC) // 1 January 2031 in Cairo
+	got, err := dir.StoresByMonth(t.Context(), since, []ulid.ID{ids[0], ids[2], f.ids.New()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	month := func(m time.Month) time.Time { return time.Date(2031, m, 1, 0, 0, 0, 0, time.UTC) }
+	want := []domain.MonthStores{
+		{Month: month(time.January), Created: 2, Converted: 1},
+		{Month: month(time.February), Created: 1, Converted: 1},
+		{Month: month(time.March), Created: 1, Converted: 0},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("by month = %+v; want %+v", got, want)
+	}
+	if none, noneErr := dir.StoresByMonth(t.Context(), time.Date(2032, 1, 1, 0, 0, 0, 0, time.UTC), nil); noneErr != nil || len(none) != 0 {
+		t.Fatalf("none = %+v, %v", none, noneErr)
 	}
 }

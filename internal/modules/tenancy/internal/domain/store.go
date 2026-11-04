@@ -186,6 +186,14 @@ type NewStores struct {
 	Daily         []DayCount
 }
 
+// MonthStores are the stores created in one month (the console's growth
+// page, ADR-0081), and how many of them paid a subscription since.
+type MonthStores struct {
+	Month     time.Time // the month's first day, midnight UTC
+	Created   int64
+	Converted int64
+}
+
 // NewStoresDays is how many days NewStores covers.
 const NewStoresDays = 30
 

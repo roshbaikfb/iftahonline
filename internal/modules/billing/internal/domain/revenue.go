@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -41,9 +42,36 @@ func MonthlyShare(amount int64, cycle Cycle) int64 {
 // renews at its price, a founding member's at what its next invoice
 // charges after its discount (Member.Renewal, as the invoice does). An
 // agency's plan is one flat price for all its stores, counted once.
-func MRR(paying []Paying) []Revenue {
+func MRR(paying []Paying) []Revenue { return Today(paying).Revenue }
+
+// PlanRevenue is one plan's share of the recurring revenue in one
+// currency (the console's growth page, ADR-0081).
+type PlanRevenue struct {
+	Currency string
+	PlanCode string
+	MRRMinor int64
+	Accounts int64
+}
+
+// RevenueToday is what pays today: the revenue per currency (MRR), each
+// plan's share of it per currency, the most first, and the paying
+// accounts, each once.
+type RevenueToday struct {
+	Revenue  []Revenue
+	Plans    []PlanRevenue
+	Accounts []ulid.ID
+}
+
+// currencies are the order the console lists them in.
+var currencies = []string{"EGP", "SAR", "AED"} //nolint:gochecknoglobals // a fixed list
+
+// Today counts paying subscriptions the way MRR does, by currency and by
+// plan.
+func Today(paying []Paying) RevenueToday {
 	sums := map[string]*Revenue{}
+	plans := map[[2]string]*PlanRevenue{}
 	agencies := map[ulid.ID]bool{}
+	accounts := map[ulid.ID]bool{}
 	for _, p := range paying {
 		if !p.Kind.Paid() {
 			continue
@@ -59,25 +87,59 @@ func MRR(paying []Paying) []Revenue {
 			charged, discount, _ := p.Founding.Renewal(p.PlanCode, p.Cycle, p.Currency, p.AmountMinor)
 			amount = charged - discount
 		}
+		share := MonthlyShare(amount, p.Cycle)
 		r := sums[p.Currency]
 		if r == nil {
 			r = &Revenue{Currency: p.Currency}
 			sums[p.Currency] = r
 		}
-		r.MRRMinor += MonthlyShare(amount, p.Cycle)
+		r.MRRMinor += share
 		r.Accounts++
+		key := [2]string{p.Currency, p.PlanCode}
+		pr := plans[key]
+		if pr == nil {
+			pr = &PlanRevenue{Currency: p.Currency, PlanCode: p.PlanCode}
+			plans[key] = pr
+		}
+		pr.MRRMinor += share
+		pr.Accounts++
+		accounts[p.Account] = true
 	}
-	currencies := []string{"EGP", "SAR", "AED"} // the order the console lists them in
-	out := make([]Revenue, 0, len(sums))
+	out := RevenueToday{Revenue: make([]Revenue, 0, len(sums)), Plans: make([]PlanRevenue, 0, len(plans)), Accounts: make([]ulid.ID, 0, len(accounts))}
 	for _, c := range currencies {
 		if r := sums[c]; r != nil {
-			out = append(out, *r)
+			out.Revenue = append(out.Revenue, *r)
 		}
 	}
 	for c, r := range sums {
 		if !slices.Contains(currencies, c) {
-			out = append(out, *r)
+			out.Revenue = append(out.Revenue, *r)
 		}
 	}
+	for _, pr := range plans {
+		out.Plans = append(out.Plans, *pr)
+	}
+	rank := func(c string) int {
+		if i := slices.Index(currencies, c); i >= 0 {
+			return i
+		}
+		return len(currencies)
+	}
+	slices.SortFunc(out.Plans, func(x, y PlanRevenue) int {
+		if d := cmp.Compare(rank(x.Currency), rank(y.Currency)); d != 0 {
+			return d
+		}
+		if d := cmp.Compare(x.Currency, y.Currency); d != 0 {
+			return d
+		}
+		if d := cmp.Compare(y.MRRMinor, x.MRRMinor); d != 0 {
+			return d
+		}
+		return cmp.Compare(x.PlanCode, y.PlanCode)
+	})
+	for a := range accounts {
+		out.Accounts = append(out.Accounts, a)
+	}
+	slices.SortFunc(out.Accounts, func(x, y ulid.ID) int { return cmp.Compare(x.String(), y.String()) })
 	return out
 }

@@ -166,6 +166,74 @@ func (q *Queries) ConsoleAttemptsByReference(ctx context.Context, arg ConsoleAtt
 	return items, nil
 }
 
+const consoleCollected = `-- name: ConsoleCollected :many
+SELECT month::date, currency::text, invoices::bigint, subtotal_minor::bigint
+FROM app.billing_collected($1::timestamptz, $2::text)
+`
+
+type ConsoleCollectedParams struct {
+	Since time.Time
+	Tz    string
+}
+
+type ConsoleCollectedRow struct {
+	Month         time.Time
+	Currency      string
+	Invoices      int64
+	SubtotalMinor int64
+}
+
+// The revenue collected per month in @tz since @since (ADR-0081).
+func (q *Queries) ConsoleCollected(ctx context.Context, arg ConsoleCollectedParams) ([]ConsoleCollectedRow, error) {
+	rows, err := q.db.Query(ctx, consoleCollected, arg.Since, arg.Tz)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleCollectedRow{}
+	for rows.Next() {
+		var i ConsoleCollectedRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.Currency,
+			&i.Invoices,
+			&i.SubtotalMinor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consoleConverted = `-- name: ConsoleConverted :many
+SELECT store_id::uuid FROM app.billing_converted($1::timestamptz)
+`
+
+// The stores that paid a subscription since @since (ADR-0081).
+func (q *Queries) ConsoleConverted(ctx context.Context, since time.Time) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, consoleConverted, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var store_id ulid.ID
+		if err := rows.Scan(&store_id); err != nil {
+			return nil, err
+		}
+		items = append(items, store_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const consoleInvoices = `-- name: ConsoleInvoices :many
 SELECT id::uuid, number::text, account_id::uuid, account_kind::text, account_name::text, (store_id IS NOT NULL)::bool AS has_store,
        coalesce(store_id, account_id)::uuid AS store_id, period::date, currency::text, subtotal_minor::bigint, tax_bps::int,

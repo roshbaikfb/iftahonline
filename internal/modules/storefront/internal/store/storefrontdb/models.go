@@ -142,6 +142,24 @@ type AdminAuditLog struct {
 	Metadata   []byte
 }
 
+type AdminGrowthMonth struct {
+	Month   pgtype.Date
+	TakenOn pgtype.Date
+}
+
+type AdminGrowthMrr struct {
+	Day      pgtype.Date
+	Currency string
+	MrrMinor int64
+	Accounts int64
+	TakenAt  time.Time
+}
+
+type AdminGrowthPaying struct {
+	Month     pgtype.Date
+	AccountID ulid.ID
+}
+
 type AdminInvite struct {
 	ID          ulid.ID
 	TokenHash   []byte

@@ -340,6 +340,50 @@ func (s *Service) Payments(ctx context.Context, q PaymentQuery, after string, li
 	return out, nil
 }
 
+// MonthCollected is the revenue collected in one month and currency.
+type MonthCollected = store.MonthCollected
+
+// RevenueToday is what pays today: the revenue per currency, each plan's
+// share, and the paying accounts (ADR-0081).
+type RevenueToday = domain.RevenueToday
+
+// PlanRevenue is one plan's share of the recurring revenue.
+type PlanRevenue = domain.PlanRevenue
+
+// consoleZone is the zone the console counts months in: the owner's.
+const consoleZone = "Africa/Cairo"
+
+// Today is the revenue as Revenue counts it, by currency and by plan,
+// with the paying accounts (the console's growth page, ADR-0081).
+func (s *Service) Today(ctx context.Context) (t RevenueToday, err error) {
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
+		paying, txErr := store.Paying(ctx, tx)
+		t = domain.Today(paying)
+		return txErr
+	})
+	return t, err
+}
+
+// Collected is the revenue collected per Cairo month since since: paid
+// invoices before VAT, per currency, oldest first (ADR-0081).
+func (s *Service) Collected(ctx context.Context, since time.Time) (out []MonthCollected, err error) {
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.Collected(ctx, tx, since, consoleZone)
+		return txErr
+	})
+	return out, err
+}
+
+// Converted are the stores that paid a subscription since since: a paid
+// invoice with a subscription line for the store (ADR-0081).
+func (s *Service) Converted(ctx context.Context, since time.Time) (out []ulid.ID, err error) {
+	err = postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.Converted(ctx, tx, since)
+		return txErr
+	})
+	return out, err
+}
+
 // Totals is the console's billing summary now.
 func (s *Service) Totals(ctx context.Context) (Totals, error) {
 	cairo, err := time.LoadLocation("Africa/Cairo")
