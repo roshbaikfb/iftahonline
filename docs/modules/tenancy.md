@@ -152,10 +152,15 @@ The hold is separate from the platform's suspension (`status`).
 | Resolution | Response |
 |---|---|
 | Active | The page, with the store in tenant context |
-| Unknown host or closed store | Branded 404 (indistinguishable) |
-| Suspended | 503 "store unavailable" |
-| Held for billing | 503 "under maintenance", `Retry-After: 3600` |
-| Resolver error | 503 with `Retry-After: 5` |
+| Unknown host or closed store | Branded 404 (indistinguishable): «لا يوجد متجر على هذا العنوان», with a button to open a store on the platform's site |
+| Suspended | 503 «هذا المتجر متوقف مؤقتًا», no reason and no link |
+| Held for billing | 503 «المتجر تحت الصيانة», `Retry-After: 3600`; a quiet «صاحب المتجر؟ ادخل لوحة التحكم» to the dashboard's sign-in, nothing about the invoice |
+| Resolver error | 503 «تعذّر تحميل الصفحة» with `Retry-After: 5` and a retry link |
+
+These pages (`internal/server/views/errorpage.templ`) are bilingual (Arabic,
+then one English line) and never cached. They follow the approved mockup,
+in the brand's typeface. Their one stylesheet is inline, allowed by its
+hash in the CSP like the shop's pages (ADR-0018), and they have no script.
 
 ## HTTP API (tag `tenancy`)
 
