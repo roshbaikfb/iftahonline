@@ -1,6 +1,9 @@
+import { Link } from 'react-router';
+
 import type { components } from '../api/client';
 import { money } from '../lib/orders';
 import { count } from './lib';
+import { useCan } from './session';
 
 type Metrics = components['schemas']['AdminMetrics'];
 
@@ -14,6 +17,7 @@ export function Growth({ metrics, failed }: { metrics: Metrics | null; failed: b
   const revenue = metrics?.revenue;
   const fresh = metrics?.new_stores;
   const peak = Math.max(1, ...(fresh?.daily.map((d) => d.count) ?? []));
+  const can = useCan();
 
   return (
     <section className="card growth" aria-label="الإيراد والنمو">
@@ -36,6 +40,11 @@ export function Growth({ metrics, failed }: { metrics: Metrics | null; failed: b
           </ul>
         )}
         <small className="kpi-note">الاشتراكات النشطة دون الضريبة، والسنوي مقسومًا على 12. لا تدخل التجربة ولا المتأخرة عن الدفع.</small>
+        {can('billing.read') && (
+          <Link to="/growth" className="growth-more">
+            النمو آخر 12 شهرًا ←
+          </Link>
+        )}
       </div>
       <div>
         <span className="muted">متاجر جديدة</span>

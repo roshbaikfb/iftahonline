@@ -1562,7 +1562,9 @@ button.chip.on:hover:not(:disabled) {
   color: var(--text);
 }
 .segmented-tabs button[aria-selected='true'],
-.segmented-tabs button[aria-selected='true']:hover:not(:disabled) {
+.segmented-tabs button[aria-selected='true']:hover:not(:disabled),
+.segmented-tabs button[aria-pressed='true'],
+.segmented-tabs button[aria-pressed='true']:hover:not(:disabled) {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
@@ -2362,5 +2364,198 @@ fieldset.read-only {
   }
   .alert-card .button {
     inline-size: 100%;
+  }
+}
+
+/* The growth page (ADR-0081, the approved mockup). */
+.growth-more {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  gap: 1rem;
+}
+.chart {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+.chart-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.chart p {
+  margin: 0;
+}
+.chart .unread {
+  color: var(--red);
+}
+.growth-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  block-size: 12rem;
+  border-block-end: 1px solid var(--field);
+}
+.growth-bars .growth-bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  block-size: 100%;
+  min-inline-size: 0;
+}
+.growth-bars .growth-bar small {
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+.growth-bars .growth-bar i {
+  inline-size: 100%;
+  max-block-size: calc(100% - 1rem);
+  border-radius: 0.25rem 0.25rem 0 0;
+  background: var(--navy);
+}
+.growth-bars.blue .growth-bar i {
+  background: #3b82f6;
+}
+.growth-bars .growth-bar.now i {
+  background: #94a3b8;
+}
+.growth-bars.blue .growth-bar.now i {
+  background: #93c5fd;
+}
+.bar-months {
+  display: flex;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.bar-months span {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-months.ends {
+  justify-content: space-between;
+}
+.bar-months.ends span {
+  flex: none;
+}
+.figures summary {
+  display: flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--navy);
+  font-weight: 600;
+  cursor: pointer;
+}
+.figures table,
+.chart table.churn {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.figures th,
+.figures td,
+.chart table.churn th,
+.chart table.churn td {
+  padding: 0.35rem 0.5rem;
+  border-block-start: 1px solid var(--line);
+  font-weight: 400;
+  text-align: start;
+}
+.mrr-line {
+  inline-size: 100%;
+  block-size: 10rem;
+  border-block-end: 1px solid var(--field);
+}
+/* Time runs right to left like the bars and labels of an Arabic page. */
+[dir='rtl'] .mrr-line {
+  transform: scaleX(-1);
+}
+.mrr-line path {
+  fill: none;
+  stroke: var(--navy);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.conversion,
+.plan-mix {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.conversion li {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.meter {
+  display: block;
+  block-size: 0.75rem;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+}
+.meter i {
+  display: block;
+  block-size: 100%;
+  background: var(--navy);
+}
+.plan-mix li {
+  display: grid;
+  gap: 0.3rem;
+}
+.plan-mix-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+}
+.empty-chart {
+  display: grid;
+  gap: 0.35rem;
+  place-content: center;
+  min-block-size: 9rem;
+  padding: 1rem;
+  border: 1px dashed var(--field);
+  border-radius: 0.75rem;
+  text-align: center;
+}
+@media (max-width: 40rem) {
+  .growth-bars .growth-bar small {
+    display: none;
+  }
+  .bar-months {
+    justify-content: space-between;
+  }
+  .bar-months span:not(:first-child):not(:last-child) {
+    display: none;
+  }
+  .bar-months span {
+    flex: none;
   }
 }
