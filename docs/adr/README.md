@@ -85,3 +85,4 @@ supersedes it.
 | [0077](0077-console-roles.md) | Console roles | Accepted |
 | [0078](0078-console-team-and-invites.md) | The console's team and invite links | Accepted |
 | [0079](0079-console-search.md) | The console's search | Accepted |
+| [0080](0080-console-alerts.md) | The console's alerts | Accepted |
