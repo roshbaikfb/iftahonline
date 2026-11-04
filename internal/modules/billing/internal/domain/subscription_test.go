@@ -191,7 +191,7 @@ func TestDunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Status != domain.Suspended || !s.SuspendedAt.Equal(failedAt.Add(policy.Grace)) {
+	if s.Status != domain.Suspended || !s.SuspendedAt.Equal(failedAt.Add(policy.Grace)) || s.Held() || s.PlanApplies(s.SuspendedAt) {
 		t.Fatalf("suspended = %+v", s)
 	}
 	if _, err = s.Close(s.SuspendedAt.Add(policy.Retention-time.Second), policy); !errors.Is(err, domain.ErrTransition) {
@@ -201,7 +201,7 @@ func TestDunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if closed.Status != domain.Cancelled || !closed.SuspendedAt.Equal(s.SuspendedAt) {
+	if closed.Status != domain.Cancelled || !closed.SuspendedAt.Equal(s.SuspendedAt) || !closed.Held() {
 		t.Fatalf("closed = %+v", closed)
 	}
 	restored, err := s.Activate(pro, domain.Monthly, failedAt.AddDate(0, 0, 10), failedAt.AddDate(0, 1, 10))
@@ -221,6 +221,54 @@ func TestDunning(t *testing.T) {
 	}
 	if _, err := closed.Close(closed.SuspendedAt.AddDate(1, 0, 0), policy); !errors.Is(err, domain.ErrTransition) {
 		t.Errorf("close twice: err = %v", err)
+	}
+}
+
+// TestHold: a suspended store is an ordinary free store for FreeFor,
+// then its storefront closes, once (ADR-0082).
+func TestHold(t *testing.T) {
+	t.Parallel()
+	s := suspended(t)
+	holdsAt := s.SuspendedAt.Add(policy.FreeFor)
+	if !s.HoldsAt(policy).Equal(holdsAt) || !s.ClosesAt(policy).Equal(holdsAt) || policy.FreeFor != 30*day {
+		t.Fatalf("HoldsAt = %v, ClosesAt = %v, want %v", s.HoldsAt(policy), s.ClosesAt(policy), holdsAt)
+	}
+	if pd := pastDue(t); !pd.ClosesAt(policy).Equal(pd.GraceUntil.Add(policy.FreeFor)) || !active(t).ClosesAt(policy).IsZero() {
+		t.Errorf("ClosesAt past due = %v, active = %v", pd.ClosesAt(policy), active(t).ClosesAt(policy))
+	}
+	held, err := s.Hold(holdsAt, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if held.Status != domain.Suspended || !held.HeldAt.Equal(holdsAt) || !held.Held() || !held.ClosesAt(policy).IsZero() {
+		t.Fatalf("held = %+v", held)
+	}
+	closed, err := held.Close(held.SuspendedAt.Add(policy.Retention), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !closed.HeldAt.Equal(holdsAt) {
+		t.Errorf("closing keeps when the store was held: %v", closed.HeldAt)
+	}
+	paid, changed, err := held.Settle(false)
+	if err != nil || !changed || paid.Status != domain.Active || paid.Held() || !paid.HeldAt.IsZero() {
+		t.Fatalf("settled = %+v, %v, %v", paid, changed, err)
+	}
+	bad := []struct {
+		name string
+		s    domain.Subscription
+		at   time.Time
+	}{
+		{"within the free days", s, holdsAt.Add(-time.Second)},
+		{"held already", held, holdsAt.Add(day)},
+		{"past due", pastDue(t), holdsAt},
+		{"active", active(t), holdsAt},
+		{"cancelled", closed, holdsAt},
+	}
+	for _, tt := range bad {
+		if _, err := tt.s.Hold(tt.at, policy); !errors.Is(err, domain.ErrTransition) {
+			t.Errorf("%s: err = %v, want ErrTransition", tt.name, err)
+		}
 	}
 }
 

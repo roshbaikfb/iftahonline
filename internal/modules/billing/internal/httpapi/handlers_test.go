@@ -206,6 +206,35 @@ func TestGetBilling(t *testing.T) {
 	if code, _ = f.do(t, req(t, http.MethodGet, path(f.storeA, ""), tokManagerA)); code != http.StatusForbidden {
 		t.Fatalf("manager = %d", code)
 	}
+	if _, ok := body["closes_at"]; ok {
+		t.Fatalf("an active store closes at nothing: %v", body)
+	}
+	// Suspended unpaid: open until closes_at (ADR-0082), then held.
+	ctx := tenant.WithStore(context.Background(), f.storeB)
+	set := func(sql string) {
+		t.Helper()
+		if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error { _, err := tx.Exec(ctx, sql); return err }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(`UPDATE subscriptions SET status = 'suspended', suspended_at = '2026-11-08T00:00:00Z'`)
+	if code, body = f.do(t, req(t, http.MethodGet, path(f.storeB, ""), tokOwnerB)); code != http.StatusOK ||
+		body["status"] != "suspended" || !sameTime(body["closes_at"], "2026-12-08T00:00:00Z") || body["held"] != nil {
+		t.Fatalf("suspended = %d %v", code, body)
+	}
+	set(`UPDATE subscriptions SET held_at = '2026-12-08T00:00:00Z'`)
+	if code, body = f.do(t, req(t, http.MethodGet, path(f.storeB, ""), tokOwnerB)); code != http.StatusOK ||
+		body["closes_at"] != nil || body["held"] != true {
+		t.Fatalf("held = %d %v", code, body)
+	}
+}
+
+// sameTime reports whether a JSON time is the instant want.
+func sameTime(v any, want string) bool {
+	got, _ := v.(string)
+	g, gErr := time.Parse(time.RFC3339, got)
+	w, wErr := time.Parse(time.RFC3339, want)
+	return gErr == nil && wErr == nil && g.Equal(w)
 }
 
 func TestPayInvoice(t *testing.T) {

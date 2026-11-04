@@ -85,6 +85,12 @@ func toBilling(s app.Summary) Billing {
 	if !s.GraceUntil.IsZero() {
 		out.GraceUntil = &s.GraceUntil
 	}
+	if !s.ClosesAt.IsZero() {
+		out.ClosesAt = &s.ClosesAt
+	}
+	if s.Held {
+		out.Held = &s.Held
+	}
 	if s.CancelAtPeriodEnd {
 		out.CancelAtPeriodEnd = &s.CancelAtPeriodEnd
 	}

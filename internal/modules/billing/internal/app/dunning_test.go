@@ -131,6 +131,11 @@ func (d *dunning) run(t *testing.T) []domain.NoticeKind {
 					continue
 				}
 				err = (&app.SuspendWorker{Svc: d.svc}).Work(tenant.WithStore(t.Context(), j.StoreID), &river.Job[app.SuspendArgs]{Args: j})
+			case app.HoldArgs:
+				if !d.mine[j.StoreID.ID] {
+					continue
+				}
+				err = (&app.HoldWorker{Svc: d.svc}).Work(tenant.WithStore(t.Context(), j.StoreID), &river.Job[app.HoldArgs]{Args: j})
 			case app.CancelArgs:
 				if !d.mine[j.StoreID.ID] {
 					continue
@@ -205,8 +210,9 @@ func (d *dunning) adFree(ctx context.Context, t *testing.T) bool {
 
 // TestDunningScenario is P7's acceptance scenario: a renewal's charge
 // fails, is retried on days 1, 3 and 5, the 7-day grace runs out, the
-// store is suspended (held, the free plan's grants), and paying restores
-// it with its next period (ADR-0051).
+// store is suspended (the free plan's grants, still open), held 30 days
+// later, and paying restores it with its next period (ADR-0051,
+// ADR-0082).
 func TestDunningScenario(t *testing.T) {
 	t.Parallel()
 	d := newDunning(t)
@@ -251,17 +257,38 @@ func TestDunningScenario(t *testing.T) {
 		t.Fatalf("day 5: %s", st)
 	}
 
-	// Day 7: the grace runs out. Suspended, held, on the free plan's grants.
+	// Day 7: the grace runs out. Suspended, on the free plan's grants,
+	// the storefront still open.
 	if n := d.tick(t, day0.Add(7*24*time.Hour)); len(n) != 1 || n[0] != domain.NoticeSuspended {
 		t.Fatalf("day 7 notices = %v", n)
 	}
-	if st, _, _, _ = d.state(ctx, t); st != "suspended" || !d.holds.of(ctx) || d.adFree(ctx, t) {
+	if st, _, _, _ = d.state(ctx, t); st != "suspended" || d.holds.of(ctx) || d.adFree(ctx, t) {
 		t.Fatalf("day 7: %s, held %v", st, d.holds.of(ctx))
 	}
+	if sum, err := d.svc.Summary(ctx); err != nil || sum.Held || !sum.ClosesAt.Equal(day0.Add(37*24*time.Hour)) {
+		t.Fatalf("day 7 summary: held %v, closes %v, %v", sum.Held, sum.ClosesAt, err)
+	}
 
-	// Day 10: the merchant changes the card and pays. Restored, with the
+	// Day 37: 30 free days later, still unpaid. Held: the maintenance page.
+	if n := d.tick(t, day0.Add(37*24*time.Hour-time.Minute)); len(n) != 0 || d.holds.of(ctx) {
+		t.Fatalf("before day 37: notices %v, held %v", n, d.holds.of(ctx))
+	}
+	if n := d.tick(t, day0.Add(37*24*time.Hour)); len(n) != 1 || n[0] != domain.NoticeHeld {
+		t.Fatalf("day 37 notices = %v", n)
+	}
+	if st, _, _, _ = d.state(ctx, t); st != "suspended" || !d.holds.of(ctx) || d.adFree(ctx, t) {
+		t.Fatalf("day 37: %s, held %v", st, d.holds.of(ctx))
+	}
+	if sum, err := d.svc.Summary(ctx); err != nil || !sum.Held || !sum.ClosesAt.IsZero() {
+		t.Fatalf("day 37 summary: held %v, closes %v, %v", sum.Held, sum.ClosesAt, err)
+	}
+	if n := d.tick(t, day0.Add(38*24*time.Hour)); len(n) != 0 {
+		t.Fatalf("held once: day 38 notices = %v", n)
+	}
+
+	// Day 40: the merchant changes the card and pays. Restored, with the
 	// period the invoice renewed.
-	*d.clock = day0.Add(10 * 24 * time.Hour)
+	*d.clock = day0.Add(40 * 24 * time.Hour)
 	if err := d.svc.SavePaymentMethod(t.Context(), account, "fake", "good-card", "Mastercard •••• 0008"); err != nil {
 		t.Fatal(err)
 	}
@@ -278,13 +305,13 @@ func TestDunningScenario(t *testing.T) {
 	if s, _, _ := d.invoice(t, account); s != "paid" || d.holds.of(ctx) || !d.adFree(ctx, t) {
 		t.Fatalf("after payment: invoice %s, held %v", s, d.holds.of(ctx))
 	}
-	// Every step was a SubscriptionChanged: past due, suspended, active.
-	if n := len(d.events.All()); n != 3 {
-		t.Fatalf("%d subscription events, want 3", n)
+	// Every step was a SubscriptionChanged: past due, suspended, held, active.
+	if n := len(d.events.All()); n != 4 {
+		t.Fatalf("%d subscription events, want 4", n)
 	}
-	// Paid: later runs charge nothing.
+	// Paid: later runs charge nothing, and hold nothing.
 	before := len(d.gw.charges)
-	if d.tick(t, day0.Add(30*24*time.Hour)); len(d.gw.charges) != before {
+	if d.tick(t, day0.Add(70*24*time.Hour)); len(d.gw.charges) != before || d.holds.of(ctx) {
 		t.Fatal("a paid invoice was charged again")
 	}
 }
@@ -374,8 +401,8 @@ func TestCancelAfterRetention(t *testing.T) {
 	if n := d.tick(t, runAt); len(n) != 0 {
 		t.Fatalf("notices = %v", n)
 	}
-	if st, _, _, _ := d.state(ctx, t); st != "cancelled" {
-		t.Fatalf("after the retention: %s", st)
+	if st, _, _, _ := d.state(ctx, t); st != "cancelled" || !d.holds.of(ctx) {
+		t.Fatalf("after the retention: %s, held %v", st, d.holds.of(ctx))
 	}
 }
 
@@ -391,7 +418,7 @@ func TestDunningNeedsItsCollaborators(t *testing.T) {
 	if err := f.svc.SavePaymentMethod(t.Context(), f.ids.New(), "fake", "t", "l"); err == nil {
 		t.Error("SavePaymentMethod without a sealer")
 	}
-	for _, k := range []string{app.DunningArgs{}.Kind(), app.ChargeInvoiceArgs{}.Kind(), app.SuspendArgs{}.Kind(), app.CancelArgs{}.Kind(), app.NotifyArgs{}.Kind()} {
+	for _, k := range []string{app.DunningArgs{}.Kind(), app.ChargeInvoiceArgs{}.Kind(), app.SuspendArgs{}.Kind(), app.HoldArgs{}.Kind(), app.CancelArgs{}.Kind(), app.NotifyArgs{}.Kind()} {
 		if !strings.HasPrefix(k, "billing.") {
 			t.Errorf("kind %q", k)
 		}

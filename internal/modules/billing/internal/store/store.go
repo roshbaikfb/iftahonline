@@ -49,7 +49,7 @@ func Subscription(ctx context.Context, tx Tx) (s domain.Subscription, ok bool, e
 	}
 	s.PlanID, s.CancelAtPeriodEnd, s.TrialUsed = r.PlanID, r.CancelAtPeriodEnd, r.TrialUsed
 	s.TrialEndsAt, s.PeriodStart, s.PeriodEnd = at(r.TrialEndsAt), at(r.PeriodStart), at(r.PeriodEnd)
-	s.GraceUntil, s.SuspendedAt = at(r.GraceUntil), at(r.SuspendedAt)
+	s.GraceUntil, s.SuspendedAt, s.HeldAt = at(r.GraceUntil), at(r.SuspendedAt), at(r.HeldAt)
 	if r.NextPlanID != nil {
 		s.NextPlanID = *r.NextPlanID
 	}
@@ -107,7 +107,7 @@ func SaveSubscription(ctx context.Context, tx Tx, s domain.Subscription) error {
 	if err = billingdb.New(tx).SaveSubscription(ctx, billingdb.SaveSubscriptionParams{
 		StoreID: store, PlanID: s.PlanID, Status: string(s.Status), Cycle: cycleOf(s.Cycle),
 		TrialEndsAt: ptr(s.TrialEndsAt), PeriodStart: ptr(s.PeriodStart), PeriodEnd: ptr(s.PeriodEnd),
-		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt),
+		GraceUntil: ptr(s.GraceUntil), SuspendedAt: ptr(s.SuspendedAt), HeldAt: ptr(s.HeldAt),
 		CancelAtPeriodEnd: s.CancelAtPeriodEnd, TrialUsed: s.TrialUsed, NextPlanID: idOf(s.NextPlanID), NextCycle: cycleOf(s.NextCycle),
 	}); err != nil {
 		return fmt.Errorf("billing store: save subscription: %w", err)

@@ -176,13 +176,13 @@ func (q *Queries) LockAgency(ctx context.Context, id ulid.ID) (LockAgencyRow, er
 
 const putSubscription = `-- name: PutSubscription :exec
 INSERT INTO subscriptions (store_id, plan_id, status, cycle, trial_ends_at, period_start, period_end, grace_until,
-                           suspended_at, cancel_at_period_end, trial_used, account_id, next_plan_id, next_cycle)
+                           suspended_at, held_at, cancel_at_period_end, trial_used, account_id, next_plan_id, next_cycle)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14)
+        $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (store_id) DO UPDATE SET
   plan_id = excluded.plan_id, status = excluded.status, cycle = excluded.cycle, trial_ends_at = excluded.trial_ends_at,
   period_start = excluded.period_start, period_end = excluded.period_end, grace_until = excluded.grace_until,
-  suspended_at = excluded.suspended_at, cancel_at_period_end = excluded.cancel_at_period_end,
+  suspended_at = excluded.suspended_at, held_at = excluded.held_at, cancel_at_period_end = excluded.cancel_at_period_end,
   trial_used = excluded.trial_used, account_id = excluded.account_id, next_plan_id = excluded.next_plan_id,
   next_cycle = excluded.next_cycle, renewal_invoice_id = NULL, renewal_plan_id = NULL, updated_at = now()
 `
@@ -197,6 +197,7 @@ type PutSubscriptionParams struct {
 	PeriodEnd         *time.Time
 	GraceUntil        *time.Time
 	SuspendedAt       *time.Time
+	HeldAt            *time.Time
 	CancelAtPeriodEnd bool
 	TrialUsed         bool
 	AccountID         *ulid.ID
@@ -217,6 +218,7 @@ func (q *Queries) PutSubscription(ctx context.Context, arg PutSubscriptionParams
 		arg.PeriodEnd,
 		arg.GraceUntil,
 		arg.SuspendedAt,
+		arg.HeldAt,
 		arg.CancelAtPeriodEnd,
 		arg.TrialUsed,
 		arg.AccountID,

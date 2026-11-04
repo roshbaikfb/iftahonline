@@ -158,6 +158,7 @@ type MerchantKind = domain.MerchantKind
 const (
 	MerchantPaymentFailed = domain.MerchantPaymentFailed // store, invoice, amount, closing date
 	MerchantSuspended     = domain.MerchantSuspended     // store
+	MerchantFree          = domain.MerchantFree          // store, closing date
 	MerchantPaid          = domain.MerchantPaid          // store, invoice, amount
 )
 

@@ -63,6 +63,7 @@ type (
 const (
 	NoticePaymentFailed = domain.NoticePaymentFailed
 	NoticeSuspended     = domain.NoticeSuspended
+	NoticeHeld          = domain.NoticeHeld
 	NoticePaid          = domain.NoticePaid
 )
 

@@ -7772,9 +7772,16 @@ export interface components {
             period_end?: string;
             /**
              * Format: date-time
-             * @description Past due: when the store closes unpaid.
+             * @description Past due: when the store moves to the free plan unpaid (ADR-0082).
              */
             grace_until?: string;
+            /**
+             * Format: date-time
+             * @description Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082).
+             */
+            closes_at?: string;
+            /** @description The storefront shows the maintenance page until the invoice is paid. */
+            held?: boolean;
             cancel_at_period_end?: boolean;
             /**
              * @description The card on file; absent without one.

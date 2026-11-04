@@ -290,6 +290,7 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		func() error { return river.AddWorkerSafely(w, &DunningWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &ChargeInvoiceWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &SuspendWorker{Svc: s}) },
+		func() error { return river.AddWorkerSafely(w, &HoldWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &CancelWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &NotifyWorker{Svc: s}) },
 		func() error { return river.AddWorkerSafely(w, &ProcessCallbackWorker{Svc: s}) },
