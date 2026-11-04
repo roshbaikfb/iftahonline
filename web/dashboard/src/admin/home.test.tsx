@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testAdmin } from '../test/admin';
 import { mockAPI, type Call } from '../test/api';
 import { Gate } from './Console';
-import { attention, greeting, initial, type AdminHealth } from './lib';
+import type { Alert } from './alerts';
+import { greeting, initial, type AdminHealth } from './lib';
 import { refreshEvery } from './Overview';
 import { AdminSessionContext, type AdminSession, type AdminState } from './session';
 
@@ -29,6 +30,19 @@ const metrics = {
   ],
   new_stores: { last_7d: 3, last_30d: 3, daily: days },
 };
+// redisDown and overdue are open alerts, as the server words them.
+const redisDown: Alert = {
+  id: '01M5ALERT00000000000000001',
+  kind: 'redis',
+  severity: 'red',
+  value: 0,
+  title: 'Redis لا يرد',
+  body: 'السلات وحدود الطلبات تعتمد عليه.',
+  path: '/',
+  opened_at: '2026-11-03T08:50:00Z',
+  last_seen_at: '2026-11-03T09:00:00Z',
+};
+const overdue: Alert = { ...redisDown, id: '01M5ALERT00000000000000002', kind: 'overdue', severity: 'amber', value: 6, title: 'فواتير متأخرة (6)', body: 'تجاوزت موعد الدفع.', path: '/billing?status=overdue' };
 const storeRow = {
   store: { id: store, slug: 'alanaqa', name: 'متجر الأناقة', status: 'active', plan: 'pro', currency: 'EGP', locale: 'ar', timezone: 'Africa/Cairo', created_at: '2026-10-28T10:00:00Z', updated_at: '' },
   primary_host: 'alanaqa.iftahonline.com',
@@ -49,6 +63,7 @@ function renderAt(path = '/') {
 function routes(over: Record<string, (c: Call) => { status: number; body?: unknown }> = {}) {
   return mockAPI({
     'GET /admin/v1/health': () => ({ status: 200, body: healthy }),
+    'GET /admin/v1/alerts': () => ({ status: 200, body: { open: [], resolved: [], email: true } }),
     'GET /admin/v1/billing/duplicates': () => ({ status: 200, body: { items: [] } }),
     'GET /admin/v1/founding': () => ({ status: 200, body: { program: { enabled: true, seats: 100, discount_bps: 2000 }, members: Array.from({ length: 12 }, (_, i) => ({ store_id: `S${String(i)}` })) } }),
     'GET /admin/v1/metrics': () => ({ status: 200, body: metrics }),
@@ -63,35 +78,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('attention', () => {
-  it('is empty when everything works', () => {
-    expect(attention(healthy, 0)).toEqual([]);
-  });
-
-  it.each<[string, Partial<AdminHealth>, number, string, 'red' | 'amber']>([
-    ['database', { database: false }, 0, 'قاعدة البيانات لا ترد', 'red'],
-    ['redis', { redis: false }, 0, 'Redis لا يرد', 'red'],
-    ['duplicates', {}, 2, 'دفعات زائدة (2)', 'red'],
-    ['discarded', { jobs: { ...jobs, discarded_24h: 3 } }, 0, 'مهام فشلت نهائيًا (3)', 'red'],
-    ['unread', { errors: ['billing', 'jobs'] }, 0, 'تعذّرت قراءة: الاشتراكات والفواتير، طابور المهام', 'amber'],
-    ['held', { stores: { ...stores, held: 37 } }, 0, 'متاجر موقوفة لفاتورة (37)', 'amber'],
-    ['overdue', { billing: { ...billing, invoices_overdue: 1200 } }, 0, 'فواتير متأخرة (1,200)', 'amber'],
-    ['past_due', { billing: { ...billing, past_due: 58 } }, 0, 'اشتراكات متأخرة الدفع (58)', 'amber'],
-    ['slow', { jobs: { ...jobs, oldest_available_seconds: 900 } }, 0, 'طابور المهام متأخر', 'amber'],
-    ['retryable', { jobs: { ...jobs, retryable: 4 } }, 0, 'مهام تُعاد (4)', 'amber'],
-  ])('raises %s', (key, change, duplicates, title, tone) => {
-    const got = attention({ ...healthy, ...change }, duplicates);
-    expect(got).toHaveLength(1);
-    expect(got[0]).toMatchObject({ key, title, tone });
-  });
-
-  it('lists the urgent first, and does not repeat a down Redis as an unread section', () => {
-    const got = attention({ ...healthy, redis: false, errors: ['redis'], billing: { ...billing, past_due: 2 }, jobs: { ...jobs, discarded_24h: 1 } }, 1);
-    expect(got.map((a) => a.key)).toEqual(['redis', 'duplicates', 'discarded', 'past_due']);
-    expect(got.find((a) => a.key === 'duplicates')?.link).toEqual({ href: '/billing?tab=payments&outcome=duplicate', label: 'راجعها' });
-    expect(attention({ ...healthy, billing: { ...billing, invoices_overdue: 3 } }, 0)[0]?.link).toEqual({ href: '/billing?status=overdue', label: 'اعرضها' });
-  });
-
+describe('home helpers', () => {
   it('greets by the hour and marks a store by its first letter', () => {
     expect(greeting(new Date(2026, 10, 3, 9))).toBe('صباح الخير');
     expect(greeting(new Date(2026, 10, 3, 15))).toBe('مساء الخير');
@@ -176,17 +163,47 @@ describe('console home', () => {
     expect(n).toBe(2);
   });
 
-  it('reads the health again on «تحديث الآن» and every minute', async () => {
+  it('shows the open alerts from the server, each with its page', async () => {
+    routes({ 'GET /admin/v1/alerts': () => ({ status: 200, body: { open: [redisDown, overdue], resolved: [], email: true } }) });
+    renderAt();
+    const needs = await screen.findByRole('region', { name: /يحتاج انتباهك/ });
+    await waitFor(() => {
+      expect(within(needs).getAllByRole('listitem')).toHaveLength(2);
+    });
+    const [red, amber] = within(needs).getAllByRole('listitem');
+    expect(red).toHaveClass('red');
+    expect(red).toHaveTextContent('Redis لا يرد');
+    // The jobs' and Redis' page is the home itself: no link to it.
+    expect(within(needs).getAllByRole('link').map((l) => l.textContent)).toEqual(['كل التنبيهات ←', 'اعرضها']);
+    expect(amber).toHaveClass('amber');
+    expect(within(needs).getByRole('link', { name: 'اعرضها' })).toHaveAttribute('href', '/billing?status=overdue');
+    expect(within(needs).getByLabelText('2 أمور')).toBeInTheDocument();
+  });
+
+  it('says when the alerts could not be read, as when the database is down', async () => {
+    routes({ 'GET /admin/v1/alerts': () => ({ status: 500, body: { title: 'Internal', status: 500 } }) });
+    renderAt();
+    expect(await screen.findByText('تعذّرت قراءة التنبيهات')).toBeInTheDocument();
+    expect(screen.queryByText('كل شيء يعمل. لا شيء ينتظرك الآن.')).toBeNull();
+  });
+
+  it('reads the health and the alerts again on «تحديث الآن» and every minute', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let n = 0;
-    const calls = routes({ 'GET /admin/v1/health': () => ({ status: 200, body: ++n > 1 ? { ...healthy, redis: false } : healthy }) });
+    // The alerts are read with the health (and by the bell): open from the
+    // second health read on.
+    const calls = routes({
+      'GET /admin/v1/health': () => ({ status: 200, body: ++n > 1 ? { ...healthy, redis: false } : healthy }),
+      'GET /admin/v1/alerts': () => ({ status: 200, body: { open: n > 1 ? [redisDown] : [], resolved: [], email: true } }),
+    });
     renderAt();
     await screen.findByText('كل شيء يعمل. لا شيء ينتظرك الآن.');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(refreshEvery);
     });
-    expect(await screen.findByText('Redis لا يرد')).toBeInTheDocument();
+    const needs = screen.getByRole('region', { name: /يحتاج انتباهك/ });
+    expect(await within(needs).findByText('Redis لا يرد')).toBeInTheDocument();
     expect(n).toBe(2);
     // The revenue changes slowly: not read again every minute.
     expect(calls.filter((c) => c.path === '/admin/v1/metrics')).toHaveLength(1);

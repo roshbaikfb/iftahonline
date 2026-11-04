@@ -93,9 +93,10 @@ alerts and those resolved in the last 30 days. The server words each alert
   with its page, then the resolved ones.
 - **The bell** in the menu and in the phone's top bar shows the open
   count, read every minute while the tab is seen.
-- **The home** keeps its live «يحتاج انتباهك» cards from the health check.
-  They show what is wrong right now, a down database included, which no
-  alert can raise. The alerts are what was told to whom, after two checks.
+- **The home's «يحتاج انتباهك»** shows the same open alerts, read with
+  the health check every minute: one source for what needs the admin, by
+  role. When the alerts cannot be read (a down database, for one), it says
+  so in a red card instead of «all is well».
 
 ## Consequences
 

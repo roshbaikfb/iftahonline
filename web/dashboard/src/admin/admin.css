@@ -232,6 +232,11 @@ body {
   margin: 0;
   font-size: 1.1rem;
 }
+.needs-all {
+  margin-inline-start: auto;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
 .needs-count {
   padding: 0 0.55rem;
   border-radius: 999px;
