@@ -1125,3 +1125,82 @@ func TestConsoleRoles(t *testing.T) {
 		}
 	}
 }
+
+// TestConsoleTeam (ADR-0078): owners manage the team; an invitee with no
+// session looks the link up, accepts it and is signed in in its role.
+func TestConsoleTeam(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	owner, finance := f.loginAs(t, "owner"), f.loginAs(t, "finance")
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/team", "", withCookie(finance)); r.status != http.StatusForbidden {
+		t.Fatalf("finance team = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/team", "", withCookie(owner))
+	if admins, _ := r.body["admins"].([]any); r.status != http.StatusOK || len(admins) < 2 || r.body["invites"] == nil {
+		t.Fatalf("team = %d %v", r.status, r.body)
+	}
+
+	addr := "inv-" + strings.ToLower(f.ids.New().String()[16:]) + "@iftahonline.com"
+	body := fmt.Sprintf(`{"email":%q,"name":"Nour","role":"content","reason":"joins content"}`, addr)
+	if r = f.do(t, http.MethodPost, adminHost, "/admin/v1/team/invites", body, withCookie(owner)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site invite = %d", r.status)
+	}
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/team/invites", body, withCookie(owner), sameOrigin)
+	token, _ := r.body["token"].(string)
+	if inv, _ := r.body["invite"].(map[string]any); r.status != http.StatusCreated || token == "" || inv["role"] != "content" || inv["purpose"] != "join" {
+		t.Fatalf("invite = %d %v", r.status, r.body)
+	}
+
+	// No session: the invitee is not an admin yet.
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/invites/lookup", fmt.Sprintf(`{"token":%q}`, token), sameOrigin)
+	secret, _ := r.body["totp_secret"].(string)
+	if svg, _ := r.body["totp_qr_svg"].(string); r.status != http.StatusOK || secret == "" || !strings.HasPrefix(svg, "<svg") || r.body["invited_by_name"] != "Ops" {
+		t.Fatalf("lookup = %d %v", r.status, r.body)
+	}
+	if got := f.do(t, http.MethodPost, adminHost, "/admin/v1/invites/lookup", `{"token":"nope"}`, sameOrigin); got.status != http.StatusNotFound {
+		t.Fatalf("bad token = %d", got.status)
+	}
+	raw, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	accept := fmt.Sprintf(`{"token":%q,"password":%q,"code":%q}`, token, adminPW, totp.HOTP(raw, totp.Step(time.Now()), 6))
+	if got := f.do(t, http.MethodPost, adminHost, "/admin/v1/invites/accept", accept); got.status != http.StatusForbidden {
+		t.Fatalf("cross-site accept = %d", got.status)
+	}
+	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/invites/accept", accept, sameOrigin)
+	if r.status != http.StatusOK || len(r.cookies) == 0 || !strings.Contains(r.header.Get("Set-Cookie"), "HttpOnly") {
+		t.Fatalf("accept = %d %v", r.status, r.body)
+	}
+	me := f.do(t, http.MethodGet, adminHost, "/admin/v1/me", "", withCookie(r.cookies[0].Value))
+	if me.status != http.StatusOK || me.body["role"] != "content" || me.body["email"] != addr {
+		t.Fatalf("me = %d %v", me.status, me.body)
+	}
+	if got := f.do(t, http.MethodPost, adminHost, "/admin/v1/invites/accept", accept, sameOrigin); got.status != http.StatusNotFound {
+		t.Fatalf("accept twice = %d", got.status)
+	}
+
+	self := f.do(t, http.MethodGet, adminHost, "/admin/v1/me", "", withCookie(owner)).body["id"].(string)
+	newID := me.body["id"].(string)
+	for _, bad := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodPut, "/admin/v1/team/admins/" + self + "/role", `{"role":"viewer","reason":"step down"}`, http.StatusConflict},
+		{http.MethodPut, "/admin/v1/team/admins/" + newID + "/role", `{"role":"root","reason":"why"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/team/admins/" + f.ids.New().String() + "/disable", `{"reason":"who"}`, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/team/admins/junk/reset", `{"reason":"who"}`, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/team/invites/" + f.ids.New().String() + "/cancel", `{"reason":"who"}`, http.StatusNotFound},
+	} {
+		if got := f.do(t, bad.method, adminHost, bad.path, bad.body, withCookie(owner), sameOrigin); got.status != bad.status {
+			t.Errorf("%s %s = %d %v; want %d", bad.method, bad.path, got.status, got.body, bad.status)
+		}
+	}
+	if got := f.do(t, http.MethodPut, adminHost, "/admin/v1/team/admins/"+newID+"/role", `{"role":"viewer","reason":"read only"}`, withCookie(owner), sameOrigin); got.status != http.StatusNoContent {
+		t.Fatalf("role = %d %v", got.status, got.body)
+	}
+	if got := f.do(t, http.MethodPost, adminHost, "/admin/v1/team/admins/"+newID+"/reset", `{"reason":"lost phone"}`, withCookie(owner), sameOrigin); got.status != http.StatusOK || got.body["token"] == "" {
+		t.Fatalf("reset = %d %v", got.status, got.body)
+	}
+	if got := f.do(t, http.MethodGet, adminHost, "/admin/v1/me", "", withCookie(r.cookies[0].Value)); got.status != http.StatusUnauthorized {
+		t.Fatalf("a reset admin's session = %d", got.status)
+	}
+}

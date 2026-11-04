@@ -117,6 +117,22 @@ type AdminAuditLog struct {
 	Metadata   []byte
 }
 
+type AdminInvite struct {
+	ID          ulid.ID
+	TokenHash   []byte
+	Purpose     string
+	AdminID     ulid.ID
+	Email       string
+	Name        string
+	Role        string
+	TotpSecret  []byte
+	InvitedBy   ulid.ID
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	UsedAt      pgtype.Timestamptz
+	CancelledAt pgtype.Timestamptz
+}
+
 type AdminSession struct {
 	ID         ulid.ID
 	AdminID    ulid.ID

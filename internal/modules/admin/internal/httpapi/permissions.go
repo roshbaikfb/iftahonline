@@ -88,6 +88,18 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 
 	"AdminListAdmins": domain.PermAuditRead,
 	"AdminAuditLog":   domain.PermAuditRead,
+
+	"AdminGetTeam":      domain.PermTeamManage,
+	"AdminInviteAdmin":  domain.PermTeamManage,
+	"AdminRenewInvite":  domain.PermTeamManage,
+	"AdminCancelInvite": domain.PermTeamManage,
+	"AdminSetRole":      domain.PermTeamManage,
+	"AdminDisableAdmin": domain.PermTeamManage,
+	"AdminEnableAdmin":  domain.PermTeamManage,
+	"AdminResetAdmin":   domain.PermTeamManage,
+	// The invitee is not an admin yet: no session (Scope's public routes).
+	"AdminLookupInvite": anyAdmin,
+	"AdminAcceptInvite": anyAdmin,
 }
 
 var errForbidden = errs.Forbidden("your role does not allow this")

@@ -1865,6 +1865,220 @@ paths:
             Set-Cookie: { $ref: "#/components/headers/AdminSessionCookie" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/invites/lookup:
+    post:
+      tags: [admin]
+      operationId: adminLookupInvite
+      summary: What an invite link is for, and the authenticator seed to scan
+      description: |
+        No session: the invitee is not an admin yet (ADR-0078). The token
+        comes from the link's fragment and travels in the body, never in a
+        URL. An unknown, used, cancelled or expired link is the same 404.
+        Throttled per address like sign-ins.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminInviteToken" }
+      responses:
+        "200":
+          description: The invite.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInviteView" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/invites/accept:
+    post:
+      tags: [admin]
+      operationId: adminAcceptInvite
+      summary: Set the password, confirm the authenticator and sign in
+      description: |
+        Once per link. A new admin is created in the invite's role; a reset
+        admin gets the new password and seed and is enabled again. The
+        code must come from the seed the lookup showed.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAcceptInvite" }
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/AdminSessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuth" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team:
+    get:
+      tags: [admin]
+      operationId: adminGetTeam
+      summary: The console's admins and open invites
+      description: "Permission: team.manage (owners)."
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The team.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTeam" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/invites:
+    post:
+      tags: [admin]
+      operationId: adminInviteAdmin
+      summary: Invite a new admin
+      description: |
+        Permission: team.manage. Recorded first in the admin log. The link's
+        token is returned once (only its hash is kept); it works for 72
+        hours. 409 when the email is an admin's or has an open invite.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminInviteInput" }
+      responses:
+        "201":
+          description: Invited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInviteLink" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/invites/{invite_id}/renew:
+    parameters:
+      - { name: invite_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [admin]
+      operationId: adminRenewInvite
+      summary: A new link for an open invite; the old one stops working
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: The new link.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInviteLink" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/invites/{invite_id}/cancel:
+    parameters:
+      - { name: invite_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [admin]
+      operationId: adminCancelInvite
+      summary: Cancel an open invite
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Cancelled.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/admins/{admin_id}/role:
+    parameters:
+      - { name: admin_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    put:
+      tags: [admin]
+      operationId: adminSetRole
+      summary: Change another admin's role
+      description: |
+        Permission: team.manage. Never your own (409 not_yourself), and
+        never the last active owner's away from owner (409 last_owner).
+        It applies from the admin's next request.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminRoleInput" }
+      responses:
+        "204":
+          description: Changed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/admins/{admin_id}/disable:
+    parameters:
+      - { name: admin_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [admin]
+      operationId: adminDisableAdmin
+      summary: Disable another admin; its sessions end at once
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Disabled.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/admins/{admin_id}/enable:
+    parameters:
+      - { name: admin_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [admin]
+      operationId: adminEnableAdmin
+      summary: Enable a disabled admin again
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Enabled.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/team/admins/{admin_id}/reset:
+    parameters:
+      - { name: admin_id, in: path, required: true, schema: { $ref: "#/components/schemas/ULID" } }
+    post:
+      tags: [admin]
+      operationId: adminResetAdmin
+      summary: Lock another admin out and give a link to set a new password and authenticator
+      description: For a lost phone. The admin is disabled and signed out until the link is used.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "200":
+          description: The reset link.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminInviteLink" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/me:
     get:
       tags: [admin]
@@ -5688,6 +5902,87 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/AdminAdminSummary" }
+    AdminTeamMember:
+      type: object
+      required: [id, name, email, role, active, resetting, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/AdminRole" }
+        active: { type: boolean }
+        resetting: { type: boolean, description: A reset link waits for the admin, who is locked out until it is used. }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time }
+    AdminInvite:
+      type: object
+      required: [id, purpose, admin_id, email, name, role, created_at, expires_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        purpose: { type: string, enum: [join, reset] }
+        admin_id: { $ref: "#/components/schemas/ULID" }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/AdminRole" }
+        invited_by_name: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: Past it, the link no longer works; renew it. }
+    AdminTeam:
+      type: object
+      required: [admins, invites]
+      properties:
+        admins:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTeamMember" }
+        invites:
+          type: array
+          description: New admins invited and not joined yet, newest first.
+          items: { $ref: "#/components/schemas/AdminInvite" }
+    AdminInviteInput:
+      type: object
+      required: [email, name, role, reason]
+      properties:
+        email: { type: string, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        role: { $ref: "#/components/schemas/AdminRole" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminInviteLink:
+      type: object
+      required: [invite, token]
+      properties:
+        invite: { $ref: "#/components/schemas/AdminInvite" }
+        token: { type: string, description: "Shown once: the console's link is /console/invite#<token>." }
+    AdminRoleInput:
+      type: object
+      required: [role, reason]
+      properties:
+        role: { $ref: "#/components/schemas/AdminRole" }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminInviteToken:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, maxLength: 64 }
+    AdminAcceptInvite:
+      type: object
+      required: [token, password, code]
+      properties:
+        token: { type: string, maxLength: 64 }
+        password: { type: string, minLength: 14, maxLength: 128 }
+        code: { type: string, maxLength: 10, description: A current code from the authenticator. }
+    AdminInviteView:
+      type: object
+      required: [purpose, name, email, role, invited_by_name, expires_at, totp_secret, totp_uri, totp_qr_svg]
+      properties:
+        purpose: { type: string, enum: [join, reset] }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/AdminRole" }
+        invited_by_name: { type: string }
+        expires_at: { type: string, format: date-time }
+        totp_secret: { type: string, description: The seed in base32, to type when the QR code cannot be scanned. }
+        totp_uri: { type: string }
+        totp_qr_svg: { type: string, description: The otpauth URI as a QR code (SVG markup the server drew). }
     AdminAdminSummary:
       type: object
       required: [id, name, email, active]
