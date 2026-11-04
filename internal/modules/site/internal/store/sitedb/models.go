@@ -257,15 +257,30 @@ type AuditLog struct {
 	Metadata    []byte
 }
 
+type BalanceEntry struct {
+	ID                ulid.ID
+	AccountID         ulid.ID
+	Kind              string
+	AmountMinor       int64
+	BalanceAfterMinor int64
+	Currency          string
+	Reason            pgtype.Text
+	Reference         string
+	AdminID           pgtype.UUID
+	CreatedAt         time.Time
+}
+
 type BillingAccount struct {
-	ID        ulid.ID
-	Kind      string
-	Name      string
-	Currency  string
-	Country   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	PlanCode  pgtype.Text
+	ID           ulid.ID
+	Kind         string
+	Name         string
+	Currency     string
+	Country      string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	PlanCode     pgtype.Text
+	BalanceMinor int64
+	Collection   pgtype.Text
 }
 
 type BillingAccountStore struct {
@@ -295,6 +310,16 @@ type BillingPaymentMethod struct {
 	Label     string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type BillingSetting struct {
+	ID              int32
+	PrepaidEnabled  bool
+	CardEnabled     bool
+	MinimumEgpMinor int64
+	MinimumSarMinor int64
+	MinimumAedMinor int64
+	UpdatedAt       time.Time
 }
 
 type CarrierConnection struct {

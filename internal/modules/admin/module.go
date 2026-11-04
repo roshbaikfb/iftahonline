@@ -66,6 +66,9 @@ type Deps struct {
 	Site site.Console
 	// Founding is the founding-merchants program; nil refuses it.
 	Founding billing.Founding
+	// Collection is the collection settings (billing.NewCollection); nil
+	// refuses them.
+	Collection billing.CollectionConsole
 	// Mailer sends the alerts' emails from the worker (ADR-0080), with
 	// links into ConsoleURL; nil sends none.
 	Mailer     mailer.Mailer
@@ -106,7 +109,7 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, Profile: d.Profile, OwnerStores: d.OwnerStores, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding,
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding, Collection: d.Collection,
 		Mailer: d.Mailer, ConsoleURL: d.ConsoleURL, Pusher: d.Pusher, PushPublicKey: d.PushPublicKey})
 	return &Module{svc: svc, deps: d}, nil
 }

@@ -738,7 +738,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			},
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
-			Site: siteConsole, Founding: billing.NewFounding(c.adminPool),
+			Site: siteConsole, Founding: billing.NewFounding(c.adminPool), Collection: billing.NewCollection(c.adminPool),
 		}); err != nil {
 			return nil, err
 		}

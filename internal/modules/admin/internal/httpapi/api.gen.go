@@ -199,6 +199,72 @@ func (e AdminAlertSeverity) Valid() bool {
 	}
 }
 
+// Defines values for AdminBalanceCreditInputReason.
+const (
+	AdminBalanceCreditInputReasonCompensation AdminBalanceCreditInputReason = "compensation"
+	AdminBalanceCreditInputReasonCorrection   AdminBalanceCreditInputReason = "correction"
+	AdminBalanceCreditInputReasonTransfer     AdminBalanceCreditInputReason = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the AdminBalanceCreditInputReason enum.
+func (e AdminBalanceCreditInputReason) Valid() bool {
+	switch e {
+	case AdminBalanceCreditInputReasonCompensation:
+		return true
+	case AdminBalanceCreditInputReasonCorrection:
+		return true
+	case AdminBalanceCreditInputReasonTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminBalanceEntryKind.
+const (
+	AdminBalanceEntryKindFee       AdminBalanceEntryKind = "fee"
+	AdminBalanceEntryKindFeeRefund AdminBalanceEntryKind = "fee_refund"
+	AdminBalanceEntryKindManual    AdminBalanceEntryKind = "manual"
+	AdminBalanceEntryKindTopup     AdminBalanceEntryKind = "topup"
+)
+
+// Valid indicates whether the value is a known member of the AdminBalanceEntryKind enum.
+func (e AdminBalanceEntryKind) Valid() bool {
+	switch e {
+	case AdminBalanceEntryKindFee:
+		return true
+	case AdminBalanceEntryKindFeeRefund:
+		return true
+	case AdminBalanceEntryKindManual:
+		return true
+	case AdminBalanceEntryKindTopup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminBalanceEntryReason.
+const (
+	AdminBalanceEntryReasonCompensation AdminBalanceEntryReason = "compensation"
+	AdminBalanceEntryReasonCorrection   AdminBalanceEntryReason = "correction"
+	AdminBalanceEntryReasonTransfer     AdminBalanceEntryReason = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the AdminBalanceEntryReason enum.
+func (e AdminBalanceEntryReason) Valid() bool {
+	switch e {
+	case AdminBalanceEntryReasonCompensation:
+		return true
+	case AdminBalanceEntryReasonCorrection:
+		return true
+	case AdminBalanceEntryReasonTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminCollectedSeriesCurrency.
 const (
 	AdminCollectedSeriesCurrencyAED AdminCollectedSeriesCurrency = "AED"
@@ -214,6 +280,27 @@ func (e AdminCollectedSeriesCurrency) Valid() bool {
 	case AdminCollectedSeriesCurrencyEGP:
 		return true
 	case AdminCollectedSeriesCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminCollectionMinimumCurrency.
+const (
+	AdminCollectionMinimumCurrencyAED AdminCollectionMinimumCurrency = "AED"
+	AdminCollectionMinimumCurrencyEGP AdminCollectionMinimumCurrency = "EGP"
+	AdminCollectionMinimumCurrencySAR AdminCollectionMinimumCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminCollectionMinimumCurrency enum.
+func (e AdminCollectionMinimumCurrency) Valid() bool {
+	switch e {
+	case AdminCollectionMinimumCurrencyAED:
+		return true
+	case AdminCollectionMinimumCurrencyEGP:
+		return true
+	case AdminCollectionMinimumCurrencySAR:
 		return true
 	default:
 		return false
@@ -955,6 +1042,66 @@ func (e AdminSiteUploadRequestContentType) Valid() bool {
 	}
 }
 
+// Defines values for AdminStoreBalanceCollection.
+const (
+	Balance AdminStoreBalanceCollection = "balance"
+	Card    AdminStoreBalanceCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the AdminStoreBalanceCollection enum.
+func (e AdminStoreBalanceCollection) Valid() bool {
+	switch e {
+	case Balance:
+		return true
+	case Card:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminStoreBalanceCurrency.
+const (
+	AdminStoreBalanceCurrencyAED AdminStoreBalanceCurrency = "AED"
+	AdminStoreBalanceCurrencyEGP AdminStoreBalanceCurrency = "EGP"
+	AdminStoreBalanceCurrencySAR AdminStoreBalanceCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the AdminStoreBalanceCurrency enum.
+func (e AdminStoreBalanceCurrency) Valid() bool {
+	switch e {
+	case AdminStoreBalanceCurrencyAED:
+		return true
+	case AdminStoreBalanceCurrencyEGP:
+		return true
+	case AdminStoreBalanceCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminStoreBalanceLevel.
+const (
+	Debt AdminStoreBalanceLevel = "debt"
+	Low  AdminStoreBalanceLevel = "low"
+	Ok   AdminStoreBalanceLevel = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AdminStoreBalanceLevel enum.
+func (e AdminStoreBalanceLevel) Valid() bool {
+	switch e {
+	case Debt:
+		return true
+	case Low:
+		return true
+	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingCycle.
 const (
 	BillingCycleAnnual  BillingCycle = "annual"
@@ -1690,6 +1837,46 @@ type AdminAuth struct {
 	ExpiresAt time.Time    `json:"expires_at"`
 }
 
+// AdminBalanceCreditInput defines model for AdminBalanceCreditInput.
+type AdminBalanceCreditInput struct {
+	AmountMinor int64 `json:"amount_minor"`
+
+	// Note Kept in the admin audit log.
+	Note   string                        `json:"note"`
+	Reason AdminBalanceCreditInputReason `json:"reason"`
+
+	// Reference The transfer's number
+	Reference string `json:"reference"`
+}
+
+// AdminBalanceCreditInputReason defines model for AdminBalanceCreditInput.Reason.
+type AdminBalanceCreditInputReason string
+
+// AdminBalanceEntry defines model for AdminBalanceEntry.
+type AdminBalanceEntry struct {
+	// AdminId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	AdminId *ULID `json:"admin_id,omitempty"`
+
+	// AmountMinor Signed; a fee is negative.
+	AmountMinor       int64     `json:"amount_minor"`
+	BalanceAfterMinor int64     `json:"balance_after_minor"`
+	CreatedAt         time.Time `json:"created_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id   ULID                  `json:"id"`
+	Kind AdminBalanceEntryKind `json:"kind"`
+
+	// Reason A manual entry's.
+	Reason    *AdminBalanceEntryReason `json:"reason,omitempty"`
+	Reference *string                  `json:"reference,omitempty"`
+}
+
+// AdminBalanceEntryKind defines model for AdminBalanceEntry.Kind.
+type AdminBalanceEntryKind string
+
+// AdminBalanceEntryReason A manual entry's.
+type AdminBalanceEntryReason string
+
 // AdminBillingHealth defines model for AdminBillingHealth.
 type AdminBillingHealth struct {
 	Active          int64 `json:"active"`
@@ -1728,6 +1915,37 @@ type AdminCollectedSeries struct {
 
 // AdminCollectedSeriesCurrency defines model for AdminCollectedSeries.Currency.
 type AdminCollectedSeriesCurrency string
+
+// AdminCollectionMinimum defines model for AdminCollectionMinimum.
+type AdminCollectionMinimum struct {
+	Currency     AdminCollectionMinimumCurrency `json:"currency"`
+	MinimumMinor int64                          `json:"minimum_minor"`
+}
+
+// AdminCollectionMinimumCurrency defines model for AdminCollectionMinimum.Currency.
+type AdminCollectionMinimumCurrency string
+
+// AdminCollectionSettings defines model for AdminCollectionSettings.
+type AdminCollectionSettings struct {
+	// CardEnabled Merchants may pay them by the card on file
+	CardEnabled bool `json:"card_enabled"`
+
+	// Minimums One per currency.
+	Minimums []AdminCollectionMinimum `json:"minimums"`
+
+	// PrepaidEnabled Merchants may pay their fees from a prepaid balance.
+	PrepaidEnabled bool `json:"prepaid_enabled"`
+}
+
+// AdminCollectionSettingsInput defines model for AdminCollectionSettingsInput.
+type AdminCollectionSettingsInput struct {
+	CardEnabled    bool                     `json:"card_enabled"`
+	Minimums       []AdminCollectionMinimum `json:"minimums"`
+	PrepaidEnabled bool                     `json:"prepaid_enabled"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
 
 // AdminCurrencyTotal defines model for AdminCurrencyTotal.
 type AdminCurrencyTotal struct {
@@ -2748,6 +2966,32 @@ type AdminSiteUploadRequest struct {
 // AdminSiteUploadRequestContentType defines model for AdminSiteUploadRequest.ContentType.
 type AdminSiteUploadRequestContentType string
 
+// AdminStoreBalance defines model for AdminStoreBalance.
+type AdminStoreBalance struct {
+	// BalanceMinor Negative when fees of delivered orders are owed.
+	BalanceMinor int64 `json:"balance_minor"`
+
+	// Collection The way the account chose; absent until it chooses.
+	Collection *AdminStoreBalanceCollection `json:"collection,omitempty"`
+	Currency   AdminStoreBalanceCurrency    `json:"currency"`
+	Entries    []AdminBalanceEntry          `json:"entries"`
+
+	// Level low: under half the minimum; debt: nothing left, or owed.
+	Level AdminStoreBalanceLevel `json:"level"`
+
+	// MinimumMinor The currency's minimum.
+	MinimumMinor int64 `json:"minimum_minor"`
+}
+
+// AdminStoreBalanceCollection The way the account chose; absent until it chooses.
+type AdminStoreBalanceCollection string
+
+// AdminStoreBalanceCurrency defines model for AdminStoreBalance.Currency.
+type AdminStoreBalanceCurrency string
+
+// AdminStoreBalanceLevel low: under half the minimum; debt: nothing left, or owed.
+type AdminStoreBalanceLevel string
+
 // AdminStoreCounts defines model for AdminStoreCounts.
 type AdminStoreCounts struct {
 	Active int64 `json:"active"`
@@ -3263,6 +3507,9 @@ type AdminSetAlertEmailJSONRequestBody = AdminAlertEmail
 // AdminLoginJSONRequestBody defines body for AdminLogin for application/json ContentType.
 type AdminLoginJSONRequestBody = AdminLoginRequest
 
+// AdminSaveCollectionSettingsJSONRequestBody defines body for AdminSaveCollectionSettings for application/json ContentType.
+type AdminSaveCollectionSettingsJSONRequestBody = AdminCollectionSettingsInput
+
 // AdminMarkDuplicateRefundedJSONRequestBody defines body for AdminMarkDuplicateRefunded for application/json ContentType.
 type AdminMarkDuplicateRefundedJSONRequestBody = AdminRefundInput
 
@@ -3331,6 +3578,9 @@ type AdminUpdateSiteTestimonialJSONRequestBody = AdminSiteTestimonialInput
 
 // AdminCreateSiteUploadJSONRequestBody defines body for AdminCreateSiteUpload for application/json ContentType.
 type AdminCreateSiteUploadJSONRequestBody = AdminSiteUploadRequest
+
+// AdminCreditStoreBalanceJSONRequestBody defines body for AdminCreditStoreBalance for application/json ContentType.
+type AdminCreditStoreBalanceJSONRequestBody = AdminBalanceCreditInput
 
 // AdminSetStoreOverrideJSONRequestBody defines body for AdminSetStoreOverride for application/json ContentType.
 type AdminSetStoreOverrideJSONRequestBody = AdminOverrideInput
@@ -3421,6 +3671,12 @@ type ServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(w http.ResponseWriter, r *http.Request)
+	// AdminGetCollectionSettings How pay-as-you-sell merchants may pay their fees
+	// (GET /admin/v1/billing/collection)
+	AdminGetCollectionSettings(w http.ResponseWriter, r *http.Request)
+	// AdminSaveCollectionSettings Save the collection settings
+	// (PUT /admin/v1/billing/collection)
+	AdminSaveCollectionSettings(w http.ResponseWriter, r *http.Request)
 	// AdminListDuplicatePayments Payments of invoices already paid, to refund
 	// (GET /admin/v1/billing/duplicates)
 	AdminListDuplicatePayments(w http.ResponseWriter, r *http.Request)
@@ -3565,6 +3821,12 @@ type ServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminGetStoreBalance A store's prepaid balance and its latest entries
+	// (GET /admin/v1/stores/{store_id}/balance)
+	AdminGetStoreBalance(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminCreditStoreBalance Add to a store's prepaid balance
+	// (POST /admin/v1/stores/{store_id}/balance/credits)
+	AdminCreditStoreBalance(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// AdminGetStoreBilling A store's plan, status, card and open invoices
 	// (GET /admin/v1/stores/{store_id}/billing)
 	AdminGetStoreBilling(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -4005,6 +4267,34 @@ func (siw *ServerInterfaceWrapper) AdminLogout(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminLogout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetCollectionSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetCollectionSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetCollectionSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveCollectionSettings operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveCollectionSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveCollectionSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5221,6 +5511,58 @@ func (siw *ServerInterfaceWrapper) AdminGetStore(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// AdminGetStoreBalance operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStoreBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStoreBalance(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminCreditStoreBalance operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreditStoreBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreditStoreBalance(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminGetStoreBilling operation middleware
 func (siw *ServerInterfaceWrapper) AdminGetStoreBilling(w http.ResponseWriter, r *http.Request) {
 
@@ -5813,6 +6155,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}", wrapper.AdminSetStoreOverride)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}/clear", wrapper.AdminClearStoreOverride)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/billing", wrapper.AdminGetStoreBilling)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/balance", wrapper.AdminGetStoreBalance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/balance/credits", wrapper.AdminCreditStoreBalance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/profile", wrapper.AdminGetStoreProfile)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
@@ -5854,6 +6198,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminUpdateSiteGuide)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminGetCollectionSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminSaveCollectionSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/summary", wrapper.AdminBillingSummary)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/invoices", wrapper.AdminListInvoices)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/invoices/export", wrapper.AdminExportInvoices)
@@ -6486,6 +6832,83 @@ type AdminLogoutdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminLogoutdefaultApplicationProblemPlusJSONResponse) VisitAdminLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetCollectionSettingsRequestObject struct {
+}
+
+type AdminGetCollectionSettingsResponseObject interface {
+	VisitAdminGetCollectionSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminGetCollectionSettings200JSONResponse AdminCollectionSettings
+
+func (response AdminGetCollectionSettings200JSONResponse) VisitAdminGetCollectionSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetCollectionSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetCollectionSettingsdefaultApplicationProblemPlusJSONResponse) VisitAdminGetCollectionSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveCollectionSettingsRequestObject struct {
+	Body *AdminSaveCollectionSettingsJSONRequestBody
+}
+
+type AdminSaveCollectionSettingsResponseObject interface {
+	VisitAdminSaveCollectionSettingsResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveCollectionSettings200JSONResponse AdminCollectionSettings
+
+func (response AdminSaveCollectionSettings200JSONResponse) VisitAdminSaveCollectionSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveCollectionSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveCollectionSettingsdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveCollectionSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8345,6 +8768,85 @@ func (response AdminGetStoredefaultApplicationProblemPlusJSONResponse) VisitAdmi
 	return err
 }
 
+type AdminGetStoreBalanceRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type AdminGetStoreBalanceResponseObject interface {
+	VisitAdminGetStoreBalanceResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStoreBalance200JSONResponse AdminStoreBalance
+
+func (response AdminGetStoreBalance200JSONResponse) VisitAdminGetStoreBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetStoreBalancedefaultApplicationProblemPlusJSONResponse) VisitAdminGetStoreBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreditStoreBalanceRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *AdminCreditStoreBalanceJSONRequestBody
+}
+
+type AdminCreditStoreBalanceResponseObject interface {
+	VisitAdminCreditStoreBalanceResponse(w http.ResponseWriter) error
+}
+
+type AdminCreditStoreBalance200JSONResponse AdminStoreBalance
+
+func (response AdminCreditStoreBalance200JSONResponse) VisitAdminCreditStoreBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminCreditStoreBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCreditStoreBalancedefaultApplicationProblemPlusJSONResponse) VisitAdminCreditStoreBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminGetStoreBillingRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 }
@@ -9048,6 +9550,12 @@ type StrictServerInterface interface {
 	// AdminLogout End the admin session
 	// (POST /admin/v1/auth/logout)
 	AdminLogout(ctx context.Context, request AdminLogoutRequestObject) (AdminLogoutResponseObject, error)
+	// AdminGetCollectionSettings How pay-as-you-sell merchants may pay their fees
+	// (GET /admin/v1/billing/collection)
+	AdminGetCollectionSettings(ctx context.Context, request AdminGetCollectionSettingsRequestObject) (AdminGetCollectionSettingsResponseObject, error)
+	// AdminSaveCollectionSettings Save the collection settings
+	// (PUT /admin/v1/billing/collection)
+	AdminSaveCollectionSettings(ctx context.Context, request AdminSaveCollectionSettingsRequestObject) (AdminSaveCollectionSettingsResponseObject, error)
 	// AdminListDuplicatePayments Payments of invoices already paid, to refund
 	// (GET /admin/v1/billing/duplicates)
 	AdminListDuplicatePayments(ctx context.Context, request AdminListDuplicatePaymentsRequestObject) (AdminListDuplicatePaymentsResponseObject, error)
@@ -9192,6 +9700,12 @@ type StrictServerInterface interface {
 	// AdminGetStore One store with its domains
 	// (GET /admin/v1/stores/{store_id})
 	AdminGetStore(ctx context.Context, request AdminGetStoreRequestObject) (AdminGetStoreResponseObject, error)
+	// AdminGetStoreBalance A store's prepaid balance and its latest entries
+	// (GET /admin/v1/stores/{store_id}/balance)
+	AdminGetStoreBalance(ctx context.Context, request AdminGetStoreBalanceRequestObject) (AdminGetStoreBalanceResponseObject, error)
+	// AdminCreditStoreBalance Add to a store's prepaid balance
+	// (POST /admin/v1/stores/{store_id}/balance/credits)
+	AdminCreditStoreBalance(ctx context.Context, request AdminCreditStoreBalanceRequestObject) (AdminCreditStoreBalanceResponseObject, error)
 	// AdminGetStoreBilling A store's plan, status, card and open invoices
 	// (GET /admin/v1/stores/{store_id}/billing)
 	AdminGetStoreBilling(ctx context.Context, request AdminGetStoreBillingRequestObject) (AdminGetStoreBillingResponseObject, error)
@@ -9736,6 +10250,61 @@ func (sh *strictHandler) AdminLogout(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminLogoutResponseObject); ok {
 		if err := validResponse.VisitAdminLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetCollectionSettings operation middleware
+func (sh *strictHandler) AdminGetCollectionSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetCollectionSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetCollectionSettings(ctx, request.(AdminGetCollectionSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetCollectionSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetCollectionSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminGetCollectionSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveCollectionSettings operation middleware
+func (sh *strictHandler) AdminSaveCollectionSettings(w http.ResponseWriter, r *http.Request) {
+	var request AdminSaveCollectionSettingsRequestObject
+
+	var body AdminSaveCollectionSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveCollectionSettings(ctx, request.(AdminSaveCollectionSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveCollectionSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveCollectionSettingsResponseObject); ok {
+		if err := validResponse.VisitAdminSaveCollectionSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11098,6 +11667,65 @@ func (sh *strictHandler) AdminGetStore(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminGetStoreResponseObject); ok {
 		if err := validResponse.VisitAdminGetStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetStoreBalance operation middleware
+func (sh *strictHandler) AdminGetStoreBalance(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminGetStoreBalanceRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStoreBalance(ctx, request.(AdminGetStoreBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStoreBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStoreBalanceResponseObject); ok {
+		if err := validResponse.VisitAdminGetStoreBalanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreditStoreBalance operation middleware
+func (sh *strictHandler) AdminCreditStoreBalance(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminCreditStoreBalanceRequestObject
+
+	request.StoreId = storeId
+
+	var body AdminCreditStoreBalanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreditStoreBalance(ctx, request.(AdminCreditStoreBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreditStoreBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreditStoreBalanceResponseObject); ok {
+		if err := validResponse.VisitAdminCreditStoreBalanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

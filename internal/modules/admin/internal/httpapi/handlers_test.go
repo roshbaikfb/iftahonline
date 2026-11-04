@@ -116,7 +116,7 @@ func newFixture(t *testing.T) fixture {
 		},
 		DashboardURL: "https://app.iftahonline.com",
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
-		Site: siteConsole, Founding: billing.NewFounding(adminPool),
+		Site: siteConsole, Founding: billing.NewFounding(adminPool), Collection: billing.NewCollection(adminPool),
 		// The package's tests all sign in from one address: room for all
 		// of them (the per-IP limit itself is tested in app).
 		Limits:  &app.Limits{LoginPerIP: ratelimit.Limit{Burst: 50, Period: time.Hour}, LoginFailPerKey: ratelimit.Limit{Burst: 5, Period: 30 * time.Minute}},
@@ -918,6 +918,110 @@ func TestConsoleFounding(t *testing.T) {
 	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/founding", `{"enabled":false,"seats":100,"discount_bps":2000,"reason":"off again"}`,
 		withCookie(sess), sameOrigin); r.status != http.StatusOK {
 		t.Fatalf("off = %d", r.status)
+	}
+}
+
+// TestConsoleCollection: the collection settings and a store's balance
+// from the console (ADR-0083): saved with a reason, credited with a
+// reason, a reference and a note, the viewer reading but not changing.
+func TestConsoleCollection(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	viewer := f.loginAs(t, "viewer")
+	t.Cleanup(func() {
+		if err := billing.NewCollection(f.adminPool).SaveCollectionSettings(context.Background(),
+			billing.CollectionSettings{Minimums: map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000}}); err != nil {
+			t.Error(err)
+		}
+	})
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/collection", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/collection", "", withCookie(viewer))
+	if mins, _ := r.body["minimums"].([]any); r.status != http.StatusOK || r.body["prepaid_enabled"] != false || len(mins) != 3 ||
+		mins[0].(map[string]any)["currency"] != "EGP" || mins[0].(map[string]any)["minimum_minor"] != float64(30000) {
+		t.Fatalf("get = %d %v", r.status, r.body)
+	}
+	save := `{"prepaid_enabled":true,"card_enabled":true,"minimums":[{"currency":"EGP","minimum_minor":50000},` +
+		`{"currency":"SAR","minimum_minor":10000},{"currency":"AED","minimum_minor":10000}],"reason":"open both ways"}`
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/billing/collection", save, withCookie(viewer), sameOrigin); r.status != http.StatusForbidden {
+		t.Fatalf("viewer save = %d", r.status)
+	}
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/billing/collection", save, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site = %d", r.status)
+	}
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/billing/collection", save, withCookie(sess), sameOrigin); r.status != http.StatusOK ||
+		r.body["prepaid_enabled"] != true || r.body["card_enabled"] != true {
+		t.Fatalf("save = %d %v", r.status, r.body)
+	}
+	for _, bad := range []string{
+		strings.Replace(save, `"minimum_minor":50000`, `"minimum_minor":5`, 1),
+		strings.Replace(save, `,{"currency":"AED","minimum_minor":10000}`, ``, 1),
+		strings.Replace(save, `{"currency":"AED"`, `{"currency":"SAR"`, 1),
+		strings.Replace(save, `"open both ways"`, `"x"`, 1),
+	} {
+		if got := f.do(t, http.MethodPut, adminHost, "/admin/v1/billing/collection", bad, withCookie(sess), sameOrigin); got.status != http.StatusUnprocessableEntity &&
+			got.status != http.StatusBadRequest {
+			t.Errorf("PUT %s = %d %v", bad, got.status, got.body)
+		}
+	}
+
+	// A store's balance: none, then a confirmed transfer.
+	storeID := f.store(t)
+	sid, err := ulid.Parse(storeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := tenant.WithStore(t.Context(), tenant.StoreID{ID: sid})
+	if err = postgres.InTenantTx(ctx, f.appPool, func(tx pgx.Tx) error {
+		_, xErr := tx.Exec(ctx, `INSERT INTO subscriptions (store_id, plan_id, status) SELECT app.current_store_id(), id, 'active'
+			FROM plans WHERE code = 'pays' AND status = 'active' ON CONFLICT (store_id) DO UPDATE SET plan_id = excluded.plan_id`)
+		return xErr
+	}); err != nil {
+		t.Fatal(err)
+	}
+	balance := "/admin/v1/stores/" + storeID + "/balance"
+	r = f.do(t, http.MethodGet, adminHost, balance, "", withCookie(viewer))
+	if r.status != http.StatusOK || r.body["balance_minor"] != float64(0) || r.body["level"] != "debt" || len(r.body["entries"].([]any)) != 0 {
+		t.Fatalf("balance = %d %v", r.status, r.body)
+	}
+	credit := `{"amount_minor":50000,"reason":"transfer","reference":"CIB 7741 2209","note":"transfer seen on the statement"}`
+	if r = f.do(t, http.MethodPost, adminHost, balance+"/credits", credit, withCookie(viewer), sameOrigin); r.status != http.StatusForbidden {
+		t.Fatalf("viewer credit = %d", r.status)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, balance+"/credits", credit, withCookie(sess)); r.status != http.StatusForbidden {
+		t.Fatalf("cross-site credit = %d", r.status)
+	}
+	r = f.do(t, http.MethodPost, adminHost, balance+"/credits", credit, withCookie(sess), sameOrigin)
+	entries, _ := r.body["entries"].([]any)
+	if r.status != http.StatusOK || r.body["balance_minor"] != float64(50000) || r.body["level"] != "ok" || len(entries) != 1 {
+		t.Fatalf("credit = %d %v", r.status, r.body)
+	}
+	if e := entries[0].(map[string]any); e["kind"] != "manual" || e["reason"] != "transfer" || e["reference"] != "CIB 7741 2209" || e["admin_id"] == nil {
+		t.Fatalf("entry = %v", e)
+	}
+	for _, bad := range []struct {
+		path, body string
+		status     int
+	}{
+		{balance + "/credits", strings.Replace(credit, `50000`, `0`, 1), http.StatusUnprocessableEntity},
+		{balance + "/credits", strings.Replace(credit, `"transfer"`, `"gift"`, 1), http.StatusUnprocessableEntity},
+		{balance + "/credits", strings.Replace(credit, `"CIB 7741 2209"`, `""`, 1), http.StatusUnprocessableEntity},
+		{balance + "/credits", strings.Replace(credit, `"transfer seen on the statement"`, `"x"`, 1), http.StatusUnprocessableEntity},
+		{balance + "/credits", ``, http.StatusBadRequest},
+		{"/admin/v1/stores/" + f.ids.New().String() + "/balance/credits", credit, http.StatusNotFound},
+		{"/admin/v1/stores/not-an-id/balance/credits", credit, http.StatusNotFound},
+	} {
+		if got := f.do(t, http.MethodPost, adminHost, bad.path, bad.body, withCookie(sess), sameOrigin); got.status != bad.status {
+			t.Errorf("POST %s %s = %d %v; want %d", bad.path, bad.body, got.status, got.body, bad.status)
+		}
+	}
+	// Another store sees nothing of it.
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+f.store(t)+"/balance", "", withCookie(sess)); r.status != http.StatusOK ||
+		r.body["balance_minor"] != float64(0) || len(r.body["entries"].([]any)) != 0 {
+		t.Fatalf("another store = %d %v", r.status, r.body)
 	}
 }
 
