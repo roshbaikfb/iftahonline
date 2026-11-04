@@ -1,6 +1,6 @@
 # ADR-0051: Collecting invoices, dunning, and the billing hold
 
-- Status: Accepted
+- Status: Accepted (§4 amended by ADR-0082: a free store for 30 days before the hold)
 - Date: 2026-10-30
 
 ## Context
