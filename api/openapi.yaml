@@ -2494,6 +2494,30 @@ paths:
               schema: { $ref: "#/components/schemas/AdminHealth" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/growth:
+    get:
+      tags: [admin]
+      operationId: adminGetGrowth
+      summary: The console's growth page
+      description: |
+        The last 12 Cairo months, this one included (ADR-0081): revenue
+        collected per month and currency (paid invoices, before VAT), the
+        stores created each month and how many of them paid a
+        subscription, the recurring revenue per day since the console
+        began recording it, each complete month's paying accounts (start,
+        joined, lost), and the plans' shares today. Currencies are never
+        converted. A section that could not be read is absent and named
+        in `errors`.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The figures.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGrowth" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/metrics:
     get:
       tags: [admin]
@@ -6761,6 +6785,86 @@ components:
         errors:
           type: array
           items: { type: string, enum: [revenue, new_stores] }
+    AdminGrowth:
+      type: object
+      required: [computed_at, months, errors]
+      properties:
+        computed_at: { type: string, format: date-time }
+        months:
+          type: array
+          description: The 12 months' first days, oldest first, this month last.
+          items: { type: string, format: date }
+        collected:
+          type: array
+          description: One series per currency with any revenue in the window, EGP then SAR then AED; each lays a value on every month.
+          items: { $ref: "#/components/schemas/AdminCollectedSeries" }
+        stores:
+          type: array
+          description: Every month of the window.
+          items: { $ref: "#/components/schemas/AdminMonthStores" }
+        mrr:
+          type: array
+          description: The recurring revenue per Cairo day and currency since recording began, oldest first.
+          items: { $ref: "#/components/schemas/AdminDayMRR" }
+        churn:
+          type: array
+          description: Complete months only, oldest first; empty until the first one.
+          items: { $ref: "#/components/schemas/AdminMonthChurn" }
+        plans:
+          type: array
+          description: Paying accounts and recurring revenue per plan and currency today, the most first in each currency.
+          items: { $ref: "#/components/schemas/AdminPlanRevenue" }
+        paying: { type: integer, format: int64, description: The paying accounts today (an agency is one). }
+        errors:
+          type: array
+          items: { type: string, enum: [collected, stores, mrr, churn, plans] }
+    AdminCollectedSeries:
+      type: object
+      required: [currency, months]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/AdminMonthAmount" }
+    AdminMonthAmount:
+      type: object
+      required: [month, invoices, amount_minor]
+      properties:
+        month: { type: string, format: date }
+        invoices: { type: integer, format: int64 }
+        amount_minor: { type: integer, format: int64, description: Before VAT. }
+    AdminMonthStores:
+      type: object
+      required: [month, created, converted]
+      properties:
+        month: { type: string, format: date }
+        created: { type: integer, format: int64 }
+        converted: { type: integer, format: int64, description: Of those created, how many have paid a subscription since. }
+    AdminDayMRR:
+      type: object
+      required: [day, currency, mrr_minor, accounts]
+      properties:
+        day: { type: string, format: date }
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        mrr_minor: { type: integer, format: int64 }
+        accounts: { type: integer, format: int64 }
+    AdminMonthChurn:
+      type: object
+      required: [month, start, joined, lost, rate_bps]
+      properties:
+        month: { type: string, format: date }
+        start: { type: integer, format: int64, description: Paying accounts as the month began. }
+        joined: { type: integer, format: int64, description: Paying by the next month's start, not at this one's. }
+        lost: { type: integer, format: int64, description: Paying at the month's start, not at the next's. }
+        rate_bps: { type: integer, format: int64, description: lost over start, in basis points. }
+    AdminPlanRevenue:
+      type: object
+      required: [currency, plan, accounts, mrr_minor]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        plan: { type: string, description: The plan's code. }
+        accounts: { type: integer, format: int64 }
+        mrr_minor: { type: integer, format: int64 }
     AdminRevenue:
       type: object
       required: [currency, mrr_minor, accounts]

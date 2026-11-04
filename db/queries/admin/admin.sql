@@ -209,3 +209,46 @@ LIMIT 1000;
 
 -- name: MarkPushSent :exec
 UPDATE admin_push_subscriptions SET last_sent_at = now() WHERE id = @id;
+
+-- name: SaveGrowthMRR :exec
+-- The day's recurring revenue in one currency; a later reading the same
+-- day replaces it (ADR-0081).
+INSERT INTO admin_growth_mrr (day, currency, mrr_minor, accounts, taken_at)
+VALUES (@day, @currency, @mrr_minor, @accounts, @taken_at)
+ON CONFLICT (day, currency) DO UPDATE
+SET mrr_minor = excluded.mrr_minor, accounts = excluded.accounts, taken_at = excluded.taken_at;
+
+-- name: StartGrowthMonth :execrows
+-- Records that the month's paying accounts are read, once a month.
+INSERT INTO admin_growth_months (month, taken_on) VALUES (@month, @taken_on)
+ON CONFLICT (month) DO NOTHING;
+
+-- name: SaveGrowthPaying :exec
+INSERT INTO admin_growth_paying (month, account_id)
+SELECT @month::date, unnest(@accounts::uuid[])
+ON CONFLICT DO NOTHING;
+
+-- name: GrowthMRR :many
+SELECT day, currency::text, mrr_minor, accounts
+FROM admin_growth_mrr
+WHERE day >= @since::date
+ORDER BY day, currency;
+
+-- name: GrowthChurn :many
+-- Each month whose start and the next month's start were both read in
+-- their first days: the accounts paying as it began, those that joined
+-- by the next, and those lost by then.
+SELECT m.month,
+       (SELECT count(*) FROM admin_growth_paying p WHERE p.month = m.month)::bigint AS start,
+       (SELECT count(*) FROM admin_growth_paying p
+         WHERE p.month = n.month
+           AND NOT EXISTS (SELECT 1 FROM admin_growth_paying q WHERE q.month = m.month AND q.account_id = p.account_id))::bigint AS joined,
+       (SELECT count(*) FROM admin_growth_paying p
+         WHERE p.month = m.month
+           AND NOT EXISTS (SELECT 1 FROM admin_growth_paying q WHERE q.month = n.month AND q.account_id = p.account_id))::bigint AS lost
+FROM admin_growth_months m
+JOIN admin_growth_months n ON n.month = (m.month + interval '1 month')::date
+WHERE m.month >= @since::date
+  AND m.taken_on < m.month + @grace_days::int
+  AND n.taken_on < n.month + @grace_days::int
+ORDER BY m.month;

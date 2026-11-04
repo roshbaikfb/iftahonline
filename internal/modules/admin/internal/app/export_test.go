@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/domain"
 )
@@ -13,3 +14,6 @@ func (s *Service) StepAlerts(ctx context.Context, r map[domain.AlertKind]domain.
 
 // DeliverAlerts sends what is owed, for tests.
 func (s *Service) DeliverAlerts(ctx context.Context) error { return s.deliverAlerts(ctx) }
+
+// SetNow sets the service's clock, for tests.
+func (s *Service) SetNow(now func() time.Time) { s.now = now }

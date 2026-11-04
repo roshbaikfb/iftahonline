@@ -1292,3 +1292,27 @@ func TestConsolePush(t *testing.T) {
 		t.Fatalf("after removing = %v", r.body)
 	}
 }
+
+// TestConsoleGrowth: the growth page is billing's to read (ADR-0081): 12
+// months, each section present or named in errors.
+func TestConsoleGrowth(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/growth", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/growth", "", withCookie(f.loginAs(t, "content"))); r.status != http.StatusForbidden {
+		t.Fatalf("content = %d", r.status)
+	}
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/growth", "", withCookie(f.loginAs(t, "finance")))
+	months, _ := r.body["months"].([]any)
+	if r.status != http.StatusOK || len(months) != 12 || r.body["errors"] == nil || r.body["computed_at"] == nil {
+		t.Fatalf("finance = %d %v", r.status, r.body)
+	}
+	errors, _ := r.body["errors"].([]any)
+	for _, section := range []string{"collected", "stores", "mrr", "churn", "plans"} {
+		if r.body[section] == nil && !slices.Contains(errors, any(section)) {
+			t.Errorf("%s neither present nor named", section)
+		}
+	}
+}

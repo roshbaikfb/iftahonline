@@ -2158,6 +2158,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/growth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The console's growth page
+         * @description The last 12 Cairo months, this one included (ADR-0081): revenue
+         *     collected per month and currency (paid invoices, before VAT), the
+         *     stores created each month and how many of them paid a
+         *     subscription, the recurring revenue per day since the console
+         *     began recording it, each complete month's paying accounts (start,
+         *     joined, lost), and the plans' shares today. Currencies are never
+         *     converted. A section that could not be read is absent and named
+         *     in `errors`.
+         */
+        get: operations["adminGetGrowth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/metrics": {
         parameters: {
             query?: never;
@@ -5838,6 +5865,99 @@ export interface components {
             revenue?: components["schemas"]["AdminRevenue"][];
             new_stores?: components["schemas"]["AdminNewStores"];
             errors: ("revenue" | "new_stores")[];
+        };
+        AdminGrowth: {
+            /** Format: date-time */
+            computed_at: string;
+            /** @description The 12 months' first days, oldest first, this month last. */
+            months: string[];
+            /** @description One series per currency with any revenue in the window, EGP then SAR then AED; each lays a value on every month. */
+            collected?: components["schemas"]["AdminCollectedSeries"][];
+            /** @description Every month of the window. */
+            stores?: components["schemas"]["AdminMonthStores"][];
+            /** @description The recurring revenue per Cairo day and currency since recording began, oldest first. */
+            mrr?: components["schemas"]["AdminDayMRR"][];
+            /** @description Complete months only, oldest first; empty until the first one. */
+            churn?: components["schemas"]["AdminMonthChurn"][];
+            /** @description Paying accounts and recurring revenue per plan and currency today, the most first in each currency. */
+            plans?: components["schemas"]["AdminPlanRevenue"][];
+            /**
+             * Format: int64
+             * @description The paying accounts today (an agency is one).
+             */
+            paying?: number;
+            errors: ("collected" | "stores" | "mrr" | "churn" | "plans")[];
+        };
+        AdminCollectedSeries: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            months: components["schemas"]["AdminMonthAmount"][];
+        };
+        AdminMonthAmount: {
+            /** Format: date */
+            month: string;
+            /** Format: int64 */
+            invoices: number;
+            /**
+             * Format: int64
+             * @description Before VAT.
+             */
+            amount_minor: number;
+        };
+        AdminMonthStores: {
+            /** Format: date */
+            month: string;
+            /** Format: int64 */
+            created: number;
+            /**
+             * Format: int64
+             * @description Of those created
+             */
+            converted: number;
+        };
+        AdminDayMRR: {
+            /** Format: date */
+            day: string;
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** Format: int64 */
+            mrr_minor: number;
+            /** Format: int64 */
+            accounts: number;
+        };
+        AdminMonthChurn: {
+            /** Format: date */
+            month: string;
+            /**
+             * Format: int64
+             * @description Paying accounts as the month began.
+             */
+            start: number;
+            /**
+             * Format: int64
+             * @description Paying by the next month's start
+             */
+            joined: number;
+            /**
+             * Format: int64
+             * @description Paying at the month's start
+             */
+            lost: number;
+            /**
+             * Format: int64
+             * @description lost over start
+             */
+            rate_bps: number;
+        };
+        AdminPlanRevenue: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /** @description The plan's code. */
+            plan: string;
+            /** Format: int64 */
+            accounts: number;
+            /** Format: int64 */
+            mrr_minor: number;
         };
         AdminRevenue: {
             /** @enum {string} */
@@ -10905,6 +11025,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminHealth"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetGrowth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminGrowth"];
                 };
             };
             default: components["responses"]["Problem"];
