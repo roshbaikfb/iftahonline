@@ -10,6 +10,7 @@ import { AlertsPage } from './AlertsPage';
 import { BillingPage } from './BillingPage';
 import { Need } from './Can';
 import { FoundingPage } from './FoundingPage';
+import { CollectionPage } from './CollectionPage';
 import { GrowthPage } from './GrowthPage';
 import { GuideEditor, GuidesPage } from './GuidesPage';
 import { InvoicePage } from './InvoicePage';
@@ -34,6 +35,7 @@ export function ConsoleRoutes() {
       <Route path="/stores/:storeId" element={<Need p="stores.read"><StorePage /></Need>} />
       <Route path="/billing" element={<Need p="billing.read"><BillingPage /></Need>} />
 <Route path="/growth" element={<Need p="billing.read"><GrowthPage /></Need>} />
+      <Route path="/collection" element={<Need p="billing.read"><CollectionPage /></Need>} />
       <Route path="/billing/invoices/:invoiceId" element={<Need p="billing.read"><InvoicePage /></Need>} />
       <Route path="/plans" element={<Need p="catalog.read"><PlansPage /></Need>} />
       <Route path="/plans/:code" element={<Need p="catalog.read"><PlanEditorPage /></Need>} />
