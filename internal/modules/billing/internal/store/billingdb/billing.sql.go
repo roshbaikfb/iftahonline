@@ -12,6 +12,36 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
+const activePlanNames = `-- name: ActivePlanNames :many
+SELECT code, name_ar FROM plans WHERE status = 'active'
+`
+
+type ActivePlanNamesRow struct {
+	Code   string
+	NameAr string
+}
+
+// The plans on sale by code, for the console's growth page (ADR-0081).
+func (q *Queries) ActivePlanNames(ctx context.Context) ([]ActivePlanNamesRow, error) {
+	rows, err := q.db.Query(ctx, activePlanNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ActivePlanNamesRow{}
+	for rows.Next() {
+		var i ActivePlanNamesRow
+		if err := rows.Scan(&i.Code, &i.NameAr); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const billingHealth = `-- name: BillingHealth :one
 SELECT trialing::bigint, active::bigint, past_due::bigint, suspended::bigint, cancelled::bigint,
        invoices_open::bigint, invoices_overdue::bigint

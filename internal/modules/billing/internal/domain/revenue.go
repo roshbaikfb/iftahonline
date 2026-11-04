@@ -49,6 +49,7 @@ func MRR(paying []Paying) []Revenue { return Today(paying).Revenue }
 type PlanRevenue struct {
 	Currency string
 	PlanCode string
+	PlanName string // the plan's Arabic name; set by the app, not here
 	MRRMinor int64
 	Accounts int64
 }

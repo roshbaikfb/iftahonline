@@ -212,3 +212,16 @@ func Converted(ctx context.Context, tx Tx, since time.Time) ([]ulid.ID, error) {
 	}
 	return ids, nil
 }
+
+// PlanNamesByCode are the Arabic names of the plans on sale, by code.
+func PlanNamesByCode(ctx context.Context, tx Tx) (map[string]string, error) {
+	rows, err := billingdb.New(tx).ActivePlanNames(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: plan names: %w", err)
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.Code] = r.NameAr
+	}
+	return out, nil
+}

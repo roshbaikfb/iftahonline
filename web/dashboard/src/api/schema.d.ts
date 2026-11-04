@@ -5954,6 +5954,8 @@ export interface components {
             currency: "EGP" | "SAR" | "AED";
             /** @description The plan's code. */
             plan: string;
+            /** @description The plan's Arabic name; empty for a plan no longer on sale. */
+            name: string;
             /** Format: int64 */
             accounts: number;
             /** Format: int64 */

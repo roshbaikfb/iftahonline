@@ -6859,10 +6859,11 @@ components:
         rate_bps: { type: integer, format: int64, description: lost over start, in basis points. }
     AdminPlanRevenue:
       type: object
-      required: [currency, plan, accounts, mrr_minor]
+      required: [currency, plan, name, accounts, mrr_minor]
       properties:
         currency: { type: string, enum: [EGP, SAR, AED] }
         plan: { type: string, description: The plan's code. }
+        name: { type: string, description: "The plan's Arabic name; empty for a plan no longer on sale." }
         accounts: { type: integer, format: int64 }
         mrr_minor: { type: integer, format: int64 }
     AdminRevenue:
