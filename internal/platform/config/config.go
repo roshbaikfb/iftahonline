@@ -369,12 +369,15 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		r.errorf("DB_MIN_CONNS (%d) must not exceed DB_MAX_CONNS (%d)", c.DB.MinConns, c.DB.MaxConns)
 	}
 
-	if role == RoleAPI {
-		// Optional: without it the super-admin console is not served.
+	if role == RoleAPI || role == RoleWorker {
+		// Optional: without it the super-admin console is not served (api)
+		// and its alerts are not checked (worker, ADR-0080).
 		c.AdminDB = DB{
 			URL: r.url("ADMIN_DATABASE_URL", false, "postgres", "postgresql"), MaxConns: 4, MinConns: 0,
 			MaxConnLifetime: c.DB.MaxConnLifetime, StatementTimeout: c.DB.StatementTimeout,
 		}
+	}
+	if role == RoleAPI {
 		c.ReadDB = DB{
 			URL:              r.url("DATABASE_READ_URL", false, "postgres", "postgresql"),
 			MaxConns:         int32(r.int64("DB_READ_MAX_CONNS", 10, 1, 1000)), //nolint:gosec // bounded above.
