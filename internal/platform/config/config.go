@@ -61,6 +61,10 @@ type Config struct {
 	// AdminDB is the super-admin console's pool (app_admin). Empty URL:
 	// the console is disabled.
 	AdminDB DB
+	// AdminPush is the console's Web Push (ADR-0080): the api hands the
+	// public key to the browser, the worker signs with the private one.
+	// Both empty: no mobile notifications.
+	AdminPush Push
 	// ReadDB is the api's pool for reads that may lag (analytics,
 	// ADR-0064): DATABASE_READ_URL, a replica as app_user. Unset, it is
 	// DATABASE_URL, read through a pool of its own.
@@ -376,6 +380,7 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 			URL: r.url("ADMIN_DATABASE_URL", false, "postgres", "postgresql"), MaxConns: 4, MinConns: 0,
 			MaxConnLifetime: c.DB.MaxConnLifetime, StatementTimeout: c.DB.StatementTimeout,
 		}
+		c.AdminPush = r.push()
 	}
 	if role == RoleAPI {
 		c.ReadDB = DB{
@@ -534,6 +539,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("base_domain", c.Tenancy.BaseDomain),
 		slog.Bool("smtp", c.Mail.SMTPAddr != ""),
 		slog.Bool("admin_console", c.AdminDB.URL != ""),
+		slog.Bool("admin_push", c.AdminPush.Enabled()),
 		slog.Bool("read_replica", c.ReadDB.URL != "" && c.ReadDB.URL != c.DB.URL),
 		slog.String("s3_endpoint", redactURL(c.Media.S3Endpoint)),
 		slog.String("s3_bucket", c.Media.S3Bucket),
@@ -733,6 +739,43 @@ func (r *reader) secret(key string) string {
 		return ""
 	}
 	return strings.TrimSpace(v)
+}
+
+// Push is the console's Web Push keys (VAPID, RFC 8292): the P-256
+// public key (65 bytes) and private key (32 bytes), base64url, and who to
+// contact (mailto: or https:), which push services may use.
+type Push struct {
+	PublicKey  string
+	PrivateKey string
+	Subject    string
+}
+
+// Enabled reports whether mobile notifications can be sent.
+func (p Push) Enabled() bool { return p.PublicKey != "" && p.PrivateKey != "" }
+
+// LogValue keeps the private key out of logs.
+func (p Push) LogValue() slog.Value { return slog.BoolValue(p.Enabled()) }
+
+// push reads VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT: both
+// keys or neither, each of its size.
+func (r *reader) push() Push {
+	p := Push{PublicKey: r.secretOptional("VAPID_PUBLIC_KEY"), PrivateKey: r.secretOptional("VAPID_PRIVATE_KEY"),
+		Subject: r.str("VAPID_SUBJECT", "mailto:ops@iftahonline.com")}
+	if p.PublicKey == "" && p.PrivateKey == "" {
+		return Push{}
+	}
+	size := func(key, v string, n int) {
+		b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(v, "="))
+		if err != nil || len(b) != n {
+			r.errorf("%s must be a base64url key of %d bytes", key, n)
+		}
+	}
+	size("VAPID_PUBLIC_KEY", p.PublicKey, 65)
+	size("VAPID_PRIVATE_KEY", p.PrivateKey, 32)
+	if !strings.HasPrefix(p.Subject, "mailto:") && !strings.HasPrefix(p.Subject, "https://") {
+		r.errorf("VAPID_SUBJECT must start with mailto: or https://")
+	}
+	return p
 }
 
 func (r *reader) secretOptional(key string) string {
