@@ -89,3 +89,4 @@ supersedes it.
 | [0081](0081-console-growth.md) | The console's growth page | Accepted |
 | [0082](0082-unpaid-stores-fall-back-to-free.md) | Unpaid stores fall back to the free plan before they close | Accepted |
 | [0083](0083-collecting-pay-as-you-sell-fees.md) | Collecting pay-as-you-sell fees: settings and prepaid balances | Accepted |
+| [0084](0084-paying-fees-from-the-prepaid-balance.md) | Paying pay-as-you-sell fees from the prepaid balance | Accepted |
