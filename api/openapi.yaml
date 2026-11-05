@@ -8954,6 +8954,7 @@ components:
         closes_at: { type: string, format: date-time, description: "Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082)." }
         held: { type: boolean, description: "The storefront shows the maintenance page until the invoice is paid." }
         agency: { type: boolean, description: "An agency pays for the store: the platform switches it to pay as you sell (ADR-0087)." }
+        support_whatsapp: { type: string, example: "+201153450716", description: "An agency's store: the platform's WhatsApp number (E.164) to arrange the switch with; absent otherwise." }
         collection: { type: string, enum: [balance, card], description: How the store's account pays pay-as-you-sell fees; absent until it chooses. }
         switch_offer:
           type: object

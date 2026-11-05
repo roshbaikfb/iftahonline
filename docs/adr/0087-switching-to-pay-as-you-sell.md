@@ -57,6 +57,15 @@ The owner approved (2026-11-04) what an unpaid store is offered:
    `switch_offer` is present only while the store may switch, pay as you
    sell is on sale with a fee in that currency, and a way is offered.
    The dashboard shows its banner and dialog from these fields (F5b).
+6. **An agency's store is sent to the platform's WhatsApp.** The summary
+   carries `support_whatsapp`, the number the console sets on the site's
+   settings, for an agency's store only.
+   - Billing does not read the site's tables: `cmd/platform` gives it a
+     `Support` reader adapted from `site.NewContacts`.
+   - The read is best effort. Without a number, the banner shows its text
+     alone.
+   - The dashboard's button opens WhatsApp with a message ready to send,
+     naming the open invoice.
 
 ## Consequences
 

@@ -72,6 +72,12 @@ func (m *Module) Handler() http.Handler { return m.site }
 // Domain is the platform's domain the site answers on.
 func (m *Module) Domain() string { return m.domain }
 
+// NewContacts reads the platform's contact details on pool (the site's
+// role reads them).
+func NewContacts(pool *pgxpool.Pool) Contacts {
+	return app.NewService(app.Deps{DB: pool})
+}
+
 // NewConsole is what the super-admin console edits (the api role): it
 // writes as app_admin, and keeps images in m's bucket (nil refuses
 // uploads).

@@ -8045,6 +8045,11 @@ export interface components {
             /** @description An agency pays for the store: the platform switches it to pay as you sell (ADR-0087). */
             agency?: boolean;
             /**
+             * @description An agency's store: the platform's WhatsApp number (E.164) to arrange the switch with; absent otherwise.
+             * @example +201153450716
+             */
+            support_whatsapp?: string;
+            /**
              * @description How the store's account pays pay-as-you-sell fees; absent until it chooses.
              * @enum {string}
              */

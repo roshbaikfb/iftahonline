@@ -74,6 +74,15 @@ func Socials() []Social { return domain.Socials() }
 // MaxFAQs bounds the FAQ.
 const MaxFAQs = domain.MaxFAQs
 
+// Contacts are the platform's contact details for the other modules
+// (NewContacts): the dashboard sends an agency's store to its WhatsApp.
+type Contacts interface {
+	// Contact is the platform's contact details.
+	Contact(ctx context.Context) (Settings, error)
+}
+
+var _ Contacts = (*app.Service)(nil)
+
 // Console is what the super-admin console edits. Changes reach the
 // site's pages within a minute, then the edge's cache lifetime.
 type Console interface {

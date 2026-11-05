@@ -55,7 +55,14 @@ type Deps struct {
 	// (identity.OwnerTx): the founding program admits one store per
 	// owner. nil leaves the program out.
 	Owner func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
+	// Support is the platform's WhatsApp number (E.164, "" for none) that
+	// an agency's store is sent to (site.Contacts; ADR-0087). nil sends
+	// none.
+	Support Support
 }
+
+// Support reads the platform's WhatsApp number.
+type Support = app.Support
 
 // Module is the wired billing module.
 type Module struct {
@@ -82,7 +89,8 @@ func New(d Deps) (*Module, error) {
 	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
 		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier,
-		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL, Owner: d.Owner}), collect: d.Collect}, nil
+		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL, Owner: d.Owner,
+		Support: d.Support}), collect: d.Collect}, nil
 }
 
 // Grants is what the entitlements module reads.

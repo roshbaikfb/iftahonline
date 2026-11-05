@@ -206,6 +206,13 @@ export function signedMoney(minor: number, currency: string): string {
   return `${minor < 0 ? '−' : '+'}${money(Math.abs(minor), currency)}`;
 }
 
+// supportLink opens WhatsApp to the platform's number with a message
+// ready to send: the switch of an agency's stores (ADR-0087).
+export function supportLink(number: string, invoice?: string): string {
+  const text = `مرحبًا، أريد تحويل متاجر حسابنا إلى «ادفع حسب مبيعاتك».${invoice ? ` رقم الفاتورة: ${invoice}.` : ''}`;
+  return `https://wa.me/${number.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+}
+
 // billingChanged tells the screens the store's billing moved (a switch,
 // a change of the way to pay), so they read it again.
 export const billingChanged = 'billing:changed';
