@@ -73,9 +73,10 @@ func (q *Queries) GetSubscriptionAccount(ctx context.Context, storeID ulid.ID) (
 }
 
 const getTaxRate = `-- name: GetTaxRate :one
-SELECT rate_bps FROM tax_rates WHERE country = $1
+SELECT rate_bps FROM tax_rates WHERE country IN ($1, 'ZZ') ORDER BY country = 'ZZ' LIMIT 1
 `
 
+// The country's, else the others' (ZZ, ADR-0089).
 func (q *Queries) GetTaxRate(ctx context.Context, country string) (int32, error) {
 	row := q.db.QueryRow(ctx, getTaxRate, country)
 	var rate_bps int32

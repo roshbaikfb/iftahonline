@@ -2890,6 +2890,140 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/payment-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How each country's merchants are paid
+         * @description For a merchant's country, the gateway the platform bills it through
+         *     and those its storefront may take cards with (cash on delivery
+         *     always). ZZ is every other country (ADR-0089).
+         */
+        get: operations["adminListPaymentRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/payment-rules/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a country's payment rule
+         * @description Recorded in the admin log first.
+         */
+        put: operations["adminSavePaymentRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/payment-rules/{country}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a country's own payment rule
+         * @description The country then follows the row of the other countries (ZZ), which stays. Recorded in the admin log first.
+         */
+        post: operations["adminRemovePaymentRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/taxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tax on the platform's invoices, by country
+         * @description The account's country's rate, else the others' (ZZ); it reaches the invoices written after a change (ADR-0089).
+         */
+        get: operations["adminListTaxes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/taxes/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a country's tax
+         * @description Recorded in the admin log first.
+         */
+        put: operations["adminSaveTax"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/taxes/{country}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a country's own tax
+         * @description The country then follows the row of the other countries (ZZ), which stays. Recorded in the admin log first.
+         */
+        post: operations["adminRemoveTax"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/collection": {
         parameters: {
             query?: never;
@@ -5846,6 +5980,53 @@ export interface components {
             /** @description The discount new members keep, in basis points (2000 = 20%). */
             discount_bps: number;
         };
+        AdminPaymentRule: {
+            /**
+             * @description ZZ: every other country.
+             * @example EG
+             */
+            country: string;
+            /**
+             * @description The gateway the platform bills these merchants through.
+             * @enum {string}
+             */
+            billing_gateway: "paymob" | "stripe";
+            /** @description The gateways their storefronts may take cards with; cash on delivery always. */
+            store_gateways: ("paymob" | "stripe")[];
+        };
+        AdminPaymentRules: {
+            items: components["schemas"]["AdminPaymentRule"][];
+            /** @description The gateways a rule may name. */
+            gateways: string[];
+        };
+        AdminPaymentRuleInput: {
+            /** @enum {string} */
+            billing_gateway: "paymob" | "stripe";
+            store_gateways: ("paymob" | "stripe")[];
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
+        AdminTax: {
+            /**
+             * @description ZZ: every other country.
+             * @example SA
+             */
+            country: string;
+            /** @example 1500 */
+            rate_bps: number;
+            name_ar: string;
+            name_en: string;
+        };
+        AdminTaxes: {
+            items: components["schemas"]["AdminTax"][];
+        };
+        AdminTaxInput: {
+            rate_bps: number;
+            name_ar: string;
+            name_en: string;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
         AdminCollectionSettings: {
             /** @description Merchants may pay their fees from a prepaid balance. */
             prepaid_enabled: boolean;
@@ -8470,6 +8651,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+        CountryCode: string;
         AgencyID: components["schemas"]["ULID"];
         FeatureKey: string;
         InvoiceStatusFilter: "open" | "overdue" | "paid" | "void";
@@ -12439,6 +12622,156 @@ export interface operations {
         };
         responses: {
             /** @description Recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListPaymentRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules, the others' last, and the gateways a rule may name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPaymentRules"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSavePaymentRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPaymentRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPaymentRule"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRemovePaymentRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListTaxes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The taxes, the others' last. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTaxes"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminTaxInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTax"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRemoveTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description An ISO 3166-1 alpha-2 country, or ZZ for every other country. */
+                country: components["parameters"]["CountryCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Removed. */
             204: {
                 headers: {
                     [name: string]: unknown;

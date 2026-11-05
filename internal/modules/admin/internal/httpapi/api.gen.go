@@ -751,6 +751,78 @@ func (e AdminPaymentOutcome) Valid() bool {
 	}
 }
 
+// Defines values for AdminPaymentRuleBillingGateway.
+const (
+	AdminPaymentRuleBillingGatewayPaymob AdminPaymentRuleBillingGateway = "paymob"
+	AdminPaymentRuleBillingGatewayStripe AdminPaymentRuleBillingGateway = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentRuleBillingGateway enum.
+func (e AdminPaymentRuleBillingGateway) Valid() bool {
+	switch e {
+	case AdminPaymentRuleBillingGatewayPaymob:
+		return true
+	case AdminPaymentRuleBillingGatewayStripe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentRuleStoreGateways.
+const (
+	AdminPaymentRuleStoreGatewaysPaymob AdminPaymentRuleStoreGateways = "paymob"
+	AdminPaymentRuleStoreGatewaysStripe AdminPaymentRuleStoreGateways = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentRuleStoreGateways enum.
+func (e AdminPaymentRuleStoreGateways) Valid() bool {
+	switch e {
+	case AdminPaymentRuleStoreGatewaysPaymob:
+		return true
+	case AdminPaymentRuleStoreGatewaysStripe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentRuleInputBillingGateway.
+const (
+	AdminPaymentRuleInputBillingGatewayPaymob AdminPaymentRuleInputBillingGateway = "paymob"
+	AdminPaymentRuleInputBillingGatewayStripe AdminPaymentRuleInputBillingGateway = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentRuleInputBillingGateway enum.
+func (e AdminPaymentRuleInputBillingGateway) Valid() bool {
+	switch e {
+	case AdminPaymentRuleInputBillingGatewayPaymob:
+		return true
+	case AdminPaymentRuleInputBillingGatewayStripe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPaymentRuleInputStoreGateways.
+const (
+	AdminPaymentRuleInputStoreGatewaysPaymob AdminPaymentRuleInputStoreGateways = "paymob"
+	AdminPaymentRuleInputStoreGatewaysStripe AdminPaymentRuleInputStoreGateways = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the AdminPaymentRuleInputStoreGateways enum.
+func (e AdminPaymentRuleInputStoreGateways) Valid() bool {
+	switch e {
+	case AdminPaymentRuleInputStoreGatewaysPaymob:
+		return true
+	case AdminPaymentRuleInputStoreGatewaysStripe:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminPermission.
 const (
 	AuditRead     AdminPermission = "audit.read"
@@ -2592,6 +2664,48 @@ type AdminPaymentPage struct {
 	NextCursor *string        `json:"next_cursor,omitempty"`
 }
 
+// AdminPaymentRule defines model for AdminPaymentRule.
+type AdminPaymentRule struct {
+	// BillingGateway The gateway the platform bills these merchants through.
+	BillingGateway AdminPaymentRuleBillingGateway `json:"billing_gateway"`
+
+	// Country ZZ: every other country.
+	//
+	// Example: EG
+	Country string `json:"country"`
+
+	// StoreGateways The gateways their storefronts may take cards with; cash on delivery always.
+	StoreGateways []AdminPaymentRuleStoreGateways `json:"store_gateways"`
+}
+
+// AdminPaymentRuleBillingGateway The gateway the platform bills these merchants through.
+type AdminPaymentRuleBillingGateway string
+
+// AdminPaymentRuleStoreGateways defines model for AdminPaymentRule.StoreGateways.
+type AdminPaymentRuleStoreGateways string
+
+// AdminPaymentRuleInput defines model for AdminPaymentRuleInput.
+type AdminPaymentRuleInput struct {
+	BillingGateway AdminPaymentRuleInputBillingGateway `json:"billing_gateway"`
+
+	// Reason Kept in the admin audit log.
+	Reason        string                               `json:"reason"`
+	StoreGateways []AdminPaymentRuleInputStoreGateways `json:"store_gateways"`
+}
+
+// AdminPaymentRuleInputBillingGateway defines model for AdminPaymentRuleInput.BillingGateway.
+type AdminPaymentRuleInputBillingGateway string
+
+// AdminPaymentRuleInputStoreGateways defines model for AdminPaymentRuleInput.StoreGateways.
+type AdminPaymentRuleInputStoreGateways string
+
+// AdminPaymentRules defines model for AdminPaymentRules.
+type AdminPaymentRules struct {
+	// Gateways The gateways a rule may name.
+	Gateways []string           `json:"gateways"`
+	Items    []AdminPaymentRule `json:"items"`
+}
+
 // AdminPermission defines model for AdminPermission.
 type AdminPermission string
 
@@ -3186,6 +3300,34 @@ type AdminStoreSummary struct {
 	Store       Store  `json:"store"`
 }
 
+// AdminTax defines model for AdminTax.
+type AdminTax struct {
+	// Country ZZ: every other country.
+	//
+	// Example: SA
+	Country string `json:"country"`
+	NameAr  string `json:"name_ar"`
+	NameEn  string `json:"name_en"`
+
+	// RateBps Example: 1500
+	RateBps int `json:"rate_bps"`
+}
+
+// AdminTaxInput defines model for AdminTaxInput.
+type AdminTaxInput struct {
+	NameAr  string `json:"name_ar"`
+	NameEn  string `json:"name_en"`
+	RateBps int    `json:"rate_bps"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
+// AdminTaxes defines model for AdminTaxes.
+type AdminTaxes struct {
+	Items []AdminTax `json:"items"`
+}
+
 // AdminTeam defines model for AdminTeam.
 type AdminTeam struct {
 	Admins []AdminTeamMember `json:"admins"`
@@ -3479,6 +3621,9 @@ type AssetID = ULID
 // CategoryID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CategoryID = ULID
 
+// CountryCode Example: SA
+type CountryCode = string
+
 // CustomerID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type CustomerID = ULID
 
@@ -3685,6 +3830,18 @@ type AdminSaveCollectionSettingsJSONRequestBody = AdminCollectionSettingsInput
 // AdminMarkDuplicateRefundedJSONRequestBody defines body for AdminMarkDuplicateRefunded for application/json ContentType.
 type AdminMarkDuplicateRefundedJSONRequestBody = AdminRefundInput
 
+// AdminSavePaymentRuleJSONRequestBody defines body for AdminSavePaymentRule for application/json ContentType.
+type AdminSavePaymentRuleJSONRequestBody = AdminPaymentRuleInput
+
+// AdminRemovePaymentRuleJSONRequestBody defines body for AdminRemovePaymentRule for application/json ContentType.
+type AdminRemovePaymentRuleJSONRequestBody = AdminReason
+
+// AdminSaveTaxJSONRequestBody defines body for AdminSaveTax for application/json ContentType.
+type AdminSaveTaxJSONRequestBody = AdminTaxInput
+
+// AdminRemoveTaxJSONRequestBody defines body for AdminRemoveTax for application/json ContentType.
+type AdminRemoveTaxJSONRequestBody = AdminReason
+
 // AdminSaveFeatureJSONRequestBody defines body for AdminSaveFeature for application/json ContentType.
 type AdminSaveFeatureJSONRequestBody = AdminFeatureInput
 
@@ -3861,9 +4018,27 @@ type ServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request, paymentId ULID)
+	// AdminListPaymentRules How each country's merchants are paid
+	// (GET /admin/v1/billing/payment-rules)
+	AdminListPaymentRules(w http.ResponseWriter, r *http.Request)
+	// AdminSavePaymentRule Set a country's payment rule
+	// (PUT /admin/v1/billing/payment-rules/{country})
+	AdminSavePaymentRule(w http.ResponseWriter, r *http.Request, country CountryCode)
+	// AdminRemovePaymentRule Remove a country's own payment rule
+	// (POST /admin/v1/billing/payment-rules/{country}/remove)
+	AdminRemovePaymentRule(w http.ResponseWriter, r *http.Request, country CountryCode)
 	// AdminBillingSummary Open, overdue and collected invoices, and failed payments
 	// (GET /admin/v1/billing/summary)
 	AdminBillingSummary(w http.ResponseWriter, r *http.Request)
+	// AdminListTaxes The tax on the platform's invoices, by country
+	// (GET /admin/v1/billing/taxes)
+	AdminListTaxes(w http.ResponseWriter, r *http.Request)
+	// AdminSaveTax Set a country's tax
+	// (PUT /admin/v1/billing/taxes/{country})
+	AdminSaveTax(w http.ResponseWriter, r *http.Request, country CountryCode)
+	// AdminRemoveTax Remove a country's own tax
+	// (POST /admin/v1/billing/taxes/{country}/remove)
+	AdminRemoveTax(w http.ResponseWriter, r *http.Request, country CountryCode)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(w http.ResponseWriter, r *http.Request)
@@ -4551,11 +4726,143 @@ func (siw *ServerInterfaceWrapper) AdminMarkDuplicateRefunded(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// AdminListPaymentRules operation middleware
+func (siw *ServerInterfaceWrapper) AdminListPaymentRules(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListPaymentRules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSavePaymentRule operation middleware
+func (siw *ServerInterfaceWrapper) AdminSavePaymentRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "country" -------------
+	var country CountryCode
+
+	err = runtime.BindStyledParameterWithOptions("simple", "country", r.PathValue("country"), &country, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSavePaymentRule(w, r, country)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRemovePaymentRule operation middleware
+func (siw *ServerInterfaceWrapper) AdminRemovePaymentRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "country" -------------
+	var country CountryCode
+
+	err = runtime.BindStyledParameterWithOptions("simple", "country", r.PathValue("country"), &country, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRemovePaymentRule(w, r, country)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminBillingSummary operation middleware
 func (siw *ServerInterfaceWrapper) AdminBillingSummary(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminBillingSummary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListTaxes operation middleware
+func (siw *ServerInterfaceWrapper) AdminListTaxes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListTaxes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveTax operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveTax(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "country" -------------
+	var country CountryCode
+
+	err = runtime.BindStyledParameterWithOptions("simple", "country", r.PathValue("country"), &country, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveTax(w, r, country)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRemoveTax operation middleware
+func (siw *ServerInterfaceWrapper) AdminRemoveTax(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "country" -------------
+	var country CountryCode
+
+	err = runtime.BindStyledParameterWithOptions("simple", "country", r.PathValue("country"), &country, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRemoveTax(w, r, country)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6433,6 +6740,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/site/guides/{guide_id}", wrapper.AdminUpdateSiteGuide)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/duplicates", wrapper.AdminListDuplicatePayments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/duplicates/{payment_id}/refunded", wrapper.AdminMarkDuplicateRefunded)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/payment-rules", wrapper.AdminListPaymentRules)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/payment-rules/{country}", wrapper.AdminSavePaymentRule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/payment-rules/{country}/remove", wrapper.AdminRemovePaymentRule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/taxes", wrapper.AdminListTaxes)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/taxes/{country}", wrapper.AdminSaveTax)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/taxes/{country}/remove", wrapper.AdminRemoveTax)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminGetCollectionSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminSaveCollectionSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/summary", wrapper.AdminBillingSummary)
@@ -7267,6 +7580,118 @@ func (response AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONRespon
 	return err
 }
 
+type AdminListPaymentRulesRequestObject struct {
+}
+
+type AdminListPaymentRulesResponseObject interface {
+	VisitAdminListPaymentRulesResponse(w http.ResponseWriter) error
+}
+
+type AdminListPaymentRules200JSONResponse AdminPaymentRules
+
+func (response AdminListPaymentRules200JSONResponse) VisitAdminListPaymentRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListPaymentRulesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListPaymentRulesdefaultApplicationProblemPlusJSONResponse) VisitAdminListPaymentRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSavePaymentRuleRequestObject struct {
+	Country CountryCode `json:"country"`
+	Body    *AdminSavePaymentRuleJSONRequestBody
+}
+
+type AdminSavePaymentRuleResponseObject interface {
+	VisitAdminSavePaymentRuleResponse(w http.ResponseWriter) error
+}
+
+type AdminSavePaymentRule200JSONResponse AdminPaymentRule
+
+func (response AdminSavePaymentRule200JSONResponse) VisitAdminSavePaymentRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSavePaymentRuledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSavePaymentRuledefaultApplicationProblemPlusJSONResponse) VisitAdminSavePaymentRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemovePaymentRuleRequestObject struct {
+	Country CountryCode `json:"country"`
+	Body    *AdminRemovePaymentRuleJSONRequestBody
+}
+
+type AdminRemovePaymentRuleResponseObject interface {
+	VisitAdminRemovePaymentRuleResponse(w http.ResponseWriter) error
+}
+
+type AdminRemovePaymentRule204Response struct {
+}
+
+func (response AdminRemovePaymentRule204Response) VisitAdminRemovePaymentRuleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRemovePaymentRuledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRemovePaymentRuledefaultApplicationProblemPlusJSONResponse) VisitAdminRemovePaymentRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminBillingSummaryRequestObject struct {
 }
 
@@ -7294,6 +7719,118 @@ type AdminBillingSummarydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminBillingSummarydefaultApplicationProblemPlusJSONResponse) VisitAdminBillingSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListTaxesRequestObject struct {
+}
+
+type AdminListTaxesResponseObject interface {
+	VisitAdminListTaxesResponse(w http.ResponseWriter) error
+}
+
+type AdminListTaxes200JSONResponse AdminTaxes
+
+func (response AdminListTaxes200JSONResponse) VisitAdminListTaxesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListTaxesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListTaxesdefaultApplicationProblemPlusJSONResponse) VisitAdminListTaxesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveTaxRequestObject struct {
+	Country CountryCode `json:"country"`
+	Body    *AdminSaveTaxJSONRequestBody
+}
+
+type AdminSaveTaxResponseObject interface {
+	VisitAdminSaveTaxResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveTax200JSONResponse AdminTax
+
+func (response AdminSaveTax200JSONResponse) VisitAdminSaveTaxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveTaxdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveTaxdefaultApplicationProblemPlusJSONResponse) VisitAdminSaveTaxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRemoveTaxRequestObject struct {
+	Country CountryCode `json:"country"`
+	Body    *AdminRemoveTaxJSONRequestBody
+}
+
+type AdminRemoveTaxResponseObject interface {
+	VisitAdminRemoveTaxResponse(w http.ResponseWriter) error
+}
+
+type AdminRemoveTax204Response struct {
+}
+
+func (response AdminRemoveTax204Response) VisitAdminRemoveTaxResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRemoveTaxdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRemoveTaxdefaultApplicationProblemPlusJSONResponse) VisitAdminRemoveTaxResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9880,9 +10417,27 @@ type StrictServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(ctx context.Context, request AdminMarkDuplicateRefundedRequestObject) (AdminMarkDuplicateRefundedResponseObject, error)
+	// AdminListPaymentRules How each country's merchants are paid
+	// (GET /admin/v1/billing/payment-rules)
+	AdminListPaymentRules(ctx context.Context, request AdminListPaymentRulesRequestObject) (AdminListPaymentRulesResponseObject, error)
+	// AdminSavePaymentRule Set a country's payment rule
+	// (PUT /admin/v1/billing/payment-rules/{country})
+	AdminSavePaymentRule(ctx context.Context, request AdminSavePaymentRuleRequestObject) (AdminSavePaymentRuleResponseObject, error)
+	// AdminRemovePaymentRule Remove a country's own payment rule
+	// (POST /admin/v1/billing/payment-rules/{country}/remove)
+	AdminRemovePaymentRule(ctx context.Context, request AdminRemovePaymentRuleRequestObject) (AdminRemovePaymentRuleResponseObject, error)
 	// AdminBillingSummary Open, overdue and collected invoices, and failed payments
 	// (GET /admin/v1/billing/summary)
 	AdminBillingSummary(ctx context.Context, request AdminBillingSummaryRequestObject) (AdminBillingSummaryResponseObject, error)
+	// AdminListTaxes The tax on the platform's invoices, by country
+	// (GET /admin/v1/billing/taxes)
+	AdminListTaxes(ctx context.Context, request AdminListTaxesRequestObject) (AdminListTaxesResponseObject, error)
+	// AdminSaveTax Set a country's tax
+	// (PUT /admin/v1/billing/taxes/{country})
+	AdminSaveTax(ctx context.Context, request AdminSaveTaxRequestObject) (AdminSaveTaxResponseObject, error)
+	// AdminRemoveTax Remove a country's own tax
+	// (POST /admin/v1/billing/taxes/{country}/remove)
+	AdminRemoveTax(ctx context.Context, request AdminRemoveTaxRequestObject) (AdminRemoveTaxResponseObject, error)
 	// AdminListFeatures The features catalog plans grant from
 	// (GET /admin/v1/features)
 	AdminListFeatures(ctx context.Context, request AdminListFeaturesRequestObject) (AdminListFeaturesResponseObject, error)
@@ -10723,6 +11278,96 @@ func (sh *strictHandler) AdminMarkDuplicateRefunded(w http.ResponseWriter, r *ht
 	}
 }
 
+// AdminListPaymentRules operation middleware
+func (sh *strictHandler) AdminListPaymentRules(w http.ResponseWriter, r *http.Request) {
+	var request AdminListPaymentRulesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListPaymentRules(ctx, request.(AdminListPaymentRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListPaymentRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListPaymentRulesResponseObject); ok {
+		if err := validResponse.VisitAdminListPaymentRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSavePaymentRule operation middleware
+func (sh *strictHandler) AdminSavePaymentRule(w http.ResponseWriter, r *http.Request, country CountryCode) {
+	var request AdminSavePaymentRuleRequestObject
+
+	request.Country = country
+
+	var body AdminSavePaymentRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSavePaymentRule(ctx, request.(AdminSavePaymentRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSavePaymentRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSavePaymentRuleResponseObject); ok {
+		if err := validResponse.VisitAdminSavePaymentRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRemovePaymentRule operation middleware
+func (sh *strictHandler) AdminRemovePaymentRule(w http.ResponseWriter, r *http.Request, country CountryCode) {
+	var request AdminRemovePaymentRuleRequestObject
+
+	request.Country = country
+
+	var body AdminRemovePaymentRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRemovePaymentRule(ctx, request.(AdminRemovePaymentRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRemovePaymentRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRemovePaymentRuleResponseObject); ok {
+		if err := validResponse.VisitAdminRemovePaymentRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminBillingSummary operation middleware
 func (sh *strictHandler) AdminBillingSummary(w http.ResponseWriter, r *http.Request) {
 	var request AdminBillingSummaryRequestObject
@@ -10740,6 +11385,96 @@ func (sh *strictHandler) AdminBillingSummary(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminBillingSummaryResponseObject); ok {
 		if err := validResponse.VisitAdminBillingSummaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListTaxes operation middleware
+func (sh *strictHandler) AdminListTaxes(w http.ResponseWriter, r *http.Request) {
+	var request AdminListTaxesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListTaxes(ctx, request.(AdminListTaxesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListTaxes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListTaxesResponseObject); ok {
+		if err := validResponse.VisitAdminListTaxesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveTax operation middleware
+func (sh *strictHandler) AdminSaveTax(w http.ResponseWriter, r *http.Request, country CountryCode) {
+	var request AdminSaveTaxRequestObject
+
+	request.Country = country
+
+	var body AdminSaveTaxJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveTax(ctx, request.(AdminSaveTaxRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveTax")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveTaxResponseObject); ok {
+		if err := validResponse.VisitAdminSaveTaxResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRemoveTax operation middleware
+func (sh *strictHandler) AdminRemoveTax(w http.ResponseWriter, r *http.Request, country CountryCode) {
+	var request AdminRemoveTaxRequestObject
+
+	request.Country = country
+
+	var body AdminRemoveTaxJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRemoveTax(ctx, request.(AdminRemoveTaxRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRemoveTax")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRemoveTaxResponseObject); ok {
+		if err := validResponse.VisitAdminRemoveTaxResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1099,6 +1099,63 @@ func TestConsoleStoreCountry(t *testing.T) {
 	}
 }
 
+// TestConsolePaymentRulesAndTaxes: payment rules and taxes by country
+// over HTTP (ADR-0089): the viewer reads, a billing manager changes them
+// with a reason, the others' row stays. Bahrain only: other tests read the
+// seeded rows.
+func TestConsolePaymentRulesAndTaxes(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	viewer := f.loginAs(t, "viewer")
+	t.Cleanup(func() {
+		c := billing.NewCollection(f.adminPool)
+		_ = c.RemovePaymentRule(context.Background(), "BH")
+		_ = c.RemoveTax(context.Background(), "BH")
+	})
+
+	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/payment-rules", "", withCookie(viewer))
+	items, _ := r.body["items"].([]any)
+	if r.status != http.StatusOK || len(items) < 2 || items[len(items)-1].(map[string]any)["country"] != "ZZ" || len(r.body["gateways"].([]any)) != 2 {
+		t.Fatalf("rules = %d %v", r.status, r.body)
+	}
+	rule := `{"billing_gateway":"stripe","store_gateways":[],"reason":"cash on delivery only for now"}`
+	cases := []struct {
+		method, path, body, token string
+		cross                     bool
+		status                    int
+	}{
+		{http.MethodPut, "/admin/v1/billing/payment-rules/BH", rule, viewer, false, http.StatusForbidden},
+		{http.MethodPut, "/admin/v1/billing/payment-rules/BH", rule, sess, true, http.StatusForbidden},
+		{http.MethodPut, "/admin/v1/billing/payment-rules/BH", `{"billing_gateway":"stripe","store_gateways":[],"reason":"x"}`, sess, false, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/billing/payment-rules/BH", ``, sess, false, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/billing/payment-rules/BH", rule, sess, false, http.StatusOK},
+		{http.MethodPost, "/admin/v1/billing/payment-rules/BH/remove", `{"reason":"back to the others"}`, sess, false, http.StatusNoContent},
+		{http.MethodPost, "/admin/v1/billing/payment-rules/BH/remove", `{"reason":"again"}`, sess, false, http.StatusNotFound},
+		{http.MethodPost, "/admin/v1/billing/payment-rules/ZZ/remove", `{"reason":"the others"}`, sess, false, http.StatusConflict},
+		{http.MethodPost, "/admin/v1/billing/payment-rules/BH/remove", ``, sess, false, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/billing/taxes/BH", `{"rate_bps":1000,"name_ar":"ضريبة القيمة المضافة","name_en":"VAT","reason":"Bahrain's VAT"}`, viewer, false, http.StatusForbidden},
+		{http.MethodPut, "/admin/v1/billing/taxes/BH", `{"rate_bps":9000,"name_ar":"ضريبة","name_en":"VAT","reason":"too much"}`, sess, false, http.StatusUnprocessableEntity},
+		{http.MethodPut, "/admin/v1/billing/taxes/BH", ``, sess, false, http.StatusBadRequest},
+		{http.MethodPut, "/admin/v1/billing/taxes/BH", `{"rate_bps":1000,"name_ar":"ضريبة القيمة المضافة","name_en":"VAT","reason":"Bahrain's VAT"}`, sess, false, http.StatusOK},
+		{http.MethodPost, "/admin/v1/billing/taxes/BH/remove", `{"reason":"back to the others"}`, sess, false, http.StatusNoContent},
+		{http.MethodPost, "/admin/v1/billing/taxes/ZZ/remove", `{"reason":"the others"}`, sess, false, http.StatusConflict},
+		{http.MethodPost, "/admin/v1/billing/taxes/BH/remove", ``, sess, false, http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		opts := []func(*http.Request){withCookie(c.token)}
+		if !c.cross {
+			opts = append(opts, sameOrigin)
+		}
+		if got := f.do(t, c.method, adminHost, c.path, c.body, opts...); got.status != c.status {
+			t.Errorf("%s %s %s = %d %v; want %d", c.method, c.path, c.body, got.status, got.body, c.status)
+		}
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/taxes", "", withCookie(viewer)); r.status != http.StatusOK || len(r.body["items"].([]any)) < 4 {
+		t.Fatalf("taxes = %d %v", r.status, r.body)
+	}
+}
+
 // TestConsoleSiteGuides: the guides from the console (S4c).
 func TestConsoleSiteGuides(t *testing.T) {
 	t.Parallel()

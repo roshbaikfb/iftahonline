@@ -740,6 +740,13 @@ type PaymentRefund struct {
 	UpdatedAt        pgtype.Timestamptz
 }
 
+type PaymentRule struct {
+	Country        string
+	BillingGateway string
+	StoreGateways  []string
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type PaymentSetting struct {
 	StoreID       pgtype.UUID
 	DefaultMethod string
