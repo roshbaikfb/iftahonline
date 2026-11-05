@@ -111,6 +111,7 @@ const (
 	AdminAgencyCurrencyAED AdminAgencyCurrency = "AED"
 	AdminAgencyCurrencyEGP AdminAgencyCurrency = "EGP"
 	AdminAgencyCurrencySAR AdminAgencyCurrency = "SAR"
+	AdminAgencyCurrencyUSD AdminAgencyCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminAgencyCurrency enum.
@@ -122,6 +123,8 @@ func (e AdminAgencyCurrency) Valid() bool {
 		return true
 	case AdminAgencyCurrencySAR:
 		return true
+	case AdminAgencyCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -132,6 +135,7 @@ const (
 	AdminAgencyInputCurrencyAED AdminAgencyInputCurrency = "AED"
 	AdminAgencyInputCurrencyEGP AdminAgencyInputCurrency = "EGP"
 	AdminAgencyInputCurrencySAR AdminAgencyInputCurrency = "SAR"
+	AdminAgencyInputCurrencyUSD AdminAgencyInputCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminAgencyInputCurrency enum.
@@ -142,6 +146,8 @@ func (e AdminAgencyInputCurrency) Valid() bool {
 	case AdminAgencyInputCurrencyEGP:
 		return true
 	case AdminAgencyInputCurrencySAR:
+		return true
+	case AdminAgencyInputCurrencyUSD:
 		return true
 	default:
 		return false
@@ -291,6 +297,7 @@ const (
 	AdminCollectedSeriesCurrencyAED AdminCollectedSeriesCurrency = "AED"
 	AdminCollectedSeriesCurrencyEGP AdminCollectedSeriesCurrency = "EGP"
 	AdminCollectedSeriesCurrencySAR AdminCollectedSeriesCurrency = "SAR"
+	AdminCollectedSeriesCurrencyUSD AdminCollectedSeriesCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminCollectedSeriesCurrency enum.
@@ -302,6 +309,8 @@ func (e AdminCollectedSeriesCurrency) Valid() bool {
 		return true
 	case AdminCollectedSeriesCurrencySAR:
 		return true
+	case AdminCollectedSeriesCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -312,6 +321,7 @@ const (
 	AdminCollectionMinimumCurrencyAED AdminCollectionMinimumCurrency = "AED"
 	AdminCollectionMinimumCurrencyEGP AdminCollectionMinimumCurrency = "EGP"
 	AdminCollectionMinimumCurrencySAR AdminCollectionMinimumCurrency = "SAR"
+	AdminCollectionMinimumCurrencyUSD AdminCollectionMinimumCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminCollectionMinimumCurrency enum.
@@ -323,6 +333,8 @@ func (e AdminCollectionMinimumCurrency) Valid() bool {
 		return true
 	case AdminCollectionMinimumCurrencySAR:
 		return true
+	case AdminCollectionMinimumCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -333,6 +345,7 @@ const (
 	AdminCurrencyTotalCurrencyAED AdminCurrencyTotalCurrency = "AED"
 	AdminCurrencyTotalCurrencyEGP AdminCurrencyTotalCurrency = "EGP"
 	AdminCurrencyTotalCurrencySAR AdminCurrencyTotalCurrency = "SAR"
+	AdminCurrencyTotalCurrencyUSD AdminCurrencyTotalCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminCurrencyTotalCurrency enum.
@@ -344,6 +357,8 @@ func (e AdminCurrencyTotalCurrency) Valid() bool {
 		return true
 	case AdminCurrencyTotalCurrencySAR:
 		return true
+	case AdminCurrencyTotalCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -354,6 +369,7 @@ const (
 	AdminDayMRRCurrencyAED AdminDayMRRCurrency = "AED"
 	AdminDayMRRCurrencyEGP AdminDayMRRCurrency = "EGP"
 	AdminDayMRRCurrencySAR AdminDayMRRCurrency = "SAR"
+	AdminDayMRRCurrencyUSD AdminDayMRRCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminDayMRRCurrency enum.
@@ -365,6 +381,8 @@ func (e AdminDayMRRCurrency) Valid() bool {
 		return true
 	case AdminDayMRRCurrencySAR:
 		return true
+	case AdminDayMRRCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -375,6 +393,7 @@ const (
 	AdminDuplicatePaymentCurrencyAED AdminDuplicatePaymentCurrency = "AED"
 	AdminDuplicatePaymentCurrencyEGP AdminDuplicatePaymentCurrency = "EGP"
 	AdminDuplicatePaymentCurrencySAR AdminDuplicatePaymentCurrency = "SAR"
+	AdminDuplicatePaymentCurrencyUSD AdminDuplicatePaymentCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminDuplicatePaymentCurrency enum.
@@ -385,6 +404,8 @@ func (e AdminDuplicatePaymentCurrency) Valid() bool {
 	case AdminDuplicatePaymentCurrencyEGP:
 		return true
 	case AdminDuplicatePaymentCurrencySAR:
+		return true
+	case AdminDuplicatePaymentCurrencyUSD:
 		return true
 	default:
 		return false
@@ -579,6 +600,7 @@ const (
 	AdminInvoiceCurrencyAED AdminInvoiceCurrency = "AED"
 	AdminInvoiceCurrencyEGP AdminInvoiceCurrency = "EGP"
 	AdminInvoiceCurrencySAR AdminInvoiceCurrency = "SAR"
+	AdminInvoiceCurrencyUSD AdminInvoiceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminInvoiceCurrency enum.
@@ -589,6 +611,8 @@ func (e AdminInvoiceCurrency) Valid() bool {
 	case AdminInvoiceCurrencyEGP:
 		return true
 	case AdminInvoiceCurrencySAR:
+		return true
+	case AdminInvoiceCurrencyUSD:
 		return true
 	default:
 		return false
@@ -681,6 +705,7 @@ const (
 	AdminPaymentCurrencyAED AdminPaymentCurrency = "AED"
 	AdminPaymentCurrencyEGP AdminPaymentCurrency = "EGP"
 	AdminPaymentCurrencySAR AdminPaymentCurrency = "SAR"
+	AdminPaymentCurrencyUSD AdminPaymentCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminPaymentCurrency enum.
@@ -691,6 +716,8 @@ func (e AdminPaymentCurrency) Valid() bool {
 	case AdminPaymentCurrencyEGP:
 		return true
 	case AdminPaymentCurrencySAR:
+		return true
+	case AdminPaymentCurrencyUSD:
 		return true
 	default:
 		return false
@@ -774,6 +801,7 @@ const (
 	AdminPlanFeeCurrencyAED AdminPlanFeeCurrency = "AED"
 	AdminPlanFeeCurrencyEGP AdminPlanFeeCurrency = "EGP"
 	AdminPlanFeeCurrencySAR AdminPlanFeeCurrency = "SAR"
+	AdminPlanFeeCurrencyUSD AdminPlanFeeCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminPlanFeeCurrency enum.
@@ -784,6 +812,8 @@ func (e AdminPlanFeeCurrency) Valid() bool {
 	case AdminPlanFeeCurrencyEGP:
 		return true
 	case AdminPlanFeeCurrencySAR:
+		return true
+	case AdminPlanFeeCurrencyUSD:
 		return true
 	default:
 		return false
@@ -819,6 +849,7 @@ const (
 	AdminPlanPriceCurrencyAED AdminPlanPriceCurrency = "AED"
 	AdminPlanPriceCurrencyEGP AdminPlanPriceCurrency = "EGP"
 	AdminPlanPriceCurrencySAR AdminPlanPriceCurrency = "SAR"
+	AdminPlanPriceCurrencyUSD AdminPlanPriceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminPlanPriceCurrency enum.
@@ -829,6 +860,8 @@ func (e AdminPlanPriceCurrency) Valid() bool {
 	case AdminPlanPriceCurrencyEGP:
 		return true
 	case AdminPlanPriceCurrencySAR:
+		return true
+	case AdminPlanPriceCurrencyUSD:
 		return true
 	default:
 		return false
@@ -858,6 +891,7 @@ const (
 	AdminPlanRevenueCurrencyAED AdminPlanRevenueCurrency = "AED"
 	AdminPlanRevenueCurrencyEGP AdminPlanRevenueCurrency = "EGP"
 	AdminPlanRevenueCurrencySAR AdminPlanRevenueCurrency = "SAR"
+	AdminPlanRevenueCurrencyUSD AdminPlanRevenueCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminPlanRevenueCurrency enum.
@@ -869,6 +903,8 @@ func (e AdminPlanRevenueCurrency) Valid() bool {
 		return true
 	case AdminPlanRevenueCurrencySAR:
 		return true
+	case AdminPlanRevenueCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -879,6 +915,7 @@ const (
 	AdminRevenueCurrencyAED AdminRevenueCurrency = "AED"
 	AdminRevenueCurrencyEGP AdminRevenueCurrency = "EGP"
 	AdminRevenueCurrencySAR AdminRevenueCurrency = "SAR"
+	AdminRevenueCurrencyUSD AdminRevenueCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminRevenueCurrency enum.
@@ -889,6 +926,8 @@ func (e AdminRevenueCurrency) Valid() bool {
 	case AdminRevenueCurrencyEGP:
 		return true
 	case AdminRevenueCurrencySAR:
+		return true
+	case AdminRevenueCurrencyUSD:
 		return true
 	default:
 		return false
@@ -1086,6 +1125,7 @@ const (
 	AdminStoreBalanceCurrencyAED AdminStoreBalanceCurrency = "AED"
 	AdminStoreBalanceCurrencyEGP AdminStoreBalanceCurrency = "EGP"
 	AdminStoreBalanceCurrencySAR AdminStoreBalanceCurrency = "SAR"
+	AdminStoreBalanceCurrencyUSD AdminStoreBalanceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminStoreBalanceCurrency enum.
@@ -1096,6 +1136,8 @@ func (e AdminStoreBalanceCurrency) Valid() bool {
 	case AdminStoreBalanceCurrencyEGP:
 		return true
 	case AdminStoreBalanceCurrencySAR:
+		return true
+	case AdminStoreBalanceCurrencyUSD:
 		return true
 	default:
 		return false
@@ -1344,6 +1386,7 @@ const (
 	OpenInvoiceCurrencyAED OpenInvoiceCurrency = "AED"
 	OpenInvoiceCurrencyEGP OpenInvoiceCurrency = "EGP"
 	OpenInvoiceCurrencySAR OpenInvoiceCurrency = "SAR"
+	OpenInvoiceCurrencyUSD OpenInvoiceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the OpenInvoiceCurrency enum.
@@ -1355,6 +1398,8 @@ func (e OpenInvoiceCurrency) Valid() bool {
 		return true
 	case OpenInvoiceCurrencySAR:
 		return true
+	case OpenInvoiceCurrencyUSD:
+		return true
 	default:
 		return false
 	}
@@ -1365,6 +1410,7 @@ const (
 	StoreCurrencyAED StoreCurrency = "AED"
 	StoreCurrencyEGP StoreCurrency = "EGP"
 	StoreCurrencySAR StoreCurrency = "SAR"
+	StoreCurrencyUSD StoreCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the StoreCurrency enum.
@@ -1375,6 +1421,8 @@ func (e StoreCurrency) Valid() bool {
 	case StoreCurrencyEGP:
 		return true
 	case StoreCurrencySAR:
+		return true
+	case StoreCurrencyUSD:
 		return true
 	default:
 		return false
@@ -1446,6 +1494,7 @@ const (
 	InvoiceCurrencyFilterAED InvoiceCurrencyFilter = "AED"
 	InvoiceCurrencyFilterEGP InvoiceCurrencyFilter = "EGP"
 	InvoiceCurrencyFilterSAR InvoiceCurrencyFilter = "SAR"
+	InvoiceCurrencyFilterUSD InvoiceCurrencyFilter = "USD"
 )
 
 // Valid indicates whether the value is a known member of the InvoiceCurrencyFilter enum.
@@ -1456,6 +1505,8 @@ func (e InvoiceCurrencyFilter) Valid() bool {
 	case InvoiceCurrencyFilterEGP:
 		return true
 	case InvoiceCurrencyFilterSAR:
+		return true
+	case InvoiceCurrencyFilterUSD:
 		return true
 	default:
 		return false
@@ -1563,6 +1614,7 @@ const (
 	AdminListInvoicesParamsCurrencyAED AdminListInvoicesParamsCurrency = "AED"
 	AdminListInvoicesParamsCurrencyEGP AdminListInvoicesParamsCurrency = "EGP"
 	AdminListInvoicesParamsCurrencySAR AdminListInvoicesParamsCurrency = "SAR"
+	AdminListInvoicesParamsCurrencyUSD AdminListInvoicesParamsCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminListInvoicesParamsCurrency enum.
@@ -1573,6 +1625,8 @@ func (e AdminListInvoicesParamsCurrency) Valid() bool {
 	case AdminListInvoicesParamsCurrencyEGP:
 		return true
 	case AdminListInvoicesParamsCurrencySAR:
+		return true
+	case AdminListInvoicesParamsCurrencyUSD:
 		return true
 	default:
 		return false
@@ -1608,6 +1662,7 @@ const (
 	AdminExportInvoicesParamsCurrencyAED AdminExportInvoicesParamsCurrency = "AED"
 	AdminExportInvoicesParamsCurrencyEGP AdminExportInvoicesParamsCurrency = "EGP"
 	AdminExportInvoicesParamsCurrencySAR AdminExportInvoicesParamsCurrency = "SAR"
+	AdminExportInvoicesParamsCurrencyUSD AdminExportInvoicesParamsCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the AdminExportInvoicesParamsCurrency enum.
@@ -1618,6 +1673,8 @@ func (e AdminExportInvoicesParamsCurrency) Valid() bool {
 	case AdminExportInvoicesParamsCurrencyEGP:
 		return true
 	case AdminExportInvoicesParamsCurrencySAR:
+		return true
+	case AdminExportInvoicesParamsCurrencyUSD:
 		return true
 	default:
 		return false
@@ -3369,6 +3426,10 @@ type Problem struct {
 
 // Store defines model for Store.
 type Store struct {
+	// Country The merchant's country (ISO 3166-1 alpha-2), set at sign-up and changed from the console only (ADR-0088).
+	//
+	// Example: EG
+	Country   *string       `json:"country,omitempty"`
 	CreatedAt time.Time     `json:"created_at"`
 	Currency  StoreCurrency `json:"currency"`
 
@@ -3579,6 +3640,15 @@ type AdminListStoresParams struct {
 // AdminListStoresParamsStatus defines parameters for AdminListStores.
 type AdminListStoresParamsStatus string
 
+// AdminSetStoreCountryJSONBody defines parameters for AdminSetStoreCountry.
+type AdminSetStoreCountryJSONBody struct {
+	// Country Example: SA
+	Country string `json:"country"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
 // AdminCreateAdBannerJSONRequestBody defines body for AdminCreateAdBanner for application/json ContentType.
 type AdminCreateAdBannerJSONRequestBody = AdminAdBannerInput
 
@@ -3683,6 +3753,9 @@ type AdminCreateSiteUploadJSONRequestBody = AdminSiteUploadRequest
 
 // AdminCreditStoreBalanceJSONRequestBody defines body for AdminCreditStoreBalance for application/json ContentType.
 type AdminCreditStoreBalanceJSONRequestBody = AdminBalanceCreditInput
+
+// AdminSetStoreCountryJSONRequestBody defines body for AdminSetStoreCountry for application/json ContentType.
+type AdminSetStoreCountryJSONRequestBody AdminSetStoreCountryJSONBody
 
 // AdminSetStoreOverrideJSONRequestBody defines body for AdminSetStoreOverride for application/json ContentType.
 type AdminSetStoreOverrideJSONRequestBody = AdminOverrideInput
@@ -3935,6 +4008,9 @@ type ServerInterface interface {
 	// AdminGetStoreBilling A store's plan, status, card and open invoices
 	// (GET /admin/v1/stores/{store_id}/billing)
 	AdminGetStoreBilling(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminSetStoreCountry Change a store's country
+	// (PUT /admin/v1/stores/{store_id}/country)
+	AdminSetStoreCountry(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
 	// (GET /admin/v1/stores/{store_id}/entitlements)
 	AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -5720,6 +5796,32 @@ func (siw *ServerInterfaceWrapper) AdminGetStoreBilling(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// AdminSetStoreCountry operation middleware
+func (siw *ServerInterfaceWrapper) AdminSetStoreCountry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSetStoreCountry(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminGetStoreEntitlements operation middleware
 func (siw *ServerInterfaceWrapper) AdminGetStoreEntitlements(w http.ResponseWriter, r *http.Request) {
 
@@ -6281,6 +6383,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/suspend", wrapper.AdminSuspendStore)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/country", wrapper.AdminSetStoreCountry)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/impersonate", wrapper.AdminImpersonateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements", wrapper.AdminGetStoreEntitlements)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/stores/{store_id}/entitlements/{feature}", wrapper.AdminSetStoreOverride)
@@ -9058,6 +9161,46 @@ func (response AdminGetStoreBillingdefaultApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type AdminSetStoreCountryRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *AdminSetStoreCountryJSONRequestBody
+}
+
+type AdminSetStoreCountryResponseObject interface {
+	VisitAdminSetStoreCountryResponse(w http.ResponseWriter) error
+}
+
+type AdminSetStoreCountry200JSONResponse Store
+
+func (response AdminSetStoreCountry200JSONResponse) VisitAdminSetStoreCountryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSetStoreCountrydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSetStoreCountrydefaultApplicationProblemPlusJSONResponse) VisitAdminSetStoreCountryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminGetStoreEntitlementsRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 }
@@ -9884,6 +10027,9 @@ type StrictServerInterface interface {
 	// AdminGetStoreBilling A store's plan, status, card and open invoices
 	// (GET /admin/v1/stores/{store_id}/billing)
 	AdminGetStoreBilling(ctx context.Context, request AdminGetStoreBillingRequestObject) (AdminGetStoreBillingResponseObject, error)
+	// AdminSetStoreCountry Change a store's country
+	// (PUT /admin/v1/stores/{store_id}/country)
+	AdminSetStoreCountry(ctx context.Context, request AdminSetStoreCountryRequestObject) (AdminSetStoreCountryResponseObject, error)
 	// AdminGetStoreEntitlements What a store's plan grants, its overrides, and the result
 	// (GET /admin/v1/stores/{store_id}/entitlements)
 	AdminGetStoreEntitlements(ctx context.Context, request AdminGetStoreEntitlementsRequestObject) (AdminGetStoreEntitlementsResponseObject, error)
@@ -11960,6 +12106,39 @@ func (sh *strictHandler) AdminGetStoreBilling(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminGetStoreBillingResponseObject); ok {
 		if err := validResponse.VisitAdminGetStoreBillingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSetStoreCountry operation middleware
+func (sh *strictHandler) AdminSetStoreCountry(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminSetStoreCountryRequestObject
+
+	request.StoreId = storeId
+
+	var body AdminSetStoreCountryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSetStoreCountry(ctx, request.(AdminSetStoreCountryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSetStoreCountry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSetStoreCountryResponseObject); ok {
+		if err := validResponse.VisitAdminSetStoreCountryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1156,6 +1156,7 @@ type Store struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	BillingHold bool
+	Country     *string
 }
 
 type StoreAsset struct {

@@ -243,3 +243,49 @@ func cairoZone(t *testing.T) *time.Location {
 	}
 	return loc
 }
+
+// TestSetStoreCountry: the console changes a store's country to one the
+// storefront delivers in, recorded first with the countries from and to
+// (ADR-0088); a code that is no country, or no reason, records nothing.
+func TestSetStoreCountry(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, me := f.signedIn(t)
+	shop := f.createStore(t)
+
+	st, err := f.svc.SetStoreCountry(ctx, shop, " ae ", "the merchant moved to Dubai")
+	if err != nil || st.Country != "AE" {
+		t.Fatalf("set = %+v, %v", st, err)
+	}
+	for name, err := range map[string]error{
+		"no reason":       func() error { _, e := f.svc.SetStoreCountry(ctx, shop, "SA", ""); return e }(),
+		"not a country":   func() error { _, e := f.svc.SetStoreCountry(ctx, shop, "EU", "moved"); return e }(),
+		"outside the GCC": func() error { _, e := f.svc.SetStoreCountry(ctx, shop, "GB", "moved to London"); return e }(),
+	} {
+		if !errs.Is(err, errs.KindValidation) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err = f.svc.SetStoreCountry(ctx, tenant.StoreID{ID: f.ids.New()}, "SA", "moved"); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("unknown shop: %v", err)
+	}
+	if _, err = f.svc.SetStoreCountry(t.Context(), shop, "SA", "moved"); err == nil {
+		t.Fatal("no session")
+	}
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changes int
+	for _, e := range page.Items {
+		if e.AdminID != nil && *e.AdminID == me.Admin.ID && e.Action == "store.country_changed" && e.TargetID == shop.String() {
+			changes++
+		}
+	}
+	// AE, then GB: refused by the store after it was recorded, so the
+	// attempt is in the log (as for setStatus); EU and no reason are
+	// refused before.
+	if changes != 2 {
+		t.Fatalf("%d country changes in the admin log, want 2", changes)
+	}
+}

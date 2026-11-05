@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -33,8 +34,13 @@ type CollectionSettings struct {
 	Minimums map[string]int64 // by currency: EGP, SAR, AED
 }
 
-// Currencies are the platform's, in the order the console shows them.
+// Currencies are the ones billing sells in, in the order the console
+// shows them. The dollar joins with its prices and Stripe (ADR-0088's
+// G3); stores may sell in it before.
 func Currencies() []string { return []string{"EGP", "SAR", "AED"} }
+
+// Billed reports whether billing sells in cur.
+func Billed(cur string) bool { return slices.Contains(Currencies(), cur) }
 
 // Validate checks every currency has a minimum within bounds.
 func (c CollectionSettings) Validate() error {

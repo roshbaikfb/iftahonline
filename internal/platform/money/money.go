@@ -33,6 +33,7 @@ const (
 	EGP Currency = "EGP" // Egyptian pound
 	SAR Currency = "SAR" // Saudi riyal
 	AED Currency = "AED" // UAE dirham
+	USD Currency = "USD" // US dollar: stores outside the region (ADR-0088)
 )
 
 type currencyInfo struct {
@@ -51,13 +52,15 @@ func (c Currency) info() (currencyInfo, bool) {
 		return currencyInfo{minor: 2, scale: 100, symbolAR: "ر.س."}, true
 	case AED:
 		return currencyInfo{minor: 2, scale: 100, symbolAR: "د.إ."}, true
+	case USD:
+		return currencyInfo{minor: 2, scale: 100, symbolAR: "$"}, true
 	default:
 		return currencyInfo{}, false
 	}
 }
 
 // Currencies lists every supported currency.
-func Currencies() []Currency { return []Currency{EGP, SAR, AED} }
+func Currencies() []Currency { return []Currency{EGP, SAR, AED, USD} }
 
 // Valid reports whether c is a supported currency.
 func (c Currency) Valid() bool {
@@ -65,7 +68,7 @@ func (c Currency) Valid() bool {
 	return ok
 }
 
-// MinorUnits is the number of fraction digits (2 for EGP/SAR/AED).
+// MinorUnits is the number of fraction digits (2 for EGP/SAR/AED/USD).
 // It returns 0 for an unsupported currency.
 func (c Currency) MinorUnits() int {
 	i, _ := c.info()

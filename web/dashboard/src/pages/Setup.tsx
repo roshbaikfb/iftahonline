@@ -8,6 +8,7 @@ import { activities, looks, palette, tint, type Activity, type Look, type Onboar
 import { uploadLogo } from '../lib/logo';
 import { problemMessage } from '../lib/problem';
 import { storefrontURL } from '../lib/storefront';
+import { currencySymbol } from '../lib/orders';
 
 type ShippingConfig = components['schemas']['ShippingConfig'];
 
@@ -17,7 +18,6 @@ const stepLook = 3;
 const stepShipping = 4;
 const stepReady = 5;
 
-const symbols: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' };
 
 type LogoState = { kind: 'none' } | { kind: 'uploading' } | { kind: 'done'; name: string } | { kind: 'failed'; message: string };
 
@@ -90,7 +90,7 @@ export function Setup() {
   }, [preparing, storeId]);
 
   const chosen = color ?? palette(activity)[0] ?? '#0f2e52';
-  const currency = symbols[ship?.currency ?? 'EGP'] ?? '';
+  const currency = currencySymbol(ship?.currency ?? 'EGP');
 
   async function pickLogo(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

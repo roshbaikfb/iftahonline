@@ -29,7 +29,7 @@ export interface Draft {
   grants: Record<string, { value: string; unlimited: boolean }>; // by feature; empty value: not granted
 }
 
-export const priceKey = (c: Currency, cy: Cycle) => `${c}-${cy}`;
+export const priceKey = (c: string, cy: Cycle) => `${c}-${cy}`;
 
 // draftFrom is the next version's form, from the version on sale (or a
 // new plan of kind when there is none).
@@ -115,7 +115,14 @@ export function byCode(plans: Plan[]): { code: string; head: Plan; versions: Pla
   });
 }
 
-export const currencyName: Record<Currency, string> = { EGP: 'الجنيه المصري', SAR: 'الريال السعودي', AED: 'الدرهم الإماراتي' };
+// currencyName is every currency's name, the dollar included (stores may
+// sell in it, ADR-0088); billing's own prices are in currencies.
+export const currencyName: Record<Currency | 'USD', string> = {
+  EGP: 'الجنيه المصري',
+  SAR: 'الريال السعودي',
+  AED: 'الدرهم الإماراتي',
+  USD: 'الدولار الأمريكي',
+};
 
 // paidKind says whether a kind sells at a price (and so has prices).
 export const paidKind = (k: Kind) => k === 'subscription' || k === 'agency';

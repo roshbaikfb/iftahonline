@@ -14,7 +14,7 @@ import (
 )
 
 const adminGetStore = `-- name: AdminGetStore :one
-SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country FROM stores WHERE id = $1
 `
 
 func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) {
@@ -31,6 +31,7 @@ func (q *Queries) AdminGetStore(ctx context.Context, id ulid.ID) (Store, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BillingHold,
+		&i.Country,
 	)
 	return i, err
 }
@@ -114,7 +115,7 @@ func (q *Queries) AdminNewStoresByDay(ctx context.Context, arg AdminNewStoresByD
 
 const adminSearchStores = `-- name: AdminSearchStores :many
 
-SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold, s.country,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
 WHERE ($1::text = '' OR s.slug::text LIKE $1::text || '%' OR s.name ILIKE '%' || $1::text || '%'
@@ -145,6 +146,7 @@ type AdminSearchStoresRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	BillingHold bool
+	Country     pgtype.Text
 	PrimaryHost string
 }
 
@@ -177,6 +179,7 @@ func (q *Queries) AdminSearchStores(ctx context.Context, arg AdminSearchStoresPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BillingHold,
+			&i.Country,
 			&i.PrimaryHost,
 		); err != nil {
 			return nil, err
@@ -251,7 +254,7 @@ func (q *Queries) AdminStoreNames(ctx context.Context, ids []ulid.ID) ([]AdminSt
 }
 
 const adminStoresByID = `-- name: AdminStoresByID :many
-SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold,
+SELECT s.id, s.slug, s.name, s.status, s.currency, s.locale, s.timezone, s.created_at, s.updated_at, s.billing_hold, s.country,
        coalesce((SELECT d.host::text FROM store_domains d WHERE d.store_id = s.id AND d.is_primary), '')::text AS primary_host
 FROM stores s
 WHERE s.id = ANY ($1::uuid[])
@@ -269,6 +272,7 @@ type AdminStoresByIDRow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	BillingHold bool
+	Country     pgtype.Text
 	PrimaryHost string
 }
 
@@ -294,6 +298,7 @@ func (q *Queries) AdminStoresByID(ctx context.Context, ids []ulid.ID) ([]AdminSt
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BillingHold,
+			&i.Country,
 			&i.PrimaryHost,
 		); err != nil {
 			return nil, err

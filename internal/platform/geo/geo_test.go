@@ -61,7 +61,7 @@ func TestLookup(t *testing.T) {
 
 func TestCountryOf(t *testing.T) {
 	t.Parallel()
-	for _, cur := range money.Currencies() {
+	for _, cur := range []money.Currency{money.EGP, money.SAR, money.AED} {
 		c, ok := geo.CountryOf(cur)
 		if !ok || len(geo.Areas(c)) == 0 {
 			t.Errorf("CountryOf(%s) = %q, %v", cur, c, ok)

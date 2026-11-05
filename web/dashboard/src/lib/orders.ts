@@ -42,8 +42,12 @@ export const stepLabel: Record<OrderStatus, string> = {
   returned: 'مرتجع',
 };
 
-const minorDigits: Record<string, number> = { EGP: 2, SAR: 2, AED: 2 };
-const symbols: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' };
+const minorDigits: Record<string, number> = { EGP: 2, SAR: 2, AED: 2, USD: 2 };
+const symbols: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ', USD: '$' };
+
+// currencySymbol is a currency's short Arabic symbol, or its ISO code for
+// one this dashboard does not know (currencies are an extensible list).
+export const currencySymbol = (currency: string) => symbols[currency] ?? currency;
 
 // money formats integer minor units the way the storefront does:
 // Western digits, grouping, decimals only when there are any.

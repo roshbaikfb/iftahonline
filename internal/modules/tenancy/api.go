@@ -57,6 +57,9 @@ type Service interface {
 	UpdateSettings(ctx context.Context, in StoreSettings) (Store, error)
 	// SetStatus is for the platform (suspension) and the owner (closing).
 	SetStatus(ctx context.Context, status StoreStatus) (Store, error)
+	// SetCountry changes the store's country: the platform's console only
+	// (ADR-0088).
+	SetCountry(ctx context.Context, country string) (Store, error)
 	// SetBillingHoldTx holds or releases the store for billing in the
 	// caller's tenant transaction: a held active store resolves as
 	// StatusHeld and its storefront shows a maintenance page (ADR-0051).

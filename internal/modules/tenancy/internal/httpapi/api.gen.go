@@ -138,6 +138,7 @@ const (
 	AED StoreCurrency = "AED"
 	EGP StoreCurrency = "EGP"
 	SAR StoreCurrency = "SAR"
+	USD StoreCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the StoreCurrency enum.
@@ -148,6 +149,8 @@ func (e StoreCurrency) Valid() bool {
 	case EGP:
 		return true
 	case SAR:
+		return true
+	case USD:
 		return true
 	default:
 		return false
@@ -405,6 +408,10 @@ type Problem struct {
 
 // Store defines model for Store.
 type Store struct {
+	// Country The merchant's country (ISO 3166-1 alpha-2), set at sign-up and changed from the console only (ADR-0088).
+	//
+	// Example: EG
+	Country   *string       `json:"country,omitempty"`
 	CreatedAt time.Time     `json:"created_at"`
 	Currency  StoreCurrency `json:"currency"`
 

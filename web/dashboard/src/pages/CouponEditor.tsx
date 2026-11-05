@@ -6,6 +6,7 @@ import { Layout } from '../components/Layout';
 import { effectOn, emptyForm, normalizeCode, randomCode, serverErrors, summaryLines, toForm, toInput, type Coupon, type CouponKind, type Form } from '../lib/coupons';
 import { timezones } from '../lib/settings';
 import { problemMessage } from '../lib/problem';
+import { currencySymbol } from '../lib/orders';
 
 const kinds: { id: CouponKind; label: string; short: string }[] = [
   { id: 'percent', label: 'نسبة مئوية', short: 'نسبة' },
@@ -13,7 +14,6 @@ const kinds: { id: CouponKind; label: string; short: string }[] = [
   { id: 'free_shipping', label: 'شحن مجاني', short: 'شحن مجاني' },
 ];
 
-const symbol: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' };
 
 // The shopper's preview prices an order whose items cost 500.
 const sampleSubtotal = 50000;
@@ -73,7 +73,7 @@ export function CouponEditor() {
   // The city alone: "القاهرة" of "القاهرة (مصر)".
   const zone = (timezones.find((t) => t.id === store.timezone)?.label ?? store.timezone).split(' (')[0];
   const lines = summaryLines(form, store.currency, store.timezone);
-  const unit = symbol[store.currency] ?? store.currency;
+  const unit = currencySymbol(store.currency);
 
   async function save() {
     if (!form) return;

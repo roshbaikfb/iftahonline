@@ -11,7 +11,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/roshbaikfb/iftahonline/internal/platform/country"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 )
@@ -64,17 +66,22 @@ const (
 func Timezones() []string {
 	return []string{
 		"Africa/Cairo", "Asia/Riyadh", "Asia/Dubai", "Asia/Kuwait",
-		"Asia/Qatar", "Asia/Bahrain", "Asia/Muscat", "UTC",
+		"Asia/Qatar", "Asia/Bahrain", "Asia/Muscat", "Asia/Amman", "Asia/Beirut", "Asia/Baghdad",
+		"Africa/Casablanca", "Africa/Tunis", "Africa/Algiers", "Europe/London", "Europe/Paris", "Europe/Berlin",
+		"Europe/Istanbul", "America/New_York", "America/Chicago", "America/Los_Angeles", "America/Toronto", "UTC",
 	}
 }
 
 // Store is a merchant's shop: the tenant.
 type Store struct {
-	ID        tenant.StoreID
-	Slug      string
-	Name      string
-	Status    StoreStatus
-	Currency  money.Currency
+	ID       tenant.StoreID
+	Slug     string
+	Name     string
+	Status   StoreStatus
+	Currency money.Currency
+	// Country is the merchant's (ISO 3166-1 alpha-2): it decides how the
+	// store and its subscription are paid (ADR-0088).
+	Country   string
 	Locale    Locale
 	Timezone  string
 	CreatedAt time.Time
@@ -86,6 +93,10 @@ type NewStore struct {
 	Slug     string
 	Name     string
 	Currency string
+	// Country is the merchant's; "" takes the currency's (EGP: Egypt, SAR:
+	// Saudi Arabia, AED: the UAE), the only one it may be until stores
+	// outside the region arrive (ADR-0088).
+	Country  string
 	Locale   string
 	Timezone string
 }
@@ -108,13 +119,24 @@ func ValidateNewStore(in NewStore) (NewStore, error) {
 		Locale:   strings.TrimSpace(in.Locale),
 		Timezone: strings.TrimSpace(in.Timezone),
 	}
+	home, _ := geo.CountryOf(money.Currency(out.Currency))
+	out.Country = string(home)
+	if strings.TrimSpace(in.Country) != "" {
+		c, ok := country.Normalize(in.Country)
+		switch {
+		case !ok:
+			fields = append(fields, errs.FieldError{Field: "country", Code: "invalid", Message: "an ISO 3166-1 alpha-2 country"})
+		case home != "" && c != string(home):
+			fields = append(fields, errs.FieldError{Field: "country", Code: "unsupported", Message: "a store's country is its currency's"})
+		}
+	}
 	if fe, ok := checkSlug(out.Slug); !ok {
 		fields = append(fields, fe)
 	}
 	if fe, ok := checkName(out.Name); !ok {
 		fields = append(fields, fe)
 	}
-	if !slices.Contains(money.Currencies(), money.Currency(out.Currency)) {
+	if !slices.Contains(StoreCurrencies(), money.Currency(out.Currency)) {
 		fields = append(fields, errs.FieldError{Field: "currency", Code: "unsupported", Message: "currency must be one of EGP, SAR, AED"})
 	}
 	fields = append(fields, checkLocaleTZ(out.Locale, out.Timezone)...)
@@ -212,4 +234,24 @@ func NewStoresFrom(byDay map[time.Time]int64, today time.Time) NewStores {
 		}
 	}
 	return out
+}
+
+// StoreCurrencies are the currencies a store may sell in: the region's.
+// The dollar is the platform's billing currency for merchants outside
+// Egypt (ADR-0088); stores selling in it, and stores outside Egypt and
+// the GCC, wait for addresses, phones and shipping beyond the region
+// (approved 2026-11-05).
+func StoreCurrencies() []money.Currency { return []money.Currency{money.EGP, money.SAR, money.AED} }
+
+// ValidateCountry normalizes a country the console sets (ADR-0088): one
+// the storefront delivers in (Egypt and the GCC, platform/geo).
+func ValidateCountry(code string) (string, error) {
+	c, ok := country.Normalize(code)
+	if !ok {
+		return "", errs.Validation(errs.FieldError{Field: "country", Code: "invalid", Message: "an ISO 3166-1 alpha-2 country"})
+	}
+	if len(geo.Areas(geo.Country(c))) == 0 {
+		return "", errs.Validation(errs.FieldError{Field: "country", Code: "unsupported", Message: "Egypt or a GCC country"})
+	}
+	return c, nil
 }

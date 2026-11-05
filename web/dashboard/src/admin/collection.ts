@@ -10,6 +10,7 @@ export const currencyLabel: Record<Currency, string> = {
   EGP: 'مصر · جنيه',
   SAR: 'السعودية · ريال',
   AED: 'الإمارات · درهم',
+  USD: 'خارج مصر · دولار',
 };
 
 export const levelLabel: Record<StoreBalance['level'], string> = {

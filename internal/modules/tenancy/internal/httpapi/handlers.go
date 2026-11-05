@@ -166,7 +166,7 @@ func (h *Handlers) SetPrimaryDomain(ctx context.Context, req SetPrimaryDomainReq
 func toStore(s domain.Store) Store {
 	return Store{
 		Id: s.ID.String(), Slug: s.Slug, Name: s.Name,
-		Status: StoreStatus(s.Status), Plan: Free, Currency: StoreCurrency(s.Currency),
+		Status: StoreStatus(s.Status), Plan: Free, Currency: StoreCurrency(s.Currency), Country: optString(s.Country),
 		Locale: StoreLocale(s.Locale), Timezone: s.Timezone,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
@@ -194,4 +194,12 @@ func (h *Handlers) toDomain(d domain.Domain) Domain {
 		out.Routing = &DomainRouting{Apex: r.Apex, Records: records}
 	}
 	return out
+}
+
+// optString is s for an optional field: nil when empty.
+func optString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

@@ -241,6 +241,7 @@ const (
 	ProductSearchHitCurrencyAED ProductSearchHitCurrency = "AED"
 	ProductSearchHitCurrencyEGP ProductSearchHitCurrency = "EGP"
 	ProductSearchHitCurrencySAR ProductSearchHitCurrency = "SAR"
+	ProductSearchHitCurrencyUSD ProductSearchHitCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the ProductSearchHitCurrency enum.
@@ -251,6 +252,8 @@ func (e ProductSearchHitCurrency) Valid() bool {
 	case ProductSearchHitCurrencyEGP:
 		return true
 	case ProductSearchHitCurrencySAR:
+		return true
+	case ProductSearchHitCurrencyUSD:
 		return true
 	default:
 		return false
@@ -283,6 +286,7 @@ const (
 	VariantCurrencyAED VariantCurrency = "AED"
 	VariantCurrencyEGP VariantCurrency = "EGP"
 	VariantCurrencySAR VariantCurrency = "SAR"
+	VariantCurrencyUSD VariantCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the VariantCurrency enum.
@@ -293,6 +297,8 @@ func (e VariantCurrency) Valid() bool {
 	case VariantCurrencyEGP:
 		return true
 	case VariantCurrencySAR:
+		return true
+	case VariantCurrencyUSD:
 		return true
 	default:
 		return false
