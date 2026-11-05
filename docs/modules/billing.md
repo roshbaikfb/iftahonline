@@ -300,6 +300,11 @@ platform provider):
   - running out puts the store past due (then ADR-0082's path), coming
     back restores it, and a low balance is told (`balance_low`,
     `balance_empty`, `balance_restored`).
+- **Topping up** (ADR-0085): `POST /v1/stores/{id}/billing/balance/topups`
+  (at least the minimum) opens Paymob's page through a `topup` checkout.
+  The confirmed payment is one `topup` entry (`checkout_id`), and a
+  repeated callback adds nothing. `GET /v1/stores/{id}/billing/balance`
+  is the merchant's view of the balance.
 
 ## The subscription lifecycle
 

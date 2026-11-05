@@ -90,3 +90,4 @@ supersedes it.
 | [0082](0082-unpaid-stores-fall-back-to-free.md) | Unpaid stores fall back to the free plan before they close | Accepted |
 | [0083](0083-collecting-pay-as-you-sell-fees.md) | Collecting pay-as-you-sell fees: settings and prepaid balances | Accepted |
 | [0084](0084-paying-fees-from-the-prepaid-balance.md) | Paying pay-as-you-sell fees from the prepaid balance | Accepted |
+| [0085](0085-topping-up-the-balance.md) | Topping up the prepaid balance on Paymob's page | Accepted |
