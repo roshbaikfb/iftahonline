@@ -152,3 +152,50 @@ func Entries(ctx context.Context, tx Tx, account ulid.ID, limit int32) ([]Entry,
 	}
 	return out, nil
 }
+
+// VoidOpenInvoices voids every open invoice of the account tx is behind,
+// and makes their fees of the store in ctx due again (its credits
+// waiting again): the store moved to pay as you sell (ADR-0087).
+func VoidOpenInvoices(ctx context.Context, tx Tx, account ulid.ID) (int, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return 0, err
+	}
+	q := billingdb.New(tx)
+	ids, err := q.LockOpenInvoiceIDs(ctx, account)
+	if err != nil {
+		return 0, fmt.Errorf("billing store: open invoices: %w", err)
+	}
+	for _, id := range ids {
+		if _, err = q.VoidInvoice(ctx, id); err != nil {
+			return 0, fmt.Errorf("billing store: void invoice: %w", err)
+		}
+		if _, err = q.UnbillFees(ctx, billingdb.UnbillFeesParams{StoreID: store, InvoiceID: &id}); err != nil {
+			return 0, fmt.Errorf("billing store: unbill fees: %w", err)
+		}
+	}
+	return len(ids), nil
+}
+
+// SetCollection records the way the account tx is behind pays its fees.
+func SetCollection(ctx context.Context, tx Tx, account ulid.ID, c domain.Collection) error {
+	v := string(c)
+	if err := billingdb.New(tx).SetAccountCollection(ctx, billingdb.SetAccountCollectionParams{ID: account, Collection: &v}); err != nil {
+		return fmt.Errorf("billing store: set collection: %w", err)
+	}
+	return nil
+}
+
+// PrepaidPending reports whether the store in ctx has fees taken from its
+// balance that no invoice holds yet.
+func PrepaidPending(ctx context.Context, tx Tx) (bool, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	ok, err := billingdb.New(tx).HasPrepaidDue(ctx, store)
+	if err != nil {
+		return false, fmt.Errorf("billing store: prepaid pending: %w", err)
+	}
+	return ok, nil
+}

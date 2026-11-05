@@ -5629,6 +5629,59 @@ paths:
               schema: { $ref: "#/components/schemas/UsageMeters" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/switch-to-pays:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: switchToPays
+      summary: Move an unpaid store to pay as you sell at once
+      description: |
+        Permission: billing.manage. During the grace and the free days
+        (`switch_offer` present), never once held (409 not_switchable), and
+        not for an agency's store (409 agency_managed). Its open invoices
+        are voided, their fees due again on the next one; the store is
+        active and open again, its fees paid by `collection`, which must be
+        offered (409 collection_not_offered); the card needs one saved (409
+        card_required). ADR-0087.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BillingCollectionInput" }
+      responses:
+        "200":
+          description: The store's billing now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/collection:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [billing]
+      operationId: setBillingCollection
+      summary: Choose how pay-as-you-sell fees are paid
+      description: |
+        Permission: billing.manage, for an active pay-as-you-sell store (409
+        not_pays). The way must be offered or already the store's; the card
+        needs one saved; leaving the balance waits for the month's invoice
+        of the fees it paid (409 prepaid_pending). ADR-0087.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BillingCollectionInput" }
+      responses:
+        "200":
+          description: The store's billing now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Billing" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/billing/balance:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -8900,6 +8953,17 @@ components:
         grace_until: { type: string, format: date-time, description: "Past due: when the store moves to the free plan unpaid (ADR-0082)." }
         closes_at: { type: string, format: date-time, description: "Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082)." }
         held: { type: boolean, description: "The storefront shows the maintenance page until the invoice is paid." }
+        agency: { type: boolean, description: "An agency pays for the store: the platform switches it to pay as you sell (ADR-0087)." }
+        collection: { type: string, enum: [balance, card], description: How the store's account pays pay-as-you-sell fees; absent until it chooses. }
+        switch_offer:
+          type: object
+          description: "Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided."
+          required: [rate_bps, offered]
+          properties:
+            rate_bps: { type: integer, description: The fee on each delivered order's goods, in basis points. }
+            offered:
+              type: array
+              items: { type: string, enum: [balance, card] }
         cancel_at_period_end: { type: boolean }
         card: { type: string, example: "MasterCard •••• 2346", description: The card on file; absent without one. }
         founding: { $ref: "#/components/schemas/BillingFounding" }
@@ -8909,6 +8973,11 @@ components:
         open_invoices:
           type: array
           items: { $ref: "#/components/schemas/OpenInvoice" }
+    BillingCollectionInput:
+      type: object
+      required: [collection]
+      properties:
+        collection: { type: string, enum: [balance, card] }
     BillingBalance:
       type: object
       required: [currency, balance_minor, minimum_minor, level, offered, entries]

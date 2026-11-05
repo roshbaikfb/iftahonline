@@ -108,3 +108,43 @@ func TestScheduledChangesApply(t *testing.T) {
 		t.Fatalf("started = %+v, %v", started, err)
 	}
 }
+
+// TestSwitchToPays: an unpaid store moves to pay as you sell during its
+// grace and its free days, not once held, and never an agency's store.
+func TestSwitchToPays(t *testing.T) {
+	t.Parallel()
+	paysPlan := domain.Plan{ID: ulid.ID{7}, Kind: domain.KindPays}
+	held := suspended(t)
+	held.HeldAt = held.SuspendedAt.Add(30 * day)
+	agency := pastDue(t)
+	agency.Kind = domain.KindAgency
+	tests := []struct {
+		name string
+		s    domain.Subscription
+		ok   bool
+	}{
+		{"past due", pastDue(t), true},
+		{"free days", suspended(t), true},
+		{"held", held, false},
+		{"active", active(t), false},
+		{"on the free plan", onFree(), false},
+		{"an agency's store", agency, false},
+	}
+	for _, tt := range tests {
+		if got := tt.s.CanSwitchToPays(); got != tt.ok {
+			t.Errorf("%s: CanSwitchToPays = %v", tt.name, got)
+		}
+		next, err := tt.s.SwitchToPays(paysPlan)
+		if tt.ok != (err == nil) {
+			t.Errorf("%s: err = %v", tt.name, err)
+			continue
+		}
+		if tt.ok && (next.PlanID != paysPlan.ID || next.Kind != domain.KindPays || next.Status != domain.Active || !next.GraceUntil.IsZero() ||
+			!next.SuspendedAt.IsZero() || next.TrialUsed != tt.s.TrialUsed) {
+			t.Errorf("%s: next = %+v", tt.name, next)
+		}
+	}
+	if _, err := pastDue(t).SwitchToPays(domain.Plan{ID: ulid.ID{8}, Kind: domain.KindSubscription}); err == nil {
+		t.Error("switched to a plan that is not pay as you sell")
+	}
+}

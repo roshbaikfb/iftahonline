@@ -1047,16 +1047,16 @@ func (e AdminSiteUploadRequestContentType) Valid() bool {
 
 // Defines values for AdminStoreBalanceCollection.
 const (
-	Balance AdminStoreBalanceCollection = "balance"
-	Card    AdminStoreBalanceCollection = "card"
+	AdminStoreBalanceCollectionBalance AdminStoreBalanceCollection = "balance"
+	AdminStoreBalanceCollectionCard    AdminStoreBalanceCollection = "card"
 )
 
 // Valid indicates whether the value is a known member of the AdminStoreBalanceCollection enum.
 func (e AdminStoreBalanceCollection) Valid() bool {
 	switch e {
-	case Balance:
+	case AdminStoreBalanceCollectionBalance:
 		return true
-	case Card:
+	case AdminStoreBalanceCollectionCard:
 		return true
 	default:
 		return false
@@ -1099,6 +1099,24 @@ func (e AdminStoreBalanceLevel) Valid() bool {
 	case Low:
 		return true
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingCollection.
+const (
+	BillingCollectionBalance BillingCollection = "balance"
+	BillingCollectionCard    BillingCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingCollection enum.
+func (e BillingCollection) Valid() bool {
+	switch e {
+	case BillingCollectionBalance:
+		return true
+	case BillingCollectionCard:
 		return true
 	default:
 		return false
@@ -1162,6 +1180,24 @@ func (e BillingStatus) Valid() bool {
 	case BillingStatusSuspended:
 		return true
 	case BillingStatusTrialing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingSwitchOfferOffered.
+const (
+	BillingSwitchOfferOfferedBalance BillingSwitchOfferOffered = "balance"
+	BillingSwitchOfferOfferedCard    BillingSwitchOfferOffered = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingSwitchOfferOffered enum.
+func (e BillingSwitchOfferOffered) Valid() bool {
+	switch e {
+	case BillingSwitchOfferOfferedBalance:
+		return true
+	case BillingSwitchOfferOfferedCard:
 		return true
 	default:
 		return false
@@ -3087,6 +3123,8 @@ type AdminTeamMember struct {
 
 // Billing defines model for Billing.
 type Billing struct {
+	// Agency An agency pays for the store: the platform switches it to pay as you sell (ADR-0087).
+	Agency            *bool `json:"agency,omitempty"`
 	CancelAtPeriodEnd *bool `json:"cancel_at_period_end,omitempty"`
 
 	// Card The card on file; absent without one.
@@ -3095,8 +3133,11 @@ type Billing struct {
 	Card *string `json:"card,omitempty"`
 
 	// ClosesAt Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082).
-	ClosesAt *time.Time    `json:"closes_at,omitempty"`
-	Cycle    *BillingCycle `json:"cycle,omitempty"`
+	ClosesAt *time.Time `json:"closes_at,omitempty"`
+
+	// Collection How the store's account pays pay-as-you-sell fees; absent until it chooses.
+	Collection *BillingCollection `json:"collection,omitempty"`
+	Cycle      *BillingCycle      `json:"cycle,omitempty"`
 
 	// Founding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
 	Founding *BillingFounding `json:"founding,omitempty"`
@@ -3118,8 +3159,19 @@ type Billing struct {
 	PlanNameAr     string        `json:"plan_name_ar"`
 	PlanNameEn     string        `json:"plan_name_en"`
 	Status         BillingStatus `json:"status"`
-	TrialEndsAt    *time.Time    `json:"trial_ends_at,omitempty"`
+
+	// SwitchOffer Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided.
+	SwitchOffer *struct {
+		Offered []BillingSwitchOfferOffered `json:"offered"`
+
+		// RateBps The fee on each delivered order's goods
+		RateBps int `json:"rate_bps"`
+	} `json:"switch_offer,omitempty"`
+	TrialEndsAt *time.Time `json:"trial_ends_at,omitempty"`
 }
+
+// BillingCollection How the store's account pays pay-as-you-sell fees; absent until it chooses.
+type BillingCollection string
 
 // BillingCycle defines model for Billing.Cycle.
 type BillingCycle string
@@ -3129,6 +3181,9 @@ type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingSwitchOfferOffered defines model for Billing.SwitchOffer.Offered.
+type BillingSwitchOfferOffered string
 
 // BillingFounding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
 type BillingFounding struct {

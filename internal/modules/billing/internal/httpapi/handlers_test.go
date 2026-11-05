@@ -285,6 +285,43 @@ func TestBillingBalanceOverHTTP(t *testing.T) {
 	}
 }
 
+// TestSwitchAndCollectionOverHTTP: the owner's switch and choice of the
+// way over HTTP; a manager may not, an active store cannot switch, a
+// store not on pay as you sell cannot choose a way, an unknown way is
+// refused (the flows themselves: app.TestSwitchToPays).
+func TestSwitchAndCollectionOverHTTP(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	for _, c := range []struct {
+		method, rest, token, body string
+		status                    int
+		code                      string
+	}{
+		{http.MethodPost, "/switch-to-pays", tokOwnerB, `{"collection":"balance"}`, http.StatusConflict, "not_switchable"},
+		{http.MethodPut, "/collection", tokOwnerB, `{"collection":"balance"}`, http.StatusConflict, "not_pays"},
+		{http.MethodPost, "/switch-to-pays", tokOwnerB, ``, http.StatusBadRequest, ""},
+		{http.MethodPut, "/collection", tokOwnerB, ``, http.StatusBadRequest, ""},
+	} {
+		code, body := f.do(t, reqBody(t, c.method, path(f.storeB, c.rest), c.token, c.body))
+		if code != c.status || (c.code != "" && body["code"] != c.code) {
+			t.Errorf("%s %s %s = %d %v; want %d %s", c.method, c.rest, c.body, code, body, c.status, c.code)
+		}
+	}
+	for _, rest := range []string{"/switch-to-pays", "/collection"} {
+		method := http.MethodPost
+		if rest == "/collection" {
+			method = http.MethodPut
+		}
+		if code, _ := f.do(t, reqBody(t, method, path(f.storeA, rest), tokManagerA, `{"collection":"balance"}`)); code != http.StatusForbidden {
+			t.Errorf("manager %s = %d", rest, code)
+		}
+	}
+	// The billing page carries no offer for an active store.
+	if code, body := f.do(t, req(t, http.MethodGet, path(f.storeB, ""), tokOwnerB)); code != http.StatusOK || body["switch_offer"] != nil || body["agency"] != nil {
+		t.Fatalf("billing = %d %v", code, body)
+	}
+}
+
 // sameTime reports whether a JSON time is the instant want.
 func sameTime(v any, want string) bool {
 	got, _ := v.(string)
@@ -338,6 +375,10 @@ func TestBillingCrossTenant(t *testing.T) {
 		{OperationID: "cancelRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/cancel"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
 		{OperationID: "resumeRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/resume"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
 		{OperationID: "getBillingBalance", Request: req(t, http.MethodGet, path(f.storeB, "/balance"), tokOwnerA), Leaks: leaks},
+		{OperationID: "switchToPays", Request: reqBody(t, http.MethodPost, path(f.storeB, "/switch-to-pays"), tokOwnerA, `{"collection":"balance"}`),
+			Leaks: leaks, Unchanged: f.bUnchanged},
+		{OperationID: "setBillingCollection", Request: reqBody(t, http.MethodPut, path(f.storeB, "/collection"), tokOwnerA, `{"collection":"balance"}`),
+			Leaks: leaks, Unchanged: f.bUnchanged},
 		{OperationID: "topUpBillingBalance", Request: reqBody(t, http.MethodPost, path(f.storeB, "/balance/topups"), tokOwnerA, `{"amount_minor":30000}`),
 			Leaks: leaks, Unchanged: unchanged},
 	}

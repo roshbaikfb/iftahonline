@@ -63,6 +63,19 @@ func (q *Queries) GetBillingSettings(ctx context.Context) (GetBillingSettingsRow
 	return i, err
 }
 
+const hasPrepaidDue = `-- name: HasPrepaidDue :one
+SELECT EXISTS (SELECT 1 FROM sell_fees WHERE store_id = $1 AND prepaid AND status IN ('due', 'credit_due')) AS pending
+`
+
+// Fees taken from the balance and not invoiced yet: the month's invoice
+// (paid from the balance) still has to take their tax.
+func (q *Queries) HasPrepaidDue(ctx context.Context, storeID ulid.ID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPrepaidDue, storeID)
+	var pending bool
+	err := row.Scan(&pending)
+	return pending, err
+}
+
 const insertBalanceEntry = `-- name: InsertBalanceEntry :execrows
 INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id,
                              checkout_id)
@@ -195,6 +208,32 @@ func (q *Queries) LockAccountBalance(ctx context.Context, id ulid.ID) (LockAccou
 	return i, err
 }
 
+const lockOpenInvoiceIDs = `-- name: LockOpenInvoiceIDs :many
+SELECT id FROM invoices WHERE account_id = $1 AND status = 'open' ORDER BY issued_at FOR UPDATE
+`
+
+// The account's open invoices, locked until they are voided (a switch to
+// pay as you sell, ADR-0087).
+func (q *Queries) LockOpenInvoiceIDs(ctx context.Context, accountID ulid.ID) ([]ulid.ID, error) {
+	rows, err := q.db.Query(ctx, lockOpenInvoiceIDs, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ulid.ID{}
+	for rows.Next() {
+		var id ulid.ID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveBillingSettings = `-- name: SaveBillingSettings :execrows
 UPDATE billing_settings SET prepaid_enabled = $1, card_enabled = $2,
   minimum_egp_minor = $3, minimum_sar_minor = $4, minimum_aed_minor = $5,
@@ -236,4 +275,49 @@ type SetAccountBalanceParams struct {
 func (q *Queries) SetAccountBalance(ctx context.Context, arg SetAccountBalanceParams) error {
 	_, err := q.db.Exec(ctx, setAccountBalance, arg.BalanceMinor, arg.ID)
 	return err
+}
+
+const setAccountCollection = `-- name: SetAccountCollection :exec
+UPDATE billing_accounts SET collection = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAccountCollectionParams struct {
+	Collection *string
+	ID         ulid.ID
+}
+
+func (q *Queries) SetAccountCollection(ctx context.Context, arg SetAccountCollectionParams) error {
+	_, err := q.db.Exec(ctx, setAccountCollection, arg.Collection, arg.ID)
+	return err
+}
+
+const unbillFees = `-- name: UnbillFees :execrows
+UPDATE sell_fees SET status = CASE status WHEN 'invoiced' THEN 'due' ELSE 'credit_due' END, invoice_id = NULL, updated_at = now()
+WHERE store_id = $1 AND invoice_id = $2 AND status IN ('invoiced', 'credited')
+`
+
+type UnbillFeesParams struct {
+	StoreID   ulid.ID
+	InvoiceID *ulid.ID
+}
+
+// A voided invoice's fees are due again, and its credits waiting again.
+func (q *Queries) UnbillFees(ctx context.Context, arg UnbillFeesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unbillFees, arg.StoreID, arg.InvoiceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const voidInvoice = `-- name: VoidInvoice :execrows
+UPDATE invoices SET status = 'void', next_attempt_at = NULL WHERE id = $1 AND status = 'open'
+`
+
+func (q *Queries) VoidInvoice(ctx context.Context, id ulid.ID) (int64, error) {
+	result, err := q.db.Exec(ctx, voidInvoice, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

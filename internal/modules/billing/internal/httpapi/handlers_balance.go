@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 )
 
@@ -50,4 +51,44 @@ func (h *Handlers) TopUpBillingBalance(ctx context.Context, req TopUpBillingBala
 		return nil, err
 	}
 	return TopUpBillingBalance200JSONResponse{CheckoutUrl: u}, nil
+}
+
+// SwitchToPays implements StrictServerInterface.
+func (h *Handlers) SwitchToPays(ctx context.Context, req SwitchToPaysRequestObject) (SwitchToPaysResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	b, err := h.withCollection(ctx, h.svc.SwitchToPays, req.Body.Collection)
+	if err != nil {
+		return nil, err
+	}
+	return SwitchToPays200JSONResponse(b), nil
+}
+
+// SetBillingCollection implements StrictServerInterface.
+func (h *Handlers) SetBillingCollection(ctx context.Context, req SetBillingCollectionRequestObject) (SetBillingCollectionResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	b, err := h.withCollection(ctx, h.svc.SetCollection, req.Body.Collection)
+	if err != nil {
+		return nil, err
+	}
+	return SetBillingCollection200JSONResponse(b), nil
+}
+
+// withCollection authorizes billing.manage, applies the way c through do
+// and answers with the store's billing now.
+func (h *Handlers) withCollection(ctx context.Context, do func(context.Context, domain.Collection) error, c BillingCollectionInputCollection) (Billing, error) {
+	if err := h.auth.Authorize(ctx, authz.PermBillingManage); err != nil {
+		return Billing{}, err
+	}
+	if err := do(ctx, domain.Collection(c)); err != nil {
+		return Billing{}, err
+	}
+	s, err := h.svc.Summary(ctx)
+	if err != nil {
+		return Billing{}, err
+	}
+	return toBilling(s), nil
 }

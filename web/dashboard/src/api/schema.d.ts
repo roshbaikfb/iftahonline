@@ -4862,6 +4862,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/billing/switch-to-pays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an unpaid store to pay as you sell at once
+         * @description Permission: billing.manage. During the grace and the free days
+         *     (`switch_offer` present), never once held (409 not_switchable), and
+         *     not for an agency's store (409 agency_managed). Its open invoices
+         *     are voided, their fees due again on the next one; the store is
+         *     active and open again, its fees paid by `collection`, which must be
+         *     offered (409 collection_not_offered); the card needs one saved (409
+         *     card_required). ADR-0087.
+         */
+        post: operations["switchToPays"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose how pay-as-you-sell fees are paid
+         * @description Permission: billing.manage, for an active pay-as-you-sell store (409
+         *     not_pays). The way must be offered or already the store's; the card
+         *     needs one saved; leaving the balance waits for the month's invoice
+         *     of the fees it paid (409 prepaid_pending). ADR-0087.
+         */
+        put: operations["setBillingCollection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/billing/balance": {
         parameters: {
             query?: never;
@@ -7989,6 +8042,19 @@ export interface components {
             closes_at?: string;
             /** @description The storefront shows the maintenance page until the invoice is paid. */
             held?: boolean;
+            /** @description An agency pays for the store: the platform switches it to pay as you sell (ADR-0087). */
+            agency?: boolean;
+            /**
+             * @description How the store's account pays pay-as-you-sell fees; absent until it chooses.
+             * @enum {string}
+             */
+            collection?: "balance" | "card";
+            /** @description Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided. */
+            switch_offer?: {
+                /** @description The fee on each delivered order's goods */
+                rate_bps: number;
+                offered: ("balance" | "card")[];
+            };
             cancel_at_period_end?: boolean;
             /**
              * @description The card on file; absent without one.
@@ -8005,6 +8071,10 @@ export interface components {
              */
             next_cycle?: "monthly" | "annual";
             open_invoices: components["schemas"]["OpenInvoice"][];
+        };
+        BillingCollectionInput: {
+            /** @enum {string} */
+            collection: "balance" | "card";
         };
         BillingBalance: {
             /** @enum {string} */
@@ -14896,6 +14966,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageMeters"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    switchToPays: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCollectionInput"];
+            };
+        };
+        responses: {
+            /** @description The store's billing now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setBillingCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCollectionInput"];
+            };
+        };
+        responses: {
+            /** @description The store's billing now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
                 };
             };
             default: components["responses"]["Problem"];
