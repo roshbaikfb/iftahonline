@@ -46,6 +46,7 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 	"AdminListPayments":           domain.PermBillingRead,
 	"AdminSettleInvoice":          domain.PermBillingManage,
 	"AdminCreditStoreBalance":     domain.PermBillingManage,
+	"AdminSwitchAgencyStores":     domain.PermBillingManage,
 	"AdminSaveCollectionSettings": domain.PermBillingManage,
 	"AdminSettleAccountInvoice":   domain.PermBillingManage,
 	"AdminMarkDuplicateRefunded":  domain.PermBillingManage,

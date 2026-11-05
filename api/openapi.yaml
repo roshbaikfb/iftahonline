@@ -2629,6 +2629,35 @@ paths:
               schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/agencies/{agency_id}/switch-to-pays:
+    parameters:
+      - $ref: "#/components/parameters/AgencyID"
+    post:
+      tags: [admin]
+      operationId: adminSwitchAgencyStores
+      summary: Move stores of an unpaid agency to pay as you sell
+      description: |
+        As agreed with the agency (ADR-0087 §7). Each store gets its own
+        account paying its fees by `collection`; the agency's open invoices
+        are voided and the stores that stay are invoiced again at the
+        agency's price, their grace going on. 409 agency_not_unpaid when the
+        agency owes nothing, 409 card_required without the agency's card,
+        422 for a store of another account. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAgencySwitchInput" }
+      responses:
+        "200":
+          description: The agency now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAgencyDetail" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/agencies/{agency_id}:
     parameters:
       - $ref: "#/components/parameters/AgencyID"
@@ -6458,6 +6487,21 @@ components:
         store_ids:
           type: array
           items: { $ref: "#/components/schemas/ULID" }
+        open_invoices:
+          type: array
+          description: The agency's open invoices, newest first; while there are, its stores may be switched to pay as you sell (ADR-0087).
+          items: { $ref: "#/components/schemas/OpenInvoice" }
+    AdminAgencySwitchInput:
+      type: object
+      required: [store_ids, collection, reason]
+      properties:
+        store_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: "#/components/schemas/ULID" }
+        collection: { type: string, enum: [balance, card], description: "card: the agency's card on file, copied to each store's own account." }
+        reason: { type: string, minLength: 3, maxLength: 500, description: "Kept in the admin audit log: the agreement with the agency." }
     AdminAgencyInput:
       type: object
       required: [name, currency, plan_code, reason]

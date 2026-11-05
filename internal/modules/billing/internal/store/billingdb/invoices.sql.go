@@ -238,7 +238,7 @@ func (q *Queries) InsertSubscribeInvoice(ctx context.Context, arg InsertSubscrib
 }
 
 const invoiceExists = `-- name: InvoiceExists :one
-SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = $1 AND period = $2 AND purpose = 'monthly')
+SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = $1 AND period = $2 AND purpose = 'monthly' AND status <> 'void')
 `
 
 type InvoiceExistsParams struct {
@@ -246,6 +246,7 @@ type InvoiceExistsParams struct {
 	Period    time.Time
 }
 
+// A voided one does not count: its period may be invoiced again.
 func (q *Queries) InvoiceExists(ctx context.Context, arg InvoiceExistsParams) (bool, error) {
 	row := q.db.QueryRow(ctx, invoiceExists, arg.AccountID, arg.Period)
 	var exists bool
@@ -363,7 +364,7 @@ CROSS JOIN LATERAL (
   LIMIT 1
 ) t
 JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = $1 AND pp.cycle = coalesce(s.next_cycle, s.cycle)
-WHERE s.store_id = $2 AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
+WHERE s.store_id = $2 AND s.status IN ('active', 'past_due') AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
   AND t.kind IN ('subscription', 'agency') AND s.period_end <= $3
 `
 
@@ -387,6 +388,9 @@ type RenewalDueRow struct {
 // has them (ADR-0060), else its own: the newest active version of that
 // plan's code that sells the cycle in the currency, or the version
 // itself (ADR-0056).
+// Past due too: a store whose billed renewal was voided (an agency's
+// invoice written again for the stores that stay, ADR-0087) is billed
+// again; one still billed keeps its mark.
 func (q *Queries) RenewalDue(ctx context.Context, arg RenewalDueParams) (RenewalDueRow, error) {
 	row := q.db.QueryRow(ctx, renewalDue, arg.Currency, arg.StoreID, arg.RenewsBy)
 	var i RenewalDueRow

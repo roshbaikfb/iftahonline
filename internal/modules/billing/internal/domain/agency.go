@@ -53,3 +53,14 @@ func LeaveAgency(own Subscription, free Plan) Subscription {
 func (s Subscription) Held() bool {
 	return (s.Status == Suspended || s.Status == Cancelled) && !s.HeldAt.IsZero()
 }
+
+// AgencyToPays is a store the platform moves out of its unpaid agency
+// onto pay as you sell p (approved 2026-11-04: the console's switch,
+// ADR-0087): active now, with its own account. It keeps whether it used
+// its trial.
+func AgencyToPays(own Subscription, p Plan) (Subscription, error) {
+	if own.Kind != KindAgency || p.Kind != KindPays {
+		return Subscription{}, refuse(own, "agency to pays")
+	}
+	return Subscription{PlanID: p.ID, Kind: KindPays, Status: Active, TrialUsed: own.TrialUsed}, nil
+}

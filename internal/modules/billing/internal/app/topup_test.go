@@ -81,3 +81,21 @@ func TestTopUp(t *testing.T) {
 		t.Fatalf("notices = %v", n)
 	}
 }
+
+// TestTopUpAndWayRefusals: without a checkout there is no top-up, and an
+// unknown way of paying is refused.
+func TestTopUpAndWayRefusals(t *testing.T) {
+	t.Parallel()
+	p := newPrepaid(t)
+	ctx := p.store(t)
+	p.subscribe(ctx, t, "pays", "active", "")
+	if _, err := p.svc.TopUp(ctx, 30000, app.Payer{}); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("no checkout: %v", err)
+	}
+	if err := p.svc.SetCollection(ctx, "cash"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("an unknown way: %v", err)
+	}
+	if bal, err := p.svc.StoreBalance(ctx); err != nil || len(bal.Offered) != 0 {
+		t.Fatalf("balance = %+v, %v", bal, err)
+	}
+}

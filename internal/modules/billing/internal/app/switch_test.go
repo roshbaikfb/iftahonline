@@ -11,6 +11,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // TestSwitchToPays is the approved offer (ADR-0087): an unpaid store
@@ -174,5 +175,132 @@ func TestAgencyStoreIsSentToSupport(t *testing.T) {
 	d.subscribe(own, t, "pro", "past_due", "grace_until='2026-11-08T00:00:00Z'")
 	if sum, err = d.svc.Summary(own); err != nil || sum.Agency || sum.SupportWhatsApp != "" || asked != 1 {
 		t.Fatalf("own store = %+v, asked %d, %v", sum, asked, err)
+	}
+}
+
+// TestSwitchAgencyStores: the console moves two of an unpaid agency's
+// three stores to pay as you sell (ADR-0087 §7): each gets its own
+// account paying by the agency's card, copied; the agency's invoice is
+// voided, and the store that stays is invoiced again at the agency's
+// price, still past due.
+func TestSwitchAgencyStores(t *testing.T) {
+	t.Parallel()
+	d := newDunning(t)
+	a, err := d.svc.CreateAgency(t.Context(), "وكالة مدار", "EGP", "agency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stores := []context.Context{d.store(t), d.store(t), d.store(t)}
+	ids := make([]ulid.ID, len(stores))
+	for i, sctx := range stores {
+		if err = d.svc.JoinAgency(sctx, a.ID); err != nil {
+			t.Fatal(err)
+		}
+		d.own(sctx, a.ID)
+		ids[i] = ulid.ID(storeOf(sctx))
+	}
+	// November's renewal, declined: every store is past due.
+	*d.clock = time.Date(2026, 12, 1, 3, 0, 0, 0, time.UTC)
+	if err = d.svc.InvoiceAccount(t.Context(), a.ID, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.svc.SavePaymentMethod(t.Context(), a.ID, "fake", "decline-card", "Visa •••• 1881"); err != nil {
+		t.Fatal(err)
+	}
+	d.tick(t, d.clock.Add(time.Hour))
+	before, err := d.svc.AgencyOpenInvoices(t.Context(), a.ID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("open invoices = %+v, %v", before, err)
+	}
+	for _, sctx := range stores {
+		if st, _, _, _ := d.state(sctx, t); st != "past_due" {
+			t.Fatalf("before: %s", st)
+		}
+	}
+
+	if err = d.svc.SwitchAgencyStores(t.Context(), a.ID, []ulid.ID{ids[0], d.ids.New()}, domain.CollectCard); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a store of another account: %v", err)
+	}
+	if err = d.svc.SwitchAgencyStores(t.Context(), a.ID, ids[:2], domain.CollectCard); err != nil {
+		t.Fatal(err)
+	}
+	for _, sctx := range stores[:2] {
+		sum, sErr := d.svc.Summary(sctx)
+		if sErr != nil || sum.Status != domain.Active || sum.Agency || sum.Collection != domain.CollectCard || sum.Card != "Visa •••• 1881" ||
+			len(sum.OpenInvoices) != 0 || d.holds.of(sctx) {
+			t.Fatalf("switched store = %+v, %v", sum, sErr)
+		}
+	}
+	sum, err := d.svc.Summary(stores[2])
+	if err != nil || sum.Status != domain.PastDue || !sum.Agency || len(sum.OpenInvoices) != 1 || sum.OpenInvoices[0].ID == before[0].ID ||
+		sum.OpenInvoices[0].Number == before[0].Number {
+		t.Fatalf("the store that stays = %+v, %v", sum, err)
+	}
+	if a2, members, aErr := d.svc.Agency(t.Context(), a.ID); aErr != nil || a2.Stores != 1 || len(members) != 1 || members[0] != ids[2] {
+		t.Fatalf("agency = %+v %v, %v", a2, members, aErr)
+	}
+
+	// An agency that owes nothing has nothing to switch.
+	paid, err := d.svc.CreateAgency(t.Context(), "وكالة النيل", "EGP", "agency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member := d.store(t)
+	if err = d.svc.JoinAgency(member, paid.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code := codeOf(d.svc.SwitchAgencyStores(t.Context(), paid.ID, []ulid.ID{ulid.ID(storeOf(member))}, domain.CollectBalance)); code != "agency_not_unpaid" {
+		t.Fatalf("an agency that owes nothing: %q", code)
+	}
+}
+
+// TestSwitchAgencyStoresRefusals: the way and the stores are checked, an
+// unknown agency is not found, the card needs the agency's, and every
+// store may move by the balance, leaving the agency empty.
+func TestSwitchAgencyStoresRefusals(t *testing.T) {
+	t.Parallel()
+	d := newDunning(t)
+	a, err := d.svc.CreateAgency(t.Context(), "وكالة الدلتا", "EGP", "agency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx := d.store(t)
+	if err = d.svc.JoinAgency(sctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	d.own(sctx, a.ID)
+	id := ulid.ID(storeOf(sctx))
+	*d.clock = time.Date(2026, 12, 1, 3, 0, 0, 0, time.UTC)
+	if err = d.svc.InvoiceAccount(t.Context(), a.ID, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	d.tick(t, d.clock.Add(time.Hour)) // no card: past due
+
+	for name, c := range map[string]struct {
+		agency ulid.ID
+		stores []ulid.ID
+		way    domain.Collection
+		code   string
+	}{
+		"an unknown way": {a.ID, []ulid.ID{id}, "cash", "validation_failed"},
+		"no store":       {a.ID, nil, domain.CollectBalance, "validation_failed"},
+		"unknown agency": {d.ids.New(), []ulid.ID{id}, domain.CollectBalance, "agency_not_found"},
+		"no agency card": {a.ID, []ulid.ID{id}, domain.CollectCard, "card_required"},
+	} {
+		if code := codeOf(d.svc.SwitchAgencyStores(t.Context(), c.agency, c.stores, c.way)); code != c.code {
+			t.Errorf("%s: %q, want %q", name, code, c.code)
+		}
+	}
+	if _, err = d.svc.AgencyOpenInvoices(t.Context(), d.ids.New()); codeOf(err) != "agency_not_found" {
+		t.Errorf("open invoices of an unknown agency: %v", err)
+	}
+	if err = d.svc.SwitchAgencyStores(t.Context(), a.ID, []ulid.ID{id}, domain.CollectBalance); err != nil {
+		t.Fatal(err)
+	}
+	if sum, sErr := d.svc.Summary(sctx); sErr != nil || sum.Status != domain.Active || sum.Collection != domain.CollectBalance || sum.Card != "" {
+		t.Fatalf("switched = %+v, %v", sum, sErr)
+	}
+	if open, oErr := d.svc.AgencyOpenInvoices(t.Context(), a.ID); oErr != nil || len(open) != 0 {
+		t.Fatalf("an empty agency's invoices = %+v, %v", open, oErr)
 	}
 }

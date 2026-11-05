@@ -28,7 +28,8 @@ SELECT id, kind, name, currency, country FROM billing_accounts WHERE id = @id;
 SELECT member_store_id FROM billing_account_stores WHERE account_id = @account_id ORDER BY added_at, member_store_id LIMIT 1000;
 
 -- name: InvoiceExists :one
-SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = @account_id AND period = @period AND purpose = 'monthly');
+-- A voided one does not count: its period may be invoiced again.
+SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = @account_id AND period = @period AND purpose = 'monthly' AND status <> 'void');
 
 -- name: GetTaxRate :one
 SELECT rate_bps FROM tax_rates WHERE country = @country;
@@ -68,7 +69,10 @@ CROSS JOIN LATERAL (
   LIMIT 1
 ) t
 JOIN plan_prices pp ON pp.plan_id = t.id AND pp.currency = @currency AND pp.cycle = coalesce(s.next_cycle, s.cycle)
-WHERE s.store_id = @store_id AND s.status = 'active' AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
+-- Past due too: a store whose billed renewal was voided (an agency's
+-- invoice written again for the stores that stay, ADR-0087) is billed
+-- again; one still billed keeps its mark.
+WHERE s.store_id = @store_id AND s.status IN ('active', 'past_due') AND NOT s.cancel_at_period_end AND s.renewal_invoice_id IS NULL
   AND t.kind IN ('subscription', 'agency') AND s.period_end <= @renews_by;
 
 -- name: MarkRenewalBilled :exec

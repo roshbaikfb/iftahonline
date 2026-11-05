@@ -603,6 +603,39 @@ func TestConsoleAgencies(t *testing.T) {
 	if r.status != http.StatusOK || r.body["agency"].(map[string]any)["stores"] != float64(1) {
 		t.Fatalf("get = %d %v", r.status, r.body)
 	}
+	// The switch to pay as you sell (ADR-0087 §7): only an unpaid agency,
+	// only its own stores, with a reason, by a role that manages billing.
+	if r.body["open_invoices"] != nil {
+		t.Fatalf("an agency that owes nothing lists open invoices: %v", r.body)
+	}
+	switchTo := base + "/switch-to-pays"
+	viewer := f.loginAs(t, "viewer")
+	for _, c := range []struct {
+		body, token string
+		status      int
+		code        string
+	}{
+		{`{"store_ids":["` + storeID + `"],"collection":"balance","reason":"agreed by phone"}`, sess, http.StatusConflict, "agency_not_unpaid"},
+		{`{"store_ids":["` + f.ids.New().String() + `"],"collection":"balance","reason":"agreed by phone"}`, sess, http.StatusUnprocessableEntity, ""},
+		{`{"store_ids":["junk"],"collection":"balance","reason":"agreed by phone"}`, sess, http.StatusUnprocessableEntity, ""},
+		{`{"store_ids":["` + storeID + `"],"collection":"cash","reason":"agreed by phone"}`, sess, http.StatusUnprocessableEntity, ""},
+		{`{"store_ids":["` + storeID + `"],"collection":"balance","reason":"x"}`, sess, http.StatusUnprocessableEntity, ""},
+		{``, sess, http.StatusBadRequest, ""},
+		{`{"store_ids":["` + storeID + `"],"collection":"balance","reason":"agreed by phone"}`, viewer, http.StatusForbidden, ""},
+	} {
+		got := f.do(t, http.MethodPost, adminHost, switchTo, c.body, withCookie(c.token), sameOrigin)
+		if got.status != c.status || (c.code != "" && got.body["code"] != c.code) {
+			t.Errorf("switch %s = %d %v; want %d %s", c.body, got.status, got.body, c.status, c.code)
+		}
+	}
+	if got := f.do(t, http.MethodPost, adminHost, "/admin/v1/agencies/"+f.ids.New().String()+"/switch-to-pays",
+		`{"store_ids":["`+storeID+`"],"collection":"balance","reason":"agreed by phone"}`, withCookie(sess), sameOrigin); got.status != http.StatusNotFound {
+		t.Errorf("an unknown agency = %d %v", got.status, got.body)
+	}
+	if got := f.do(t, http.MethodPost, adminHost, switchTo, `{"store_ids":["`+storeID+`"],"collection":"balance","reason":"agreed by phone"}`,
+		withCookie(sess)); got.status != http.StatusForbidden {
+		t.Errorf("cross-site = %d", got.status)
+	}
 	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/agencies", "", withCookie(sess)); r.status != http.StatusOK || len(r.body["items"].([]any)) == 0 {
 		t.Fatalf("list = %d %v", r.status, r.body)
 	}

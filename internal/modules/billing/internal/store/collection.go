@@ -157,24 +157,50 @@ func Entries(ctx context.Context, tx Tx, account ulid.ID, limit int32) ([]Entry,
 // and makes their fees of the store in ctx due again (its credits
 // waiting again): the store moved to pay as you sell (ADR-0087).
 func VoidOpenInvoices(ctx context.Context, tx Tx, account ulid.ID) (int, error) {
-	store, err := current(ctx)
+	ids, err := LockOpenInvoiceIDs(ctx, tx, account)
 	if err != nil {
 		return 0, err
 	}
-	q := billingdb.New(tx)
-	ids, err := q.LockOpenInvoiceIDs(ctx, account)
-	if err != nil {
-		return 0, fmt.Errorf("billing store: open invoices: %w", err)
-	}
 	for _, id := range ids {
-		if _, err = q.VoidInvoice(ctx, id); err != nil {
-			return 0, fmt.Errorf("billing store: void invoice: %w", err)
+		if err = VoidInvoice(ctx, tx, id); err != nil {
+			return 0, err
 		}
-		if _, err = q.UnbillFees(ctx, billingdb.UnbillFeesParams{StoreID: store, InvoiceID: &id}); err != nil {
-			return 0, fmt.Errorf("billing store: unbill fees: %w", err)
+		if err = UnbillInvoice(ctx, tx, id); err != nil {
+			return 0, err
 		}
 	}
 	return len(ids), nil
+}
+
+// LockOpenInvoiceIDs are the open invoices of the account tx is behind,
+// locked until tx ends.
+func LockOpenInvoiceIDs(ctx context.Context, tx Tx, account ulid.ID) ([]ulid.ID, error) {
+	ids, err := billingdb.New(tx).LockOpenInvoiceIDs(ctx, account)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: open invoices: %w", err)
+	}
+	return ids, nil
+}
+
+// VoidInvoice voids an open invoice of the account tx is behind.
+func VoidInvoice(ctx context.Context, tx Tx, id ulid.ID) error {
+	if _, err := billingdb.New(tx).VoidInvoice(ctx, id); err != nil {
+		return fmt.Errorf("billing store: void invoice: %w", err)
+	}
+	return nil
+}
+
+// UnbillInvoice makes a voided invoice's fees of the store in ctx due
+// again, and its credits waiting again.
+func UnbillInvoice(ctx context.Context, tx Tx, id ulid.ID) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err = billingdb.New(tx).UnbillFees(ctx, billingdb.UnbillFeesParams{StoreID: store, InvoiceID: &id}); err != nil {
+		return fmt.Errorf("billing store: unbill fees: %w", err)
+	}
+	return nil
 }
 
 // SetCollection records the way the account tx is behind pays its fees.
