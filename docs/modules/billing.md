@@ -305,6 +305,11 @@ platform provider):
   The confirmed payment is one `topup` entry (`checkout_id`), and a
   repeated callback adds nothing. `GET /v1/stores/{id}/billing/balance`
   is the merchant's view of the balance.
+- **The card with a minimum** (ADR-0086): for an account whose
+  `collection` is `card`, a new fee that brings the due fees to the
+  minimum (before tax) writes a `fees` invoice at once, under the
+  account's lock. The dunning charges it within the hour, and the month's
+  invoice bills whatever is still due.
 
 ## The subscription lifecycle
 
