@@ -206,7 +206,7 @@ func TestRefundIsNeverRepeated(t *testing.T) {
 	if err := srv.Pay(req.Reference); err != nil {
 		t.Fatal(err)
 	}
-	st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+	st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), gateway.Ref{Reference: req.Reference}, money.EGP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestStatusIsNotTakenOnTrust(t *testing.T) {
 			if err := srv.Override(req.Reference, fields); err != nil {
 				t.Fatal(err)
 			}
-			st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+			st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), gateway.Ref{Reference: req.Reference}, money.EGP)
 			if err == nil || st.State == gateway.StatePaid {
 				t.Fatalf("believed %+v (%v)", st, err)
 			}
@@ -265,7 +265,7 @@ func TestStatusIsNotTakenOnTrust(t *testing.T) {
 		if err := srv.Override(req.Reference, map[string]any{"is_auth": true, "is_capture": false, "is_standalone_payment": false}); err != nil {
 			t.Fatal(err)
 		}
-		st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP)
+		st, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), gateway.Ref{Reference: req.Reference}, money.EGP)
 		if err != nil || st.State != gateway.StatePending {
 			t.Fatalf("an authorization: %+v %v, want pending", st, err)
 		}
@@ -309,7 +309,7 @@ func TestAuthTokenIsReused(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP); err != nil {
+		if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), gateway.Ref{Reference: req.Reference}, money.EGP); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -317,7 +317,7 @@ func TestAuthTokenIsReused(t *testing.T) {
 		t.Fatalf("%d tokens asked for 3 inquiries, want 1", n)
 	}
 	srv.ExpireTokens()
-	if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), req.Reference, money.EGP); err != nil {
+	if _, err := g.FetchStatus(t.Context(), paymobtest.Credentials(), gateway.Ref{Reference: req.Reference}, money.EGP); err != nil {
 		t.Fatalf("after the token expired: %v", err)
 	}
 	if n := srv.TokenCalls(); n != 2 {
@@ -325,7 +325,7 @@ func TestAuthTokenIsReused(t *testing.T) {
 	}
 	other := paymobtest.Credentials()
 	other.APIKey = "another-merchant"
-	if _, err := g.FetchStatus(t.Context(), other, req.Reference, money.EGP); err == nil {
+	if _, err := g.FetchStatus(t.Context(), other, gateway.Ref{Reference: req.Reference}, money.EGP); err == nil {
 		t.Fatal("another merchant's key used the first merchant's token")
 	}
 }

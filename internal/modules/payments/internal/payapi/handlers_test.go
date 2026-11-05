@@ -58,7 +58,7 @@ type countingGateway struct {
 	asked *atomic.Int64
 }
 
-func (g countingGateway) FetchStatus(ctx context.Context, c gateway.Credentials, ref string, cur money.Currency) (gateway.Status, error) {
+func (g countingGateway) FetchStatus(ctx context.Context, c gateway.Credentials, ref gateway.Ref, cur money.Currency) (gateway.Status, error) {
 	g.asked.Add(1)
 	return g.Gateway.FetchStatus(ctx, c, ref, cur)
 }

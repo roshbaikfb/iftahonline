@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -160,7 +161,7 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pay, err := payments.New(payments.Deps{Pool: one, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true},
+	pay, err := payments.New(payments.Deps{Pool: one, IDs: ids, Events: bus, Gateways: config.Payments{FakeGateway: true, Stripe: true},
 		Sealer: sealer, PublicURL: "https://app.example.com", Orders: ord.Payments(), Jobs: ins, Inbox: hooks.Inbox(),
 		Limiter: checkoutLimiter, ClientIP: func(context.Context) (netip.Addr, bool) { return netip.MustParseAddr("198.51.100.22"), true },
 		DepositLinks: func(_ context.Context, _ ulid.ID, token string) (bool, error) { return token == phoneLink, nil },
@@ -173,10 +174,15 @@ func newPlatform(t *testing.T) platform {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var providers []string
 	for _, p := range pay.WebhookProviders() {
 		if err = hooks.Register(p); err != nil {
 			t.Fatal(err)
 		}
+		providers = append(providers, p.Name())
+	}
+	if !slices.Contains(providers, "stripe") { // merchants' Stripe accounts, when on (ADR-0092)
+		t.Fatalf("providers = %v", providers)
 	}
 	if err = bus.Subscribe(orders.EventOrderPlaced, payments.WatchOrdersSubscriber, pay.OrderPlacedHandler()); err != nil {
 		t.Fatal(err)

@@ -122,7 +122,8 @@ func (*Gateway) ParseWebhook(body []byte) (gateway.WebhookEvent, error) {
 }
 
 // FetchStatus implements gateway.Gateway.
-func (g *Gateway) FetchStatus(_ context.Context, creds gateway.Credentials, reference string, cur money.Currency) (gateway.Status, error) {
+func (g *Gateway) FetchStatus(_ context.Context, creds gateway.Credentials, ref gateway.Ref, cur money.Currency) (gateway.Status, error) {
+	reference := ref.Reference
 	if err := auth(creds); err != nil {
 		return gateway.Status{}, err
 	}

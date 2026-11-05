@@ -170,11 +170,13 @@ func TestShipping(t *testing.T) {
 func TestPayments(t *testing.T) {
 	t.Parallel()
 	c, err := config.Load(config.RoleWorker, env(base()))
-	if err != nil || c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "" {
+	if err != nil || c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "" || c.Payments.Stripe {
 		t.Fatalf("defaults: %+v %v", c.Payments, err)
 	}
-	c, err = config.Load(config.RoleAPI, env(with("PAYMENTS_FAKE_GATEWAY", "true", "PAYMOB_BASE_URL", "https://accept.paymob.com")))
-	if err != nil || !c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "https://accept.paymob.com" {
+	c, err = config.Load(config.RoleAPI, env(with("PAYMENTS_FAKE_GATEWAY", "true", "PAYMOB_BASE_URL", "https://accept.paymob.com",
+		"PAYMENTS_STRIPE_ENABLED", "true", "STRIPE_BASE_URL", "https://api.stripe.com")))
+	if err != nil || !c.Payments.FakeGateway || c.Payments.PaymobBaseURL != "https://accept.paymob.com" || !c.Payments.Stripe ||
+		c.Payments.StripeBaseURL != "https://api.stripe.com" {
 		t.Fatalf("set: %+v %v", c.Payments, err)
 	}
 	if c, err = config.Load(config.RoleStorefront, env(base())); err != nil || c.Payments.CheckoutURL != "https://app.iftahonline.com" {

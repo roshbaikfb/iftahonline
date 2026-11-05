@@ -8060,17 +8060,21 @@ export interface components {
             /** @description Where the gateway notifies this connection's payments (sent with every payment; active connections). */
             webhook_url?: string;
         };
+        /** @description The merchant's keys. Each gateway needs its own: Paymob the secret, public and API keys, the HMAC secret and integration IDs; Stripe the secret (or restricted) key and the webhook endpoint's signing secret (ADR-0092). A key a gateway needs and is missing is a validation error. */
         ConnectPaymentGatewayInput: {
             /** @example paymob */
             gateway: string;
             /** Format: password */
             secret_key?: string;
             public_key?: string;
-            /** Format: password */
-            api_key: string;
             /**
              * Format: password
-             * @description The gateway's webhook signing secret (Paymob: HMAC).
+             * @description Paymob: for transaction inquiries. Stripe: none.
+             */
+            api_key?: string;
+            /**
+             * Format: password
+             * @description The gateway's webhook signing secret (Paymob: HMAC; Stripe: whsec_).
              */
             webhook_secret: string;
             /** @description The gateway's card integration IDs (Paymob). */

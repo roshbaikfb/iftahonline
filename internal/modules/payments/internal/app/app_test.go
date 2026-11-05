@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/paymob"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/stripe"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/paytest"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks/webhookstest"
@@ -160,7 +162,7 @@ func TestConnect(t *testing.T) {
 	if _, err := f.svc.Connect(f.ctxB, app.ConnectInput{Gateway: fake.Name, APIKey: fake.InvalidKey, WebhookSecret: "s"}); !isField(err, "secret_key", "refused") {
 		t.Errorf("refused keys: %v", err)
 	}
-	if _, err := f.svc.Connect(f.ctxB, app.ConnectInput{Gateway: "stripe", APIKey: "k", WebhookSecret: "s"}); !isField(err, "gateway", "unknown") {
+	if _, err := f.svc.Connect(f.ctxB, app.ConnectInput{Gateway: "adyen", APIKey: "k", WebhookSecret: "s"}); !isField(err, "gateway", "unknown") {
 		t.Errorf("unknown gateway: %v", err)
 	}
 	if _, err := f.svc.Connect(f.ctxB, app.ConnectInput{Gateway: fake.Name, APIKey: "k"}); !isField(err, "webhook_secret", "invalid") {
@@ -195,6 +197,42 @@ func TestConnect(t *testing.T) {
 	}
 	if on, err := f.svc.CardEnabled(f.ctxA); err != nil || on {
 		t.Fatalf("after disconnect: %v %v", on, err)
+	}
+}
+
+// TestConnectStripe: Stripe needs the secret key and the endpoint
+// secret, and no API key; Paymob still needs its API key (ADR-0092).
+func TestConnectStripe(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer rk_test_1" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	svc := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Sealer: f.sealer(), Gateways: app.Gateways{
+		stripe.Name: stripe.New(stripe.Options{BaseURL: srv.URL, Client: srv.Client()}),
+		paymob.Name: paymob.New(paymob.Options{BaseURL: "http://127.0.0.1:1"}),
+	}, Orders: f.orders, Jobs: f.jobs, PublicURL: "https://api.example.com"})
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, WebhookSecret: "whsec_1"}); !isField(err, "secret_key", "invalid") {
+		t.Errorf("no secret key: %v", err)
+	}
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_wrong", WebhookSecret: "whsec_1"}); !isField(err, "secret_key", "refused") {
+		t.Errorf("a refused key: %v", err)
+	}
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: paymob.Name, SecretKey: "sk", PublicKey: "pk", WebhookSecret: "s", IntegrationIDs: []int{1}}); !isField(err, "api_key", "invalid") {
+		t.Errorf("Paymob without its API key: %v", err)
+	}
+	c, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1", WebhookSecret: "whsec_1"})
+	if err != nil || c.Gateway != stripe.Name {
+		t.Fatalf("connect = %+v, %v", c, err)
+	}
+	id, _ := tenant.FromContext(f.ctxB)
+	if u := svc.WebhookURL(id, c); !strings.Contains(u, "/v1/webhooks/stripe/") {
+		t.Errorf("webhook URL = %s", u)
 	}
 }
 
@@ -467,7 +505,7 @@ func TestRefunds(t *testing.T) {
 	if err != nil || got.Status != domain.StatusPartiallyRefunded || got.Refunded.Amount() != 20000 || refunds[0].Status != domain.RefundSucceeded {
 		t.Fatalf("after the refund: %+v %+v %v", got, refunds, err)
 	}
-	if st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP); stErr != nil || st.Refunded.Amount() != 20000 {
+	if st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, gateway.Ref{Reference: p.ID.String()}, money.EGP); stErr != nil || st.Refunded.Amount() != 20000 {
 		t.Fatalf("the gateway refunded %v (%v), want once", st.Refunded, stErr)
 	}
 	if f.orders.Order(order).PaymentStatus != orders.PaymentPartiallyRefunded {
@@ -588,7 +626,7 @@ func TestWorkers(t *testing.T) {
 // slowGateway never answers status inquiries in time.
 type slowGateway struct{ *fake.Gateway }
 
-func (slowGateway) FetchStatus(ctx context.Context, _ gateway.Credentials, _ string, _ money.Currency) (gateway.Status, error) {
+func (slowGateway) FetchStatus(ctx context.Context, _ gateway.Credentials, _ gateway.Ref, _ money.Currency) (gateway.Status, error) {
 	<-ctx.Done()
 	return gateway.Status{}, ctx.Err()
 }
@@ -650,7 +688,7 @@ func TestRefundsBeforeTheSync(t *testing.T) {
 	}
 	refunded := func() int64 {
 		t.Helper()
-		st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP)
+		st, stErr := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, gateway.Ref{Reference: p.ID.String()}, money.EGP)
 		if stErr != nil {
 			t.Fatal(stErr)
 		}
@@ -728,7 +766,7 @@ func TestRefundAnswerLost(t *testing.T) {
 	if err = svc.RefundPayment(f.ctxA, r.ID); err != nil {
 		t.Fatal(err)
 	}
-	st, err := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, p.ID.String(), money.EGP)
+	st, err := f.gw.FetchStatus(f.ctxA, gateway.Credentials{APIKey: apiKey}, gateway.Ref{Reference: p.ID.String()}, money.EGP)
 	if err != nil || st.Refunded.Amount() != 20000 {
 		t.Fatalf("the gateway refunded %v (%v), want 20000 once", st.Refunded, err)
 	}

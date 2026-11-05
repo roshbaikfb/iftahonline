@@ -72,7 +72,7 @@ func Run(t *testing.T, h Harness) {
 		if err != nil || !strings.HasPrefix(c.URL, "http") {
 			t.Fatalf("create: %+v %v", c, err)
 		}
-		st, err := g.FetchStatus(ctx, h.Creds, req.Reference, h.Currency)
+		st, err := g.FetchStatus(ctx, h.Creds, gateway.Ref{Reference: req.Reference, ProviderRef: c.ProviderRef}, h.Currency)
 		if err != nil || st.State != gateway.StatePending || !st.Amount.IsZero() {
 			t.Fatalf("status before paying: %+v %v", st, err)
 		}
@@ -92,11 +92,13 @@ func Run(t *testing.T, h Harness) {
 	}
 	t.Run("pay, webhook, refund", func(t *testing.T) {
 		req := Request(t, h.Currency)
-		if _, err := g.CreatePayment(ctx, h.Creds, req); err != nil {
+		c, err := g.CreatePayment(ctx, h.Creds, req)
+		if err != nil {
 			t.Fatal(err)
 		}
+		ref := gateway.Ref{Reference: req.Reference, ProviderRef: c.ProviderRef}
 		h.Pay(t, req.Reference)
-		st, err := g.FetchStatus(ctx, h.Creds, req.Reference, h.Currency)
+		st, err := g.FetchStatus(ctx, h.Creds, ref, h.Currency)
 		if err != nil || st.State != gateway.StatePaid || st.Amount.Amount() != 52000 || st.TransactionID == "" || !st.Refunded.IsZero() {
 			t.Fatalf("status after paying: %+v %v", st, err)
 		}
@@ -129,7 +131,7 @@ func Run(t *testing.T, h Harness) {
 		if _, err = g.Refund(ctx, h.Creds, st.TransactionID, amountOf(t, 32000, h.Currency)); err != nil {
 			t.Fatalf("refund the rest: %v", err)
 		}
-		if st, err = g.FetchStatus(ctx, h.Creds, req.Reference, h.Currency); err != nil || st.Refunded.Amount() != 52000 {
+		if st, err = g.FetchStatus(ctx, h.Creds, ref, h.Currency); err != nil || st.Refunded.Amount() != 52000 {
 			t.Fatalf("after refunds: %+v %v", st, err)
 		}
 		if _, err = g.Refund(ctx, h.Creds, st.TransactionID, amountOf(t, 1, h.Currency)); !errors.Is(err, gateway.ErrRejected) {
@@ -139,11 +141,12 @@ func Run(t *testing.T, h Harness) {
 
 	t.Run("declined", func(t *testing.T) {
 		req := Request(t, h.Currency)
-		if _, err := g.CreatePayment(ctx, h.Creds, req); err != nil {
+		c, err := g.CreatePayment(ctx, h.Creds, req)
+		if err != nil {
 			t.Fatal(err)
 		}
 		h.Decline(t, req.Reference)
-		if st, err := g.FetchStatus(ctx, h.Creds, req.Reference, h.Currency); err != nil || st.State != gateway.StateFailed || !st.Amount.IsZero() {
+		if st, err := g.FetchStatus(ctx, h.Creds, gateway.Ref{Reference: req.Reference, ProviderRef: c.ProviderRef}, h.Currency); err != nil || st.State != gateway.StateFailed || !st.Amount.IsZero() {
 			t.Fatalf("declined: %+v %v", st, err)
 		}
 	})

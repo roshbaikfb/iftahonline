@@ -8996,13 +8996,18 @@ components:
           description: Where the gateway notifies this connection's payments (sent with every payment; active connections).
     ConnectPaymentGatewayInput:
       type: object
-      required: [gateway, api_key, webhook_secret]
+      required: [gateway, webhook_secret]
+      description: >-
+        The merchant's keys. Each gateway needs its own: Paymob the secret,
+        public and API keys, the HMAC secret and integration IDs; Stripe the
+        secret (or restricted) key and the webhook endpoint's signing secret
+        (ADR-0092). A key a gateway needs and is missing is a validation error.
       properties:
         gateway: { type: string, example: paymob }
         secret_key: { type: string, maxLength: 512, format: password }
         public_key: { type: string, maxLength: 512 }
-        api_key: { type: string, maxLength: 1024, format: password }
-        webhook_secret: { type: string, maxLength: 512, format: password, description: "The gateway's webhook signing secret (Paymob: HMAC)." }
+        api_key: { type: string, maxLength: 1024, format: password, description: "Paymob: for transaction inquiries. Stripe: none." }
+        webhook_secret: { type: string, maxLength: 512, format: password, description: "The gateway's webhook signing secret (Paymob: HMAC; Stripe: whsec_)." }
         integration_ids:
           type: array
           maxItems: 10

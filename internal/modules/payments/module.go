@@ -15,6 +15,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/paymob"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/stripe"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/payapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
@@ -69,6 +70,9 @@ type Deps struct {
 // pages are served under publicURL.
 func gateways(c config.Payments, publicURL string) (app.Gateways, *fake.Gateway) {
 	out := app.Gateways{paymob.Name: paymob.New(paymob.Options{BaseURL: c.PaymobBaseURL})}
+	if c.Stripe {
+		out[stripe.Name] = stripe.New(stripe.Options{BaseURL: c.StripeBaseURL})
+	}
 	if !c.FakeGateway {
 		return out, nil
 	}
