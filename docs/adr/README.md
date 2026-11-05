@@ -96,3 +96,4 @@ supersedes it.
 | [0088](0088-the-merchants-country-and-the-dollar.md) | The merchant's country, and the US dollar | Accepted |
 | [0089](0089-payments-and-taxes-by-country.md) | Payment rules and taxes by the merchant's country | Accepted |
 | [0090](0090-billing-in-dollars.md) | Billing in dollars outside Egypt | Accepted |
+| [0091](0091-stripe-billing.md) | Stripe for the platform's billing outside Egypt | Accepted |

@@ -368,6 +368,34 @@ platform provider):
 - **Agencies** are created in their country's currency: EGP in Egypt,
   USD elsewhere, with the country.
 
+## Stripe (ADR-0091)
+
+The `stripe` gateway bills merchants outside Egypt through the
+platform's own Stripe account (UK). A checkout opens on its account's
+country's billing gateway (the payment rule), and records it
+(`billing_checkouts.gateway`).
+
+1. **Pay now / top up:** a Checkout Session that saves the card
+   (`setup_future_usage=off_session`). Its ID is kept
+   (`billing_checkouts.session_id`).
+2. **Callbacks:** `/v1/webhooks/stripe_billing`, signed in
+   `Stripe-Signature`. The `checkout.session.*` events are placed by our
+   reference.
+3. **Paid:** Stripe is asked by the session. A paid session's card
+   (customer + payment method) becomes the card on file.
+4. **Charges:** an off-session PaymentIntent.
+   - Stripe is searched by the attempt's reference first, then asked
+     with `charge:<reference>` as the idempotency key.
+   - A bank asking for 3DS is a decline (`authentication_required`).
+
+The shared client is `platform/stripe`.
+
+| Variable (api and worker) | Meaning |
+|---|---|
+| `BILLING_STRIPE_SECRET_KEY` | A restricted key (`rk_`) or the secret key (`sk_`) |
+| `BILLING_STRIPE_WEBHOOK_SECRET` | The `stripe_billing` endpoint's signing secret (`whsec_`) |
+| `BILLING_STRIPE_BASE_URL` | Overrides the API (tests) |
+
 ## The subscription lifecycle
 
 | From | Step | To |
