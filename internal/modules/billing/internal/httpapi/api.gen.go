@@ -80,6 +80,111 @@ func (e BillingStatus) Valid() bool {
 	}
 }
 
+// Defines values for BillingBalanceCollection.
+const (
+	BillingBalanceCollectionBalance BillingBalanceCollection = "balance"
+	BillingBalanceCollectionCard    BillingBalanceCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceCollection enum.
+func (e BillingBalanceCollection) Valid() bool {
+	switch e {
+	case BillingBalanceCollectionBalance:
+		return true
+	case BillingBalanceCollectionCard:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingBalanceCurrency.
+const (
+	BillingBalanceCurrencyAED BillingBalanceCurrency = "AED"
+	BillingBalanceCurrencyEGP BillingBalanceCurrency = "EGP"
+	BillingBalanceCurrencySAR BillingBalanceCurrency = "SAR"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceCurrency enum.
+func (e BillingBalanceCurrency) Valid() bool {
+	switch e {
+	case BillingBalanceCurrencyAED:
+		return true
+	case BillingBalanceCurrencyEGP:
+		return true
+	case BillingBalanceCurrencySAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingBalanceLevel.
+const (
+	Debt BillingBalanceLevel = "debt"
+	Low  BillingBalanceLevel = "low"
+	Ok   BillingBalanceLevel = "ok"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceLevel enum.
+func (e BillingBalanceLevel) Valid() bool {
+	switch e {
+	case Debt:
+		return true
+	case Low:
+		return true
+	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingBalanceOffered.
+const (
+	BillingBalanceOfferedBalance BillingBalanceOffered = "balance"
+	BillingBalanceOfferedCard    BillingBalanceOffered = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceOffered enum.
+func (e BillingBalanceOffered) Valid() bool {
+	switch e {
+	case BillingBalanceOfferedBalance:
+		return true
+	case BillingBalanceOfferedCard:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingBalanceEntryKind.
+const (
+	Fee       BillingBalanceEntryKind = "fee"
+	FeeRefund BillingBalanceEntryKind = "fee_refund"
+	Invoice   BillingBalanceEntryKind = "invoice"
+	Manual    BillingBalanceEntryKind = "manual"
+	Topup     BillingBalanceEntryKind = "topup"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceEntryKind enum.
+func (e BillingBalanceEntryKind) Valid() bool {
+	switch e {
+	case Fee:
+		return true
+	case FeeRefund:
+		return true
+	case Invoice:
+		return true
+	case Manual:
+		return true
+	case Topup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingFeatureKind.
 const (
 	BillingFeatureKindCount   BillingFeatureKind = "count"
@@ -287,6 +392,56 @@ type BillingNextCycle string
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
 
+// BillingBalance defines model for BillingBalance.
+type BillingBalance struct {
+	// BalanceMinor Negative when fees of delivered orders are owed.
+	BalanceMinor int64 `json:"balance_minor"`
+
+	// Collection The way the store pays its fees; absent until it chooses.
+	Collection *BillingBalanceCollection `json:"collection,omitempty"`
+	Currency   BillingBalanceCurrency    `json:"currency"`
+	Entries    []BillingBalanceEntry     `json:"entries"`
+	Level      BillingBalanceLevel       `json:"level"`
+
+	// MinimumMinor The least top-up; the low-balance notice is at half of it.
+	MinimumMinor int64 `json:"minimum_minor"`
+
+	// Offered The ways the platform offers now.
+	Offered []BillingBalanceOffered `json:"offered"`
+}
+
+// BillingBalanceCollection The way the store pays its fees; absent until it chooses.
+type BillingBalanceCollection string
+
+// BillingBalanceCurrency defines model for BillingBalance.Currency.
+type BillingBalanceCurrency string
+
+// BillingBalanceLevel defines model for BillingBalance.Level.
+type BillingBalanceLevel string
+
+// BillingBalanceOffered defines model for BillingBalance.Offered.
+type BillingBalanceOffered string
+
+// BillingBalanceEntry defines model for BillingBalanceEntry.
+type BillingBalanceEntry struct {
+	// AmountMinor Signed; a fee is negative.
+	AmountMinor       int64     `json:"amount_minor"`
+	BalanceAfterMinor int64     `json:"balance_after_minor"`
+	CreatedAt         time.Time `json:"created_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id ULID `json:"id"`
+
+	// Kind An extensible list (ADR-0032); clients show a kind they do not know as a plain entry.
+	Kind BillingBalanceEntryKind `json:"kind"`
+
+	// Reference The invoice's number, the gateway's transaction, or the platform's note.
+	Reference *string `json:"reference,omitempty"`
+}
+
+// BillingBalanceEntryKind An extensible list (ADR-0032); clients show a kind they do not know as a plain entry.
+type BillingBalanceEntryKind string
+
 // BillingFeature defines model for BillingFeature.
 type BillingFeature struct {
 	Key    string             `json:"key"`
@@ -480,10 +635,18 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// TopUpBillingBalanceJSONBody defines parameters for TopUpBillingBalance.
+type TopUpBillingBalanceJSONBody struct {
+	AmountMinor int64 `json:"amount_minor"`
+}
+
 // StartTrialJSONBody defines parameters for StartTrial.
 type StartTrialJSONBody struct {
 	PlanCode string `json:"plan_code"`
 }
+
+// TopUpBillingBalanceJSONRequestBody defines body for TopUpBillingBalance for application/json ContentType.
+type TopUpBillingBalanceJSONRequestBody TopUpBillingBalanceJSONBody
 
 // ChoosePlanJSONRequestBody defines body for ChoosePlan for application/json ContentType.
 type ChoosePlanJSONRequestBody = ChoosePlanRequest
@@ -496,6 +659,12 @@ type ServerInterface interface {
 	// GetBilling The store's plan, card on file and open invoices
 	// (GET /v1/stores/{store_id}/billing)
 	GetBilling(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// GetBillingBalance The store's prepaid balance and its latest entries
+	// (GET /v1/stores/{store_id}/billing/balance)
+	GetBillingBalance(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// TopUpBillingBalance Top up the balance on Paymob's page
+	// (POST /v1/stores/{store_id}/billing/balance/topups)
+	TopUpBillingBalance(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// CancelRenewal Stop renewing; the free plan after the paid period
 	// (POST /v1/stores/{store_id}/billing/cancel)
 	CancelRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -542,6 +711,58 @@ func (siw *ServerInterfaceWrapper) GetBilling(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetBilling(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBillingBalance operation middleware
+func (siw *ServerInterfaceWrapper) GetBillingBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBillingBalance(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TopUpBillingBalance operation middleware
+func (siw *ServerInterfaceWrapper) TopUpBillingBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TopUpBillingBalance(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -842,6 +1063,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/trial", wrapper.StartTrial)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/cancel", wrapper.CancelRenewal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/resume", wrapper.ResumeRenewal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/billing/balance", wrapper.GetBillingBalance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/balance/topups", wrapper.TopUpBillingBalance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay", wrapper.PayInvoice)
 
 	return m
@@ -877,6 +1100,87 @@ type GetBillingdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetBillingdefaultApplicationProblemPlusJSONResponse) VisitGetBillingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBillingBalanceRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetBillingBalanceResponseObject interface {
+	VisitGetBillingBalanceResponse(w http.ResponseWriter) error
+}
+
+type GetBillingBalance200JSONResponse BillingBalance
+
+func (response GetBillingBalance200JSONResponse) VisitGetBillingBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBillingBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBillingBalancedefaultApplicationProblemPlusJSONResponse) VisitGetBillingBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TopUpBillingBalanceRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *TopUpBillingBalanceJSONRequestBody
+}
+
+type TopUpBillingBalanceResponseObject interface {
+	VisitTopUpBillingBalanceResponse(w http.ResponseWriter) error
+}
+
+type TopUpBillingBalance200JSONResponse struct {
+	CheckoutUrl string `json:"checkout_url"`
+}
+
+func (response TopUpBillingBalance200JSONResponse) VisitTopUpBillingBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TopUpBillingBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response TopUpBillingBalancedefaultApplicationProblemPlusJSONResponse) VisitTopUpBillingBalanceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1132,6 +1436,12 @@ type StrictServerInterface interface {
 	// GetBilling The store's plan, card on file and open invoices
 	// (GET /v1/stores/{store_id}/billing)
 	GetBilling(ctx context.Context, request GetBillingRequestObject) (GetBillingResponseObject, error)
+	// GetBillingBalance The store's prepaid balance and its latest entries
+	// (GET /v1/stores/{store_id}/billing/balance)
+	GetBillingBalance(ctx context.Context, request GetBillingBalanceRequestObject) (GetBillingBalanceResponseObject, error)
+	// TopUpBillingBalance Top up the balance on Paymob's page
+	// (POST /v1/stores/{store_id}/billing/balance/topups)
+	TopUpBillingBalance(ctx context.Context, request TopUpBillingBalanceRequestObject) (TopUpBillingBalanceResponseObject, error)
 	// CancelRenewal Stop renewing; the free plan after the paid period
 	// (POST /v1/stores/{store_id}/billing/cancel)
 	CancelRenewal(ctx context.Context, request CancelRenewalRequestObject) (CancelRenewalResponseObject, error)
@@ -1210,6 +1520,65 @@ func (sh *strictHandler) GetBilling(w http.ResponseWriter, r *http.Request, stor
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBillingResponseObject); ok {
 		if err := validResponse.VisitGetBillingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBillingBalance operation middleware
+func (sh *strictHandler) GetBillingBalance(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetBillingBalanceRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBillingBalance(ctx, request.(GetBillingBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBillingBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBillingBalanceResponseObject); ok {
+		if err := validResponse.VisitGetBillingBalanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TopUpBillingBalance operation middleware
+func (sh *strictHandler) TopUpBillingBalance(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request TopUpBillingBalanceRequestObject
+
+	request.StoreId = storeId
+
+	var body TopUpBillingBalanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TopUpBillingBalance(ctx, request.(TopUpBillingBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TopUpBillingBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TopUpBillingBalanceResponseObject); ok {
+		if err := validResponse.VisitTopUpBillingBalanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

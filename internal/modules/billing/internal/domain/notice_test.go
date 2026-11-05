@@ -33,6 +33,8 @@ func TestNoticeEmails(t *testing.T) {
 		{domain.Notice{Kind: domain.NoticeBalanceEmpty, TotalMinor: 4230, Currency: "EGP"}, "en", []string{"balance ran out"}, []string{"owes 42.30 EGP"}},
 		{domain.Notice{Kind: domain.NoticeBalanceRestored, TotalMinor: 45770, Currency: "EGP"}, "ar", []string{"رجع متجرك"}, []string{"457.70 EGP"}},
 		{domain.Notice{Kind: domain.NoticeBalanceRestored, TotalMinor: 45770, Currency: "EGP"}, "en", []string{"store is back"}, []string{"457.70 EGP"}},
+		{domain.Notice{Kind: domain.NoticeToppedUp, TotalMinor: 30000, Currency: "EGP"}, "ar", []string{"تم شحن رصيدك"}, []string{"300.00 EGP"}},
+		{domain.Notice{Kind: domain.NoticeToppedUp, TotalMinor: 30000, Currency: "EGP"}, "en", []string{"balance topped up"}, []string{"300.00 EGP"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "ar", []string{"تم استلام الدفع"}, []string{"682.86 EGP"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "en", []string{"payment received"}, []string{"is paid"}},
 	}

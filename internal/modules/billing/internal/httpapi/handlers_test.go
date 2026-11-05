@@ -229,6 +229,62 @@ func TestGetBilling(t *testing.T) {
 	}
 }
 
+// TestBillingBalanceOverHTTP: the owner reads the balance and tops it
+// up once the store pays from it (ADR-0085); a manager may not, a
+// top-up below the minimum is refused, and so is one while the balance
+// is neither offered nor chosen.
+func TestBillingBalanceOverHTTP(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	code, body := f.do(t, req(t, http.MethodGet, path(f.storeB, "/balance"), tokOwnerB))
+	offered, _ := body["offered"].([]any)
+	if code != http.StatusOK || body["currency"] != "EGP" || body["balance_minor"] != float64(0) || body["level"] != "debt" ||
+		body["minimum_minor"] != float64(30000) || offered == nil || len(body["entries"].([]any)) != 0 || body["collection"] != nil {
+		t.Fatalf("balance = %d %v", code, body)
+	}
+	if code, _ = f.do(t, req(t, http.MethodGet, path(f.storeA, "/balance"), tokManagerA)); code != http.StatusForbidden {
+		t.Fatalf("manager = %d", code)
+	}
+	top := func(store tenant.StoreID, token, b string) (int, map[string]any) {
+		return f.do(t, reqBody(t, http.MethodPost, path(store, "/balance/topups"), token, b))
+	}
+	if code, body = top(f.storeB, tokOwnerB, `{"amount_minor":30000}`); code != http.StatusConflict {
+		t.Fatalf("not offered = %d %v", code, body)
+	}
+	// B pays from its balance (the merchant's choice comes with F5).
+	ctx := tenant.WithStore(context.Background(), f.storeB)
+	if err := postgres.InTenantTx(ctx, f.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT set_config('app.account_id', (SELECT account_id::text FROM subscriptions), true)`)
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE billing_accounts SET collection = 'balance'`)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []struct {
+		body   string
+		status int
+	}{
+		{`{"amount_minor":29999}`, http.StatusUnprocessableEntity},
+		{``, http.StatusBadRequest},
+	} {
+		if code, body = top(f.storeB, tokOwnerB, bad.body); code != bad.status {
+			t.Errorf("top up %s = %d %v; want %d", bad.body, code, body, bad.status)
+		}
+	}
+	if code, _ = top(f.storeA, tokManagerA, `{"amount_minor":30000}`); code != http.StatusForbidden {
+		t.Fatalf("manager top-up = %d", code)
+	}
+	code, body = top(f.storeB, tokOwnerB, `{"amount_minor":30000}`)
+	if u, _ := body["checkout_url"].(string); code != http.StatusOK || !strings.HasPrefix(u, "https://pay.example.com/bc_") {
+		t.Fatalf("top up = %d %v", code, body)
+	}
+	if code, body = f.do(t, req(t, http.MethodGet, path(f.storeB, "/balance"), tokOwnerB)); code != http.StatusOK || body["collection"] != "balance" {
+		t.Fatalf("after choosing = %d %v", code, body)
+	}
+}
+
 // sameTime reports whether a JSON time is the instant want.
 func sameTime(v any, want string) bool {
 	got, _ := v.(string)
@@ -281,6 +337,9 @@ func TestBillingCrossTenant(t *testing.T) {
 		{OperationID: "startTrial", Request: reqBody(t, http.MethodPost, path(f.storeB, "/trial"), tokOwnerA, `{"plan_code":"brand"}`), Leaks: leaks, Unchanged: f.bUnchanged},
 		{OperationID: "cancelRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/cancel"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
 		{OperationID: "resumeRenewal", Request: req(t, http.MethodPost, path(f.storeB, "/resume"), tokOwnerA), Leaks: leaks, Unchanged: f.bUnchanged},
+		{OperationID: "getBillingBalance", Request: req(t, http.MethodGet, path(f.storeB, "/balance"), tokOwnerA), Leaks: leaks},
+		{OperationID: "topUpBillingBalance", Request: reqBody(t, http.MethodPost, path(f.storeB, "/balance/topups"), tokOwnerA, `{"amount_minor":30000}`),
+			Leaks: leaks, Unchanged: unchanged},
 	}
 	for _, c := range cases {
 		t.Run(c.OperationID, func(t *testing.T) {

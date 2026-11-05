@@ -4862,6 +4862,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/billing/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The store's prepaid balance and its latest entries
+         * @description Permission: billing.manage. Pay-as-you-sell fees are taken from it
+         *     when the store pays that way (ADR-0084); `offered` are the ways the
+         *     platform offers now. 0 for a store never invoiced. An agency's store
+         *     has none (409 agency_managed).
+         */
+        get: operations["getBillingBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stores/{store_id}/billing/balance/topups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Top up the balance on Paymob's page
+         * @description Permission: billing.manage. At least the currency's minimum
+         *     (`minimum_minor`). The amount is added when Paymob confirms the
+         *     payment (its callback, checked by asking Paymob), once (ADR-0085).
+         *     409 prepaid_off while the balance is neither offered nor chosen;
+         *     503 when the currency has no checkout.
+         */
+        post: operations["topUpBillingBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay": {
         parameters: {
             query?: never;
@@ -7954,6 +8005,49 @@ export interface components {
              */
             next_cycle?: "monthly" | "annual";
             open_invoices: components["schemas"]["OpenInvoice"][];
+        };
+        BillingBalance: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED";
+            /**
+             * Format: int64
+             * @description Negative when fees of delivered orders are owed.
+             */
+            balance_minor: number;
+            /**
+             * Format: int64
+             * @description The least top-up; the low-balance notice is at half of it.
+             */
+            minimum_minor: number;
+            /** @enum {string} */
+            level: "ok" | "low" | "debt";
+            /**
+             * @description The way the store pays its fees; absent until it chooses.
+             * @enum {string}
+             */
+            collection?: "balance" | "card";
+            /** @description The ways the platform offers now. */
+            offered: ("balance" | "card")[];
+            entries: components["schemas"]["BillingBalanceEntry"][];
+        };
+        BillingBalanceEntry: {
+            id: components["schemas"]["ULID"];
+            /**
+             * @description An extensible list (ADR-0032); clients show a kind they do not know as a plain entry.
+             * @enum {string}
+             */
+            kind: "topup" | "manual" | "fee" | "fee_refund" | "invoice";
+            /**
+             * Format: int64
+             * @description Signed; a fee is negative.
+             */
+            amount_minor: number;
+            /** Format: int64 */
+            balance_after_minor: number;
+            /** @description The invoice's number, the gateway's transaction, or the platform's note. */
+            reference?: string;
+            /** Format: date-time */
+            created_at: string;
         };
         UsageMeters: {
             items: components["schemas"]["UsageMeter"][];
@@ -14802,6 +14896,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageMeters"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBillingBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The balance and its latest 50 entries, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingBalance"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    topUpBillingBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    amount_minor: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The checkout page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        checkout_url: string;
+                    };
                 };
             };
             default: components["responses"]["Problem"];

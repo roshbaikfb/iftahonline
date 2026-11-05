@@ -23,14 +23,15 @@ UPDATE billing_accounts SET balance_minor = @balance_minor, updated_at = now() W
 -- name: InsertBalanceEntry :execrows
 -- An order's fee or refund, or an invoice, is written once: a repeat
 -- writes nothing (balance_entries_order, balance_entries_invoice).
-INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id)
+INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id,
+                             checkout_id)
 VALUES (@id, @account_id, @kind, @amount_minor, @balance_after_minor, @currency, sqlc.narg(reason), @reference, sqlc.narg(admin_id),
-        sqlc.narg(order_id), sqlc.narg(invoice_id))
+        sqlc.narg(order_id), sqlc.narg(invoice_id), sqlc.narg(checkout_id))
 ON CONFLICT DO NOTHING;
 
 -- name: ListBalanceEntries :many
 -- The account's latest entries, newest first.
-SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id, created_at
+SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id, checkout_id, created_at
 FROM balance_entries
 WHERE account_id = @account_id
 ORDER BY created_at DESC, id DESC

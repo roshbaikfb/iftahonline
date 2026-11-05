@@ -30,7 +30,7 @@ func (q *Queries) CheckoutStore(ctx context.Context, arg CheckoutStoreParams) (u
 }
 
 const getCheckout = `-- name: GetCheckout :one
-SELECT id, account_id, invoice_id, reference, currency, amount_minor, status FROM billing_checkouts
+SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose FROM billing_checkouts
 WHERE store_id = $1
   AND (($2::text <> '' AND reference = $2::text) OR ($3::text <> '' AND paymob_order_id = $3::text))
 `
@@ -44,11 +44,12 @@ type GetCheckoutParams struct {
 type GetCheckoutRow struct {
 	ID          ulid.ID
 	AccountID   ulid.ID
-	InvoiceID   ulid.ID
+	InvoiceID   *ulid.ID
 	Reference   string
 	Currency    string
 	AmountMinor int64
 	Status      string
+	Purpose     string
 }
 
 // By our reference or Paymob's order.
@@ -63,6 +64,7 @@ func (q *Queries) GetCheckout(ctx context.Context, arg GetCheckoutParams) (GetCh
 		&i.Currency,
 		&i.AmountMinor,
 		&i.Status,
+		&i.Purpose,
 	)
 	return i, err
 }
@@ -84,18 +86,19 @@ func (q *Queries) GetPlanNames(ctx context.Context, id ulid.ID) (GetPlanNamesRow
 }
 
 const insertCheckout = `-- name: InsertCheckout :exec
-INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertCheckoutParams struct {
 	StoreID     ulid.ID
 	ID          ulid.ID
 	AccountID   ulid.ID
-	InvoiceID   ulid.ID
+	InvoiceID   *ulid.ID
 	Reference   string
 	Currency    string
 	AmountMinor int64
+	Purpose     string
 }
 
 func (q *Queries) InsertCheckout(ctx context.Context, arg InsertCheckoutParams) error {
@@ -107,6 +110,7 @@ func (q *Queries) InsertCheckout(ctx context.Context, arg InsertCheckoutParams) 
 		arg.Reference,
 		arg.Currency,
 		arg.AmountMinor,
+		arg.Purpose,
 	)
 	return err
 }
@@ -154,6 +158,25 @@ func (q *Queries) ListOpenInvoices(ctx context.Context, accountID ulid.ID) ([]Li
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCheckoutPaid = `-- name: MarkCheckoutPaid :execrows
+UPDATE billing_checkouts SET status = 'paid', updated_at = now() WHERE store_id = $1 AND id = $2 AND status <> 'paid'
+`
+
+type MarkCheckoutPaidParams struct {
+	StoreID ulid.ID
+	ID      ulid.ID
+}
+
+// Once: a top-up's repeated callback finds it paid already. A checkout
+// an earlier callback found unpaid (failed) can still be paid.
+func (q *Queries) MarkCheckoutPaid(ctx context.Context, arg MarkCheckoutPaidParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markCheckoutPaid, arg.StoreID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setCheckoutOrder = `-- name: SetCheckoutOrder :exec
