@@ -43,6 +43,19 @@ Both tables have forced RLS. Cross-tenant host lookups go only through
 - To make it work under `FORCE ROW LEVEL SECURITY`, `app_owner` has a
   read-only `directory_lookup` policy.
 
+## The merchant's country (ADR-0088)
+
+- **`stores.country`** (ISO 3166-1 alpha-2) decides how the store and its
+  subscription are paid: Paymob in Egypt, Stripe elsewhere.
+  - It is set at sign-up. Without it, it is the currency's: EGP Egypt,
+    SAR Saudi Arabia, AED the UAE. A USD store names it.
+  - Only the console changes it (`Service.SetCountry`, audited as
+    `store.country_changed`).
+  - A store from before 00103 reads its currency's.
+- **Currencies:** a store sells in EGP, SAR, AED or USD.
+- **Time zones:** the allowlist covers the region, the Levant, North
+  Africa, Europe and North America.
+
 ## Custom domains
 
 1. The merchant adds a domain with `POST /v1/stores/{id}/domains` and gets
