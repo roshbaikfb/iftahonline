@@ -38,8 +38,13 @@ export function entryLabel(e: BalanceEntry): string {
       return 'رسوم طلب مسلَّم';
     case 'fee_refund':
       return 'رد رسوم طلب مرتجع';
-    default:
+    case 'invoice':
+      return 'ضريبة الفاتورة الشهرية';
+    case 'manual':
       return `إضافة يدوية: ${e.reason ? reasonLabel[e.reason] : ''}`;
+    default:
+      // A kind this console does not know yet (an extensible list, ADR-0032).
+      return 'حركة';
   }
 }
 

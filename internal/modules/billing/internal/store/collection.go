@@ -81,11 +81,15 @@ type Entry struct {
 	Reason      domain.CreditReason // a manual entry's
 	Reference   string
 	Admin       ulid.ID // who added a manual entry
+	Order       ulid.ID // a fee's or a refund's order
+	Invoice     ulid.ID // an invoice entry's
 	CreatedAt   time.Time
 }
 
-// AddEntry writes e and the balance after it, under LockBalance.
-func AddEntry(ctx context.Context, tx Tx, e Entry) error {
+// AddEntry writes e and the balance after it, under LockBalance. An
+// order's entry of a kind, or an invoice's, is written once: added is
+// false for a repeat, and the balance is left as it was.
+func AddEntry(ctx context.Context, tx Tx, e Entry) (added bool, err error) {
 	q := billingdb.New(tx)
 	p := billingdb.InsertBalanceEntryParams{ID: e.ID, AccountID: e.Account, Kind: string(e.Kind), AmountMinor: e.AmountMinor,
 		BalanceAfterMinor: e.AfterMinor, Currency: e.Currency, Reference: e.Reference}
@@ -96,13 +100,23 @@ func AddEntry(ctx context.Context, tx Tx, e Entry) error {
 	if !e.Admin.IsZero() {
 		p.AdminID = &e.Admin
 	}
-	if err := q.InsertBalanceEntry(ctx, p); err != nil {
-		return fmt.Errorf("billing store: insert balance entry: %w", err)
+	if !e.Order.IsZero() {
+		p.OrderID = &e.Order
 	}
-	if err := q.SetAccountBalance(ctx, billingdb.SetAccountBalanceParams{ID: e.Account, BalanceMinor: e.AfterMinor}); err != nil {
-		return fmt.Errorf("billing store: set balance: %w", err)
+	if !e.Invoice.IsZero() {
+		p.InvoiceID = &e.Invoice
 	}
-	return nil
+	n, err := q.InsertBalanceEntry(ctx, p)
+	if err != nil {
+		return false, fmt.Errorf("billing store: insert balance entry: %w", err)
+	}
+	if n == 0 {
+		return false, nil
+	}
+	if err = q.SetAccountBalance(ctx, billingdb.SetAccountBalanceParams{ID: e.Account, BalanceMinor: e.AfterMinor}); err != nil {
+		return false, fmt.Errorf("billing store: set balance: %w", err)
+	}
+	return true, nil
 }
 
 // Entries are the account's latest limit entries, newest first.
@@ -120,6 +134,12 @@ func Entries(ctx context.Context, tx Tx, account ulid.ID, limit int32) ([]Entry,
 		}
 		if r.AdminID != nil {
 			e.Admin = *r.AdminID
+		}
+		if r.OrderID != nil {
+			e.Order = *r.OrderID
+		}
+		if r.InvoiceID != nil {
+			e.Invoice = *r.InvoiceID
 		}
 		out[i] = e
 	}

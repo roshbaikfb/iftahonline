@@ -18,6 +18,8 @@ func TestMerchantTemplates(t *testing.T) {
 		{domain.MerchantPaymentFailed, "billing_payment_failed_v1", 4},
 		{domain.MerchantSuspended, "billing_store_suspended_v1", 1},
 		{domain.MerchantFree, "billing_store_free_v1", 2},
+		{domain.MerchantBalanceLow, "billing_balance_low_v1", 2},
+		{domain.MerchantBalanceEmpty, "billing_balance_empty_v1", 3},
 		{domain.MerchantPaid, "billing_payment_received_v1", 3},
 	}
 	for _, tt := range tests {

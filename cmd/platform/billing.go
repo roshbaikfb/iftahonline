@@ -103,18 +103,28 @@ func billingNotifier(ten *tenancy.Module, owners func(context.Context) ([]string
 	}
 }
 
-// merchantNotice is a billing notice's WhatsApp template and values.
-func merchantNotice(n billing.Notice, store string) (messaging.MerchantKind, []string) {
+// merchantNotice is a billing notice's WhatsApp template and values; ok
+// is false for a notice sent by email alone.
+func merchantNotice(n billing.Notice, store string) (kind messaging.MerchantKind, values []string, ok bool) {
 	switch n.Kind {
 	case billing.NoticePaymentFailed:
-		return messaging.MerchantPaymentFailed, []string{store, n.Invoice, n.Amount(), closes(n)}
+		return messaging.MerchantPaymentFailed, []string{store, n.Invoice, n.Amount(), closes(n)}, true
 	case billing.NoticeSuspended:
-		return messaging.MerchantFree, []string{store, closes(n)}
+		return messaging.MerchantFree, []string{store, closes(n)}, true
 	case billing.NoticeHeld:
-		return messaging.MerchantSuspended, []string{store}
-	default:
-		return messaging.MerchantPaid, []string{store, n.Invoice, n.Amount()}
+		return messaging.MerchantSuspended, []string{store}, true
+	case billing.NoticePaid:
+		return messaging.MerchantPaid, []string{store, n.Invoice, n.Amount()}, true
+	case billing.NoticeBalanceLow:
+		return messaging.MerchantBalanceLow, []string{store, n.Amount()}, true
+	case billing.NoticeBalanceEmpty:
+		free := billing.NoticeDate(n.GraceUntil)
+		if free == "" {
+			free = "-"
+		}
+		return messaging.MerchantBalanceEmpty, []string{store, n.Amount(), free}, true
 	}
+	return "", nil, false
 }
 
 // closes is the day the notice's store closes if still unpaid (the
@@ -127,7 +137,8 @@ func closes(n billing.Notice) string {
 }
 
 func (o ownerNotices) send(ctx context.Context, n billing.Notice, locale, store string) {
-	if o.whatsapp == nil || o.phones == nil {
+	kind, values, ok := merchantNotice(n, store)
+	if !ok || o.whatsapp == nil || o.phones == nil {
 		return
 	}
 	phones, err := o.phones(ctx)
@@ -135,7 +146,6 @@ func (o ownerNotices) send(ctx context.Context, n billing.Notice, locale, store 
 		o.log.WarnContext(ctx, "billing: owners' phones", "err", err)
 		return
 	}
-	kind, values := merchantNotice(n, store)
 	for _, p := range phones {
 		if err = o.whatsapp.SendMerchant(ctx, p, kind, locale, values); err != nil {
 			o.log.WarnContext(ctx, "billing: WhatsApp notice not sent", "kind", string(kind), "err", text.Redact(err.Error()))

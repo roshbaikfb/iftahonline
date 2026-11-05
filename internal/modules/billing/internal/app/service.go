@@ -184,7 +184,10 @@ func (s *Service) OrderMoved(ctx context.Context, id ulid.ID) error {
 			if f, ok = f.Returned(o.StatusAt); !ok {
 				return nil
 			}
-			return store.SetSellFeeReturned(ctx, tx, f)
+			if fErr = store.SetSellFeeReturned(ctx, tx, f); fErr != nil {
+				return fErr
+			}
+			return s.refundTx(ctx, tx, f)
 		default:
 			return nil
 		}
@@ -204,9 +207,13 @@ func (s *Service) chargeTx(ctx context.Context, tx pgx.Tx, id ulid.ID, o Order) 
 		return err
 	}
 	base := o.Base.Amount()
-	_, err = store.InsertSellFee(ctx, tx, domain.SellFee{
+	fee := rule.Fee(base)
+	inserted, err := store.InsertSellFee(ctx, tx, domain.SellFee{
 		OrderID: id, Period: domain.PeriodOf(o.StatusAt), PlanID: plan, BaseMinor: base, RateBps: rule.RateBps,
-		FeeMinor: rule.Fee(base), Currency: cur, DeliveredAt: o.StatusAt,
+		FeeMinor: fee, Currency: cur, DeliveredAt: o.StatusAt,
 	})
-	return err
+	if err != nil || !inserted {
+		return err
+	}
+	return s.prepayTx(ctx, tx, id, fee, cur)
 }

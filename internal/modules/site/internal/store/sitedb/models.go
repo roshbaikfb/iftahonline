@@ -268,6 +268,8 @@ type BalanceEntry struct {
 	Reference         string
 	AdminID           pgtype.UUID
 	CreatedAt         time.Time
+	OrderID           pgtype.UUID
+	InvoiceID         pgtype.UUID
 }
 
 type BillingAccount struct {
@@ -964,6 +966,7 @@ type SellFee struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	InvoiceID   pgtype.UUID
+	Prepaid     bool
 }
 
 type Shipment struct {

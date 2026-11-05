@@ -96,6 +96,7 @@ const (
 	EntryManual    EntryKind = "manual"     // added in the console
 	EntryFee       EntryKind = "fee"        // a delivered order's fee, with its tax
 	EntryFeeRefund EntryKind = "fee_refund" // that fee back, the order returned
+	EntryInvoice   EntryKind = "invoice"    // the month's invoice: what the fees' entries did not give (its tax)
 )
 
 // CreditReason is why the console adds to a balance.

@@ -1,7 +1,7 @@
 # Breaking-change exceptions accepted on purpose (scripts/openapi-diff.sh).
 # Each line is one exact oasdiff finding: method, path and message. Only
 # what ADR-0032 allows belongs here: new values of an extensible list
-# (SectionType; MessageKind, ADR-0041) that clients must tolerate. Anything
+# (SectionType; MessageKind, ADR-0041; AdminBalanceEntry.kind, ADR-0084) that clients must tolerate. Anything
 # else stays an error. A line here matches nothing once main has the
 # value, so the file can be emptied after the merge.
 #
@@ -42,3 +42,7 @@ GET /v1/stores/{store_id}/messages added the new `order_answer_ack` enum value t
 #
 # P8 review R1 (ADR-0070): order_delivery_prepay, the link that pays a prepaid delivery
 GET /v1/stores/{store_id}/messages added the new `order_delivery_prepay` enum value to the `items/items/kind` response property for the response status `200`
+#
+# ADR-0084: the balance entry kind invoice
+GET /admin/v1/stores/{store_id}/balance added the new `invoice` enum value to the `entries/items/kind` response property for the response status `200`
+POST /admin/v1/stores/{store_id}/balance/credits added the new `invoice` enum value to the `entries/items/kind` response property for the response status `200`

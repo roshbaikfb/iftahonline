@@ -70,8 +70,36 @@ func SellFee(ctx context.Context, tx Tx, order ulid.ID) (f domain.SellFee, ok bo
 	}
 	return domain.SellFee{
 		OrderID: r.OrderID, Period: r.Period, PlanID: r.PlanID, BaseMinor: r.BaseMinor, RateBps: r.RateBps, FeeMinor: r.FeeMinor,
-		Currency: r.Currency, Status: st, DeliveredAt: r.DeliveredAt, ReturnedAt: at(r.ReturnedAt),
+		Currency: r.Currency, Status: st, DeliveredAt: r.DeliveredAt, ReturnedAt: at(r.ReturnedAt), Prepaid: r.Prepaid,
 	}, true, nil
+}
+
+// MarkSellFeePrepaid records that the order's fee was taken from the
+// prepaid balance (ADR-0084).
+func MarkSellFeePrepaid(ctx context.Context, tx Tx, order ulid.ID) error {
+	store, err := current(ctx)
+	if err != nil {
+		return err
+	}
+	if err = billingdb.New(tx).MarkSellFeePrepaid(ctx, billingdb.MarkSellFeePrepaidParams{StoreID: store, OrderID: order}); err != nil {
+		return fmt.Errorf("billing store: sell fee prepaid: %w", err)
+	}
+	return nil
+}
+
+// PrepaidOnInvoice is what invoice holds of the store-in-ctx's fees
+// already settled through the balance: its prepaid fees less its
+// prepaid credits.
+func PrepaidOnInvoice(ctx context.Context, tx Tx, invoice ulid.ID) (int64, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := billingdb.New(tx).SumPrepaidOnInvoice(ctx, billingdb.SumPrepaidOnInvoiceParams{StoreID: store, InvoiceID: &invoice})
+	if err != nil {
+		return 0, fmt.Errorf("billing store: prepaid on invoice: %w", err)
+	}
+	return n, nil
 }
 
 // SetSellFeeReturned records a return applied to an order's fee.

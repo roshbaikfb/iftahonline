@@ -35,7 +35,7 @@ func (q *Queries) GetFeeRule(ctx context.Context, arg GetFeeRuleParams) (GetFeeR
 }
 
 const getSellFee = `-- name: GetSellFee :one
-SELECT order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, status, delivered_at, returned_at
+SELECT order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, status, delivered_at, returned_at, prepaid
 FROM sell_fees WHERE store_id = $1 AND order_id = $2
 `
 
@@ -55,6 +55,7 @@ type GetSellFeeRow struct {
 	Status      string
 	DeliveredAt time.Time
 	ReturnedAt  *time.Time
+	Prepaid     bool
 }
 
 func (q *Queries) GetSellFee(ctx context.Context, arg GetSellFeeParams) (GetSellFeeRow, error) {
@@ -71,6 +72,7 @@ func (q *Queries) GetSellFee(ctx context.Context, arg GetSellFeeParams) (GetSell
 		&i.Status,
 		&i.DeliveredAt,
 		&i.ReturnedAt,
+		&i.Prepaid,
 	)
 	return i, err
 }
@@ -112,6 +114,21 @@ func (q *Queries) InsertSellFee(ctx context.Context, arg InsertSellFeeParams) (i
 	return result.RowsAffected(), nil
 }
 
+const markSellFeePrepaid = `-- name: MarkSellFeePrepaid :exec
+UPDATE sell_fees SET prepaid = true, updated_at = now() WHERE store_id = $1 AND order_id = $2
+`
+
+type MarkSellFeePrepaidParams struct {
+	StoreID ulid.ID
+	OrderID ulid.ID
+}
+
+// The fee was taken from the prepaid balance (ADR-0084).
+func (q *Queries) MarkSellFeePrepaid(ctx context.Context, arg MarkSellFeePrepaidParams) error {
+	_, err := q.db.Exec(ctx, markSellFeePrepaid, arg.StoreID, arg.OrderID)
+	return err
+}
+
 const setSellFeeReturned = `-- name: SetSellFeeReturned :exec
 UPDATE sell_fees SET status = $1, returned_at = $2, updated_at = now()
 WHERE store_id = $3 AND order_id = $4
@@ -132,4 +149,23 @@ func (q *Queries) SetSellFeeReturned(ctx context.Context, arg SetSellFeeReturned
 		arg.OrderID,
 	)
 	return err
+}
+
+const sumPrepaidOnInvoice = `-- name: SumPrepaidOnInvoice :one
+SELECT coalesce(sum(CASE WHEN status = 'invoiced' THEN fee_minor ELSE -fee_minor END), 0)::bigint AS net
+FROM sell_fees WHERE store_id = $1 AND invoice_id = $2 AND prepaid AND status IN ('invoiced', 'credited')
+`
+
+type SumPrepaidOnInvoiceParams struct {
+	StoreID   ulid.ID
+	InvoiceID *ulid.ID
+}
+
+// What the invoice holds of the store's fees already taken from (and
+// returned to) the balance: its prepaid fees less its prepaid credits.
+func (q *Queries) SumPrepaidOnInvoice(ctx context.Context, arg SumPrepaidOnInvoiceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumPrepaidOnInvoice, arg.StoreID, arg.InvoiceID)
+	var net int64
+	err := row.Scan(&net)
+	return net, err
 }

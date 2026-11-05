@@ -63,9 +63,11 @@ func (q *Queries) GetBillingSettings(ctx context.Context) (GetBillingSettingsRow
 	return i, err
 }
 
-const insertBalanceEntry = `-- name: InsertBalanceEntry :exec
-INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+const insertBalanceEntry = `-- name: InsertBalanceEntry :execrows
+INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11)
+ON CONFLICT DO NOTHING
 `
 
 type InsertBalanceEntryParams struct {
@@ -78,10 +80,14 @@ type InsertBalanceEntryParams struct {
 	Reason            *string
 	Reference         string
 	AdminID           *ulid.ID
+	OrderID           *ulid.ID
+	InvoiceID         *ulid.ID
 }
 
-func (q *Queries) InsertBalanceEntry(ctx context.Context, arg InsertBalanceEntryParams) error {
-	_, err := q.db.Exec(ctx, insertBalanceEntry,
+// An order's fee or refund, or an invoice, is written once: a repeat
+// writes nothing (balance_entries_order, balance_entries_invoice).
+func (q *Queries) InsertBalanceEntry(ctx context.Context, arg InsertBalanceEntryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertBalanceEntry,
 		arg.ID,
 		arg.AccountID,
 		arg.Kind,
@@ -91,12 +97,17 @@ func (q *Queries) InsertBalanceEntry(ctx context.Context, arg InsertBalanceEntry
 		arg.Reason,
 		arg.Reference,
 		arg.AdminID,
+		arg.OrderID,
+		arg.InvoiceID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listBalanceEntries = `-- name: ListBalanceEntries :many
-SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, created_at
+SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id, created_at
 FROM balance_entries
 WHERE account_id = $1
 ORDER BY created_at DESC, id DESC
@@ -117,6 +128,8 @@ type ListBalanceEntriesRow struct {
 	Reason            *string
 	Reference         string
 	AdminID           *ulid.ID
+	OrderID           *ulid.ID
+	InvoiceID         *ulid.ID
 	CreatedAt         time.Time
 }
 
@@ -139,6 +152,8 @@ func (q *Queries) ListBalanceEntries(ctx context.Context, arg ListBalanceEntries
 			&i.Reason,
 			&i.Reference,
 			&i.AdminID,
+			&i.OrderID,
+			&i.InvoiceID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
