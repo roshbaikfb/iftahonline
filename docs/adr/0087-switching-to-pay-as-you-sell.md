@@ -67,6 +67,32 @@ The owner approved (2026-11-04) what an unpaid store is offered:
    - The dashboard's button opens WhatsApp with a message ready to send,
      naming the open invoice.
 
+7. **The console switches an unpaid agency's stores** (approved
+   2026-11-04, mockup 8), as agreed with the agency.
+   - `POST /admin/v1/agencies/{id}/switch-to-pays` takes `store_ids`,
+     `collection` and a reason (`billing.manage`), and is recorded in the
+     admin log first.
+   - In one transaction:
+     - the agency's open invoices are voided, and every member's fees on
+       them are due again and its renewal mark cleared;
+     - each chosen store leaves the agency, goes onto pay as you sell
+       (`AgencyToPays`), and opens its own account paying by
+       `collection`. The card is the agency's, opened and sealed again
+       under the store's account;
+     - the stores that stay are invoiced again for the same month at the
+       agency's price. Their grace goes on: still past due, from the first
+       failure.
+   - To write that month again:
+     - a voided monthly invoice no longer holds its period (migration
+       00102, `invoices_monthly_live_key`, built concurrently);
+     - the renewal query bills a past-due store whose mark was cleared.
+       One still billed keeps its mark, so it is never billed twice.
+   - Refusals: 409 `agency_not_unpaid` when the agency owes nothing, 409
+     `card_required` without the agency's card, 422 for a store of another
+     account, 404 for an unknown agency.
+   - The agency's detail lists its `open_invoices`, and the console's
+     agency page shows the switch while there are any.
+
 ## Consequences
 
 - **The switch costs the merchant nothing it owed for the plan.** Fees
