@@ -347,6 +347,27 @@ platform provider):
 - **The console** edits both (`NewCollection`); each change needs a
   reason.
 
+## Billing in dollars outside Egypt (ADR-0090)
+
+- **The currency.** An account opens in its country's billing currency
+  (`domain.BillingCurrency`): the pound in Egypt, the dollar elsewhere.
+  It keeps it. Accounts opened in riyals or dirhams before stay in them
+  (`domain.Legacy`); nothing new is sold in those.
+- **Plans** need a monthly price, or pay as you sell's fee, in EGP and
+  USD. Prices in the legacy currencies are optional. Migration 00105
+  priced every plan in dollars from its riyal price at 3.75.
+- **The fee** is a rate of the goods plus a fixed amount per order
+  (`plan_fees.fixed_minor`), within the bounds.
+- **Conversion.** An order in another currency than its account's is
+  converted at `fx_rates` (each store currency's units per dollar ×
+  10^6, set from the console). The fee keeps the order's currency, its
+  goods and the rate (`sell_fees.order_currency`, `order_base_minor`,
+  `rate_micros`).
+- **The dollar's minimum** is $10 (`billing_settings.minimum_usd_minor`).
+  The console saves the minimums it sends; one left out keeps its value.
+- **Agencies** are created in their country's currency: EGP in Egypt,
+  USD elsewhere, with the country.
+
 ## The subscription lifecycle
 
 | From | Step | To |
@@ -372,7 +393,8 @@ table-driven tests. The jobs that take them arrive with payments (7d).
 | `plans` | platform | Versions: `UNIQUE (code, version)`; one active version per code; one active free plan |
 | `plan_prices` | platform | `(plan_id, currency, cycle)` |
 | `plan_entitlements` | platform | `(plan_id, feature)`; `value` NULL is unlimited |
-| `plan_fees` | platform | `(plan_id, currency)`: `rate_bps`, `min_minor`, `max_minor` (00057) |
+| `plan_fees` | platform | `(plan_id, currency)`: `rate_bps`, `fixed_minor` (00105), `min_minor`, `max_minor` (00057) |
+| `fx_rates` | platform | A store currency's units per dollar × 10^6 (00105); only the console writes it |
 | `sell_fees` | tenant (RLS) | `(store_id, order_id)`; `sell_fees_store_period` serves invoices; `app_user` cannot delete (00057) |
 | `billing_accounts`, `billing_account_stores` | account (RLS on `app.account_id`) | A store is in one account (00058) |
 | `invoices`, `invoice_lines` | account (RLS) | `UNIQUE (account_id, period)`; lines are never updated or deleted by merchant code |
