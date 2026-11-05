@@ -215,5 +215,8 @@ func (s *Service) chargeTx(ctx context.Context, tx pgx.Tx, id ulid.ID, o Order) 
 	if err != nil || !inserted {
 		return err
 	}
-	return s.prepayTx(ctx, tx, id, fee, cur)
+	if err = s.prepayTx(ctx, tx, id, fee, cur); err != nil {
+		return err
+	}
+	return s.thresholdTx(ctx, tx, cur)
 }

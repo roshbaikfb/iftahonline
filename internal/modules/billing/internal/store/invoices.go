@@ -196,6 +196,7 @@ type Invoice struct {
 	Totals   domain.InvoiceTotals
 	Issued   time.Time
 	Lines    []domain.Line
+	Fees     bool // a fees invoice at the card's minimum (ADR-0086); else the month's
 }
 
 // InsertInvoice numbers and writes an invoice with its lines, in the
@@ -218,10 +219,14 @@ func insertInvoice(ctx context.Context, tx Tx, inv Invoice, sub *Subscribe) (str
 	}
 	number := domain.InvoiceNumber(inv.Issued.UTC().Year(), n)
 	if sub == nil {
+		purpose := "monthly"
+		if inv.Fees {
+			purpose = "fees"
+		}
 		err = q.InsertInvoice(ctx, billingdb.InsertInvoiceParams{
 			ID: inv.ID, AccountID: inv.Account, Number: number, Period: inv.Period, Currency: inv.Currency,
 			SubtotalMinor: inv.Totals.SubtotalMinor, TaxBps: inv.Totals.TaxBps, TaxMinor: inv.Totals.TaxMinor, TotalMinor: inv.Totals.TotalMinor,
-			IssuedAt: inv.Issued, DueAt: domain.DueAt(inv.Issued),
+			IssuedAt: inv.Issued, DueAt: domain.DueAt(inv.Issued), Purpose: purpose,
 		})
 	} else {
 		cycle := string(sub.Cycle)

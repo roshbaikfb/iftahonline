@@ -41,8 +41,10 @@ RETURNING last;
 
 -- name: InsertInvoice :exec
 -- Its first charge is due at once (ADR-0051).
-INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at)
-VALUES (@id, @account_id, @number, @period, @currency, @subtotal_minor, @tax_bps, @tax_minor, @total_minor, @issued_at, @due_at, @issued_at);
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at,
+                      purpose)
+VALUES (@id, @account_id, @number, @period, @currency, @subtotal_minor, @tax_bps, @tax_minor, @total_minor, @issued_at, @due_at, @issued_at,
+        @purpose);
 
 -- name: InsertInvoiceLine :exec
 INSERT INTO invoice_lines (invoice_id, account_id, line_no, kind, line_store_id, description, quantity, amount_minor)
