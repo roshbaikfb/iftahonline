@@ -158,3 +158,54 @@ export function annualSaving(p: BillingPlan): number {
   if (p.monthly_minor === undefined || p.annual_minor === undefined || p.monthly_minor === 0) return 0;
   return Math.round(12 - p.annual_minor / p.monthly_minor);
 }
+
+// The prepaid balance and the switch to pay as you sell (ADR-0084–0087).
+export type BillingBalance = components['schemas']['BillingBalance'];
+export type BalanceEntry = components['schemas']['BillingBalanceEntry'];
+export type Collection = NonNullable<Billing['collection']>;
+
+export const collectionLabel: Record<Collection, string> = { balance: 'رصيد مسبق', card: 'البطاقة المحفوظة' };
+
+// rateText writes basis points as a percentage: 150 → "1.5%".
+export const rateText = (bps: number) => `${String(bps / 100)}%`;
+
+// feeOf is the fee of an order whose goods cost base, at bps, rounded
+// half up as billing does (ADR-0048).
+export const feeOf = (base: number, bps: number) => Math.floor((base * bps + 5000) / 10000);
+
+// topUpAmounts are the amounts offered on the balance page: the minimum,
+// then about 5/3 and 10/3 of it (300 → 300, 500, 1000), in whole tens.
+export function topUpAmounts(minimum: number): number[] {
+  const tens = (v: number) => Math.round(v / 1000) * 1000;
+  return [minimum, Math.max(tens((minimum * 5) / 3), minimum), Math.max(tens((minimum * 10) / 3), minimum)].filter(
+    (v, i, all) => all.indexOf(v) === i,
+  );
+}
+
+// entryText is what a balance entry was, as the merchant reads it.
+export function entryText(e: BalanceEntry): string {
+  switch (e.kind) {
+    case 'topup':
+      return 'شحن بالبطاقة';
+    case 'manual':
+      return 'إضافة من فريق المنصة';
+    case 'fee':
+      return 'رسوم طلب مسلَّم';
+    case 'fee_refund':
+      return 'رد رسوم طلب مرتجع';
+    case 'invoice':
+      return `ضريبة الفاتورة${e.reference ? ` ${e.reference}` : ''}`;
+    default:
+      // A kind this dashboard does not know yet (an extensible list, ADR-0032).
+      return 'حركة';
+  }
+}
+
+// signedMoney writes an entry's amount with its sign: "+300 ج.م", "−12.75 ج.م".
+export function signedMoney(minor: number, currency: string): string {
+  return `${minor < 0 ? '−' : '+'}${money(Math.abs(minor), currency)}`;
+}
+
+// billingChanged tells the screens the store's billing moved (a switch,
+// a change of the way to pay), so they read it again.
+export const billingChanged = 'billing:changed';

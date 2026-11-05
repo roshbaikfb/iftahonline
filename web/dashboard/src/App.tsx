@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { api } from './api/client';
 
+import { Balance } from './pages/Balance';
 import { Billing } from './pages/Billing';
 import { Carriers } from './pages/Carriers';
 import { Categories } from './pages/Categories';
@@ -131,6 +132,7 @@ function Gate() {
           <Route path="/stores/:storeId/gateways" element={<Gateways />} />
           <Route path="/stores/:storeId/billing" element={<Billing />} />
           <Route path="/stores/:storeId/billing/plans" element={<Plans />} />
+          <Route path="/stores/:storeId/billing/balance" element={<Balance />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       );

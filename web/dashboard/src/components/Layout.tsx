@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { navGroups } from '../lib/nav';
 import { storefrontURL } from '../lib/storefront';
 import { useSession } from '../session';
+import { BillingBanner } from './BillingBanner';
 import { NotificationBell } from './NotificationBell';
 
 // Layout is the signed-in frame (the approved mockup): the navy sidebar
@@ -170,7 +171,10 @@ export function Layout({ storeId, children }: { storeId: string; children: React
             </div>
           </details>
         </header>
-        <main>{children}</main>
+        <main>
+          <BillingBanner storeId={storeId} />
+          {children}
+        </main>
       </div>
     </div>
   );

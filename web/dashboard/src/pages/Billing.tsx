@@ -8,7 +8,6 @@ import {
   cycleLabel,
   dateAr,
   daysLeft,
-  lateText,
   leave,
   meterLabel,
   meterLevel,
@@ -124,7 +123,6 @@ export function Billing() {
     void run(() => api.POST('/v1/stores/{store_id}/billing/cancel', path), 'أُلغي التجديد.');
   }
 
-  const firstOpen = billing?.open_invoices[0];
   const periodLabel = billing?.status === 'trialing' ? 'تنتهي التجربة' : billing?.status === 'past_due' ? 'آخر موعد للدفع' : 'التجديد القادم';
   const periodDate = billing?.status === 'trialing' ? billing.trial_ends_at : billing?.status === 'past_due' ? billing.grace_until : billing?.period_end;
 
@@ -161,22 +159,6 @@ export function Billing() {
           </Link>
         </div>
       )}
-      {(billing?.status === 'past_due' || billing?.status === 'suspended') && firstOpen && (
-        <div className={`bill-banner ${billing.status === 'suspended' && !billing.held ? 'free' : 'late'}`} role="alert">
-          <div>
-            <strong>
-              {billing.status === 'suspended' && !billing.held
-                ? `متجرك الآن على الباقة المجانية حتى تُدفع فاتورة ${monthAr(firstOpen.period)}`
-                : `لم ننجح في تحصيل فاتورة ${monthAr(firstOpen.period)}`}
-            </strong>
-            <p>{lateText(billing)}</p>
-          </div>
-          <button type="button" className="button success" disabled={busy} onClick={() => void pay(firstOpen.id)}>
-            ادفع الآن {money(firstOpen.total_minor, firstOpen.currency)}
-          </button>
-        </div>
-      )}
-
       {billing && (
         <div className="bill-grid">
           <section className="card" aria-labelledby="h-plan">
@@ -238,6 +220,11 @@ export function Billing() {
               <Link className="button primary" to={`/stores/${storeId}/billing/plans`}>
                 تغيير الباقة
               </Link>
+              {billing.collection && (
+                <Link className="button" to={`/stores/${storeId}/billing/balance`}>
+                  الرصيد وطريقة دفع الرسوم
+                </Link>
+              )}
               {paid && billing.cycle === 'monthly' && !scheduled && !billing.cancel_at_period_end && current && annualSaving(current) > 0 && (
                 <button type="button" className="button" disabled={busy} onClick={() => void toAnnual()}>
                   التحويل للسنوي — وفّر {annualSaving(current) === 2 ? 'شهرين' : `${String(annualSaving(current))} أشهر`}
