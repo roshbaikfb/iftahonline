@@ -306,7 +306,7 @@ func TestValidation(t *testing.T) {
 		field                    string
 	}{
 		{"second gateway", http.MethodPost, "/gateways", connectInput, http.StatusConflict, ""},
-		{"unknown gateway", http.MethodPost, "/gateways", `{"gateway":"stripe","api_key":"k","webhook_secret":"s"}`, http.StatusUnprocessableEntity, "gateway"},
+		{"unknown gateway", http.MethodPost, "/gateways", `{"gateway":"adyen","api_key":"k","webhook_secret":"s"}`, http.StatusUnprocessableEntity, "gateway"},
 		{"no body", http.MethodPost, "/gateways", ``, http.StatusBadRequest, ""},
 		{"bad json", http.MethodPost, "/gateways", `{"gateway":`, http.StatusBadRequest, ""},
 		{"zero refund", http.MethodPost, refunds, `{"amount_minor":0}`, http.StatusUnprocessableEntity, "amount_minor"},

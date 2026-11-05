@@ -79,7 +79,7 @@ func (h *Handlers) ConnectPaymentGateway(ctx context.Context, req ConnectPayment
 	}
 	b := req.Body
 	c, err := h.svc.Connect(ctx, app.ConnectInput{Gateway: b.Gateway, SecretKey: deref(b.SecretKey), PublicKey: deref(b.PublicKey),
-		WebhookSecret: b.WebhookSecret, APIKey: b.ApiKey, IntegrationIDs: deref(b.IntegrationIds)})
+		WebhookSecret: b.WebhookSecret, APIKey: deref(b.ApiKey), IntegrationIDs: deref(b.IntegrationIds)})
 	if err != nil {
 		return nil, err
 	}

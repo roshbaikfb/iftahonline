@@ -239,6 +239,11 @@ func (s *Service) RefreshOrder(ctx context.Context, orderID ulid.ID) error {
 }
 
 // fetchAndApply asks the gateway about p and applies the answer.
+// refOf names p to its gateway.
+func refOf(p domain.Payment) gateway.Ref {
+	return gateway.Ref{Reference: p.ID.String(), ProviderRef: p.ProviderRef}
+}
+
 func (s *Service) fetchAndApply(ctx context.Context, p domain.Payment) error {
 	c, err := s.connection(ctx, p.ConnectionID)
 	if err != nil {
@@ -248,7 +253,7 @@ func (s *Service) fetchAndApply(ctx context.Context, p domain.Payment) error {
 	if err != nil {
 		return err
 	}
-	st, err := g.FetchStatus(ctx, creds, p.ID.String(), p.Amount.Currency())
+	st, err := g.FetchStatus(ctx, creds, refOf(p), p.Amount.Currency())
 	if err != nil {
 		return err
 	}

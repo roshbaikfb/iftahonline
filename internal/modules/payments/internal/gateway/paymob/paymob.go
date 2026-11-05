@@ -182,8 +182,10 @@ func (g *Gateway) CreatePayment(ctx context.Context, creds gateway.Credentials, 
 // transaction is Paymob's transaction object (callbacks and inquiries).
 type transaction = paymob.Transaction
 
-// FetchStatus implements gateway.Gateway by transaction inquiry.
-func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, reference string, cur money.Currency) (gateway.Status, error) {
+// FetchStatus implements gateway.Gateway by transaction inquiry, by our
+// reference.
+func (g *Gateway) FetchStatus(ctx context.Context, creds gateway.Credentials, ref gateway.Ref, cur money.Currency) (gateway.Status, error) {
+	reference := ref.Reference
 	base, err := g.baseFor(cur)
 	if err != nil {
 		return gateway.Status{}, err

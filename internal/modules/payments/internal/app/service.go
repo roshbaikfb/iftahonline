@@ -154,14 +154,15 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 	}
 	var creds gateway.Credentials
 	var fields []errs.FieldError
+	need := gateway.RequiredKeys(g)
 	for _, f := range []struct {
 		name     string
 		in       string
 		dst      *string
 		required bool
 	}{
-		{"secret_key", in.SecretKey, &creds.SecretKey, false}, {"public_key", in.PublicKey, &creds.PublicKey, false},
-		{"webhook_secret", in.WebhookSecret, &creds.WebhookSecret, true}, {"api_key", in.APIKey, &creds.APIKey, true},
+		{"secret_key", in.SecretKey, &creds.SecretKey, need.SecretKey}, {"public_key", in.PublicKey, &creds.PublicKey, need.PublicKey},
+		{"webhook_secret", in.WebhookSecret, &creds.WebhookSecret, need.WebhookSecret}, {"api_key", in.APIKey, &creds.APIKey, need.APIKey},
 	} {
 		v, cleanErr := domain.CleanKey(f.name, f.in, f.required)
 		var e *errs.Error

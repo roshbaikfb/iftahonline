@@ -196,6 +196,11 @@ type Payments struct {
 	// FakeGateway offers the in-memory gateway, for development and
 	// demos. Refused in production.
 	FakeGateway bool
+	// Stripe offers merchants their own Stripe account (ADR-0092). Off
+	// until the dashboard has its screen (G7 of the Stripe plan).
+	Stripe bool
+	// StripeBaseURL overrides Stripe's API (tests).
+	StripeBaseURL string
 	// CheckoutURL is the API host's public origin, where the storefront
 	// sends card orders' shoppers (ADR-0030; storefront role).
 	CheckoutURL string
@@ -468,6 +473,8 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		c.Payments = Payments{
 			PaymobBaseURL: r.url("PAYMOB_BASE_URL", false, "https", "http"),
 			FakeGateway:   r.oneOf("PAYMENTS_FAKE_GATEWAY", "false", "true", "false") == "true",
+			Stripe:        r.oneOf("PAYMENTS_STRIPE_ENABLED", "false", "true", "false") == "true",
+			StripeBaseURL: r.url("STRIPE_BASE_URL", false, "https", "http"),
 		}
 		if c.Env == EnvProduction && c.Payments.FakeGateway {
 			r.errorf("PAYMENTS_FAKE_GATEWAY: the fake gateway is not for production")

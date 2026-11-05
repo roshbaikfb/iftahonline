@@ -89,6 +89,14 @@ type Checkout struct {
 	ProviderRef string // the gateway's own payment (intention) ID
 }
 
+// Ref names a payment to the gateway: our reference, and the gateway's
+// own payment (Checkout.ProviderRef) when it gave one. Paymob is asked by
+// ours; Stripe by its Checkout Session (ADR-0092).
+type Ref struct {
+	Reference   string
+	ProviderRef string
+}
+
 // Status is a payment's state at the gateway.
 type Status struct {
 	State         State
@@ -112,6 +120,25 @@ type WebhookRequest struct {
 	Body   []byte
 }
 
+// Keys are the credentials a gateway needs from the merchant.
+type Keys struct {
+	SecretKey, PublicKey, WebhookSecret, APIKey bool
+}
+
+// KeysNeeded is implemented by gateways that need other keys than the
+// webhook secret and the API key (Paymob's, the default).
+type KeysNeeded interface {
+	NeedsKeys() Keys
+}
+
+// RequiredKeys are the keys g needs.
+func RequiredKeys(g Gateway) Keys {
+	if k, ok := g.(KeysNeeded); ok {
+		return k.NeedsKeys()
+	}
+	return Keys{WebhookSecret: true, APIKey: true}
+}
+
 // IntegrationIDsNeeded is implemented by gateways whose accounts route
 // card payments through integration IDs the merchant must give (Paymob).
 type IntegrationIDsNeeded interface {
@@ -132,9 +159,9 @@ type Gateway interface {
 	// ParseWebhook reads an already verified body (a stored receipt's):
 	// ErrBadWebhook when it is not the gateway's.
 	ParseWebhook(body []byte) (WebhookEvent, error)
-	// FetchStatus returns a payment's state by our reference; a payment
-	// the gateway has no transaction for yet is pending.
-	FetchStatus(ctx context.Context, creds Credentials, reference string, cur money.Currency) (Status, error)
+	// FetchStatus returns a payment's state; a payment the gateway has no
+	// transaction for yet is pending.
+	FetchStatus(ctx context.Context, creds Credentials, ref Ref, cur money.Currency) (Status, error)
 	// Refund refunds amount of a paid transaction; it returns the
 	// gateway's refund ID. It sends the refund at most once: an answer
 	// that is lost is an error (not ErrRejected), never a second try, and

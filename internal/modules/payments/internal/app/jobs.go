@@ -237,7 +237,7 @@ func (s *Service) RefundPayment(ctx context.Context, id ulid.ID) error {
 		}
 		gctx, cancel := context.WithTimeout(ctx, refundTimeout)
 		defer cancel()
-		st, err := g.FetchStatus(gctx, creds, p.ID.String(), p.Amount.Currency())
+		st, err := g.FetchStatus(gctx, creds, refOf(p), p.Amount.Currency())
 		if err != nil {
 			return err
 		}
@@ -318,7 +318,7 @@ func (s *Service) ProcessWebhook(ctx context.Context, receiptID ulid.ID) error {
 	if err != nil {
 		return err
 	}
-	st, err := gw.FetchStatus(ctx, creds, p.ID.String(), p.Amount.Currency())
+	st, err := gw.FetchStatus(ctx, creds, refOf(p), p.Amount.Currency())
 	if err != nil {
 		return err
 	}

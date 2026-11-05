@@ -86,7 +86,7 @@ func TestHostedPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	for ref, want := range map[string]gateway.State{"pay-me": gateway.StatePaid, "decline-me": gateway.StateFailed} {
-		st, stErr := g.FetchStatus(t.Context(), creds, ref, money.EGP)
+		st, stErr := g.FetchStatus(t.Context(), creds, gateway.Ref{Reference: ref}, money.EGP)
 		if stErr != nil || st.State != want {
 			t.Errorf("%s: %+v %v, want %s", ref, st, stErr, want)
 		}
