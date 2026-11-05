@@ -47,3 +47,20 @@ func TestJoinAndLeaveAgency(t *testing.T) {
 		t.Fatalf("year end = %v %v", start, end)
 	}
 }
+
+func TestAgencyToPays(t *testing.T) {
+	t.Parallel()
+	pays := domain.Plan{ID: ulid.ID{5}, Kind: domain.KindPays}
+	member := domain.Subscription{PlanID: ulid.ID{2}, Kind: domain.KindAgency, Status: domain.Suspended, TrialUsed: true,
+		SuspendedAt: time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)}
+	s, err := domain.AgencyToPays(member, pays)
+	if err != nil || s.PlanID != pays.ID || s.Kind != domain.KindPays || s.Status != domain.Active || !s.TrialUsed || !s.SuspendedAt.IsZero() || s.Held() {
+		t.Fatalf("switched = %+v, %v", s, err)
+	}
+	if _, err = domain.AgencyToPays(domain.Subscription{Kind: domain.KindSubscription}, pays); err == nil {
+		t.Error("a store not in an agency")
+	}
+	if _, err = domain.AgencyToPays(member, domain.Plan{Kind: domain.KindFree}); err == nil {
+		t.Error("onto a plan that is not pay as you sell")
+	}
+}

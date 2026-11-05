@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/roshbaikfb/iftahonline/internal/modules/admin/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -108,5 +110,37 @@ func toAgencyDetail(d app.AgencyDetail) AdminAgencyDetail {
 	for i, s := range d.Stores {
 		out.StoreIds[i] = s.String()
 	}
+	if len(d.OpenInvoices) > 0 {
+		open := make([]OpenInvoice, len(d.OpenInvoices))
+		for i, inv := range d.OpenInvoices {
+			open[i] = OpenInvoice{Id: inv.ID.String(), Number: inv.Number, Period: openapi_types.Date{Time: inv.Period},
+				Currency: OpenInvoiceCurrency(inv.Currency), TotalMinor: inv.TotalMinor, DueAt: inv.DueAt, Attempts: inv.Attempts}
+		}
+		out.OpenInvoices = &open
+	}
 	return out
+}
+
+// AdminSwitchAgencyStores implements StrictServerInterface.
+func (h *Handlers) AdminSwitchAgencyStores(ctx context.Context, req AdminSwitchAgencyStoresRequestObject) (AdminSwitchAgencyStoresResponseObject, error) {
+	id, err := agencyID(req.AgencyId)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	stores := make([]ulid.ID, len(req.Body.StoreIds))
+	for i, raw := range req.Body.StoreIds {
+		s, pErr := ulid.Parse(raw)
+		if pErr != nil {
+			return nil, errs.Validation(errs.FieldError{Field: "store_ids", Code: "invalid", Message: "not a store ID"})
+		}
+		stores[i] = s
+	}
+	d, err := h.svc.SwitchAgencyStores(ctx, id, stores, billing.Collection(req.Body.Collection), req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminSwitchAgencyStores200JSONResponse(toAgencyDetail(d)), nil
 }

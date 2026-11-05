@@ -2285,6 +2285,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/agencies/{agency_id}/switch-to-pays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move stores of an unpaid agency to pay as you sell
+         * @description As agreed with the agency (ADR-0087 §7). Each store gets its own
+         *     account paying its fees by `collection`; the agency's open invoices
+         *     are voided and the stores that stay are invoiced again at the
+         *     agency's price, their grace going on. 409 agency_not_unpaid when the
+         *     agency owes nothing, 409 card_required without the agency's card,
+         *     422 for a store of another account. Recorded in the admin log first.
+         */
+        post: operations["adminSwitchAgencyStores"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/agencies/{agency_id}": {
         parameters: {
             query?: never;
@@ -5510,6 +5537,18 @@ export interface components {
         AdminAgencyDetail: {
             agency: components["schemas"]["AdminAgency"];
             store_ids: components["schemas"]["ULID"][];
+            /** @description The agency's open invoices, newest first; while there are, its stores may be switched to pay as you sell (ADR-0087). */
+            open_invoices?: components["schemas"]["OpenInvoice"][];
+        };
+        AdminAgencySwitchInput: {
+            store_ids: components["schemas"]["ULID"][];
+            /**
+             * @description card: the agency's card on file, copied to each store's own account.
+             * @enum {string}
+             */
+            collection: "balance" | "card";
+            /** @description Kept in the admin audit log: the agreement with the agency. */
+            reason: string;
         };
         AdminAgencyInput: {
             name: string;
@@ -11492,6 +11531,33 @@ export interface operations {
         responses: {
             /** @description Opened. */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAgencyDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSwitchAgencyStores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agency_id: components["parameters"]["AgencyID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAgencySwitchInput"];
+            };
+        };
+        responses: {
+            /** @description The agency now. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

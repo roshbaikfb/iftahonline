@@ -148,6 +148,24 @@ func (e AdminAgencyInputCurrency) Valid() bool {
 	}
 }
 
+// Defines values for AdminAgencySwitchInputCollection.
+const (
+	AdminAgencySwitchInputCollectionBalance AdminAgencySwitchInputCollection = "balance"
+	AdminAgencySwitchInputCollectionCard    AdminAgencySwitchInputCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the AdminAgencySwitchInputCollection enum.
+func (e AdminAgencySwitchInputCollection) Valid() bool {
+	switch e {
+	case AdminAgencySwitchInputCollectionBalance:
+		return true
+	case AdminAgencySwitchInputCollectionCard:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminAlertKind.
 const (
 	AdminAlertKindDiscarded  AdminAlertKind = "discarded"
@@ -1778,8 +1796,11 @@ type AdminAgencyCurrency string
 
 // AdminAgencyDetail defines model for AdminAgencyDetail.
 type AdminAgencyDetail struct {
-	Agency   AdminAgency `json:"agency"`
-	StoreIds []ULID      `json:"store_ids"`
+	Agency AdminAgency `json:"agency"`
+
+	// OpenInvoices The agency's open invoices, newest first; while there are, its stores may be switched to pay as you sell (ADR-0087).
+	OpenInvoices *[]OpenInvoice `json:"open_invoices,omitempty"`
+	StoreIds     []ULID         `json:"store_ids"`
 }
 
 // AdminAgencyInput defines model for AdminAgencyInput.
@@ -1799,6 +1820,19 @@ type AdminAgencyInputCurrency string
 type AdminAgencyList struct {
 	Items []AdminAgency `json:"items"`
 }
+
+// AdminAgencySwitchInput defines model for AdminAgencySwitchInput.
+type AdminAgencySwitchInput struct {
+	// Collection card: the agency's card on file, copied to each store's own account.
+	Collection AdminAgencySwitchInputCollection `json:"collection"`
+
+	// Reason Kept in the admin audit log: the agreement with the agency.
+	Reason   string `json:"reason"`
+	StoreIds []ULID `json:"store_ids"`
+}
+
+// AdminAgencySwitchInputCollection card: the agency's card on file, copied to each store's own account.
+type AdminAgencySwitchInputCollection string
 
 // AdminAlert defines model for AdminAlert.
 type AdminAlert struct {
@@ -3566,6 +3600,9 @@ type AdminAddAgencyStoreJSONRequestBody = AdminReason
 // AdminRemoveAgencyStoreJSONRequestBody defines body for AdminRemoveAgencyStore for application/json ContentType.
 type AdminRemoveAgencyStoreJSONRequestBody = AdminReason
 
+// AdminSwitchAgencyStoresJSONRequestBody defines body for AdminSwitchAgencyStores for application/json ContentType.
+type AdminSwitchAgencyStoresJSONRequestBody = AdminAgencySwitchInput
+
 // AdminSetAlertEmailJSONRequestBody defines body for AdminSetAlertEmail for application/json ContentType.
 type AdminSetAlertEmailJSONRequestBody = AdminAlertEmail
 
@@ -3721,6 +3758,9 @@ type ServerInterface interface {
 	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
 	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
 	AdminRemoveAgencyStore(w http.ResponseWriter, r *http.Request, agencyId AgencyID, storeId StoreID)
+	// AdminSwitchAgencyStores Move stores of an unpaid agency to pay as you sell
+	// (POST /admin/v1/agencies/{agency_id}/switch-to-pays)
+	AdminSwitchAgencyStores(w http.ResponseWriter, r *http.Request, agencyId AgencyID)
 	// AdminListAlerts The alerts the admin's role hears of
 	// (GET /admin/v1/alerts)
 	AdminListAlerts(w http.ResponseWriter, r *http.Request)
@@ -4165,6 +4205,32 @@ func (siw *ServerInterfaceWrapper) AdminRemoveAgencyStore(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRemoveAgencyStore(w, r, agencyId, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSwitchAgencyStores operation middleware
+func (siw *ServerInterfaceWrapper) AdminSwitchAgencyStores(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agency_id" -------------
+	var agencyId AgencyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agency_id", r.PathValue("agency_id"), &agencyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agency_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSwitchAgencyStores(w, r, agencyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6230,6 +6296,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/metrics", wrapper.AdminGetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminListAgencies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies", wrapper.AdminCreateAgency)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/switch-to-pays", wrapper.AdminSwitchAgencyStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}", wrapper.AdminGetAgency)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}", wrapper.AdminAddAgencyStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/agencies/{agency_id}/stores/{store_id}/remove", wrapper.AdminRemoveAgencyStore)
@@ -6698,6 +6765,46 @@ type AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminRemoveAgencyStoredefaultApplicationProblemPlusJSONResponse) VisitAdminRemoveAgencyStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSwitchAgencyStoresRequestObject struct {
+	AgencyId AgencyID `json:"agency_id"`
+	Body     *AdminSwitchAgencyStoresJSONRequestBody
+}
+
+type AdminSwitchAgencyStoresResponseObject interface {
+	VisitAdminSwitchAgencyStoresResponse(w http.ResponseWriter) error
+}
+
+type AdminSwitchAgencyStores200JSONResponse AdminAgencyDetail
+
+func (response AdminSwitchAgencyStores200JSONResponse) VisitAdminSwitchAgencyStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSwitchAgencyStoresdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSwitchAgencyStoresdefaultApplicationProblemPlusJSONResponse) VisitAdminSwitchAgencyStoresResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9600,6 +9707,9 @@ type StrictServerInterface interface {
 	// AdminRemoveAgencyStore Take a store out of an agency, onto the free plan
 	// (POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove)
 	AdminRemoveAgencyStore(ctx context.Context, request AdminRemoveAgencyStoreRequestObject) (AdminRemoveAgencyStoreResponseObject, error)
+	// AdminSwitchAgencyStores Move stores of an unpaid agency to pay as you sell
+	// (POST /admin/v1/agencies/{agency_id}/switch-to-pays)
+	AdminSwitchAgencyStores(ctx context.Context, request AdminSwitchAgencyStoresRequestObject) (AdminSwitchAgencyStoresResponseObject, error)
 	// AdminListAlerts The alerts the admin's role hears of
 	// (GET /admin/v1/alerts)
 	AdminListAlerts(ctx context.Context, request AdminListAlertsRequestObject) (AdminListAlertsResponseObject, error)
@@ -10179,6 +10289,39 @@ func (sh *strictHandler) AdminRemoveAgencyStore(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRemoveAgencyStoreResponseObject); ok {
 		if err := validResponse.VisitAdminRemoveAgencyStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSwitchAgencyStores operation middleware
+func (sh *strictHandler) AdminSwitchAgencyStores(w http.ResponseWriter, r *http.Request, agencyId AgencyID) {
+	var request AdminSwitchAgencyStoresRequestObject
+
+	request.AgencyId = agencyId
+
+	var body AdminSwitchAgencyStoresJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSwitchAgencyStores(ctx, request.(AdminSwitchAgencyStoresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSwitchAgencyStores")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSwitchAgencyStoresResponseObject); ok {
+		if err := validResponse.VisitAdminSwitchAgencyStoresResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

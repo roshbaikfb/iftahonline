@@ -221,6 +221,13 @@ type Agencies interface {
 	// LeaveAgency takes the store in ctx out of its agency, onto the
 	// free plan.
 	LeaveAgency(ctx context.Context) error
+	// AgencyOpenInvoices are the agency's open invoices, newest first.
+	AgencyOpenInvoices(ctx context.Context, agency ulid.ID) ([]OpenInvoice, error)
+	// SwitchAgencyStores moves stores of the unpaid agency to pay as you
+	// sell, each with its own account paying by c (ADR-0087 §7): the
+	// agency's open invoices are voided and the stores that stay invoiced
+	// again. It needs Deps.Sealer for the card.
+	SwitchAgencyStores(ctx context.Context, agency ulid.ID, stores []ulid.ID, c Collection) error
 }
 
 var _ Agencies = (*app.Service)(nil)

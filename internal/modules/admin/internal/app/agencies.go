@@ -14,8 +14,9 @@ import (
 
 // AgencyDetail is an agency and its stores.
 type AgencyDetail struct {
-	Agency billing.Agency
-	Stores []ulid.ID
+	Agency       billing.Agency
+	Stores       []ulid.ID
+	OpenInvoices []billing.OpenInvoice // newest first (ADR-0087)
 }
 
 var (
@@ -50,7 +51,36 @@ func (s *Service) Agency(ctx context.Context, id ulid.ID) (AgencyDetail, error) 
 		return AgencyDetail{}, err
 	}
 	ag, members, err := a.Agency(ctx, id)
-	return AgencyDetail{Agency: ag, Stores: members}, err
+	if err != nil {
+		return AgencyDetail{}, err
+	}
+	open, err := a.AgencyOpenInvoices(ctx, id)
+	return AgencyDetail{Agency: ag, Stores: members, OpenInvoices: open}, err
+}
+
+// SwitchAgencyStores moves stores of the unpaid agency to pay as you
+// sell, as agreed with it (ADR-0087 §7), recorded first with the reason.
+func (s *Service) SwitchAgencyStores(ctx context.Context, id ulid.ID, stores []ulid.ID, collection billing.Collection, rawReason string) (AgencyDetail, error) {
+	who, a, err := s.agencies(ctx)
+	if err != nil {
+		return AgencyDetail{}, err
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return AgencyDetail{}, err
+	}
+	ids := make([]string, len(stores))
+	for i, st := range stores {
+		ids[i] = st.String()
+	}
+	if err = s.audit(ctx, &who.AdminID, "agency.switched_to_pays", "agency", id.String(),
+		map[string]any{"reason": reason, "stores": ids, "collection": string(collection)}); err != nil {
+		return AgencyDetail{}, err
+	}
+	if err = a.SwitchAgencyStores(ctx, id, stores, collection); err != nil {
+		return AgencyDetail{}, err
+	}
+	return s.Agency(ctx, id)
 }
 
 // CreateAgency opens an agency account. It is recorded once billing has
