@@ -149,6 +149,12 @@ func (s *Service) admin() (store.Tx, error) {
 	return s.d.Admin, nil
 }
 
+// Contact is the platform's contact details for the other modules (the
+// dashboard's banners), read with the site's own role.
+func (s *Service) Contact(ctx context.Context) (domain.Settings, error) {
+	return store.Settings(ctx, s.d.DB)
+}
+
 // Settings are the site's contact details, as the console edits them.
 func (s *Service) Settings(ctx context.Context) (domain.Settings, error) {
 	db, err := s.admin()

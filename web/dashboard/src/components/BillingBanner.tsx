@@ -2,7 +2,7 @@ import { useEffect, useState, type SubmitEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import { api } from '../api/client';
-import { billingChanged, collectionLabel, dateAr, feeOf, lateText, leave, monthAr, rateText, type Billing, type Collection } from '../lib/billing';
+import { billingChanged, collectionLabel, dateAr, feeOf, lateText, leave, monthAr, rateText, supportLink, type Billing, type Collection } from '../lib/billing';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { useRole } from '../lib/settings';
@@ -80,6 +80,11 @@ export function BillingBanner({ storeId }: { storeId: string }) {
           <Link className="button success" to={`/stores/${storeId}/billing/balance`}>
             اشحن الرصيد
           </Link>
+        )}
+        {billing.agency && billing.support_whatsapp && (
+          <a className="button" href={supportLink(billing.support_whatsapp, invoice?.number)} target="_blank" rel="noreferrer">
+            تواصل مع فريق المنصة
+          </a>
         )}
         {billing.switch_offer && (
           <button

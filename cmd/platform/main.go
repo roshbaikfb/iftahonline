@@ -705,7 +705,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	// agencies here (ADR-0058, ADR-0059).
 	bill, err := billing.New(billing.Deps{Pool: c.pool, Jobs: billJobs, IDs: c.ids, Log: c.log, Paymob: c.cfg.Billing,
 		PublicURL: c.cfg.Mail.DashboardURL, DashboardURL: c.cfg.Mail.DashboardURL, Stores: billingStores(ten), Holds: billingHolds(ten), Events: c.events,
-		Owner: identity.OwnerTx})
+		Owner: identity.OwnerTx, Support: billingSupport(site.NewContacts(c.pool))})
 	if err != nil {
 		return nil, err
 	}

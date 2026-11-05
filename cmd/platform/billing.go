@@ -10,6 +10,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
+	"github.com/roshbaikfb/iftahonline/internal/modules/site"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/eventbus"
 	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
@@ -56,6 +57,15 @@ func billingStores(ten *tenancy.Module) billing.Stores {
 			return billing.StoreInfo{}, err
 		}
 		return billing.StoreInfo{Name: st.Name, Currency: string(st.Currency)}, nil
+	}
+}
+
+// billingSupport adapts the site's contact details: the WhatsApp number
+// an agency's store is sent to (ADR-0087).
+func billingSupport(c site.Contacts) billing.Support {
+	return func(ctx context.Context) (string, error) {
+		s, err := c.Contact(ctx)
+		return s.WhatsApp, err
 	}
 }
 

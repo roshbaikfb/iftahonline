@@ -3160,6 +3160,11 @@ type Billing struct {
 	PlanNameEn     string        `json:"plan_name_en"`
 	Status         BillingStatus `json:"status"`
 
+	// SupportWhatsapp An agency's store: the platform's WhatsApp number (E.164) to arrange the switch with; absent otherwise.
+	//
+	// Example: +201153450716
+	SupportWhatsapp *string `json:"support_whatsapp,omitempty"`
+
 	// SwitchOffer Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided.
 	SwitchOffer *struct {
 		Offered []BillingSwitchOfferOffered `json:"offered"`

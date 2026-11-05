@@ -144,3 +144,35 @@ func codeOf(err error) string {
 	}
 	return ""
 }
+
+// TestAgencyStoreIsSentToSupport: an agency's store gets no offer to
+// switch, and the platform's WhatsApp number to arrange it; other stores
+// do not ask for it (ADR-0087).
+func TestAgencyStoreIsSentToSupport(t *testing.T) {
+	t.Parallel()
+	d := newDunning(t)
+	asked := 0
+	d.svc = app.NewService(app.Deps{DB: d.pool, Jobs: d.jobs, IDs: d.ids, Events: d.events, Now: func() time.Time { return *d.clock },
+		Stores: func(context.Context) (app.StoreInfo, error) {
+			return app.StoreInfo{Name: "متجر", Currency: "EGP"}, nil
+		},
+		Holds: d.holds.set, Notifier: func(context.Context, app.Notice) error { return nil },
+		Support: func(context.Context) (string, error) {
+			asked++
+			return "+201153450716", nil
+		}})
+	agency := d.store(t)
+	d.subscribe(agency, t, "agency", "past_due", "grace_until='2026-11-08T00:00:00Z'")
+	sum, err := d.svc.Summary(agency)
+	if err != nil || !sum.Agency || sum.Switch != nil || sum.SupportWhatsApp != "+201153450716" {
+		t.Fatalf("agency's store = %+v, %v", sum, err)
+	}
+	if err = d.svc.SwitchToPays(agency, domain.CollectBalance); !errs.Is(err, errs.KindConflict) {
+		t.Fatalf("an agency's store switching: %v", err)
+	}
+	own := d.store(t)
+	d.subscribe(own, t, "pro", "past_due", "grace_until='2026-11-08T00:00:00Z'")
+	if sum, err = d.svc.Summary(own); err != nil || sum.Agency || sum.SupportWhatsApp != "" || asked != 1 {
+		t.Fatalf("own store = %+v, asked %d, %v", sum, asked, err)
+	}
+}

@@ -236,7 +236,9 @@ client is `platform/paymob`.
   - "pay now", and «حوّل إلى ادفع حسب مبيعاتك» while `switch_offer` is
     present. Its dialog shows the fee with an example, the invoice that is
     voided, and the ways offered (the card only with one saved);
-  - an agency's store is told to talk to the platform's team;
+  - an agency's store is told to talk to the platform's team, with a
+    button to the platform's WhatsApp (`support_whatsapp`) and the invoice
+    named in the message;
   - a pay-as-you-sell store whose balance ran out is sent to top up.
 - **`/stores/{id}/billing/balance`** (ADR-0084, ADR-0085; mockup 4)
   shows:

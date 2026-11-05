@@ -94,6 +94,9 @@ func toBilling(s app.Summary) Billing {
 	if s.Agency {
 		out.Agency = &s.Agency
 	}
+	if s.SupportWhatsApp != "" {
+		out.SupportWhatsapp = &s.SupportWhatsApp
+	}
 	if s.Collection != "" {
 		c := BillingCollection(s.Collection)
 		out.Collection = &c

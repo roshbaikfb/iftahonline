@@ -46,6 +46,10 @@ type Order struct {
 // module, which billing does not import (ADR-0046 §6).
 type Orders func(ctx context.Context, tx pgx.Tx, id ulid.ID) (Order, error)
 
+// Support reads the platform's WhatsApp number (E.164, "" for none):
+// cmd/platform adapts the site's contact details.
+type Support func(ctx context.Context) (string, error)
+
 // Service implements the use cases.
 type Service struct {
 	db       postgres.Beginner
@@ -60,6 +64,7 @@ type Service struct {
 	inbox    webhooks.Inbox
 	log      *slog.Logger
 	owner    func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
+	support  Support
 	// callbackURL and dashboardURL are where the gateway sends callbacks
 	// and merchants back (ADR-0053).
 	callbackURL, dashboardURL string
@@ -95,6 +100,9 @@ type Deps struct {
 	// the founding program admits one store per owner. nil leaves the
 	// program out.
 	Owner func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
+	// Support is the platform's WhatsApp number for an agency's store's
+	// banner (ADR-0087); nil gives none.
+	Support Support
 	// IDs makes accounts' and invoices' IDs; nil is a new generator.
 	IDs *ulid.Generator
 	// Now is the clock (tests); nil is time.Now.
@@ -114,7 +122,7 @@ func NewService(d Deps) *Service {
 		d.Events = eventbus.Nop{}
 	}
 	svc := &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
-		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, owner: d.Owner, dashboardURL: d.DashboardURL,
+		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, owner: d.Owner, support: d.Support, dashboardURL: d.DashboardURL,
 		policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
 	if d.PublicURL != "" {
 		svc.callbackURL = CallbackURL(d.PublicURL)

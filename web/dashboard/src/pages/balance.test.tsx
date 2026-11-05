@@ -121,10 +121,13 @@ describe('the unpaid store’s banner (ADR-0087)', () => {
   });
 
   it('tells an agency’s store to talk to the platform, and a balance that ran out to top up', async () => {
-    routes({ ...pastDue, agency: true, switch_offer: undefined });
+    routes({ ...pastDue, agency: true, support_whatsapp: '+201153450716', switch_offer: undefined });
     const first = renderAt(`/stores/${store}/billing`);
     const banner = await screen.findByRole('alert');
     expect(banner).toHaveTextContent('تواصل مع فريق المنصة');
+    const contact = within(banner).getByRole('link', { name: 'تواصل مع فريق المنصة' });
+    expect(contact.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/201153450716\?text=/);
+    expect(decodeURIComponent(contact.getAttribute('href') ?? '')).toContain('رقم الفاتورة: INV-2026-000184');
     expect(within(banner).queryByRole('button', { name: /حوّل/ })).not.toBeInTheDocument();
     first.unmount();
     vi.restoreAllMocks();

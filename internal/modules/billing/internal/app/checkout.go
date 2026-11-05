@@ -59,6 +59,9 @@ type Summary struct {
 	Agency     bool
 	Collection domain.Collection
 	Switch     *SwitchOffer
+	// SupportWhatsApp is the platform's WhatsApp number an agency's store
+	// is sent to ("" for none, or not an agency's store).
+	SupportWhatsApp string
 	// A change waiting for the period's end (ADR-0060): the plan it moves
 	// to (names empty for the free plan after a cancellation) and cycle.
 	NextPlanNameAr, NextPlanNameEn string
@@ -154,6 +157,14 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 		}
 		return err
 	})
+	if err == nil && out.Agency && s.support != nil {
+		// Best effort: the banner shows no button without it.
+		if n, sErr := s.support(ctx); sErr == nil {
+			out.SupportWhatsApp = n
+		} else {
+			s.logf(ctx, "billing: the platform's WhatsApp number", sErr)
+		}
+	}
 	return out, err
 }
 
