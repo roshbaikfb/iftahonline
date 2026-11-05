@@ -230,6 +230,23 @@ client is `platform/paymob`.
   - **The comparison** is one row per catalog feature.
 - **Prices before VAT.** The picker's prices are before VAT, which
   invoices add.
+- **The unpaid store's banner** (ADR-0087, the approved mockups 1–3, 5)
+  sits above every screen, for the owner:
+  - past due (red), free until it closes (amber), or closed;
+  - "pay now", and «حوّل إلى ادفع حسب مبيعاتك» while `switch_offer` is
+    present. Its dialog shows the fee with an example, the invoice that is
+    voided, and the ways offered (the card only with one saved);
+  - an agency's store is told to talk to the platform's team;
+  - a pay-as-you-sell store whose balance ran out is sent to top up.
+- **`/stores/{id}/billing/balance`** (ADR-0084, ADR-0085; mockup 4)
+  shows:
+  - the balance and its level;
+  - top-ups from the minimum (about 1, 5/3 and 10/3 of it, or another
+    amount) on Paymob's page;
+  - the way the fees are paid, with a change;
+  - the entries.
+
+  The billing page links to it once the store has a way.
 
 ## Choosing a plan (ADR-0060)
 
