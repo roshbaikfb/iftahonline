@@ -305,6 +305,8 @@ type BillingCheckout struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	Purpose       string
+	Gateway       string
+	SessionID     *string
 }
 
 type BillingPaymentMethod struct {

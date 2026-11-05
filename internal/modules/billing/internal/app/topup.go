@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -29,8 +27,7 @@ var errPrepaidOff = errs.Conflict("prepaid_off", "the prepaid balance is not off
 // balance: at least the currency's minimum (ADR-0083). The confirmed
 // payment adds it (ProcessCallback).
 func (s *Service) TopUp(ctx context.Context, amount int64, payer Payer) (string, error) {
-	gw, ok := s.checkout()
-	if !ok || s.callbackURL == "" {
+	if !s.canCheckout() {
 		return "", errCheckoutOff
 	}
 	storeID, err := tenant.FromContext(ctx)
@@ -43,6 +40,7 @@ func (s *Service) TopUp(ctx context.Context, amount int64, payer Payer) (string,
 	}
 	c := store.Checkout{ID: s.ids.New(), AmountMinor: amount}
 	c.Reference = "bc_" + c.ID.String()
+	var gw CheckoutGateway
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		account, b, txErr := s.ownBalanceTx(ctx, tx, info)
 		if txErr != nil {
@@ -59,27 +57,16 @@ func (s *Service) TopUp(ctx context.Context, amount int64, payer Payer) (string,
 			return errs.Validation(errs.FieldError{Field: "amount_minor", Code: "out_of_range",
 				Message: fmt.Sprintf("between %d and %d", minimum, maxTopUp)})
 		}
+		if c.Gateway, gw, txErr = s.checkoutForTx(ctx, tx, account); txErr != nil {
+			return txErr
+		}
 		c.Account, c.Currency = account, b.Currency
 		return store.InsertCheckout(ctx, tx, c)
 	})
 	if err != nil {
 		return "", err
 	}
-	page, err := gw.Checkout(ctx, CheckoutRequest{Reference: c.Reference, AmountMinor: c.AmountMinor, Currency: c.Currency,
-		Description: "شحن الرصيد", Name: payer.Name, Email: payer.Email, NotificationURL: s.callbackURL,
-		RedirectURL: strings.TrimRight(s.dashboardURL, "/") + "/stores/" + storeID.String() + "/billing/balance"})
-	if errors.Is(err, ErrNoCheckout) {
-		return "", errCheckoutOff
-	}
-	if err != nil {
-		return "", err
-	}
-	if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		return store.SetCheckoutOrder(ctx, tx, c.Reference, page.ProviderOrderID)
-	}); err != nil {
-		return "", err
-	}
-	return page.URL, nil
+	return s.openPage(ctx, gw, c, "شحن الرصيد", payer, "/stores/"+storeID.String()+"/billing/balance")
 }
 
 // toppedUp adds a confirmed top-up c (gateway transaction txn) to its

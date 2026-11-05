@@ -21,6 +21,10 @@ type Checkout struct {
 	Currency    string
 	AmountMinor int64
 	Status      string // open, paid, failed
+	// Gateway is the one it was opened on (ADR-0091); Session the
+	// gateway's checkout it is asked by, when it has one.
+	Gateway string
+	Session string
 }
 
 // TopUp reports whether c tops up the balance rather than paying an
@@ -34,7 +38,7 @@ func InsertCheckout(ctx context.Context, tx Tx, c Checkout) error {
 		return err
 	}
 	p := billingdb.InsertCheckoutParams{StoreID: store, ID: c.ID, AccountID: c.Account, Reference: c.Reference,
-		Currency: c.Currency, AmountMinor: c.AmountMinor, Purpose: "topup"}
+		Currency: c.Currency, AmountMinor: c.AmountMinor, Purpose: "topup", Gateway: c.Gateway}
 	if !c.TopUp() {
 		p.InvoiceID, p.Purpose = &c.Invoice, "invoice"
 	}
@@ -57,6 +61,19 @@ func SetCheckoutOrder(ctx context.Context, tx Tx, reference, order string) error
 	return nil
 }
 
+// SetCheckoutSession records the gateway's checkout of the checkout with
+// reference, once.
+func SetCheckoutSession(ctx context.Context, tx Tx, reference, session string) error {
+	store, err := current(ctx)
+	if err != nil || session == "" {
+		return err
+	}
+	if err = billingdb.New(tx).SetCheckoutSession(ctx, billingdb.SetCheckoutSessionParams{StoreID: store, Reference: reference, SessionID: &session}); err != nil {
+		return fmt.Errorf("billing store: checkout session: %w", err)
+	}
+	return nil
+}
+
 // FindCheckout is the store-in-ctx's checkout by our reference or the
 // gateway's order; ok is false when there is none.
 func FindCheckout(ctx context.Context, tx Tx, reference, order string) (Checkout, bool, error) {
@@ -71,7 +88,11 @@ func FindCheckout(ctx context.Context, tx Tx, reference, order string) (Checkout
 	case err != nil:
 		return Checkout{}, false, fmt.Errorf("billing store: get checkout: %w", err)
 	}
-	c := Checkout{ID: r.ID, Account: r.AccountID, Reference: r.Reference, Currency: r.Currency, AmountMinor: r.AmountMinor, Status: r.Status}
+	c := Checkout{ID: r.ID, Account: r.AccountID, Reference: r.Reference, Currency: r.Currency, AmountMinor: r.AmountMinor, Status: r.Status,
+		Gateway: r.Gateway}
+	if r.SessionID != nil {
+		c.Session = *r.SessionID
+	}
 	if r.InvoiceID != nil {
 		c.Invoice = *r.InvoiceID
 	}

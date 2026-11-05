@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -30,6 +31,8 @@ type checkoutGateway struct {
 	base  int // Paymob's order numbers start after it (4546 when zero): one per test in the shared database
 }
 
+var _ app.CheckoutGateway = (*checkoutGateway)(nil)
+
 func storeOf(ctx context.Context) [16]byte {
 	id, _ := tenant.FromContext(ctx)
 	return id.ID
@@ -47,7 +50,7 @@ func (g *checkoutGateway) Checkout(_ context.Context, c app.CheckoutRequest) (ap
 	return app.CheckoutPage{URL: "https://pay.example.com/" + c.Reference, ProviderOrderID: strconv.Itoa(base + len(g.pages))}, nil
 }
 
-func (g *checkoutGateway) ParseCallback(q url.Values, body []byte) (app.Callback, error) {
+func (g *checkoutGateway) ParseCallback(_ http.Header, q url.Values, body []byte) (app.Callback, error) {
 	if q.Get("hmac") != "ok" {
 		return app.Callback{}, app.ErrForgedCallback
 	}
@@ -68,8 +71,8 @@ func (*checkoutGateway) ReadCallback(body []byte) (app.Callback, error) {
 	return cb, nil
 }
 
-func (g *checkoutGateway) Paid(_ context.Context, _, reference string, _ int64) (string, bool, error) {
-	return "txn-" + reference, g.paid[reference], nil
+func (g *checkoutGateway) Paid(_ context.Context, q app.PaidQuery) (app.Payment, error) {
+	return app.Payment{TransactionID: "txn-" + q.Reference, Paid: g.paid[q.Reference]}, nil
 }
 
 // TestPayNowSavesTheCardAndRestores: a suspended store's owner pays on
@@ -129,10 +132,11 @@ func TestPayNowSavesTheCardAndRestores(t *testing.T) {
 
 	// Callbacks reach the platform URL and are placed in the store by our
 	// reference (the payment) or Paymob's order (the card).
-	provider, ok := d.svc.CallbackProvider()
-	if !ok || provider.Name() != "paymob_billing" {
+	providers := d.svc.CallbackProviders()
+	if len(providers) != 1 || providers[0].Name() != "paymob_billing" {
 		t.Fatal("no callback provider")
 	}
+	provider := providers[0]
 	signed := url.Values{"hmac": {"ok"}}
 	tokenBody := []byte("token - " + order + " tok-1")
 	parts, err := provider.VerifyPlatform(t.Context(), webhooks.Request{Query: signed, Body: tokenBody})
@@ -223,14 +227,14 @@ func TestPayNowRefusals(t *testing.T) {
 	if _, err := app.NewService(app.Deps{DB: d.pool}).PayNow(a, invoice, app.Payer{}); !errs.Is(err, errs.KindUnavailable) {
 		t.Errorf("no checkout gateway: %v", err)
 	}
-	if _, ok := app.NewService(app.Deps{DB: d.pool}).CallbackProvider(); ok {
+	if p := app.NewService(app.Deps{DB: d.pool}).CallbackProviders(); len(p) != 0 {
 		t.Error("a callback provider without a checkout gateway")
 	}
 	if err := app.NewService(app.Deps{DB: d.pool}).ProcessCallback(a, d.ids.New()); err == nil {
 		t.Error("ProcessCallback without a gateway and inbox")
 	}
-	if app.CallbackURL("https://api.example.com/") != "https://api.example.com/v1/webhooks/paymob_billing" {
-		t.Error("callback URL")
+	if app.CallbackProviderOf("stripe") != "stripe_billing" {
+		t.Error("callback provider")
 	}
 }
 
@@ -257,7 +261,7 @@ func TestCallbacksOfNothing(t *testing.T) {
 	if (app.ProcessCallbackArgs{}).Kind() != "billing.process_callback" || app.BillingConnection().IsZero() {
 		t.Error("kind or connection")
 	}
-	p, _ := svc.CallbackProvider()
+	p := svc.CallbackProviders()[0]
 	if _, err = p.ChallengePlatform(t.Context(), nil); !errors.Is(err, webhooks.ErrForged) {
 		t.Errorf("challenge: %v", err)
 	}

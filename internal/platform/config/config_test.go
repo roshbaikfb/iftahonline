@@ -228,6 +228,25 @@ func TestBilling(t *testing.T) {
 	if _, err = config.Load(config.RoleWorker, env(with(checkout[6:]...))); err == nil {
 		t.Fatal("a checkout without the account accepted")
 	}
+
+	// The platform's Stripe account (ADR-0091): both or neither.
+	if c.Billing.Stripe.On() {
+		t.Fatal("Stripe on by default")
+	}
+	stripe := []string{"BILLING_STRIPE_SECRET_KEY", "rk_test_1", "BILLING_STRIPE_WEBHOOK_SECRET", "whsec_1"}
+	if c, err = config.Load(config.RoleAPI, env(with(stripe...))); err != nil || !c.Billing.Stripe.On() || c.Billing.Stripe.WebhookSecret != "whsec_1" {
+		t.Fatalf("Stripe: %v", err)
+	}
+	for name, bad := range map[string][]string{
+		"a key alone":        stripe[:2],
+		"a secret alone":     stripe[2:],
+		"a publishable key":  {"BILLING_STRIPE_SECRET_KEY", "pk_test_1", "BILLING_STRIPE_WEBHOOK_SECRET", "whsec_1"},
+		"not a whsec secret": {"BILLING_STRIPE_SECRET_KEY", "sk_test_1", "BILLING_STRIPE_WEBHOOK_SECRET", "secret"},
+	} {
+		if _, err = config.Load(config.RoleWorker, env(with(bad...))); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
 }
 
 func TestMessaging(t *testing.T) {

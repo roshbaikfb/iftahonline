@@ -206,16 +206,16 @@ func TestParseCallback(t *testing.T) {
 	txn := `{"type":"TRANSACTION","obj":{"id":9001,"success":true,"pending":false,"amount_cents":68286,"currency":"EGP","order":{"id":4547,"merchant_order_id":"bc_01"}}}`
 	token := `{"type":"TOKEN","obj":{"id":12929738,"token":"tok-1","masked_pan":"xxxx-xxxx-xxxx-2346","merchant_id":1,"card_subtype":"MasterCard","created_at":"2026-01-20","email":"m@example.com","order_id":"4547"}}` // nocarddata:allow Paymob's masked card
 
-	cb, err := g.ParseCallback(signed(t, "hmac-eg", txn, platformpaymob.TransactionFields()), []byte(txn))
+	cb, err := g.ParseCallback(nil, signed(t, "hmac-eg", txn, platformpaymob.TransactionFields()), []byte(txn))
 	if err != nil || cb.Kind != app.CallbackTransaction || cb.Reference != "bc_01" || cb.ProviderOrderID != "4547" || cb.TransactionID != "9001" ||
 		cb.EventID != "txn:9001:true:false" {
 		t.Fatalf("transaction = %+v, %v", cb, err)
 	}
 	// Another region's secret is the platform's too.
-	if _, err = g.ParseCallback(signed(t, "hmac-sa", txn, platformpaymob.TransactionFields()), []byte(txn)); err != nil {
+	if _, err = g.ParseCallback(nil, signed(t, "hmac-sa", txn, platformpaymob.TransactionFields()), []byte(txn)); err != nil {
 		t.Errorf("Saudi secret: %v", err)
 	}
-	cb, err = g.ParseCallback(signed(t, "hmac-eg", token, platformpaymob.TokenFields()), []byte(token))
+	cb, err = g.ParseCallback(nil, signed(t, "hmac-eg", token, platformpaymob.TokenFields()), []byte(token))
 	if err != nil || cb.Kind != app.CallbackToken || cb.Token != "tok-1" || cb.ProviderOrderID != "4547" || cb.Label != "MasterCard •••• 2346" {
 		t.Fatalf("token = %+v, %v", cb, err)
 	}
@@ -223,11 +223,11 @@ func TestParseCallback(t *testing.T) {
 		"unsigned": {}, "a stranger's secret": signed(t, "other", txn, platformpaymob.TransactionFields()),
 		"the token's fields": signed(t, "hmac-eg", txn, platformpaymob.TokenFields()),
 	} {
-		if _, err = g.ParseCallback(q, []byte(txn)); !errors.Is(err, app.ErrForgedCallback) {
+		if _, err = g.ParseCallback(nil, q, []byte(txn)); !errors.Is(err, app.ErrForgedCallback) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err = g.ParseCallback(url.Values{}, []byte(`garbage`)); !errors.Is(err, app.ErrForgedCallback) {
+	if _, err = g.ParseCallback(nil, url.Values{}, []byte(`garbage`)); !errors.Is(err, app.ErrForgedCallback) {
 		t.Errorf("garbage: %v", err)
 	}
 	if _, err = g.ReadCallback([]byte(`{"type":"TRANSACTION","obj":{"id":1}}`)); !errors.Is(err, app.ErrBadCallback) {
@@ -246,22 +246,22 @@ func TestPaid(t *testing.T) {
 	s.txns["bc_short"] = map[string]any{"id": 78, "success": true, "amount_cents": 100, "currency": "EGP", "order": map[string]any{"merchant_order_id": "bc_short"}}
 	s.txns["bc_nocur"] = map[string]any{"id": 80, "success": true, "amount_cents": 68286, "order": map[string]any{"merchant_order_id": "bc_nocur"}}
 	s.txns["bc_other"] = map[string]any{"id": 79, "success": true, "amount_cents": 100, "order": map[string]any{"merchant_order_id": "someone-else"}}
-	if txn, paid, err := g.Paid(t.Context(), "EGP", "bc_paid", 68286); err != nil || !paid || txn != "77" {
-		t.Errorf("paid = %s %v %v", txn, paid, err)
+	if p, err := g.Paid(t.Context(), app.PaidQuery{Currency: "EGP", Reference: "bc_paid", AmountMinor: 68286}); err != nil || !p.Paid || p.TransactionID != "77" || p.Token != "" {
+		t.Errorf("paid = %+v %v", p, err)
 	}
-	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_short", 68286); err != nil || paid {
-		t.Errorf("a partial amount is not paid: %v %v", paid, err)
+	if p, err := g.Paid(t.Context(), app.PaidQuery{Currency: "EGP", Reference: "bc_short", AmountMinor: 68286}); err != nil || p.Paid {
+		t.Errorf("a partial amount is not paid: %+v %v", p, err)
 	}
-	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_none", 1); err != nil || paid {
-		t.Errorf("no transaction: %v %v", paid, err)
+	if p, err := g.Paid(t.Context(), app.PaidQuery{Currency: "EGP", Reference: "bc_none", AmountMinor: 1}); err != nil || p.Paid {
+		t.Errorf("no transaction: %+v %v", p, err)
 	}
-	if _, _, err := g.Paid(t.Context(), "EGP", "bc_other", 100); err == nil {
+	if _, err := g.Paid(t.Context(), app.PaidQuery{Currency: "EGP", Reference: "bc_other", AmountMinor: 100}); err == nil {
 		t.Error("an answer about another payment believed")
 	}
-	if _, paid, err := g.Paid(t.Context(), "EGP", "bc_nocur", 68286); err == nil || paid {
-		t.Errorf("an answer without its currency believed: %v %v", paid, err)
+	if p, err := g.Paid(t.Context(), app.PaidQuery{Currency: "EGP", Reference: "bc_nocur", AmountMinor: 68286}); err == nil || p.Paid {
+		t.Errorf("an answer without its currency believed: %+v %v", p, err)
 	}
-	if _, _, err := g.Paid(t.Context(), "AED", "bc_paid", 1); err == nil {
+	if _, err := g.Paid(t.Context(), app.PaidQuery{Currency: "AED", Reference: "bc_paid", AmountMinor: 1}); err == nil {
 		t.Error("a region without an account answered")
 	}
 }
@@ -278,7 +278,7 @@ func FuzzParseCallback(f *testing.F) {
 	f.Add([]byte(`{"type":"TOKEN","obj":{"id":1,"token":"t","masked_pan":"éé","card_subtype":"","order_id":"7"}}`), "")            // nocarddata:allow a masked card
 	f.Add([]byte(`{"obj":null}`), "ab")
 	f.Fuzz(func(t *testing.T, body []byte, mac string) {
-		cb, err := g.ParseCallback(url.Values{"hmac": {mac}}, body)
+		cb, err := g.ParseCallback(nil, url.Values{"hmac": {mac}}, body)
 		if err == nil {
 			fields := platformpaymob.TransactionFields()
 			if cb.Kind == app.CallbackToken {

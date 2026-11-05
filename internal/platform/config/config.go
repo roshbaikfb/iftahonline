@@ -96,7 +96,22 @@ type Billing struct {
 	Paymob map[string]BillingPaymob
 	// PaymobBaseURL overrides Paymob's API for every region (tests).
 	PaymobBaseURL string
+	// Stripe is the platform's own Stripe account (the UK company), which
+	// bills merchants outside Egypt (ADR-0091); zero for none.
+	Stripe BillingStripe
 }
+
+// BillingStripe is the platform's Stripe account: its secret key (or a
+// restricted key), the billing webhook endpoint's signing secret, both or
+// neither.
+type BillingStripe struct {
+	SecretKey     string
+	WebhookSecret string
+	BaseURL       string // overrides Stripe's API (tests)
+}
+
+// On reports whether the account is configured.
+func (s BillingStripe) On() bool { return s.SecretKey != "" }
 
 // BillingPaymob is one of the platform's Paymob accounts.
 type BillingPaymob struct {
@@ -858,7 +873,8 @@ func (r *reader) prefixes(key string) []netip.Prefix {
 // accounts: BILLING_PAYMOB_<CURRENCY>_{SECRET_KEY,API_KEY,MOTO_INTEGRATION_ID},
 // all three of a currency or none, and its checkout,
 // BILLING_PAYMOB_<CURRENCY>_{PUBLIC_KEY,CARD_INTEGRATION_ID,HMAC_SECRET},
-// all three or none, on an account.
+// all three or none, on an account; and the platform's Stripe account,
+// BILLING_STRIPE_{SECRET_KEY,WEBHOOK_SECRET}, both or neither.
 func (r *reader) billing() Billing {
 	b := Billing{
 		CollectionEnabled: r.oneOf("BILLING_COLLECTION_ENABLED", "false", "true", "false") == "true",
@@ -883,6 +899,16 @@ func (r *reader) billing() Billing {
 		case account == 3:
 			b.Paymob[cur] = a
 		}
+	}
+	b.Stripe = BillingStripe{SecretKey: r.secretOptional("BILLING_STRIPE_SECRET_KEY"), WebhookSecret: r.secretOptional("BILLING_STRIPE_WEBHOOK_SECRET"),
+		BaseURL: r.url("BILLING_STRIPE_BASE_URL", false, "https", "http")}
+	switch st := b.Stripe; {
+	case countSet(st.SecretKey, st.WebhookSecret) == 1:
+		r.errorf("BILLING_STRIPE_SECRET_KEY and BILLING_STRIPE_WEBHOOK_SECRET go together")
+	case st.SecretKey != "" && !strings.HasPrefix(st.SecretKey, "sk_") && !strings.HasPrefix(st.SecretKey, "rk_"):
+		r.errorf("BILLING_STRIPE_SECRET_KEY: a secret key (sk_) or a restricted key (rk_)")
+	case st.WebhookSecret != "" && !strings.HasPrefix(st.WebhookSecret, "whsec_"):
+		r.errorf("BILLING_STRIPE_WEBHOOK_SECRET: an endpoint's signing secret (whsec_)")
 	}
 	return b
 }

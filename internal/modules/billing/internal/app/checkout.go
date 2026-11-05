@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,13 +22,16 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
-// CheckoutGatewayName is the gateway that takes payments on its own page
-// and saves cards there.
-const CheckoutGatewayName = "paymob"
+// The platform's checkout gateways take payments on their own page and
+// save the card there: Paymob's (ADR-0053) and Stripe's (ADR-0091). An
+// account opens its checkouts on its country's billing gateway
+// (ADR-0089); each gateway's callbacks reach a URL of their own.
 
-// CallbackProvider is the platform webhook path of its callbacks:
-// /v1/webhooks/paymob_billing.
-const CallbackProvider = "paymob_billing"
+// CallbackProviderOf is the platform webhook path of gateway's
+// callbacks: /v1/webhooks/<gateway>_billing.
+func CallbackProviderOf(gateway string) string { return gateway + callbackSuffix }
+
+const callbackSuffix = "_billing"
 
 // BillingConnection is the connection ID billing's callback receipts
 // carry: the platform's own account, no store connection.
@@ -74,9 +78,73 @@ type Summary struct {
 	FoundingBps  int32
 }
 
-func (s *Service) checkout() (CheckoutGateway, bool) {
-	g, ok := s.gateways[CheckoutGatewayName].(CheckoutGateway)
+func (s *Service) checkoutGateway(name string) (CheckoutGateway, bool) {
+	g, ok := s.gateways[name].(CheckoutGateway)
 	return g, ok
+}
+
+// checkoutGateways are the names of the gateways with a checkout, sorted.
+func (s *Service) checkoutGateways() []string {
+	var out []string
+	for name := range s.gateways {
+		if _, ok := s.checkoutGateway(name); ok {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// canCheckout reports whether any checkout can open: a gateway with one,
+// and the platform's URL for its callbacks.
+func (s *Service) canCheckout() bool { return s.publicURL != "" && len(s.checkoutGateways()) > 0 }
+
+// checkoutForTx is the gateway account opens its checkouts on: its
+// country's billing gateway (ADR-0089), when the platform has it. tx is
+// behind account.
+func (s *Service) checkoutForTx(ctx context.Context, tx pgx.Tx, account ulid.ID) (string, CheckoutGateway, error) {
+	acct, err := store.Account(ctx, tx, account)
+	if err != nil {
+		return "", nil, err
+	}
+	rules, err := store.PaymentRules(ctx, tx)
+	if err != nil {
+		return "", nil, err
+	}
+	rule, ok := domain.RuleFor(rules, acct.Country)
+	if !ok {
+		return "", nil, errCheckoutOff
+	}
+	gw, ok := s.checkoutGateway(rule.BillingGateway)
+	if !ok {
+		return "", nil, errCheckoutOff
+	}
+	return rule.BillingGateway, gw, nil
+}
+
+// openPage opens c's page on gw, where the merchant comes back to back
+// (a path of the dashboard), and records the gateway's order and
+// checkout.
+func (s *Service) openPage(ctx context.Context, gw CheckoutGateway, c store.Checkout, description string, payer Payer, back string) (string, error) {
+	page, err := gw.Checkout(ctx, CheckoutRequest{Reference: c.Reference, AmountMinor: c.AmountMinor, Currency: c.Currency,
+		Description: description, Name: payer.Name, Email: payer.Email,
+		NotificationURL: webhooks.PlatformURL(s.publicURL, CallbackProviderOf(c.Gateway)),
+		RedirectURL:     strings.TrimRight(s.dashboardURL, "/") + back})
+	if errors.Is(err, ErrNoCheckout) {
+		return "", errCheckoutOff
+	}
+	if err != nil {
+		return "", err
+	}
+	if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		if txErr := store.SetCheckoutOrder(ctx, tx, c.Reference, page.ProviderOrderID); txErr != nil {
+			return txErr
+		}
+		return store.SetCheckoutSession(ctx, tx, c.Reference, page.Session)
+	}); err != nil {
+		return "", err
+	}
+	return page.URL, nil
 }
 
 // accountOf is the store-in-ctx's account; ok is false before its first
@@ -209,10 +277,10 @@ type Payer struct {
 
 // PayNow opens the gateway's page for an open invoice of the store in
 // ctx's account, where the card is also saved for the next ones
-// (ADR-0053). The callbacks settle it.
+// (ADR-0053), on its country's gateway (ADR-0091). The callbacks settle
+// it.
 func (s *Service) PayNow(ctx context.Context, invoice ulid.ID, payer Payer) (string, error) {
-	gw, ok := s.checkout()
-	if !ok || s.callbackURL == "" {
+	if !s.canCheckout() {
 		return "", errCheckoutOff
 	}
 	storeID, err := tenant.FromContext(ctx)
@@ -222,6 +290,7 @@ func (s *Service) PayNow(ctx context.Context, invoice ulid.ID, payer Payer) (str
 	c := store.Checkout{ID: s.ids.New(), Invoice: invoice}
 	c.Reference = "bc_" + c.ID.String()
 	var number string
+	var gw CheckoutGateway
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		account, has, txErr := accountOf(ctx, tx)
 		if txErr != nil {
@@ -240,54 +309,49 @@ func (s *Service) PayNow(ctx context.Context, invoice ulid.ID, payer Payer) (str
 		if !open {
 			return ErrInvoiceNotFound
 		}
+		if c.Gateway, gw, txErr = s.checkoutForTx(ctx, tx, account); txErr != nil {
+			return txErr
+		}
 		c.Account, c.Currency, c.AmountMinor, number = account, inv.Currency, inv.TotalMinor, inv.Number
 		return store.InsertCheckout(ctx, tx, c)
 	})
 	if err != nil {
 		return "", err
 	}
-	page, err := gw.Checkout(ctx, CheckoutRequest{Reference: c.Reference, AmountMinor: c.AmountMinor, Currency: c.Currency,
-		Description: number, Name: payer.Name, Email: payer.Email, NotificationURL: s.callbackURL,
-		RedirectURL: strings.TrimRight(s.dashboardURL, "/") + "/stores/" + storeID.String() + "/billing"})
-	if errors.Is(err, ErrNoCheckout) {
-		return "", errCheckoutOff
-	}
-	if err != nil {
-		return "", err
-	}
-	if err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		return store.SetCheckoutOrder(ctx, tx, c.Reference, page.ProviderOrderID)
-	}); err != nil {
-		return "", err
-	}
-	return page.URL, nil
+	return s.openPage(ctx, gw, c, number, payer, "/stores/"+storeID.String()+"/billing")
 }
 
-// CallbackPlatform is billing's side of the webhooks inbox: one URL for
-// the platform's Paymob accounts, every store's checkouts.
-type CallbackPlatform struct{ svc *Service }
+// CallbackPlatform is billing's side of the webhooks inbox for one
+// checkout gateway: one URL for the platform's accounts on it, every
+// store's checkouts.
+type CallbackPlatform struct {
+	svc     *Service
+	gateway string
+}
 
 var _ webhooks.PlatformProvider = CallbackPlatform{}
 
-// CallbackProvider returns billing's platform webhook provider; ok is
-// false without a checkout gateway.
-func (s *Service) CallbackProvider() (webhooks.PlatformProvider, bool) {
-	if _, ok := s.checkout(); !ok {
-		return nil, false
+// CallbackProviders are billing's platform webhook providers, one per
+// checkout gateway (none without one).
+func (s *Service) CallbackProviders() []webhooks.PlatformProvider {
+	names := s.checkoutGateways()
+	out := make([]webhooks.PlatformProvider, len(names))
+	for i, name := range names {
+		out[i] = CallbackPlatform{svc: s, gateway: name}
 	}
-	return CallbackPlatform{svc: s}, true
+	return out
 }
 
 // Name implements webhooks.PlatformProvider.
-func (CallbackPlatform) Name() string { return CallbackProvider }
+func (p CallbackPlatform) Name() string { return CallbackProviderOf(p.gateway) }
 
 // VerifyPlatform implements webhooks.PlatformProvider: the gateway
 // checks the signature, and the callback is placed in the store of its
 // checkout, by our reference or the gateway's order. A callback of no
 // checkout is dropped with a log line.
 func (p CallbackPlatform) VerifyPlatform(ctx context.Context, req webhooks.Request) ([]webhooks.Part, error) {
-	gw, _ := p.svc.checkout()
-	cb, err := gw.ParseCallback(req.Query, req.Body)
+	gw, _ := p.svc.checkoutGateway(p.gateway)
+	cb, err := gw.ParseCallback(req.Header, req.Query, req.Body)
 	if errors.Is(err, ErrForgedCallback) {
 		return nil, webhooks.ErrForged
 	}
@@ -310,8 +374,8 @@ func (p CallbackPlatform) VerifyPlatform(ctx context.Context, req webhooks.Reque
 	return []webhooks.Part{{Store: tenant.StoreID{ID: storeID}, ConnectionID: BillingConnection(), EventID: cb.EventID, Body: req.Body}}, nil
 }
 
-// ChallengePlatform implements webhooks.PlatformProvider: Paymob has no
-// URL handshake.
+// ChallengePlatform implements webhooks.PlatformProvider: neither
+// gateway has a URL handshake.
 func (CallbackPlatform) ChallengePlatform(context.Context, url.Values) (string, error) {
 	return "", webhooks.ErrForged
 }
@@ -339,18 +403,27 @@ func (p CallbackPlatform) AcceptTx(ctx context.Context, tx pgx.Tx, r webhooks.Re
 //   - a payment: the gateway is asked whether the checkout is paid in
 //     full (the callback is a hint), and only then is the invoice
 //     settled;
-//   - a saved card: it becomes the account's card on file.
+//   - a saved card: it becomes the account's card on file (Paymob says
+//     so in a callback of its own, Stripe in its answer about the
+//     payment).
+//
+// The receipt's provider names the gateway; a callback placed in a
+// checkout opened on another one is not acted on.
 func (s *Service) ProcessCallback(ctx context.Context, receipt ulid.ID) error {
-	gw, ok := s.checkout()
-	if !ok || s.inbox == nil {
-		return errors.New("billing: no checkout gateway or inbox")
+	if s.inbox == nil {
+		return errors.New("billing: no inbox")
 	}
-	_, _, body, err := s.inbox.Get(ctx, receipt)
+	r, _, body, err := s.inbox.Get(ctx, receipt)
 	if errors.Is(err, webhooks.ErrReceiptNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	gateway, _ := strings.CutSuffix(r.Provider, callbackSuffix)
+	gw, ok := s.checkoutGateway(gateway)
+	if !ok {
+		return fmt.Errorf("billing: no checkout gateway %q", gateway)
 	}
 	cb, err := gw.ReadCallback(body)
 	if body == nil || err != nil {
@@ -372,24 +445,34 @@ func (s *Service) ProcessCallback(ctx context.Context, receipt ulid.ID) error {
 	if !found {
 		return s.markReceipt(ctx, receipt, "unplaced")
 	}
+	if c.Gateway != gateway {
+		return s.markReceipt(ctx, receipt, "other_gateway")
+	}
 	if cb.Kind == CallbackToken {
-		if err = s.SavePaymentMethod(ctx, c.Account, CheckoutGatewayName, cb.Token, cb.Label); err != nil {
+		if err = s.SavePaymentMethod(ctx, c.Account, c.Gateway, cb.Token, cb.Label); err != nil {
 			return err
 		}
 		return s.markReceipt(ctx, receipt, "card_saved")
 	}
-	txn, paid, err := gw.Paid(ctx, c.Currency, c.Reference, c.AmountMinor)
+	pay, err := gw.Paid(ctx, PaidQuery{Currency: c.Currency, Reference: c.Reference, Session: c.Session, AmountMinor: c.AmountMinor})
 	if err != nil {
 		return err
 	}
-	if !paid {
+	if !pay.Paid {
 		return s.finishCheckout(ctx, receipt, c, "failed", "not_paid")
 	}
+	if pay.Token != "" {
+		// Saved before the payment is recorded: a failure retries both.
+		if err = s.SavePaymentMethod(ctx, c.Account, c.Gateway, pay.Token, pay.Label); err != nil {
+			return err
+		}
+	}
+	txn := pay.TransactionID
 	if c.TopUp() {
 		return s.toppedUp(ctx, receipt, c, txn)
 	}
 	duplicate, err := s.recordAttempt(ctx, c.Account, store.Attempt{ID: s.ids.New(), Invoice: c.Invoice, Account: c.Account,
-		Gateway: CheckoutGatewayName, Outcome: "approved", Reference: txn, AmountMinor: c.AmountMinor})
+		Gateway: c.Gateway, Outcome: "approved", Reference: txn, AmountMinor: c.AmountMinor})
 	if err != nil {
 		return err
 	}
@@ -431,9 +514,4 @@ type ProcessCallbackWorker struct {
 // Work implements river.Worker.
 func (w *ProcessCallbackWorker) Work(ctx context.Context, j *river.Job[ProcessCallbackArgs]) error {
 	return w.Svc.ProcessCallback(ctx, j.Args.ReceiptID)
-}
-
-// CallbackURL is the platform's URL of billing's callbacks.
-func CallbackURL(publicURL string) string {
-	return fmt.Sprintf("%s/v1/webhooks/%s", strings.TrimRight(publicURL, "/"), CallbackProvider)
 }

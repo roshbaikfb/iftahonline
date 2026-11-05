@@ -12,6 +12,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/app"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/paymob"
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/gateway/stripe"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/httpapi"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
@@ -37,7 +38,8 @@ type Deps struct {
 	// Gateways, Sealer, Holds and Notifier collect invoices and run
 	// dunning (the worker, ADR-0051); Collect turns the hourly run on.
 	// Paymob adds the paymob gateway from the platform's accounts
-	// (ADR-0052).
+	// (ADR-0052), and the stripe gateway from its Stripe account
+	// (ADR-0091).
 	Paymob   config.Billing
 	Gateways map[string]Gateway
 	Sealer   Sealer
@@ -87,6 +89,9 @@ func New(d Deps) (*Module, error) {
 		}
 		gateways[paymob.Name] = paymob.New(paymob.Options{Regions: regions, BaseURL: d.Paymob.PaymobBaseURL})
 	}
+	if st := d.Paymob.Stripe; st.On() {
+		gateways[stripe.Name] = stripe.New(stripe.Options{SecretKey: st.SecretKey, WebhookSecret: st.WebhookSecret, BaseURL: st.BaseURL})
+	}
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, Orders: d.Orders, Stores: d.Stores, Jobs: d.Jobs, IDs: d.IDs, Events: d.Events,
 		Gateways: gateways, Sealer: d.Sealer, Holds: d.Holds, Notifier: d.Notifier,
 		Inbox: d.Inbox, Log: d.Log, PublicURL: d.PublicURL, DashboardURL: d.DashboardURL, Owner: d.Owner,
@@ -108,10 +113,11 @@ func (m *Module) Mount(mux *http.ServeMux, auth authz.Authorizer, scope func(htt
 	httpapi.Mount(mux, m.svc, auth, scope, resp)
 }
 
-// CallbackProvider is billing's platform webhook provider (Paymob's
-// callbacks of merchants' checkouts); ok is false without a checkout.
-func (m *Module) CallbackProvider() (webhooks.PlatformProvider, bool) {
-	return m.svc.CallbackProvider()
+// CallbackProviders are billing's platform webhook providers: the
+// callbacks of merchants' checkouts, one per checkout gateway (Paymob's,
+// Stripe's); none without one.
+func (m *Module) CallbackProviders() []webhooks.PlatformProvider {
+	return m.svc.CallbackProviders()
 }
 
 // Collections records payments from outside the card on file.
