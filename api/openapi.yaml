@@ -6670,7 +6670,7 @@ components:
       required: [id, kind, amount_minor, balance_after_minor, created_at]
       properties:
         id: { $ref: "#/components/schemas/ULID" }
-        kind: { type: string, enum: [topup, manual, fee, fee_refund] }
+        kind: { type: string, enum: [topup, manual, fee, fee_refund, invoice], description: "An extensible list (ADR-0032): new kinds are added within the contract, and clients show a kind they do not know as a plain entry. invoice: what the month's invoice took that the fees' entries had not, its tax (ADR-0084)." }
         amount_minor: { type: integer, format: int64, description: Signed; a fee is negative. }
         balance_after_minor: { type: integer, format: int64 }
         reason: { type: string, enum: [transfer, compensation, correction], description: A manual entry's. }

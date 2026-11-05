@@ -14,6 +14,11 @@ const (
 	NoticeSuspended     NoticeKind = "suspended"      // the grace ran out: the store is on the free plan until ClosesAt
 	NoticeHeld          NoticeKind = "held"           // still unpaid: the store is closed, its data kept
 	NoticePaid          NoticeKind = "paid"           // an invoice was paid (and the store is back if it was not)
+	// The prepaid balance (ADR-0084); TotalMinor is the balance, or what
+	// it owes.
+	NoticeBalanceLow      NoticeKind = "balance_low"      // under half the minimum
+	NoticeBalanceEmpty    NoticeKind = "balance_empty"    // nothing left or owed: past due until GraceUntil
+	NoticeBalanceRestored NoticeKind = "balance_restored" // back above nothing: the store is back
 )
 
 // Notice is a billing notice's facts.
@@ -50,6 +55,8 @@ type noticeTexts struct {
 	suspendedSubject, suspended                         string
 	heldSubject, held                                   string
 	paidSubject, paid                                   string
+	lowSubject, low, emptySubject, empty, topUp         string
+	restoredSubject, restored                           string
 }
 
 func textsFor(locale string) noticeTexts {
@@ -65,6 +72,10 @@ func textsFor(locale string) noticeTexts {
 			heldSubject: ": store closed for an unpaid invoice",
 			held:        "The store is closed: shoppers see a maintenance page. Its data is kept; pay the invoice to open it again.\n\n",
 			paidSubject: ": payment received", paid: "Invoice %s (%s) is paid. Thank you.\n\n",
+			lowSubject: ": your balance is low", low: "Your balance is %s. Top it up before it runs out so nothing stops in your store.",
+			emptySubject: ": your balance ran out", empty: "Your balance owes %s in fees of delivered orders. Top it up; what is owed is taken from it first.",
+			topUp:           "\n\nTop up: ",
+			restoredSubject: ": your store is back", restored: "Your balance is %s again, and your store is back on its plan. Thank you.\n\n",
 		}
 	}
 	return noticeTexts{
@@ -78,6 +89,10 @@ func textsFor(locale string) noticeTexts {
 		heldSubject: ": أُغلق المتجر لفاتورة غير مدفوعة",
 		held:        "أُغلق المتجر: يرى العملاء صفحة صيانة. بياناته محفوظة؛ ادفع الفاتورة ليعود.\n\n",
 		paidSubject: ": تم استلام الدفع", paid: "دُفعت الفاتورة %s (%s). شكرًا لك.\n\n",
+		lowSubject: ": رصيدك منخفض", low: "رصيدك %s. اشحنه قبل أن ينفد حتى لا يتوقف شيء في متجرك.",
+		emptySubject: ": نفد رصيدك", empty: "عليك %s رسوم طلبات سُلّمت. اشحن رصيدك؛ يُخصم المستحق من أول شحنة.",
+		topUp:           "\n\nاشحن رصيدك: ",
+		restoredSubject: ": رجع متجرك", restored: "رصيدك الآن %s، ورجع متجرك على باقته. شكرًا لك.\n\n",
 	}
 }
 
@@ -101,13 +116,26 @@ func (n Notice) Email(locale, store, link string) (subject, text string) {
 		}
 		return store + w.failedSubject, text + w.payLink + link
 	case NoticeSuspended:
-		text := w.suspended
+		text = w.suspended
 		if !n.ClosesAt.IsZero() {
 			text += fmt.Sprintf(w.closes, day(n.ClosesAt))
 		}
 		return store + w.suspendedSubject, text + "\n\n" + link
 	case NoticeHeld:
 		return store + w.heldSubject, w.held + link
+	case NoticeBalanceLow:
+		return store + w.lowSubject, fmt.Sprintf(w.low, sum) + w.topUp + link
+	case NoticeBalanceEmpty:
+		text = fmt.Sprintf(w.empty, sum)
+		if !n.GraceUntil.IsZero() {
+			text += fmt.Sprintf(w.free, day(n.GraceUntil))
+		}
+		if !n.ClosesAt.IsZero() {
+			text += fmt.Sprintf(w.closes, day(n.ClosesAt))
+		}
+		return store + w.emptySubject, text + w.topUp + link
+	case NoticeBalanceRestored:
+		return store + w.restoredSubject, fmt.Sprintf(w.restored, sum) + link
 	default:
 		return store + w.paidSubject, fmt.Sprintf(w.paid, n.Invoice, sum) + link
 	}

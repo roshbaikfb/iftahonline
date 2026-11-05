@@ -159,6 +159,8 @@ const (
 	MerchantPaymentFailed = domain.MerchantPaymentFailed // store, invoice, amount, closing date
 	MerchantSuspended     = domain.MerchantSuspended     // store
 	MerchantFree          = domain.MerchantFree          // store, closing date
+	MerchantBalanceLow    = domain.MerchantBalanceLow    // store, balance
+	MerchantBalanceEmpty  = domain.MerchantBalanceEmpty  // store, owed, free-plan date
 	MerchantPaid          = domain.MerchantPaid          // store, invoice, amount
 )
 

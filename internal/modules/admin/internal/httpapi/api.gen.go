@@ -224,6 +224,7 @@ func (e AdminBalanceCreditInputReason) Valid() bool {
 const (
 	AdminBalanceEntryKindFee       AdminBalanceEntryKind = "fee"
 	AdminBalanceEntryKindFeeRefund AdminBalanceEntryKind = "fee_refund"
+	AdminBalanceEntryKindInvoice   AdminBalanceEntryKind = "invoice"
 	AdminBalanceEntryKindManual    AdminBalanceEntryKind = "manual"
 	AdminBalanceEntryKindTopup     AdminBalanceEntryKind = "topup"
 )
@@ -234,6 +235,8 @@ func (e AdminBalanceEntryKind) Valid() bool {
 	case AdminBalanceEntryKindFee:
 		return true
 	case AdminBalanceEntryKindFeeRefund:
+		return true
+	case AdminBalanceEntryKindInvoice:
 		return true
 	case AdminBalanceEntryKindManual:
 		return true
@@ -1863,7 +1866,9 @@ type AdminBalanceEntry struct {
 	CreatedAt         time.Time `json:"created_at"`
 
 	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
-	Id   ULID                  `json:"id"`
+	Id ULID `json:"id"`
+
+	// Kind An extensible list (ADR-0032): new kinds are added within the contract, and clients show a kind they do not know as a plain entry. invoice: what the month's invoice took that the fees' entries had not, its tax (ADR-0084).
 	Kind AdminBalanceEntryKind `json:"kind"`
 
 	// Reason A manual entry's.
@@ -1871,7 +1876,7 @@ type AdminBalanceEntry struct {
 	Reference *string                  `json:"reference,omitempty"`
 }
 
-// AdminBalanceEntryKind defines model for AdminBalanceEntry.Kind.
+// AdminBalanceEntryKind An extensible list (ADR-0032): new kinds are added within the contract, and clients show a kind they do not know as a plain entry. invoice: what the month's invoice took that the fees' entries had not, its tax (ADR-0084).
 type AdminBalanceEntryKind string
 
 // AdminBalanceEntryReason A manual entry's.

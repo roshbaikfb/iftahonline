@@ -186,7 +186,8 @@ func (s *Service) invoiceTx(ctx context.Context, tx pgx.Tx, account ulid.ID, per
 		return nil // nothing to bill, or credits waiting for charges
 	}
 	inv := store.Invoice{ID: s.ids.New(), Account: account, Period: period, Currency: acct.Currency, Totals: totals, Issued: s.now().UTC(), Lines: lines}
-	if _, err = store.InsertInvoice(ctx, tx, inv); err != nil {
+	number, err := store.InsertInvoice(ctx, tx, inv)
+	if err != nil {
 		return err
 	}
 	for _, m := range members {
@@ -196,6 +197,12 @@ func (s *Service) invoiceTx(ctx context.Context, tx pgx.Tx, account ulid.ID, per
 		}
 		if sErr = store.MarkBilled(sctx, tx, inv.ID, period, acct.Currency, m.renewal); sErr != nil {
 			return sErr
+		}
+	}
+	if len(members) == 1 {
+		// Paid at once from a prepaid balance (ADR-0084).
+		if _, err = s.payFromBalanceTx(ctx, tx, acct, inv, number, members[0]); err != nil {
+			return err
 		}
 	}
 	return nil

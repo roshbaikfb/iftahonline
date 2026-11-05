@@ -71,6 +71,7 @@ type SellFee struct {
 	Status      FeeStatus
 	DeliveredAt time.Time
 	ReturnedAt  time.Time
+	Prepaid     bool // taken from the prepaid balance (ADR-0084)
 }
 
 // Returned is the fee after its order came back at: no fee when it was

@@ -103,6 +103,9 @@ func TestOwnerWhatsAppNotices(t *testing.T) {
 		{Kind: billing.NoticePaymentFailed, Invoice: "INV-2026-000002", TotalMinor: 100, Currency: "EGP"},
 		{Kind: billing.NoticeSuspended, ClosesAt: closesAt},
 		{Kind: billing.NoticeHeld},
+		{Kind: billing.NoticeBalanceLow, TotalMinor: 9640, Currency: "EGP"},
+		{Kind: billing.NoticeBalanceEmpty, TotalMinor: 4230, Currency: "EGP", GraceUntil: grace},
+		{Kind: billing.NoticeBalanceRestored, TotalMinor: 45770, Currency: "EGP"},
 		{Kind: billing.NoticePaid, Invoice: "INV-2026-000001", TotalMinor: 68286, Currency: "EGP"},
 	} {
 		o.send(t.Context(), n, "ar", "سوق")
@@ -112,6 +115,8 @@ func TestOwnerWhatsAppNotices(t *testing.T) {
 		"+201000000001|billing_payment_failed|ar|سوق;INV-2026-000002;1.00 EGP;-",
 		"+201000000001|billing_store_free|ar|سوق;2026-12-08",
 		"+201000000001|billing_store_suspended|ar|سوق",
+		"+201000000001|billing_balance_low|ar|سوق;96.40 EGP",
+		"+201000000001|billing_balance_empty|ar|سوق;42.30 EGP;2026-11-08",
 		"+201000000001|billing_payment_received|ar|سوق;INV-2026-000001;682.86 EGP",
 	}
 	if strings.Join(sends.got, "\n") != strings.Join(want, "\n") {

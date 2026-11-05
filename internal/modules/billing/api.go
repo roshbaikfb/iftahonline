@@ -64,7 +64,11 @@ const (
 	NoticePaymentFailed = domain.NoticePaymentFailed
 	NoticeSuspended     = domain.NoticeSuspended
 	NoticeHeld          = domain.NoticeHeld
-	NoticePaid          = domain.NoticePaid
+	// The prepaid balance (ADR-0084).
+	NoticeBalanceLow      = domain.NoticeBalanceLow
+	NoticeBalanceEmpty    = domain.NoticeBalanceEmpty
+	NoticeBalanceRestored = domain.NoticeBalanceRestored
+	NoticePaid            = domain.NoticePaid
 )
 
 // NoticeDate is a notice's day as written in it (UTC), "" for none.

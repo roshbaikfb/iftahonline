@@ -26,6 +26,13 @@ func TestNoticeEmails(t *testing.T) {
 		{domain.Notice{Kind: domain.NoticeSuspended, ClosesAt: retry.AddDate(0, 1, 6)}, "en", []string{"free plan"}, []string{"stays open", "closes on 2026-12-08"}},
 		{domain.Notice{Kind: domain.NoticeHeld}, "ar", []string{"أُغلق المتجر"}, []string{"صفحة صيانة"}},
 		{domain.Notice{Kind: domain.NoticeHeld}, "en", []string{"store closed"}, []string{"maintenance page"}},
+		{domain.Notice{Kind: domain.NoticeBalanceLow, TotalMinor: 9640, Currency: "EGP"}, "ar", []string{"رصيدك منخفض"}, []string{"96.40 EGP", "اشحن"}},
+		{domain.Notice{Kind: domain.NoticeBalanceLow, TotalMinor: 9640, Currency: "EGP"}, "en", []string{"balance is low"}, []string{"96.40 EGP", "Top up"}},
+		{domain.Notice{Kind: domain.NoticeBalanceEmpty, TotalMinor: 4230, Currency: "EGP", GraceUntil: retry, ClosesAt: retry.AddDate(0, 0, 30)}, "ar",
+			[]string{"نفد رصيدك"}, []string{"42.30 EGP", "الباقة المجانية يوم 2026-11-02", "يُغلق المتجر يوم 2026-12-02"}},
+		{domain.Notice{Kind: domain.NoticeBalanceEmpty, TotalMinor: 4230, Currency: "EGP"}, "en", []string{"balance ran out"}, []string{"owes 42.30 EGP"}},
+		{domain.Notice{Kind: domain.NoticeBalanceRestored, TotalMinor: 45770, Currency: "EGP"}, "ar", []string{"رجع متجرك"}, []string{"457.70 EGP"}},
+		{domain.Notice{Kind: domain.NoticeBalanceRestored, TotalMinor: 45770, Currency: "EGP"}, "en", []string{"store is back"}, []string{"457.70 EGP"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "ar", []string{"تم استلام الدفع"}, []string{"682.86 EGP"}},
 		{domain.Notice{Kind: domain.NoticePaid, Invoice: "INV-2026-000007", TotalMinor: 68286, Currency: "EGP"}, "en", []string{"payment received"}, []string{"is paid"}},
 	}

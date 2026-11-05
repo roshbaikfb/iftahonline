@@ -169,6 +169,7 @@ describe('collection helpers', () => {
     expect(signed(30000)).toBe('+300.00');
     expect(entryLabel(entry({ kind: 'topup' }))).toBe('شحن بالبطاقة');
     expect(entryLabel(entry({ kind: 'fee_refund' }))).toBe('رد رسوم طلب مرتجع');
+    expect(entryLabel(entry({ kind: 'invoice', amount_minor: -2800 }))).toBe('ضريبة الفاتورة الشهرية');
     expect(entryLabel(entry({ reason: 'compensation' }))).toBe('إضافة يدوية: تعويض');
   });
 });

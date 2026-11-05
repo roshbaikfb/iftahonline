@@ -5722,8 +5722,11 @@ export interface components {
         };
         AdminBalanceEntry: {
             id: components["schemas"]["ULID"];
-            /** @enum {string} */
-            kind: "topup" | "manual" | "fee" | "fee_refund";
+            /**
+             * @description An extensible list (ADR-0032): new kinds are added within the contract, and clients show a kind they do not know as a plain entry. invoice: what the month's invoice took that the fees' entries had not, its tax (ADR-0084).
+             * @enum {string}
+             */
+            kind: "topup" | "manual" | "fee" | "fee_refund" | "invoice";
             /**
              * Format: int64
              * @description Signed; a fee is negative.

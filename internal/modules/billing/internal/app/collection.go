@@ -152,8 +152,9 @@ func (s *Service) CreditBalance(ctx context.Context, c domain.Credit, admin ulid
 		if b.Kind == domain.AccountAgency {
 			return errAgencyBalance
 		}
-		if err = store.AddEntry(ctx, tx, store.Entry{ID: s.ids.New(), Account: account, Kind: domain.EntryManual, AmountMinor: c.AmountMinor,
-			AfterMinor: b.Minor + c.AmountMinor, Currency: b.Currency, Reason: c.Reason, Reference: c.Reference, Admin: admin}); err != nil {
+		// Through moveBalanceTx: a credit that covers a debt restores the store.
+		if _, err = s.moveBalanceTx(ctx, tx, account, b, store.Entry{Kind: domain.EntryManual, AmountMinor: c.AmountMinor,
+			Reason: c.Reason, Reference: c.Reference, Admin: admin}); err != nil {
 			return err
 		}
 		settings, err := store.CollectionSettings(ctx, tx)
