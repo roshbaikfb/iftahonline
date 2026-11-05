@@ -1155,6 +1155,7 @@ type Store struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	BillingHold bool
+	Country     pgtype.Text
 }
 
 type StoreAsset struct {

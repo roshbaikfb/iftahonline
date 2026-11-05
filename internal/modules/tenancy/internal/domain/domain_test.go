@@ -125,7 +125,7 @@ func TestValidateNewStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Slug != "my-shop" || got.Name != "متجر أحمد" || got.Currency != "EGP" {
+	if got.Slug != "my-shop" || got.Name != "متجر أحمد" || got.Currency != "EGP" || got.Country != "EG" {
 		t.Fatalf("normalized = %+v", got)
 	}
 
@@ -145,9 +145,13 @@ func TestValidateNewStore(t *testing.T) {
 		{"empty name", func(s *domain.NewStore) { s.Name = "   " }, map[string]string{"name": "length"}},
 		{"long name", func(s *domain.NewStore) { s.Name = strings.Repeat("م", 121) }, map[string]string{"name": "length"}},
 		{"control char", func(s *domain.NewStore) { s.Name = "a\u0007b" }, map[string]string{"name": "invalid"}},
-		{"bad currency", func(s *domain.NewStore) { s.Currency = "USD" }, map[string]string{"currency": "unsupported"}},
+		{"bad currency", func(s *domain.NewStore) { s.Currency = "GBP" }, map[string]string{"currency": "unsupported"}},
+		{"not yet a dollar store", func(s *domain.NewStore) { s.Currency = "USD" }, map[string]string{"currency": "unsupported"}},
+		{"its currency's country", func(s *domain.NewStore) { s.Country = "eg" }, nil},
+		{"not yet a pound store abroad", func(s *domain.NewStore) { s.Country = "AE" }, map[string]string{"country": "unsupported"}},
+		{"bad country", func(s *domain.NewStore) { s.Country = "ZZ" }, map[string]string{"country": "invalid"}},
 		{"bad locale", func(s *domain.NewStore) { s.Locale = "fr" }, map[string]string{"locale": "unsupported"}},
-		{"bad timezone", func(s *domain.NewStore) { s.Timezone = "Europe/Paris" }, map[string]string{"timezone": "unsupported"}},
+		{"bad timezone", func(s *domain.NewStore) { s.Timezone = "Asia/Tokyo" }, map[string]string{"timezone": "unsupported"}},
 		{"everything wrong", func(s *domain.NewStore) { *s = domain.NewStore{} },
 			map[string]string{"slug": "invalid", "name": "length", "currency": "unsupported", "locale": "unsupported", "timezone": "unsupported"}},
 	}
@@ -311,5 +315,21 @@ func TestNewStoresFrom(t *testing.T) {
 				t.Fatalf("days run %v to %v", first, last)
 			}
 		})
+	}
+}
+
+func TestValidateCountry(t *testing.T) {
+	t.Parallel()
+	if c, err := domain.ValidateCountry(" sa "); err != nil || c != "SA" {
+		t.Fatalf("SA = %q, %v", c, err)
+	}
+	if _, err := domain.ValidateCountry("EU"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("EU: %v", err)
+	}
+	if _, err := domain.ValidateCountry("GB"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a country the storefront does not deliver in yet: %v", err)
+	}
+	if c, err := domain.ValidateCountry("kw"); err != nil || c != "KW" {
+		t.Fatalf("KW = %q, %v", c, err)
 	}
 }

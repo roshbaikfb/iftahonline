@@ -189,6 +189,22 @@ func (h *Handlers) AdminSuspendStore(ctx context.Context, req AdminSuspendStoreR
 	return AdminSuspendStore200JSONResponse(toStore(st)), nil
 }
 
+// AdminSetStoreCountry implements StrictServerInterface.
+func (h *Handlers) AdminSetStoreCountry(ctx context.Context, req AdminSetStoreCountryRequestObject) (AdminSetStoreCountryResponseObject, error) {
+	id, err := storeID(req.StoreId)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBody
+	}
+	st, err := h.svc.SetStoreCountry(ctx, id, req.Body.Country, req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminSetStoreCountry200JSONResponse(toStore(st)), nil
+}
+
 // AdminReactivateStore implements StrictServerInterface.
 func (h *Handlers) AdminReactivateStore(ctx context.Context, req AdminReactivateStoreRequestObject) (AdminReactivateStoreResponseObject, error) {
 	id, err := storeID(req.StoreId)
@@ -285,7 +301,12 @@ func (h *Handlers) AdminListAdmins(ctx context.Context, _ AdminListAdminsRequest
 }
 
 func toStore(s tenancy.Store) Store {
-	return Store{Id: s.ID.String(), Slug: s.Slug, Name: s.Name, Status: StoreStatus(s.Status), Plan: StorePlanFree,
+	out := Store{Id: s.ID.String(), Slug: s.Slug, Name: s.Name, Status: StoreStatus(s.Status), Plan: StorePlanFree,
 		Currency: StoreCurrency(s.Currency), Locale: StoreLocale(s.Locale), Timezone: s.Timezone,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
+	if s.Country != "" {
+		c := s.Country
+		out.Country = &c
+	}
+	return out
 }

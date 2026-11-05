@@ -1058,6 +1058,47 @@ func TestConsoleCollection(t *testing.T) {
 	}
 }
 
+// TestConsoleStoreCountry: the console changes a store's country with a
+// reason (ADR-0088); a role that may not manage stores may not.
+func TestConsoleStoreCountry(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	viewer := f.loginAs(t, "viewer")
+	storeID := f.store(t)
+	path := "/admin/v1/stores/" + storeID + "/country"
+	body := `{"country":"ae","reason":"the merchant moved to Dubai"}`
+	r := f.do(t, http.MethodPut, adminHost, path, body, withCookie(sess), sameOrigin)
+	if r.status != http.StatusOK || r.body["country"] != "AE" {
+		t.Fatalf("set = %d %v", r.status, r.body)
+	}
+	for _, c := range []struct {
+		path, body, token string
+		cross             bool
+		status            int
+	}{
+		{path, `{"country":"EU","reason":"a macro-region"}`, sess, false, http.StatusUnprocessableEntity},
+		{path, `{"country":"SA","reason":"x"}`, sess, false, http.StatusUnprocessableEntity},
+		{path, ``, sess, false, http.StatusBadRequest},
+		{path, body, viewer, false, http.StatusForbidden},
+		{path, body, sess, true, http.StatusForbidden},
+		{"/admin/v1/stores/" + f.ids.New().String() + "/country", body, sess, false, http.StatusNotFound},
+		{"/admin/v1/stores/not-an-id/country", body, sess, false, http.StatusNotFound},
+	} {
+		opts := []func(*http.Request){withCookie(c.token)}
+		if !c.cross {
+			opts = append(opts, sameOrigin)
+		}
+		if got := f.do(t, http.MethodPut, adminHost, c.path, c.body, opts...); got.status != c.status {
+			t.Errorf("PUT %s %s = %d %v; want %d", c.path, c.body, got.status, got.body, c.status)
+		}
+	}
+	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/stores/"+storeID, "", withCookie(viewer)); r.status != http.StatusOK ||
+		r.body["store"].(map[string]any)["country"] != "AE" {
+		t.Fatalf("read back = %d %v", r.status, r.body)
+	}
+}
+
 // TestConsoleSiteGuides: the guides from the console (S4c).
 func TestConsoleSiteGuides(t *testing.T) {
 	t.Parallel()

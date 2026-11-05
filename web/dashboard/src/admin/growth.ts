@@ -7,7 +7,7 @@ export type Section = GrowthData['errors'][number];
 // The console's growth page (ADR-0081): what each chart shows, from the
 // server's figures, in one currency at a time (never converted).
 
-export const currencyNames: Record<Currency, string> = { EGP: 'جنيه مصري', SAR: 'ريال سعودي', AED: 'درهم إماراتي' };
+export const currencyNames: Record<Currency, string> = { EGP: 'جنيه مصري', SAR: 'ريال سعودي', AED: 'درهم إماراتي', USD: 'دولار أمريكي' };
 
 // monthName is a month's Arabic name: «نوفمبر»; with the year: «نوفمبر 2026».
 export function monthName(iso: string, year = false): string {

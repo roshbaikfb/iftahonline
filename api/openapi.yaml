@@ -8,6 +8,10 @@ info:
     (CLAUDE.md rule 11). Breaking changes inside /v1 fail CI (oasdiff).
 
     Errors use RFC 9457 `application/problem+json`.
+
+    Currencies are an extensible list (ADR-0032, ADR-0088): a currency is
+    added within /v1, so clients show an amount in a currency they do not
+    know with its ISO code.
 servers:
   - url: /
 # Every operation needs a session unless it declares `security: []`.
@@ -2282,6 +2286,37 @@ paths:
       responses:
         "200":
           description: Suspended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/country:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    put:
+      tags: [admin]
+      operationId: adminSetStoreCountry
+      summary: Change a store's country
+      description: |
+        The merchant's country decides how the store and its subscription are
+        paid (ADR-0088): Paymob in Egypt, Stripe elsewhere. Only the console
+        changes it. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [country, reason]
+              properties:
+                country: { type: string, pattern: "^[A-Za-z]{2}$", example: SA }
+                reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+      responses:
+        "200":
+          description: Changed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Store" }
@@ -5834,7 +5869,7 @@ components:
     InvoiceCurrencyFilter:
       name: currency
       in: query
-      schema: { type: string, enum: [EGP, SAR, AED] }
+      schema: { type: string, enum: [EGP, SAR, AED, USD] }
     InvoiceSearch:
       name: q
       in: query
@@ -5938,7 +5973,12 @@ components:
       properties:
         name: { type: string, maxLength: 120 }
         slug: { type: string, maxLength: 63, example: ahmed-shop }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        country:
+          type: string
+          pattern: "^[A-Za-z]{2}$"
+          example: EG
+          description: "The merchant's country (ISO 3166-1 alpha-2): Egypt pays through Paymob, elsewhere through Stripe (ADR-0088). Absent: the currency's (EGP Egypt, SAR Saudi Arabia, AED the UAE); a USD store must name it."
         locale: { type: string, enum: [ar, en] }
         timezone: { type: string, example: Africa/Cairo }
     LoginRequest:
@@ -6468,7 +6508,7 @@ components:
       properties:
         id: { $ref: "#/components/schemas/ULID" }
         name: { type: string }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         plan_code: { type: string }
         stores: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
@@ -6507,7 +6547,7 @@ components:
       required: [name, currency, plan_code, reason]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminAds:
@@ -6790,7 +6830,7 @@ components:
       type: object
       required: [currency, minimum_minor]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         minimum_minor: { type: integer, format: int64, minimum: 100, maximum: 100000000 }
     AdminCollectionSettingsInput:
       type: object
@@ -6808,7 +6848,7 @@ components:
       type: object
       required: [currency, balance_minor, minimum_minor, level, entries]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         balance_minor: { type: integer, format: int64, description: Negative when fees of delivered orders are owed. }
         minimum_minor: { type: integer, format: int64, description: The currency's minimum. }
         level: { type: string, enum: [ok, low, debt], description: "low: under half the minimum; debt: nothing left, or owed." }
@@ -6909,7 +6949,7 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         store_id: { $ref: "#/components/schemas/ULID" }
         invoice_number: { type: string }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         amount_minor: { type: integer, format: int64 }
         gateway: { type: string }
         reference: { type: string, description: "The gateway's transaction, to refund." }
@@ -6920,7 +6960,7 @@ components:
       type: object
       required: [currency, count, total_minor, tax_minor]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         count: { type: integer, format: int64 }
         total_minor: { type: integer, format: int64, description: VAT included. }
         tax_minor: { type: integer, format: int64, description: The VAT in the total. }
@@ -6968,7 +7008,7 @@ components:
         account_name: { type: string, description: "The store's name now for a store's account, else the agency's." }
         store_id: { $ref: "#/components/schemas/ULID", description: "The store billed (an agency's first store when it bills them all)." }
         period: { type: string, format: date }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         subtotal_minor: { type: integer, format: int64 }
         tax_bps: { type: integer }
         tax_minor: { type: integer, format: int64 }
@@ -7030,7 +7070,7 @@ components:
         reason: { type: string, description: Why it failed, in the gateway's words. }
         reference: { type: string }
         amount_minor: { type: integer, format: int64 }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         refunded_at: { type: string, format: date-time }
     AdminPaymentPage:
       type: object
@@ -7122,7 +7162,7 @@ components:
       type: object
       required: [currency, months]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         months:
           type: array
           items: { $ref: "#/components/schemas/AdminMonthAmount" }
@@ -7145,7 +7185,7 @@ components:
       required: [day, currency, mrr_minor, accounts]
       properties:
         day: { type: string, format: date }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         mrr_minor: { type: integer, format: int64 }
         accounts: { type: integer, format: int64 }
     AdminMonthChurn:
@@ -7161,7 +7201,7 @@ components:
       type: object
       required: [currency, plan, name, accounts, mrr_minor]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         plan: { type: string, description: The plan's code. }
         name: { type: string, description: "The plan's Arabic name; empty for a plan no longer on sale." }
         accounts: { type: integer, format: int64 }
@@ -7170,7 +7210,7 @@ components:
       type: object
       required: [currency, mrr_minor, accounts]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         mrr_minor: { type: integer, format: int64, description: Monthly recurring revenue in minor units, before VAT. }
         accounts: { type: integer, format: int64, description: The paying accounts it comes from (an agency is one). }
     AdminNewStores:
@@ -7254,7 +7294,7 @@ components:
       type: object
       required: [currency, cycle, amount_minor]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         cycle: { type: string, enum: [monthly, annual] }
         amount_minor: { type: integer, format: int64, minimum: 0 }
     AdminPlanGrant:
@@ -7268,7 +7308,7 @@ components:
       type: object
       required: [currency, rate_bps]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         rate_bps: { type: integer, minimum: 0, maximum: 10000, description: "250 is 2.5%." }
         min_minor: { type: integer, format: int64, minimum: 0, default: 0 }
         max_minor: { type: integer, format: int64, minimum: 0 }
@@ -7383,7 +7423,8 @@ components:
           enum: [free, basic, pro]
           deprecated: true
           description: "Always `free`: plans are billing's (GET /v1/stores/{store_id}/billing, ADR-0045). Kept in /v1, gone in /v2."
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        country: { type: string, example: EG, description: "The merchant's country (ISO 3166-1 alpha-2), set at sign-up and changed from the console only (ADR-0088)." }
         locale: { type: string, enum: [ar, en] }
         timezone: { type: string, example: Africa/Cairo }
         created_at: { type: string, format: date-time }
@@ -7661,7 +7702,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ULID" }
         price_minor: { type: integer, format: int64, description: The lowest variant price. }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         thumb: { $ref: "#/components/schemas/ImageFormats" }
     ProductImage:
       type: object
@@ -7733,7 +7774,7 @@ components:
         price_minor: { type: integer, format: int64 }
         compare_at_minor: { type: integer, format: int64 }
         cost_minor: { type: integer, format: int64, description: "The merchant's cost (ADR-0068); absent when not known." }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         position: { type: integer }
         hidden: { type: boolean, description: Off sale and not shown to shoppers; absent means false. }
         stock: { $ref: "#/components/schemas/Stock" }
@@ -7915,7 +7956,7 @@ components:
       type: object
       required: [currency, from, to, by, totals, days, rows]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         from: { type: string, format: date }
         to: { type: string, format: date }
         by: { type: string, enum: [product, campaign, governorate] }
@@ -9027,7 +9068,7 @@ components:
       type: object
       required: [currency, balance_minor, minimum_minor, level, offered, entries]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         balance_minor: { type: integer, format: int64, description: Negative when fees of delivered orders are owed. }
         minimum_minor: { type: integer, format: int64, description: "The least top-up; the low-balance notice is at half of it." }
         level: { type: string, enum: [ok, low, debt] }
@@ -9073,7 +9114,7 @@ components:
       type: object
       required: [currency, features, plans]
       properties:
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         features:
           type: array
           items: { $ref: "#/components/schemas/BillingFeature" }
@@ -9139,7 +9180,7 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         number: { type: string, example: INV-2026-000001 }
         period: { type: string, format: date, example: "2026-10-01" }
-        currency: { type: string, enum: [EGP, SAR, AED] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
         total_minor: { type: integer, format: int64, description: With tax. }
         due_at: { type: string, format: date-time }
         attempts: { type: integer, description: Charges tried. }

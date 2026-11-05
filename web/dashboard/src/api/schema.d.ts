@@ -1951,6 +1951,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/stores/{store_id}/country": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a store's country
+         * @description The merchant's country decides how the store and its subscription are
+         *     paid (ADR-0088): Paymob in Egypt, Stripe elsewhere. Only the console
+         *     changes it. Recorded in the admin log first.
+         */
+        put: operations["adminSetStoreCountry"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/stores/{store_id}/impersonate": {
         parameters: {
             query?: never;
@@ -5041,7 +5065,12 @@ export interface components {
             /** @example ahmed-shop */
             slug: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * @description The merchant's country (ISO 3166-1 alpha-2): Egypt pays through Paymob, elsewhere through Stripe (ADR-0088). Absent: the currency's (EGP Egypt, SAR Saudi Arabia, AED the UAE); a USD store must name it.
+             * @example EG
+             */
+            country?: string;
             /** @enum {string} */
             locale: "ar" | "en";
             /** @example Africa/Cairo */
@@ -5524,7 +5553,7 @@ export interface components {
             id: components["schemas"]["ULID"];
             name: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             plan_code: string;
             /** Format: int64 */
             stores: number;
@@ -5553,7 +5582,7 @@ export interface components {
         AdminAgencyInput: {
             name: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             plan_code: string;
             /** @description Kept in the admin audit log. */
             reason: string;
@@ -5827,7 +5856,7 @@ export interface components {
         };
         AdminCollectionMinimum: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: int64 */
             minimum_minor: number;
         };
@@ -5840,7 +5869,7 @@ export interface components {
         };
         AdminStoreBalance: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /**
              * Format: int64
              * @description Negative when fees of delivered orders are owed.
@@ -5986,7 +6015,7 @@ export interface components {
             store_id: components["schemas"]["ULID"];
             invoice_number: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: int64 */
             amount_minor: number;
             gateway: string;
@@ -6000,7 +6029,7 @@ export interface components {
         };
         AdminCurrencyTotal: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: int64 */
             count: number;
             /**
@@ -6053,7 +6082,7 @@ export interface components {
             /** Format: date */
             period: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: int64 */
             subtotal_minor: number;
             tax_bps: number;
@@ -6123,7 +6152,7 @@ export interface components {
             /** Format: int64 */
             amount_minor: number;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: date-time */
             refunded_at?: string;
         };
@@ -6189,7 +6218,7 @@ export interface components {
         };
         AdminCollectedSeries: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             months: components["schemas"]["AdminMonthAmount"][];
         };
         AdminMonthAmount: {
@@ -6218,7 +6247,7 @@ export interface components {
             /** Format: date */
             day: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: int64 */
             mrr_minor: number;
             /** Format: int64 */
@@ -6250,7 +6279,7 @@ export interface components {
         };
         AdminPlanRevenue: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** @description The plan's code. */
             plan: string;
             /** @description The plan's Arabic name; empty for a plan no longer on sale. */
@@ -6262,7 +6291,7 @@ export interface components {
         };
         AdminRevenue: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /**
              * Format: int64
              * @description Monthly recurring revenue in minor units
@@ -6364,7 +6393,7 @@ export interface components {
         AdminPlanKind: "free" | "pays" | "subscription" | "agency";
         AdminPlanPrice: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** @enum {string} */
             cycle: "monthly" | "annual";
             /** Format: int64 */
@@ -6382,7 +6411,7 @@ export interface components {
         };
         AdminPlanFee: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** @description 250 is 2.5%. */
             rate_bps: number;
             /**
@@ -6487,7 +6516,12 @@ export interface components {
              */
             plan: "free" | "basic" | "pro";
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * @description The merchant's country (ISO 3166-1 alpha-2), set at sign-up and changed from the console only (ADR-0088).
+             * @example EG
+             */
+            country?: string;
             /** @enum {string} */
             locale: "ar" | "en";
             /** @example Africa/Cairo */
@@ -6746,7 +6780,7 @@ export interface components {
              */
             price_minor: number;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             thumb?: components["schemas"]["ImageFormats"];
         };
         ProductImage: {
@@ -6815,7 +6849,7 @@ export interface components {
              */
             cost_minor?: number;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             position: number;
             /** @description Off sale and not shown to shoppers; absent means false. */
             hidden?: boolean;
@@ -7040,7 +7074,7 @@ export interface components {
         };
         ProfitReport: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /** Format: date */
             from: string;
             /** Format: date */
@@ -8122,7 +8156,7 @@ export interface components {
         };
         BillingBalance: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /**
              * Format: int64
              * @description Negative when fees of delivered orders are owed.
@@ -8181,7 +8215,7 @@ export interface components {
         };
         BillingPlans: {
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             features: components["schemas"]["BillingFeature"][];
             plans: components["schemas"]["BillingPlan"][];
         };
@@ -8254,7 +8288,7 @@ export interface components {
              */
             period: string;
             /** @enum {string} */
-            currency: "EGP" | "SAR" | "AED";
+            currency: "EGP" | "SAR" | "AED" | "USD";
             /**
              * Format: int64
              * @description With tax.
@@ -8439,7 +8473,7 @@ export interface components {
         AgencyID: components["schemas"]["ULID"];
         FeatureKey: string;
         InvoiceStatusFilter: "open" | "overdue" | "paid" | "void";
-        InvoiceCurrencyFilter: "EGP" | "SAR" | "AED";
+        InvoiceCurrencyFilter: "EGP" | "SAR" | "AED" | "USD";
         /** @description An invoice number's start, or a part of the store's or agency's name. */
         InvoiceSearch: string;
         InvoiceID: components["schemas"]["ULID"];
@@ -11164,6 +11198,38 @@ export interface operations {
         };
         responses: {
             /** @description Suspended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSetStoreCountry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example SA */
+                    country: string;
+                    /** @description Kept in the admin audit log. */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Changed. */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -112,6 +112,7 @@ const (
 	AED NewStoreCurrency = "AED"
 	EGP NewStoreCurrency = "EGP"
 	SAR NewStoreCurrency = "SAR"
+	USD NewStoreCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the NewStoreCurrency enum.
@@ -122,6 +123,8 @@ func (e NewStoreCurrency) Valid() bool {
 	case EGP:
 		return true
 	case SAR:
+		return true
+	case USD:
 		return true
 	default:
 		return false
@@ -460,6 +463,10 @@ type NewInvitationRole string
 
 // NewStore defines model for NewStore.
 type NewStore struct {
+	// Country The merchant's country (ISO 3166-1 alpha-2): Egypt pays through Paymob, elsewhere through Stripe (ADR-0088). Absent: the currency's (EGP Egypt, SAR Saudi Arabia, AED the UAE); a USD store must name it.
+	//
+	// Example: EG
+	Country  *string          `json:"country,omitempty"`
 	Currency NewStoreCurrency `json:"currency"`
 	Locale   NewStoreLocale   `json:"locale"`
 	Name     string           `json:"name"`

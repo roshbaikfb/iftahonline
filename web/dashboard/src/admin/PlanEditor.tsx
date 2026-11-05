@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { toMinor } from '../lib/amounts';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
+import { currencySymbol } from '../lib/orders';
 import { useCatalog } from './catalog';
 import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
@@ -28,7 +29,6 @@ import {
   type Plan,
 } from './plans';
 
-const symbol = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' } as const;
 
 // PlanEditorPage is one plan's page (the approved mockup): its basics,
 // prices or fees, what it grants, a sticky bar that publishes the next
@@ -237,7 +237,7 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
                             inputMode="decimal"
                             dir="ltr"
                           />
-                          <span className="muted">{symbol[c]}</span>
+                          <span className="muted">{currencySymbol(c)}</span>
                           {cy === 'annual' && save && <span className="status store-active">{save}</span>}
                         </span>
                       </label>

@@ -28,7 +28,8 @@ func TestNew(t *testing.T) {
 		{"EGP", money.EGP, nil},
 		{"SAR", money.SAR, nil},
 		{"AED", money.AED, nil},
-		{"unknown", money.Currency("USD"), money.ErrUnknownCurrency},
+		{"USD", money.USD, nil},
+		{"unknown", money.Currency("GBP"), money.ErrUnknownCurrency},
 		{"empty", money.Currency(""), money.ErrUnknownCurrency},
 		{"lowercase", money.Currency("egp"), money.ErrUnknownCurrency},
 	}
@@ -352,7 +353,7 @@ func TestJSON(t *testing.T) {
 		t.Fatalf("round trip = %v, want %v", back, m)
 	}
 	for _, bad := range []string{
-		`{"amount":1,"currency":"USD"}`,
+		`{"amount":1,"currency":"JPY"}`,
 		`{"amount":1}`,
 		`{"amount":1.5,"currency":"EGP"}`,
 		`{"amount":"1","currency":"EGP"}`,

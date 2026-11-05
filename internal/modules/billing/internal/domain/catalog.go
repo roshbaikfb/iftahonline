@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
-	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 )
 
 // FeatureKind is how a feature is granted.
@@ -129,7 +128,7 @@ func (v PlanVersion) checkPrices() []errs.FieldError {
 	seen := map[string]bool{}
 	for i, p := range v.Prices {
 		field := fmt.Sprintf("prices[%d]", i)
-		if !money.Currency(p.Currency).Valid() || (p.Cycle != Monthly && p.Cycle != Annual) || p.AmountMinor < 0 {
+		if !Billed(p.Currency) || (p.Cycle != Monthly && p.Cycle != Annual) || p.AmountMinor < 0 {
 			fe = append(fe, errs.FieldError{Field: field, Code: "invalid", Message: "a supported currency, monthly or annual, and an amount of 0 or more"})
 			continue
 		}
@@ -141,7 +140,7 @@ func (v PlanVersion) checkPrices() []errs.FieldError {
 	}
 	switch {
 	case v.Kind.Paid():
-		for _, c := range money.Currencies() {
+		for _, c := range Currencies() {
 			if !seen[string(c)+"/"+string(Monthly)] {
 				fe = append(fe, errs.FieldError{Field: "prices", Code: "missing", Message: "a monthly price in " + string(c)})
 			}
@@ -174,13 +173,13 @@ func (v PlanVersion) checkFees() []errs.FieldError {
 	seen := map[string]bool{}
 	for i, f := range v.Fees {
 		field := fmt.Sprintf("fees[%d]", i)
-		if !money.Currency(f.Currency).Valid() || f.RateBps < 0 || f.RateBps > 10000 || f.MinMinor < 0 ||
+		if !Billed(f.Currency) || f.RateBps < 0 || f.RateBps > 10000 || f.MinMinor < 0 ||
 			f.MaxMinor != nil && *f.MaxMinor < f.MinMinor || seen[f.Currency] {
 			fe = append(fe, errs.FieldError{Field: field, Code: "invalid", Message: "one per currency; a rate of 0 to 10000 bps; 0 <= min <= max"})
 		}
 		seen[f.Currency] = true
 	}
-	for _, c := range money.Currencies() {
+	for _, c := range Currencies() {
 		if !seen[string(c)] {
 			fe = append(fe, errs.FieldError{Field: "fees", Code: "missing", Message: "a fee in " + string(c)})
 		}

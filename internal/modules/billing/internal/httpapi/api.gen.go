@@ -139,6 +139,7 @@ const (
 	BillingBalanceCurrencyAED BillingBalanceCurrency = "AED"
 	BillingBalanceCurrencyEGP BillingBalanceCurrency = "EGP"
 	BillingBalanceCurrencySAR BillingBalanceCurrency = "SAR"
+	BillingBalanceCurrencyUSD BillingBalanceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the BillingBalanceCurrency enum.
@@ -149,6 +150,8 @@ func (e BillingBalanceCurrency) Valid() bool {
 	case BillingBalanceCurrencyEGP:
 		return true
 	case BillingBalanceCurrencySAR:
+		return true
+	case BillingBalanceCurrencyUSD:
 		return true
 	default:
 		return false
@@ -286,6 +289,7 @@ const (
 	BillingPlansCurrencyAED BillingPlansCurrency = "AED"
 	BillingPlansCurrencyEGP BillingPlansCurrency = "EGP"
 	BillingPlansCurrencySAR BillingPlansCurrency = "SAR"
+	BillingPlansCurrencyUSD BillingPlansCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the BillingPlansCurrency enum.
@@ -296,6 +300,8 @@ func (e BillingPlansCurrency) Valid() bool {
 	case BillingPlansCurrencyEGP:
 		return true
 	case BillingPlansCurrencySAR:
+		return true
+	case BillingPlansCurrencyUSD:
 		return true
 	default:
 		return false
@@ -361,6 +367,7 @@ const (
 	OpenInvoiceCurrencyAED OpenInvoiceCurrency = "AED"
 	OpenInvoiceCurrencyEGP OpenInvoiceCurrency = "EGP"
 	OpenInvoiceCurrencySAR OpenInvoiceCurrency = "SAR"
+	OpenInvoiceCurrencyUSD OpenInvoiceCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the OpenInvoiceCurrency enum.
@@ -371,6 +378,8 @@ func (e OpenInvoiceCurrency) Valid() bool {
 	case OpenInvoiceCurrencyEGP:
 		return true
 	case OpenInvoiceCurrencySAR:
+		return true
+	case OpenInvoiceCurrencyUSD:
 		return true
 	default:
 		return false

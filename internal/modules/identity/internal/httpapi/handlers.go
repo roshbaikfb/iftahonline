@@ -66,7 +66,7 @@ func (h *Handlers) Signup(ctx context.Context, req SignupRequestObject) (SignupR
 	b := req.Body
 	res, err := h.svc.Signup(ctx, app.SignupInput{
 		Email: b.Email, Password: b.Password, Name: b.Name,
-		Store: tenancy.NewStore{Slug: b.Store.Slug, Name: b.Store.Name, Currency: string(b.Store.Currency),
+		Store: tenancy.NewStore{Slug: b.Store.Slug, Name: b.Store.Name, Currency: string(b.Store.Currency), Country: deref(b.Store.Country),
 			Locale: string(b.Store.Locale), Timezone: b.Store.Timezone},
 	})
 	if err != nil {
@@ -231,4 +231,12 @@ func sessionCookie(token string, maxAge int) string {
 		Name: CookieName, Value: token, Path: "/", MaxAge: maxAge,
 		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
 	}).String()
+}
+
+// deref is an optional string field's value, "" when absent.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

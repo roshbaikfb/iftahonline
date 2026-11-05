@@ -1,7 +1,7 @@
 # Breaking-change exceptions accepted on purpose (scripts/openapi-diff.sh).
 # Each line is one exact oasdiff finding: method, path and message. Only
 # what ADR-0032 allows belongs here: new values of an extensible list
-# (SectionType; MessageKind, ADR-0041; AdminBalanceEntry.kind, ADR-0084) that clients must tolerate. Anything
+# (SectionType; MessageKind, ADR-0041; AdminBalanceEntry.kind, ADR-0084; currencies, ADR-0088) that clients must tolerate. Anything
 # else stays an error. A line here matches nothing once main has the
 # value, so the file can be emptied after the merge.
 #
@@ -46,3 +46,65 @@ GET /v1/stores/{store_id}/messages added the new `order_delivery_prepay` enum va
 # ADR-0084: the balance entry kind invoice
 GET /admin/v1/stores/{store_id}/balance added the new `invoice` enum value to the `entries/items/kind` response property for the response status `200`
 POST /admin/v1/stores/{store_id}/balance/credits added the new `invoice` enum value to the `entries/items/kind` response property for the response status `200`
+#
+# ADR-0088: the US dollar joins every currency list
+GET /admin/v1/agencies added the new `USD` enum value to the `items/items/currency` response property for the response status `200`
+GET /admin/v1/agencies/{agency_id} added the new `USD` enum value to the `agency/currency` response property for the response status `200`
+GET /admin/v1/agencies/{agency_id} added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+GET /admin/v1/billing/collection added the new `USD` enum value to the `minimums/items/currency` response property for the response status `200`
+GET /admin/v1/billing/duplicates added the new `USD` enum value to the `items/items/currency` response property for the response status `200`
+GET /admin/v1/billing/summary added the new `USD` enum value to the `collected/items/currency` response property for the response status `200`
+GET /admin/v1/billing/summary added the new `USD` enum value to the `open/items/currency` response property for the response status `200`
+GET /admin/v1/billing/summary added the new `USD` enum value to the `overdue/items/currency` response property for the response status `200`
+GET /admin/v1/growth added the new `USD` enum value to the `collected/items/currency` response property for the response status `200`
+GET /admin/v1/growth added the new `USD` enum value to the `mrr/items/currency` response property for the response status `200`
+GET /admin/v1/growth added the new `USD` enum value to the `plans/items/currency` response property for the response status `200`
+GET /admin/v1/invoices added the new `USD` enum value to the `items/items/currency` response property for the response status `200`
+GET /admin/v1/invoices/{invoice_id} added the new `USD` enum value to the `invoice/currency` response property for the response status `200`
+GET /admin/v1/invoices/{invoice_id} added the new `USD` enum value to the `payments/items/currency` response property for the response status `200`
+GET /admin/v1/metrics added the new `USD` enum value to the `revenue/items/currency` response property for the response status `200`
+GET /admin/v1/payments added the new `USD` enum value to the `items/items/currency` response property for the response status `200`
+GET /admin/v1/plans added the new `USD` enum value to the `items/items/fees/items/currency` response property for the response status `200`
+GET /admin/v1/plans added the new `USD` enum value to the `items/items/prices/items/currency` response property for the response status `200`
+GET /admin/v1/search added the new `USD` enum value to the `agencies/items/currency` response property for the response status `200`
+GET /admin/v1/search added the new `USD` enum value to the `invoices/items/currency` response property for the response status `200`
+GET /admin/v1/search added the new `USD` enum value to the `owner_stores/items/store/currency` response property for the response status `200`
+GET /admin/v1/search added the new `USD` enum value to the `payments/items/currency` response property for the response status `200`
+GET /admin/v1/search added the new `USD` enum value to the `stores/items/store/currency` response property for the response status `200`
+GET /admin/v1/stores added the new `USD` enum value to the `items/items/store/currency` response property for the response status `200`
+GET /admin/v1/stores/{store_id} added the new `USD` enum value to the `store/currency` response property for the response status `200`
+GET /admin/v1/stores/{store_id}/balance added the new `USD` enum value to the `currency` response property for the response status `200`
+GET /admin/v1/stores/{store_id}/billing added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+GET /v1/stores/{store_id} added the new `USD` enum value to the `currency` response property for the response status `200`
+GET /v1/stores/{store_id}/analytics/profit added the new `USD` enum value to the `currency` response property for the response status `200`
+GET /v1/stores/{store_id}/billing added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+GET /v1/stores/{store_id}/billing/balance added the new `USD` enum value to the `currency` response property for the response status `200`
+GET /v1/stores/{store_id}/billing/plans added the new `USD` enum value to the `currency` response property for the response status `200`
+GET /v1/stores/{store_id}/products added the new `USD` enum value to the `items/items/variants/items/currency` response property for the response status `200`
+GET /v1/stores/{store_id}/products/search added the new `USD` enum value to the `items/items/currency` response property for the response status `200`
+GET /v1/stores/{store_id}/products/{product_id} added the new `USD` enum value to the `variants/items/currency` response property for the response status `200`
+PATCH /v1/stores/{store_id} added the new `USD` enum value to the `currency` response property for the response status `200`
+POST /admin/v1/agencies added the new `USD` enum value to the `agency/currency` response property for the response status `201`
+POST /admin/v1/agencies added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `201`
+POST /admin/v1/agencies/{agency_id}/stores/{store_id} added the new `USD` enum value to the `agency/currency` response property for the response status `200`
+POST /admin/v1/agencies/{agency_id}/stores/{store_id} added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove added the new `USD` enum value to the `agency/currency` response property for the response status `200`
+POST /admin/v1/agencies/{agency_id}/stores/{store_id}/remove added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /admin/v1/agencies/{agency_id}/switch-to-pays added the new `USD` enum value to the `agency/currency` response property for the response status `200`
+POST /admin/v1/agencies/{agency_id}/switch-to-pays added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /admin/v1/invoices/{invoice_id}/settle added the new `USD` enum value to the `invoice/currency` response property for the response status `200`
+POST /admin/v1/invoices/{invoice_id}/settle added the new `USD` enum value to the `payments/items/currency` response property for the response status `200`
+POST /admin/v1/plans added the new `USD` enum value to the `fees/items/currency` response property for the response status `201`
+POST /admin/v1/plans added the new `USD` enum value to the `prices/items/currency` response property for the response status `201`
+POST /admin/v1/stores/{store_id}/balance/credits added the new `USD` enum value to the `currency` response property for the response status `200`
+POST /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /admin/v1/stores/{store_id}/reactivate added the new `USD` enum value to the `currency` response property for the response status `200`
+POST /admin/v1/stores/{store_id}/suspend added the new `USD` enum value to the `currency` response property for the response status `200`
+POST /v1/stores/{store_id}/billing/cancel added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /v1/stores/{store_id}/billing/resume added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /v1/stores/{store_id}/billing/switch-to-pays added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /v1/stores/{store_id}/billing/trial added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+POST /v1/stores/{store_id}/products added the new `USD` enum value to the `variants/items/currency` response property for the response status `201`
+PUT /admin/v1/billing/collection added the new `USD` enum value to the `minimums/items/currency` response property for the response status `200`
+PUT /v1/stores/{store_id}/billing/collection added the new `USD` enum value to the `open_invoices/items/currency` response property for the response status `200`
+PUT /v1/stores/{store_id}/products/{product_id} added the new `USD` enum value to the `variants/items/currency` response property for the response status `200`

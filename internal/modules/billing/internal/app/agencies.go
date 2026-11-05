@@ -13,7 +13,6 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
-	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
@@ -44,7 +43,7 @@ func (s *Service) CreateAgency(ctx context.Context, rawName, currency, planCode 
 	if n := utf8.RuneCountInString(name); n < 1 || n > 120 {
 		return Agency{}, errAgencyName
 	}
-	if !money.Currency(currency).Valid() {
+	if !domain.Billed(currency) {
 		return Agency{}, errAgencyCurrency
 	}
 	a := Agency{Account: domain.Account{ID: s.ids.New(), Kind: domain.AccountAgency, Name: name, Currency: currency,

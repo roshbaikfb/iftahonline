@@ -131,6 +131,7 @@ const (
 	AED ProfitReportCurrency = "AED"
 	EGP ProfitReportCurrency = "EGP"
 	SAR ProfitReportCurrency = "SAR"
+	USD ProfitReportCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the ProfitReportCurrency enum.
@@ -141,6 +142,8 @@ func (e ProfitReportCurrency) Valid() bool {
 	case EGP:
 		return true
 	case SAR:
+		return true
+	case USD:
 		return true
 	default:
 		return false

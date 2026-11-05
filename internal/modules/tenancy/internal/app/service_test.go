@@ -159,6 +159,67 @@ func TestCreateStore(t *testing.T) {
 	}
 }
 
+// TestStoreCountry: a store keeps the merchant's country, taken from its
+// currency when it names none; the console changes it, recorded in the
+// store's log; a store from before ADR-0088 reads its currency's.
+func TestStoreCountry(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, st := f.createStore(t, f.slug("eg"))
+	if st.Country != "EG" {
+		t.Fatalf("an EGP store's country = %q", st.Country)
+	}
+	// A dollar store waits for stores beyond the region (approved 2026-11-05).
+	usd := tenant.WithStore(t.Context(), tenant.StoreID{ID: f.ids.New()})
+	if err := postgres.InTenantTx(usd, f.app, func(tx pgx.Tx) error {
+		_, txErr := f.svc.CreateStoreTx(usd, tx, domain.NewStore{Slug: f.slug("uk"), Name: "London shop", Currency: "USD", Country: "gb",
+			Locale: "en", Timezone: "Europe/London"})
+		return txErr
+	}); kindOf(err) != errs.KindValidation {
+		t.Fatalf("a dollar store: %v", err)
+	}
+
+	moved, err := f.svc.SetCountry(ctx, "sa")
+	if err != nil || moved.Country != "SA" {
+		t.Fatalf("set country = %+v, %v", moved, err)
+	}
+	if got, gErr := f.svc.GetStore(ctx); gErr != nil || got.Country != "SA" {
+		t.Fatalf("read back = %+v, %v", got, gErr)
+	}
+	if _, err = f.svc.SetCountry(ctx, "EU"); kindOf(err) != errs.KindValidation {
+		t.Fatalf("a macro-region: %v", err)
+	}
+	// The change is recorded, in the change's transaction.
+	rec := &recorder{}
+	audited := app.NewService(f.app, nil, f.ids, base, rec, nil)
+	if _, err = audited.SetCountry(ctx, "AE"); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != "store.country_changed" || rec.entries[0].Metadata["country"] != "AE" {
+		t.Fatalf("audit = %+v", rec.entries)
+	}
+
+	// Before ADR-0088 a store had no country: its currency's is read.
+	legacy, old := f.createStore(t, f.slug("old"))
+	if _, err = f.owner.Exec(t.Context(), `UPDATE stores SET country = NULL WHERE id = $1`, old.ID.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, gErr := f.svc.GetStore(legacy); gErr != nil || got.Country != "EG" {
+		t.Fatalf("a legacy store = %+v, %v", got, gErr)
+	}
+}
+
+// recorder keeps the audit entries a service records.
+type recorder struct{ entries []audit.Entry }
+
+func (r *recorder) RecordTx(_ context.Context, tx pgx.Tx, e audit.Entry) error {
+	if tx == nil {
+		return errors.New("an entry outside a transaction")
+	}
+	r.entries = append(r.entries, e)
+	return nil
+}
+
 func TestCreateStoreValidatesAndNeedsTenant(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

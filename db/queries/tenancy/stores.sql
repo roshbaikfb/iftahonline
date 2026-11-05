@@ -5,23 +5,29 @@
 -- while an older release still runs (the legacy plan: 00071).
 
 -- name: InsertStore :one
-INSERT INTO stores (id, slug, name, currency, locale, timezone)
-VALUES (@id, @slug, @name, @currency, @locale, @timezone)
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold;
+INSERT INTO stores (id, slug, name, currency, locale, timezone, country)
+VALUES (@id, @slug, @name, @currency, @locale, @timezone, @country)
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country;
 
 -- name: GetStore :one
-SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = @store_id;
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country FROM stores WHERE id = @store_id;
 
 -- name: UpdateStore :one
 UPDATE stores
 SET name = @name, locale = @locale, timezone = @timezone, updated_at = now()
 WHERE id = @store_id
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold;
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country;
+
+-- name: SetStoreCountry :one
+-- The merchant's country, from the console only (ADR-0088).
+UPDATE stores SET country = @country, updated_at = now()
+WHERE id = @store_id
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country;
 
 -- name: SetStoreStatus :one
 UPDATE stores SET status = @status, updated_at = now()
 WHERE id = @store_id
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold;
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country;
 
 -- name: ResolveHost :one
 -- The only cross-tenant read: SECURITY DEFINER, returns no other columns.

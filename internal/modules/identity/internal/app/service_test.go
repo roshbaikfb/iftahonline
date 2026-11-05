@@ -202,7 +202,7 @@ func TestSignupValidation(t *testing.T) {
 	// Store errors are namespaced, and nothing is left behind.
 	email := f.unique("v") + "@example.com"
 	_, err = f.svc.Signup(ctx, app.SignupInput{Email: email, Password: goodPassword, Name: "A",
-		Store: tenancy.NewStore{Slug: "admin", Name: "", Currency: "USD", Locale: "ar", Timezone: "UTC"}})
+		Store: tenancy.NewStore{Slug: "admin", Name: "", Currency: "GBP", Locale: "ar", Timezone: "UTC"}})
 	if c := fieldCodes(err); c["store.slug"] != "reserved" || c["store.name"] != "length" || c["store.currency"] != "unsupported" {
 		t.Fatalf("store fields = %v (%v)", c, err)
 	}

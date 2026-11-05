@@ -11,10 +11,10 @@ import { count } from '../lib/home';
 import { problemMessage } from '../lib/problem';
 import { productStatusLabel, type Category, type Product } from '../lib/products';
 import { storefrontURL } from '../lib/storefront';
+import { currencySymbol } from '../lib/orders';
 
 type SizeChart = components['schemas']['SizeChart'];
 
-const symbols: Record<string, string> = { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ' };
 
 // ProductEditor creates or edits a product (the approved mockup): the
 // basics, pictures, options that make the variants grid, and on the side
@@ -271,7 +271,7 @@ export function ProductEditor() {
           <VariantsGrid
             options={draft.gridOptions}
             variants={draft.variants}
-            currency={symbols[currency] ?? currency}
+            currency={currencySymbol(currency)}
             errors={errors}
             onChange={(variants) => {
               setDraft({ ...draft, variants });

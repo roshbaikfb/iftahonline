@@ -136,6 +136,26 @@ func (s *Service) SetStatus(ctx context.Context, status domain.StoreStatus) (dom
 	return st, notFound(err, errStoreNotFound)
 }
 
+// SetCountry changes the current store's country: the platform's
+// console only, since it decides how the store and its subscription are
+// paid (ADR-0088).
+func (s *Service) SetCountry(ctx context.Context, code string) (domain.Store, error) {
+	c, err := domain.ValidateCountry(code)
+	if err != nil {
+		return domain.Store{}, err
+	}
+	var st domain.Store
+	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
+		var txErr error
+		if st, txErr = store.SetStoreCountry(ctx, tx, c); txErr != nil {
+			return txErr
+		}
+		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "store.country_changed", TargetType: "store", TargetID: st.ID.String(),
+			Metadata: map[string]any{"country": c}})
+	})
+	return st, notFound(err, errStoreNotFound)
+}
+
 // SetBillingHoldTx holds (or releases) the store in ctx for billing, in
 // the caller's tenant transaction: its storefront shows a maintenance
 // page (ADR-0051). The platform's suspension (SetStatus) is separate.

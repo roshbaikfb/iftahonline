@@ -8,11 +8,12 @@ package tenancydb
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 const getStore = `-- name: GetStore :one
-SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold FROM stores WHERE id = $1
+SELECT id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country FROM stores WHERE id = $1
 `
 
 func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (Store, error) {
@@ -29,15 +30,16 @@ func (q *Queries) GetStore(ctx context.Context, storeID ulid.ID) (Store, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BillingHold,
+		&i.Country,
 	)
 	return i, err
 }
 
 const insertStore = `-- name: InsertStore :one
 
-INSERT INTO stores (id, slug, name, currency, locale, timezone)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
+INSERT INTO stores (id, slug, name, currency, locale, timezone, country)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country
 `
 
 type InsertStoreParams struct {
@@ -47,6 +49,7 @@ type InsertStoreParams struct {
 	Currency string
 	Locale   string
 	Timezone string
+	Country  pgtype.Text
 }
 
 // Every query on a tenant table takes store_id; the store layer reads it
@@ -62,6 +65,7 @@ func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (Store
 		arg.Currency,
 		arg.Locale,
 		arg.Timezone,
+		arg.Country,
 	)
 	var i Store
 	err := row.Scan(
@@ -75,6 +79,7 @@ func (q *Queries) InsertStore(ctx context.Context, arg InsertStoreParams) (Store
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BillingHold,
+		&i.Country,
 	)
 	return i, err
 }
@@ -117,10 +122,41 @@ func (q *Queries) SetBillingHold(ctx context.Context, arg SetBillingHoldParams) 
 	return result.RowsAffected(), nil
 }
 
+const setStoreCountry = `-- name: SetStoreCountry :one
+UPDATE stores SET country = $1, updated_at = now()
+WHERE id = $2
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country
+`
+
+type SetStoreCountryParams struct {
+	Country pgtype.Text
+	StoreID ulid.ID
+}
+
+// The merchant's country, from the console only (ADR-0088).
+func (q *Queries) SetStoreCountry(ctx context.Context, arg SetStoreCountryParams) (Store, error) {
+	row := q.db.QueryRow(ctx, setStoreCountry, arg.Country, arg.StoreID)
+	var i Store
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Status,
+		&i.Currency,
+		&i.Locale,
+		&i.Timezone,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BillingHold,
+		&i.Country,
+	)
+	return i, err
+}
+
 const setStoreStatus = `-- name: SetStoreStatus :one
 UPDATE stores SET status = $1, updated_at = now()
 WHERE id = $2
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country
 `
 
 type SetStoreStatusParams struct {
@@ -142,6 +178,7 @@ func (q *Queries) SetStoreStatus(ctx context.Context, arg SetStoreStatusParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BillingHold,
+		&i.Country,
 	)
 	return i, err
 }
@@ -150,7 +187,7 @@ const updateStore = `-- name: UpdateStore :one
 UPDATE stores
 SET name = $1, locale = $2, timezone = $3, updated_at = now()
 WHERE id = $4
-RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold
+RETURNING id, slug, name, status, currency, locale, timezone, created_at, updated_at, billing_hold, country
 `
 
 type UpdateStoreParams struct {
@@ -179,6 +216,7 @@ func (q *Queries) UpdateStore(ctx context.Context, arg UpdateStoreParams) (Store
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BillingHold,
+		&i.Country,
 	)
 	return i, err
 }

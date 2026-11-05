@@ -10,10 +10,12 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy/internal/store/tenancydb"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/geo"
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
@@ -39,6 +41,7 @@ func InsertStore(ctx context.Context, tx Tx, in domain.NewStore) (domain.Store, 
 	}
 	row, err := tenancydb.New(tx).InsertStore(ctx, tenancydb.InsertStoreParams{
 		ID: id, Slug: in.Slug, Name: in.Name, Currency: in.Currency, Locale: in.Locale, Timezone: in.Timezone,
+		Country: pgtype.Text{String: in.Country, Valid: in.Country != ""},
 	})
 	if err != nil {
 		if postgres.IsUniqueViolation(err, "stores_slug_key") {
@@ -81,6 +84,16 @@ func SetStoreStatus(ctx context.Context, tx Tx, st domain.StoreStatus) (domain.S
 	return storeResult(row, err, "set status")
 }
 
+// SetStoreCountry records the current store's country (ADR-0088).
+func SetStoreCountry(ctx context.Context, tx Tx, country string) (domain.Store, error) {
+	id, err := current(ctx)
+	if err != nil {
+		return domain.Store{}, err
+	}
+	row, err := tenancydb.New(tx).SetStoreCountry(ctx, tenancydb.SetStoreCountryParams{StoreID: id, Country: pgtype.Text{String: country, Valid: true}})
+	return storeResult(row, err, "set country")
+}
+
 // SetBillingHold holds or releases the store in ctx for billing; changed
 // is false when it already was.
 func SetBillingHold(ctx context.Context, tx Tx, hold bool) (changed bool, err error) {
@@ -110,9 +123,20 @@ func toStore(r tenancydb.Store) domain.Store {
 	return domain.Store{
 		ID: tenant.StoreID{ID: r.ID}, Slug: r.Slug, Name: r.Name,
 		Status:   domain.StoreStatus(r.Status),
-		Currency: money.Currency(r.Currency), Locale: domain.Locale(r.Locale), Timezone: r.Timezone,
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Currency: money.Currency(r.Currency), Country: countryOf(r.Country, money.Currency(r.Currency)),
+		Locale: domain.Locale(r.Locale), Timezone: r.Timezone, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+// countryOf is a store's country: its own, or its currency's for a store
+// from before ADR-0088 (00103 backfilled them; the column is not NOT NULL
+// yet).
+func countryOf(c pgtype.Text, cur money.Currency) string {
+	if c.Valid && c.String != "" {
+		return c.String
+	}
+	g, _ := geo.CountryOf(cur)
+	return string(g)
 }
 
 // NewDomain is a domain row to insert for the current store.

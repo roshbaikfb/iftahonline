@@ -26,6 +26,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/clientinfo"
+	countrypkg "github.com/roshbaikfb/iftahonline/internal/platform/country"
 	"github.com/roshbaikfb/iftahonline/internal/platform/cursor"
 	"github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
@@ -419,6 +420,32 @@ func (s *Service) setStatus(ctx context.Context, id tenant.StoreID, rawReason st
 		return tenancy.Store{}, err
 	}
 	return s.d.Stores.SetStatus(tenant.WithStore(ctx, id), to)
+}
+
+// SetStoreCountry changes store id's country (ADR-0088), recorded first
+// in the admin log with the reason and the countries from and to.
+func (s *Service) SetStoreCountry(ctx context.Context, id tenant.StoreID, country, rawReason string) (tenancy.Store, error) {
+	who, ok := IdentityFrom(ctx)
+	if !ok {
+		return tenancy.Store{}, errNoSession
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return tenancy.Store{}, err
+	}
+	country, ok = countrypkg.Normalize(country)
+	if !ok {
+		return tenancy.Store{}, errs.Validation(errs.FieldError{Field: "country", Code: "invalid", Message: "an ISO 3166-1 alpha-2 country"})
+	}
+	cur, _, err := s.d.Directory.Store(ctx, id)
+	if err != nil {
+		return tenancy.Store{}, err
+	}
+	if err = s.audit(ctx, &who.AdminID, "store.country_changed", "store", id.String(),
+		map[string]any{"reason": reason, "slug": cur.Slug, "from": cur.Country, "to": country}); err != nil {
+		return tenancy.Store{}, err
+	}
+	return s.d.Stores.SetCountry(tenant.WithStore(ctx, id), country)
 }
 
 // Impersonation is a support session's one-time code.
