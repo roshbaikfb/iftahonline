@@ -5563,3 +5563,87 @@ td.end {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* The unpaid store's banner on every screen, the switch dialog and the
+   balance page (ADR-0084–0087, the approved mockups 1–4). */
+.bill-banner.global {
+  margin-block-end: 1rem;
+}
+.switch-dialog {
+  display: grid;
+  gap: 0.85rem;
+  max-inline-size: 34rem;
+}
+.ways {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ways legend {
+  margin-block-end: 0.5rem;
+  font-weight: 700;
+}
+.way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.way.on {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 1px var(--navy);
+}
+.way span {
+  display: grid;
+  gap: 0.15rem;
+}
+.amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.amount {
+  min-block-size: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.amount.on {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 1px var(--navy);
+}
+.balance-now {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.balance-now.neg {
+  color: var(--red);
+}
+.status.balance-ok {
+  background: #f0fdf4;
+  color: var(--green);
+}
+.status.balance-low {
+  background: #fffbeb;
+  color: #b45309;
+}
+.status.balance-debt {
+  background: #fef2f2;
+  color: var(--red);
+}
+td.plus {
+  color: var(--green);
+}
