@@ -104,7 +104,20 @@ The return URL must be an http(s) URL on a host of the same store
     unless `PAYMOB_BASE_URL` overrides it.
   - It follows the documentation and is unverified until the sandbox
     run: `PAYMOB_SANDBOX_SECRET_KEY=… PAYMOB_SANDBOX_PUBLIC_KEY=… PAYMOB_SANDBOX_API_KEY=… PAYMOB_SANDBOX_HMAC_SECRET=… PAYMOB_SANDBOX_INTEGRATION_ID=… go test ./internal/modules/payments/internal/gateway/paymob/`.
-- **The webhook parser** is fuzzed (`FuzzVerifyWebhook`).
+- **`stripe`** (ADR-0092; on when `PAYMENTS_STRIPE_ENABLED=true`):
+  - The merchant's own account: a Checkout Session per payment (an
+    hour, cards only); status from the session with its PaymentIntent
+    and latest charge; refunds from `/v1/refunds`.
+  - Webhooks carry `Stripe-Signature` (HMAC-SHA256 with the endpoint's
+    `whsec_`), for the `checkout.session.*` events.
+  - Keys: the secret or restricted key and the endpoint secret, no API
+    key (`gateway.KeysNeeded`).
+  - Unverified until the sandbox run:
+    `STRIPE_SANDBOX_SECRET_KEY=… STRIPE_SANDBOX_WEBHOOK_SECRET=… go test ./internal/modules/payments/internal/gateway/stripe/`.
+- **`FetchStatus`** asks by `gateway.Ref`: our reference and the
+  gateway's own payment (Paymob asks by ours, Stripe by its session).
+- **The webhook parsers** are fuzzed (`FuzzVerifyWebhook`,
+  `FuzzParseWebhook`).
 
 ## HTTP API (tag `payments`)
 

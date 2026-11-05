@@ -221,6 +221,8 @@ account, before merchants rely on it:
 | Meta, TikTok, Snap Conversions APIs; GA4 Measurement Protocol | Connect each pixel with a test event code and a token; place an order; see the events in each provider's test tool with the browser's and the server's events counted once |
 | Product feeds | Add the Google and Meta links to Merchant Center and Commerce Manager; check the first fetch's diagnostics |
 | Paymob billing: saved-card checkout, the TOKEN and TRANSACTION callbacks, MOTO renewals | In Paymob's test mode, pay an invoice of a demo store on its page; renew it from the card on file (`BILLING_COLLECTION_ENABLED=true`); pay one invoice on two pages and see the second under the console's duplicate payments (ADR-0063) |
+| Stripe billing (ADR-0091) | The steps under "The platform's Stripe account" above |
+| Stripe for storefronts (ADR-0092) | With a merchant's test keys, run `STRIPE_SANDBOX_SECRET_KEY=… STRIPE_SANDBOX_WEBHOOK_SECRET=… go test ./internal/modules/payments/internal/gateway/stripe/`; then, with `PAYMENTS_STRIPE_ENABLED=true`, connect a demo store, pay a card order with `4242 4242 4242 4242`, refund part of it, and let a page expire unpaid |
 | Google AdSense in free stores (ADR-0062) | With the publisher's account: (1) `ads.txt` is read from the root domain, so serve `iftahonline.com/ads.txt` with the publisher's line (and, if AdSense asks, a `subdomain=` line per store host) rather than relying on each store host's `/ads.txt`; (2) open a free store's home with the browser's console open and add any origin the CSP blocks to `adSenseSources` (`internal/modules/storefront/internal/web/ads.go`); (3) check the units fill, non-personalized |
 
 ## 12. Known gaps
