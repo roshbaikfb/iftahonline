@@ -97,3 +97,4 @@ supersedes it.
 | [0089](0089-payments-and-taxes-by-country.md) | Payment rules and taxes by the merchant's country | Accepted |
 | [0090](0090-billing-in-dollars.md) | Billing in dollars outside Egypt | Accepted |
 | [0091](0091-stripe-billing.md) | Stripe for the platform's billing outside Egypt | Accepted |
+| [0092](0092-stripe-for-storefronts.md) | Stripe for merchants' storefronts | Accepted |
