@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { problemMessage } from '../lib/problem';
+import { AgencySwitch } from './AgencySwitch';
 import { Editable } from './Can';
 import { ConsoleLayout } from './ConsoleLayout';
+import { useCan } from './session';
 
 type Detail = components['schemas']['AdminAgencyDetail'];
 
@@ -28,6 +30,7 @@ export function AgencyPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const can = useCan();
 
   const apply = useCallback((x: Awaited<ReturnType<typeof fetchAgency>>) => {
     if (x.r.data) setDetail(x.r.data);
@@ -123,6 +126,16 @@ export function AgencyPage() {
           </>
         )}
       </Editable>
+      {detail && can('billing.manage') && (
+        <AgencySwitch
+          detail={detail}
+          names={names}
+          onDone={(d, n) => {
+            setDetail(d);
+            setNotice(`تحوّل ${String(n)} ${n === 1 ? 'متجر' : 'متاجر'} إلى «ادفع حسب مبيعاتك»، وأُلغيت الفاتورة.`);
+          }}
+        />
+      )}
     </ConsoleLayout>
   );
 }
