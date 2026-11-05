@@ -310,6 +310,12 @@ platform provider):
   minimum (before tax) writes a `fees` invoice at once, under the
   account's lock. The dunning charges it within the hour, and the month's
   invoice bills whatever is still due.
+- **Switching to pay as you sell** (ADR-0087): during the grace and the
+  free days, `POST /v1/stores/{id}/billing/switch-to-pays` with a way.
+  It voids the account's open invoices (their fees due again) and makes
+  the store active and open. `PUT /v1/stores/{id}/billing/collection`
+  changes the way later. The billing summary carries `switch_offer`,
+  `collection` and `agency`.
 
 ## The subscription lifecycle
 
