@@ -715,8 +715,9 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 	if err != nil {
 		return nil, err
 	}
-	// Paymob's callbacks of merchants' checkouts (ADR-0053).
-	if p, ok := bill.CallbackProvider(); ok {
+	// The callbacks of merchants' checkouts: Paymob's (ADR-0053) and
+	// Stripe's (ADR-0091).
+	for _, p := range bill.CallbackProviders() {
 		if err = hooks.RegisterPlatform(p); err != nil {
 			return nil, err
 		}

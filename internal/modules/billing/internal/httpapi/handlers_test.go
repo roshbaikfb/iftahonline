@@ -73,18 +73,20 @@ const (
 // pages is a checkout gateway that opens pages and charges nothing.
 type pages struct{}
 
+var _ app.CheckoutGateway = pages{}
+
 func (pages) Charge(context.Context, app.Charge) (app.ChargeResult, error) {
 	return app.ChargeResult{}, nil
 }
 func (pages) Checkout(_ context.Context, c app.CheckoutRequest) (app.CheckoutPage, error) {
 	return app.CheckoutPage{URL: "https://pay.example.com/" + c.Reference}, nil
 }
-func (pages) ParseCallback(url.Values, []byte) (app.Callback, error) {
+func (pages) ParseCallback(http.Header, url.Values, []byte) (app.Callback, error) {
 	return app.Callback{}, app.ErrForgedCallback
 }
 func (pages) ReadCallback([]byte) (app.Callback, error) { return app.Callback{}, app.ErrBadCallback }
-func (pages) Paid(context.Context, string, string, int64) (string, bool, error) {
-	return "", false, nil
+func (pages) Paid(context.Context, app.PaidQuery) (app.Payment, error) {
+	return app.Payment{}, nil
 }
 
 type fixture struct {

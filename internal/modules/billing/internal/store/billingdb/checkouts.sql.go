@@ -30,7 +30,7 @@ func (q *Queries) CheckoutStore(ctx context.Context, arg CheckoutStoreParams) (u
 }
 
 const getCheckout = `-- name: GetCheckout :one
-SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose FROM billing_checkouts
+SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose, gateway, session_id FROM billing_checkouts
 WHERE store_id = $1
   AND (($2::text <> '' AND reference = $2::text) OR ($3::text <> '' AND paymob_order_id = $3::text))
 `
@@ -50,6 +50,8 @@ type GetCheckoutRow struct {
 	AmountMinor int64
 	Status      string
 	Purpose     string
+	Gateway     string
+	SessionID   *string
 }
 
 // By our reference or Paymob's order.
@@ -65,6 +67,8 @@ func (q *Queries) GetCheckout(ctx context.Context, arg GetCheckoutParams) (GetCh
 		&i.AmountMinor,
 		&i.Status,
 		&i.Purpose,
+		&i.Gateway,
+		&i.SessionID,
 	)
 	return i, err
 }
@@ -86,8 +90,8 @@ func (q *Queries) GetPlanNames(ctx context.Context, id ulid.ID) (GetPlanNamesRow
 }
 
 const insertCheckout = `-- name: InsertCheckout :exec
-INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose, gateway)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertCheckoutParams struct {
@@ -99,6 +103,7 @@ type InsertCheckoutParams struct {
 	Currency    string
 	AmountMinor int64
 	Purpose     string
+	Gateway     string
 }
 
 func (q *Queries) InsertCheckout(ctx context.Context, arg InsertCheckoutParams) error {
@@ -111,6 +116,7 @@ func (q *Queries) InsertCheckout(ctx context.Context, arg InsertCheckoutParams) 
 		arg.Currency,
 		arg.AmountMinor,
 		arg.Purpose,
+		arg.Gateway,
 	)
 	return err
 }
@@ -194,6 +200,23 @@ type SetCheckoutOrderParams struct {
 // callback): card token callbacks name only it.
 func (q *Queries) SetCheckoutOrder(ctx context.Context, arg SetCheckoutOrderParams) error {
 	_, err := q.db.Exec(ctx, setCheckoutOrder, arg.PaymobOrderID, arg.StoreID, arg.Reference)
+	return err
+}
+
+const setCheckoutSession = `-- name: SetCheckoutSession :exec
+UPDATE billing_checkouts SET session_id = $1, updated_at = now()
+WHERE store_id = $2 AND reference = $3 AND session_id IS NULL
+`
+
+type SetCheckoutSessionParams struct {
+	SessionID *string
+	StoreID   ulid.ID
+	Reference string
+}
+
+// The gateway's checkout it is asked by (Stripe's Checkout Session).
+func (q *Queries) SetCheckoutSession(ctx context.Context, arg SetCheckoutSessionParams) error {
+	_, err := q.db.Exec(ctx, setCheckoutSession, arg.SessionID, arg.StoreID, arg.Reference)
 	return err
 }
 

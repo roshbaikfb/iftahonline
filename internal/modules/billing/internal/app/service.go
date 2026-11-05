@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -66,12 +67,12 @@ type Service struct {
 	log      *slog.Logger
 	owner    func(ctx context.Context, tx pgx.Tx) (ulid.ID, error)
 	support  Support
-	// callbackURL and dashboardURL are where the gateway sends callbacks
-	// and merchants back (ADR-0053).
-	callbackURL, dashboardURL string
-	policy                    domain.Policy
-	ids                       *ulid.Generator
-	now                       func() time.Time
+	// publicURL is the platform's origin, where gateways send callbacks,
+	// and dashboardURL where merchants come back (ADR-0053).
+	publicURL, dashboardURL string
+	policy                  domain.Policy
+	ids                     *ulid.Generator
+	now                     func() time.Time
 }
 
 // Deps are the service's dependencies.
@@ -125,9 +126,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{db: d.DB, orders: d.Orders, stores: d.Stores, jobs: d.Jobs, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
 		holds: d.Holds, notifier: d.Notifier, inbox: d.Inbox, log: d.Log, owner: d.Owner, support: d.Support, dashboardURL: d.DashboardURL,
 		policy: domain.DefaultPolicy(), ids: d.IDs, now: now}
-	if d.PublicURL != "" {
-		svc.callbackURL = CallbackURL(d.PublicURL)
-	}
+	svc.publicURL = strings.TrimRight(d.PublicURL, "/")
 	return svc
 }
 

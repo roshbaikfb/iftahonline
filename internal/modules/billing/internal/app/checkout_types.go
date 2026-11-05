@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 )
 
@@ -30,7 +31,26 @@ type CheckoutRequest struct {
 // CheckoutPage is where the merchant pays.
 type CheckoutPage struct {
 	URL             string
-	ProviderOrderID string // the gateway's order, when it says (card token callbacks name it)
+	ProviderOrderID string // the gateway's order, when it says (Paymob's card token callbacks name it)
+	Session         string // the gateway's checkout, when it is asked by it (Stripe's Checkout Session)
+}
+
+// PaidQuery asks a gateway about a checkout.
+type PaidQuery struct {
+	Currency    string
+	Reference   string // ours
+	Session     string // CheckoutPage.Session, when the gateway gave one
+	AmountMinor int64
+}
+
+// Payment is the gateway's answer about a checkout.
+type Payment struct {
+	TransactionID string
+	Paid          bool // in full, in its currency
+	// Token and Label are the card the payment saved, when the gateway
+	// says so in the answer (Stripe) rather than in a callback of its own
+	// (Paymob): "" for none.
+	Token, Label string
 }
 
 // CallbackKind is what a gateway callback is about.
@@ -58,11 +78,12 @@ type Callback struct {
 type CheckoutGateway interface {
 	Gateway
 	Checkout(ctx context.Context, c CheckoutRequest) (CheckoutPage, error)
-	// ParseCallback verifies a callback's signature and reads it.
-	ParseCallback(query url.Values, body []byte) (Callback, error)
+	// ParseCallback verifies a callback's signature (in its header or its
+	// query) and reads it.
+	ParseCallback(header http.Header, query url.Values, body []byte) (Callback, error)
 	// ReadCallback reads a callback verified when it was received.
 	ReadCallback(body []byte) (Callback, error)
-	// Paid asks the gateway whether reference is paid in full: a
+	// Paid asks the gateway whether a checkout is paid in full: a
 	// callback is a hint, the gateway's answer the evidence.
-	Paid(ctx context.Context, currency, reference string, amountMinor int64) (transactionID string, paid bool, err error)
+	Paid(ctx context.Context, q PaidQuery) (Payment, error)
 }

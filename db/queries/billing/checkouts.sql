@@ -1,6 +1,6 @@
 -- name: InsertCheckout :exec
-INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose)
-VALUES (@store_id, @id, @account_id, sqlc.narg(invoice_id), @reference, @currency, @amount_minor, @purpose);
+INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose, gateway)
+VALUES (@store_id, @id, @account_id, sqlc.narg(invoice_id), @reference, @currency, @amount_minor, @purpose, @gateway);
 
 -- name: SetCheckoutOrder :exec
 -- Paymob's order, once known (from the intention, or the transaction
@@ -8,9 +8,14 @@ VALUES (@store_id, @id, @account_id, sqlc.narg(invoice_id), @reference, @currenc
 UPDATE billing_checkouts SET paymob_order_id = @paymob_order_id, updated_at = now()
 WHERE store_id = @store_id AND reference = @reference AND paymob_order_id IS NULL;
 
+-- name: SetCheckoutSession :exec
+-- The gateway's checkout it is asked by (Stripe's Checkout Session).
+UPDATE billing_checkouts SET session_id = @session_id, updated_at = now()
+WHERE store_id = @store_id AND reference = @reference AND session_id IS NULL;
+
 -- name: GetCheckout :one
 -- By our reference or Paymob's order.
-SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose FROM billing_checkouts
+SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose, gateway, session_id FROM billing_checkouts
 WHERE store_id = @store_id
   AND ((@reference::text <> '' AND reference = @reference::text) OR (@paymob_order_id::text <> '' AND paymob_order_id = @paymob_order_id::text));
 

@@ -199,7 +199,7 @@ func orNA(s string) string {
 // ParseCallback implements app.CheckoutGateway: a callback is believed
 // only with a region's HMAC secret over its type's fields (transaction:
 // Paymob's 20; card token: its 8).
-func (g *Gateway) ParseCallback(query url.Values, body []byte) (app.Callback, error) {
+func (g *Gateway) ParseCallback(_ http.Header, query url.Values, body []byte) (app.Callback, error) {
 	cb, err := paymob.ParseCallback(body)
 	if err != nil {
 		return app.Callback{}, app.ErrForgedCallback
@@ -273,27 +273,28 @@ func cardLabel(brand, masked string) string {
 }
 
 // Paid implements app.CheckoutGateway: Paymob is asked about the
-// checkout's reference before anything is marked paid (CLAUDE.md).
-func (g *Gateway) Paid(ctx context.Context, currency, reference string, amountMinor int64) (string, bool, error) {
-	r, ok := g.regions[currency]
+// checkout's reference before anything is marked paid (CLAUDE.md). Its
+// card arrives in a callback of its own, so the answer has none.
+func (g *Gateway) Paid(ctx context.Context, q app.PaidQuery) (app.Payment, error) {
+	r, ok := g.regions[q.Currency]
 	if !ok || r.APIKey == "" {
-		return "", false, fmt.Errorf("paymob: no billing account for %s", currency)
+		return app.Payment{}, fmt.Errorf("paymob: no billing account for %s", q.Currency)
 	}
-	base, err := g.client.BaseFor(currency)
+	base, err := g.client.BaseFor(q.Currency)
 	if err != nil {
-		return "", false, err
+		return app.Payment{}, err
 	}
 	tok, err := g.client.AuthToken(ctx, base, r.APIKey)
 	if err != nil {
-		return "", false, err
+		return app.Payment{}, err
 	}
-	t, found, err := g.client.Inquire(ctx, base, tok, reference)
+	t, found, err := g.client.Inquire(ctx, base, tok, q.Reference)
 	if err != nil || !found {
-		return "", false, err
+		return app.Payment{}, err
 	}
-	if t.Order.MerchantOrderID != reference || t.Currency != currency {
-		return "", false, fmt.Errorf("paymob: the inquiry for %s answered another payment", reference)
+	if t.Order.MerchantOrderID != q.Reference || t.Currency != q.Currency {
+		return app.Payment{}, fmt.Errorf("paymob: the inquiry for %s answered another payment", q.Reference)
 	}
-	paid := t.Success && !t.Pending && !t.IsVoided && t.AmountCents == amountMinor
-	return t.ID.String(), paid, nil
+	paid := t.Success && !t.Pending && !t.IsVoided && t.AmountCents == q.AmountMinor
+	return app.Payment{TransactionID: t.ID.String(), Paid: paid}, nil
 }

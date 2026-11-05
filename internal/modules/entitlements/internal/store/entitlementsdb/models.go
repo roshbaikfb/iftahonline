@@ -305,6 +305,8 @@ type BillingCheckout struct {
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 	Purpose       string
+	Gateway       string
+	SessionID     pgtype.Text
 }
 
 type BillingPaymentMethod struct {
