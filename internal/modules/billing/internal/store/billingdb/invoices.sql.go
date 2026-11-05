@@ -121,8 +121,10 @@ func (q *Queries) InsertAccountStore(ctx context.Context, arg InsertAccountStore
 }
 
 const insertInvoice = `-- name: InsertInvoice :exec
-INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $10)
+INSERT INTO invoices (id, account_id, number, period, currency, subtotal_minor, tax_bps, tax_minor, total_minor, issued_at, due_at, next_attempt_at,
+                      purpose)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $10,
+        $12)
 `
 
 type InsertInvoiceParams struct {
@@ -137,6 +139,7 @@ type InsertInvoiceParams struct {
 	TotalMinor    int64
 	IssuedAt      time.Time
 	DueAt         time.Time
+	Purpose       string
 }
 
 // Its first charge is due at once (ADR-0051).
@@ -153,6 +156,7 @@ func (q *Queries) InsertInvoice(ctx context.Context, arg InsertInvoiceParams) er
 		arg.TotalMinor,
 		arg.IssuedAt,
 		arg.DueAt,
+		arg.Purpose,
 	)
 	return err
 }

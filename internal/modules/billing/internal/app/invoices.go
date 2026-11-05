@@ -161,6 +161,11 @@ func (s *Service) invoiceTx(ctx context.Context, tx pgx.Tx, account ulid.ID, per
 	if err := store.UseAccount(ctx, tx, account); err != nil {
 		return err
 	}
+	// One writer of the account's invoices at a time: a fees invoice at
+	// the card's minimum (ADR-0086) may be written meanwhile.
+	if _, err := store.LockBalance(ctx, tx, account); err != nil {
+		return err
+	}
 	if exists, err := store.InvoiceExists(ctx, tx, account, period); err != nil || exists {
 		return err
 	}
@@ -235,15 +240,22 @@ func linesOf(ctx context.Context, tx pgx.Tx, acct domain.Account, period time.Ti
 	if err != nil {
 		return nil, err
 	}
+	return append(lines, feeLines(sums, m.id, m.name, period)...), nil
+}
+
+// feeLines are a store's due fees up to period and its credits, as
+// invoice lines.
+func feeLines(sums store.FeeSums, id ulid.ID, name string, period time.Time) []domain.Line {
+	var lines []domain.Line
 	if sums.Due > 0 {
-		lines = append(lines, domain.Line{Kind: domain.LineSellFees, StoreID: m.id, Quantity: sums.Due, AmountMinor: sums.DueMinor,
-			Description: fmt.Sprintf("%s: رسوم المبيعات حتى %s (%d طلب مُسلَّم)", m.name, period.Format("2006-01"), sums.Due)})
+		lines = append(lines, domain.Line{Kind: domain.LineSellFees, StoreID: id, Quantity: sums.Due, AmountMinor: sums.DueMinor,
+			Description: fmt.Sprintf("%s: رسوم المبيعات حتى %s (%d طلب مُسلَّم)", name, period.Format("2006-01"), sums.Due)})
 	}
 	if sums.Credits > 0 {
-		lines = append(lines, domain.Line{Kind: domain.LineFeeCredit, StoreID: m.id, Quantity: sums.Credits, AmountMinor: -sums.CreditsMinor,
-			Description: fmt.Sprintf("%s: رصيد رسوم طلبات مرتجعة (%d طلب)", m.name, sums.Credits)})
+		lines = append(lines, domain.Line{Kind: domain.LineFeeCredit, StoreID: id, Quantity: sums.Credits, AmountMinor: -sums.CreditsMinor,
+			Description: fmt.Sprintf("%s: رصيد رسوم طلبات مرتجعة (%d طلب)", name, sums.Credits)})
 	}
-	return lines, nil
+	return lines
 }
 
 func cycleAr(c domain.Cycle) string {
