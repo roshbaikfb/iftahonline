@@ -91,6 +91,23 @@ func toBilling(s app.Summary) Billing {
 	if s.Held {
 		out.Held = &s.Held
 	}
+	if s.Agency {
+		out.Agency = &s.Agency
+	}
+	if s.Collection != "" {
+		c := BillingCollection(s.Collection)
+		out.Collection = &c
+	}
+	if s.Switch != nil {
+		o := struct {
+			Offered []BillingSwitchOfferOffered `json:"offered"`
+			RateBps int                         `json:"rate_bps"`
+		}{RateBps: int(s.Switch.RateBps), Offered: make([]BillingSwitchOfferOffered, len(s.Switch.Offered))}
+		for i, w := range s.Switch.Offered {
+			o.Offered[i] = BillingSwitchOfferOffered(w)
+		}
+		out.SwitchOffer = &o
+	}
 	if s.CancelAtPeriodEnd {
 		out.CancelAtPeriodEnd = &s.CancelAtPeriodEnd
 	}

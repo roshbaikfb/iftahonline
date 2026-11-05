@@ -52,6 +52,13 @@ type Summary struct {
 	// Held is whether it has.
 	ClosesAt time.Time
 	Held     bool
+	// Agency is a store an agency pays for: the platform switches it
+	// (ADR-0087). Collection is how its account pays pay-as-you-sell fees
+	// ("" until it chooses). Switch is the offer to move to pay as you
+	// sell, while the store may (nil otherwise).
+	Agency     bool
+	Collection domain.Collection
+	Switch     *SwitchOffer
 	// A change waiting for the period's end (ADR-0060): the plan it moves
 	// to (names empty for the free plan after a cancellation) and cycle.
 	NextPlanNameAr, NextPlanNameEn string
@@ -83,6 +90,10 @@ func accountOf(ctx context.Context, tx pgx.Tx) (ulid.ID, bool, error) {
 // invoices.
 func (s *Service) Summary(ctx context.Context) (Summary, error) {
 	var out Summary
+	info, infoErr := s.storeInfo(ctx)
+	if infoErr != nil {
+		return out, infoErr
+	}
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		sub, ok, err := store.Subscription(ctx, tx)
 		if err != nil {
@@ -113,24 +124,65 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 		if isMember && fm.Active() {
 			out.FoundingSeat, out.FoundingBps = fm.Seat, fm.DiscountBps
 		}
+		out.Agency = sub.Kind == domain.KindAgency
 		account, has, err := accountOf(ctx, tx)
-		if err != nil || !has {
-			return err
-		}
-		if err = store.UseAccount(ctx, tx, account); err != nil {
-			return err
-		}
-		m, hasCard, err := store.PaymentMethod(ctx, tx, account)
 		if err != nil {
 			return err
 		}
-		if hasCard {
-			out.Card = m.Label
+		if has {
+			if err = store.UseAccount(ctx, tx, account); err != nil {
+				return err
+			}
+			m, hasCard, mErr := store.PaymentMethod(ctx, tx, account)
+			if mErr != nil {
+				return mErr
+			}
+			if hasCard {
+				out.Card = m.Label
+			}
+			b, bErr := store.AccountBalance(ctx, tx, account)
+			if bErr != nil {
+				return bErr
+			}
+			out.Agency, out.Collection = out.Agency || b.Kind == domain.AccountAgency, b.Collection
+			if out.OpenInvoices, err = store.OpenInvoices(ctx, tx, account); err != nil {
+				return err
+			}
 		}
-		out.OpenInvoices, err = store.OpenInvoices(ctx, tx, account)
+		if ok && !out.Agency && sub.CanSwitchToPays() {
+			out.Switch, err = switchOffer(ctx, tx, info.Currency)
+		}
 		return err
 	})
 	return out, err
+}
+
+// SwitchOffer is what moving to pay as you sell costs and how its fees
+// may be paid (ADR-0087).
+type SwitchOffer struct {
+	RateBps int32               // the fee on delivered orders, in the store's currency
+	Offered []domain.Collection // the ways the platform offers now
+}
+
+// switchOffer is the offer in currency; nil when pay as you sell is not
+// on sale, charges nothing in it, or no way of paying is offered.
+func switchOffer(ctx context.Context, tx pgx.Tx, currency string) (*SwitchOffer, error) {
+	pays, err := paysPlan(ctx, tx)
+	if errors.Is(err, errNoPaysPlan) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	rule, ok, err := store.FeeRule(ctx, tx, pays.ID, currency)
+	if err != nil || !ok {
+		return nil, err
+	}
+	settings, err := store.CollectionSettings(ctx, tx)
+	if err != nil || len(settings.Offered()) == 0 {
+		return nil, err
+	}
+	return &SwitchOffer{RateBps: rule.RateBps, Offered: settings.Offered()}, nil
 }
 
 // Payer is who pays a checkout, as the gateway asks.

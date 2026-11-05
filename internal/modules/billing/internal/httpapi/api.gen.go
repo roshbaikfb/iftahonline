@@ -17,6 +17,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BillingCollection.
+const (
+	BillingCollectionBalance BillingCollection = "balance"
+	BillingCollectionCard    BillingCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingCollection enum.
+func (e BillingCollection) Valid() bool {
+	switch e {
+	case BillingCollectionBalance:
+		return true
+	case BillingCollectionCard:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingCycle.
 const (
 	BillingCycleAnnual  BillingCycle = "annual"
@@ -74,6 +92,24 @@ func (e BillingStatus) Valid() bool {
 	case Suspended:
 		return true
 	case Trialing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingSwitchOfferOffered.
+const (
+	BillingSwitchOfferOfferedBalance BillingSwitchOfferOffered = "balance"
+	BillingSwitchOfferOfferedCard    BillingSwitchOfferOffered = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingSwitchOfferOffered enum.
+func (e BillingSwitchOfferOffered) Valid() bool {
+	switch e {
+	case BillingSwitchOfferOfferedBalance:
+		return true
+	case BillingSwitchOfferOfferedCard:
 		return true
 	default:
 		return false
@@ -179,6 +215,24 @@ func (e BillingBalanceEntryKind) Valid() bool {
 	case Manual:
 		return true
 	case Topup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingCollectionInputCollection.
+const (
+	BillingCollectionInputCollectionBalance BillingCollectionInputCollection = "balance"
+	BillingCollectionInputCollectionCard    BillingCollectionInputCollection = "card"
+)
+
+// Valid indicates whether the value is a known member of the BillingCollectionInputCollection enum.
+func (e BillingCollectionInputCollection) Valid() bool {
+	switch e {
+	case BillingCollectionInputCollectionBalance:
+		return true
+	case BillingCollectionInputCollectionCard:
 		return true
 	default:
 		return false
@@ -349,6 +403,8 @@ func (e PolicySlug) Valid() bool {
 
 // Billing defines model for Billing.
 type Billing struct {
+	// Agency An agency pays for the store: the platform switches it to pay as you sell (ADR-0087).
+	Agency            *bool `json:"agency,omitempty"`
 	CancelAtPeriodEnd *bool `json:"cancel_at_period_end,omitempty"`
 
 	// Card The card on file; absent without one.
@@ -357,8 +413,11 @@ type Billing struct {
 	Card *string `json:"card,omitempty"`
 
 	// ClosesAt Past due or suspended: when the storefront closes (the maintenance page) if still unpaid (ADR-0082).
-	ClosesAt *time.Time    `json:"closes_at,omitempty"`
-	Cycle    *BillingCycle `json:"cycle,omitempty"`
+	ClosesAt *time.Time `json:"closes_at,omitempty"`
+
+	// Collection How the store's account pays pay-as-you-sell fees; absent until it chooses.
+	Collection *BillingCollection `json:"collection,omitempty"`
+	Cycle      *BillingCycle      `json:"cycle,omitempty"`
 
 	// Founding A founding merchant's seat and lifetime discount (ADR-0074); absent when the store is not one.
 	Founding *BillingFounding `json:"founding,omitempty"`
@@ -380,8 +439,19 @@ type Billing struct {
 	PlanNameAr     string        `json:"plan_name_ar"`
 	PlanNameEn     string        `json:"plan_name_en"`
 	Status         BillingStatus `json:"status"`
-	TrialEndsAt    *time.Time    `json:"trial_ends_at,omitempty"`
+
+	// SwitchOffer Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided.
+	SwitchOffer *struct {
+		Offered []BillingSwitchOfferOffered `json:"offered"`
+
+		// RateBps The fee on each delivered order's goods
+		RateBps int `json:"rate_bps"`
+	} `json:"switch_offer,omitempty"`
+	TrialEndsAt *time.Time `json:"trial_ends_at,omitempty"`
 }
+
+// BillingCollection How the store's account pays pay-as-you-sell fees; absent until it chooses.
+type BillingCollection string
 
 // BillingCycle defines model for Billing.Cycle.
 type BillingCycle string
@@ -391,6 +461,9 @@ type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingSwitchOfferOffered defines model for Billing.SwitchOffer.Offered.
+type BillingSwitchOfferOffered string
 
 // BillingBalance defines model for BillingBalance.
 type BillingBalance struct {
@@ -441,6 +514,14 @@ type BillingBalanceEntry struct {
 
 // BillingBalanceEntryKind An extensible list (ADR-0032); clients show a kind they do not know as a plain entry.
 type BillingBalanceEntryKind string
+
+// BillingCollectionInput defines model for BillingCollectionInput.
+type BillingCollectionInput struct {
+	Collection BillingCollectionInputCollection `json:"collection"`
+}
+
+// BillingCollectionInputCollection defines model for BillingCollectionInput.Collection.
+type BillingCollectionInputCollection string
 
 // BillingFeature defines model for BillingFeature.
 type BillingFeature struct {
@@ -648,8 +729,14 @@ type StartTrialJSONBody struct {
 // TopUpBillingBalanceJSONRequestBody defines body for TopUpBillingBalance for application/json ContentType.
 type TopUpBillingBalanceJSONRequestBody TopUpBillingBalanceJSONBody
 
+// SetBillingCollectionJSONRequestBody defines body for SetBillingCollection for application/json ContentType.
+type SetBillingCollectionJSONRequestBody = BillingCollectionInput
+
 // ChoosePlanJSONRequestBody defines body for ChoosePlan for application/json ContentType.
 type ChoosePlanJSONRequestBody = ChoosePlanRequest
+
+// SwitchToPaysJSONRequestBody defines body for SwitchToPays for application/json ContentType.
+type SwitchToPaysJSONRequestBody = BillingCollectionInput
 
 // StartTrialJSONRequestBody defines body for StartTrial for application/json ContentType.
 type StartTrialJSONRequestBody StartTrialJSONBody
@@ -668,6 +755,9 @@ type ServerInterface interface {
 	// CancelRenewal Stop renewing; the free plan after the paid period
 	// (POST /v1/stores/{store_id}/billing/cancel)
 	CancelRenewal(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// SetBillingCollection Choose how pay-as-you-sell fees are paid
+	// (PUT /v1/stores/{store_id}/billing/collection)
+	SetBillingCollection(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// PayInvoice Pay an open invoice on Paymob's page
 	// (POST /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay)
 	PayInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID)
@@ -680,6 +770,9 @@ type ServerInterface interface {
 	// ChoosePlan Choose a plan
 	// (POST /v1/stores/{store_id}/billing/subscription)
 	ChoosePlan(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// SwitchToPays Move an unpaid store to pay as you sell at once
+	// (POST /v1/stores/{store_id}/billing/switch-to-pays)
+	SwitchToPays(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// StartTrial Start a paid plan's free trial
 	// (POST /v1/stores/{store_id}/billing/trial)
 	StartTrial(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -798,6 +891,32 @@ func (siw *ServerInterfaceWrapper) CancelRenewal(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// SetBillingCollection operation middleware
+func (siw *ServerInterfaceWrapper) SetBillingCollection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetBillingCollection(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PayInvoice operation middleware
 func (siw *ServerInterfaceWrapper) PayInvoice(w http.ResponseWriter, r *http.Request) {
 
@@ -902,6 +1021,32 @@ func (siw *ServerInterfaceWrapper) ChoosePlan(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChoosePlan(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SwitchToPays operation middleware
+func (siw *ServerInterfaceWrapper) SwitchToPays(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SwitchToPays(w, r, storeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1063,6 +1208,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/trial", wrapper.StartTrial)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/cancel", wrapper.CancelRenewal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/resume", wrapper.ResumeRenewal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/switch-to-pays", wrapper.SwitchToPays)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/stores/{store_id}/billing/collection", wrapper.SetBillingCollection)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/billing/balance", wrapper.GetBillingBalance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/balance/topups", wrapper.TopUpBillingBalance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/billing/invoices/{invoice_id}/pay", wrapper.PayInvoice)
@@ -1220,6 +1367,46 @@ type CancelRenewaldefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CancelRenewaldefaultApplicationProblemPlusJSONResponse) VisitCancelRenewalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetBillingCollectionRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *SetBillingCollectionJSONRequestBody
+}
+
+type SetBillingCollectionResponseObject interface {
+	VisitSetBillingCollectionResponse(w http.ResponseWriter) error
+}
+
+type SetBillingCollection200JSONResponse Billing
+
+func (response SetBillingCollection200JSONResponse) VisitSetBillingCollectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetBillingCollectiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetBillingCollectiondefaultApplicationProblemPlusJSONResponse) VisitSetBillingCollectionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1391,6 +1578,46 @@ func (response ChoosePlandefaultApplicationProblemPlusJSONResponse) VisitChooseP
 	return err
 }
 
+type SwitchToPaysRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *SwitchToPaysJSONRequestBody
+}
+
+type SwitchToPaysResponseObject interface {
+	VisitSwitchToPaysResponse(w http.ResponseWriter) error
+}
+
+type SwitchToPays200JSONResponse Billing
+
+func (response SwitchToPays200JSONResponse) VisitSwitchToPaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SwitchToPaysdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SwitchToPaysdefaultApplicationProblemPlusJSONResponse) VisitSwitchToPaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartTrialRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *StartTrialJSONRequestBody
@@ -1445,6 +1672,9 @@ type StrictServerInterface interface {
 	// CancelRenewal Stop renewing; the free plan after the paid period
 	// (POST /v1/stores/{store_id}/billing/cancel)
 	CancelRenewal(ctx context.Context, request CancelRenewalRequestObject) (CancelRenewalResponseObject, error)
+	// SetBillingCollection Choose how pay-as-you-sell fees are paid
+	// (PUT /v1/stores/{store_id}/billing/collection)
+	SetBillingCollection(ctx context.Context, request SetBillingCollectionRequestObject) (SetBillingCollectionResponseObject, error)
 	// PayInvoice Pay an open invoice on Paymob's page
 	// (POST /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay)
 	PayInvoice(ctx context.Context, request PayInvoiceRequestObject) (PayInvoiceResponseObject, error)
@@ -1457,6 +1687,9 @@ type StrictServerInterface interface {
 	// ChoosePlan Choose a plan
 	// (POST /v1/stores/{store_id}/billing/subscription)
 	ChoosePlan(ctx context.Context, request ChoosePlanRequestObject) (ChoosePlanResponseObject, error)
+	// SwitchToPays Move an unpaid store to pay as you sell at once
+	// (POST /v1/stores/{store_id}/billing/switch-to-pays)
+	SwitchToPays(ctx context.Context, request SwitchToPaysRequestObject) (SwitchToPaysResponseObject, error)
 	// StartTrial Start a paid plan's free trial
 	// (POST /v1/stores/{store_id}/billing/trial)
 	StartTrial(ctx context.Context, request StartTrialRequestObject) (StartTrialResponseObject, error)
@@ -1612,6 +1845,39 @@ func (sh *strictHandler) CancelRenewal(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
+// SetBillingCollection operation middleware
+func (sh *strictHandler) SetBillingCollection(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request SetBillingCollectionRequestObject
+
+	request.StoreId = storeId
+
+	var body SetBillingCollectionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetBillingCollection(ctx, request.(SetBillingCollectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetBillingCollection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetBillingCollectionResponseObject); ok {
+		if err := validResponse.VisitSetBillingCollectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PayInvoice operation middleware
 func (sh *strictHandler) PayInvoice(w http.ResponseWriter, r *http.Request, storeId StoreID, invoiceId InvoiceID) {
 	var request PayInvoiceRequestObject
@@ -1717,6 +1983,39 @@ func (sh *strictHandler) ChoosePlan(w http.ResponseWriter, r *http.Request, stor
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChoosePlanResponseObject); ok {
 		if err := validResponse.VisitChoosePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SwitchToPays operation middleware
+func (sh *strictHandler) SwitchToPays(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request SwitchToPaysRequestObject
+
+	request.StoreId = storeId
+
+	var body SwitchToPaysJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SwitchToPays(ctx, request.(SwitchToPaysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SwitchToPays")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SwitchToPaysResponseObject); ok {
+		if err := validResponse.VisitSwitchToPaysResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

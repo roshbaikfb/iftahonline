@@ -103,3 +103,23 @@ func (s Subscription) schedule(current, p Plan, c Cycle) (Choice, error) {
 func (s Subscription) StartPaid(p Plan, c Cycle, paidAt time.Time) (Subscription, error) {
 	return s.Activate(p, c, paidAt, NextPeriodEnd(paidAt, c))
 }
+
+// CanSwitchToPays reports whether an unpaid store may move to pay as
+// you sell at once (approved 2026-11-04): during its grace, and during
+// its free days, before its storefront is held. Agencies' stores are
+// switched by the platform (approved 2026-11-04).
+func (s Subscription) CanSwitchToPays() bool {
+	if s.Kind == KindAgency || s.Kind == KindPays {
+		return false
+	}
+	return s.Status == PastDue || (s.Status == Suspended && s.HeldAt.IsZero())
+}
+
+// SwitchToPays is the store on pay as you sell p, active now: the unpaid
+// renewal is given up (its invoice voided by the caller).
+func (s Subscription) SwitchToPays(p Plan) (Subscription, error) {
+	if p.Kind != KindPays || !s.CanSwitchToPays() {
+		return Subscription{}, refuse(s, "switch to pays")
+	}
+	return Subscription{PlanID: p.ID, Kind: KindPays, Status: Active, TrialUsed: s.TrialUsed}, nil
+}

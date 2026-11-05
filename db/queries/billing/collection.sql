@@ -36,3 +36,24 @@ FROM balance_entries
 WHERE account_id = @account_id
 ORDER BY created_at DESC, id DESC
 LIMIT @lim;
+
+-- name: LockOpenInvoiceIDs :many
+-- The account's open invoices, locked until they are voided (a switch to
+-- pay as you sell, ADR-0087).
+SELECT id FROM invoices WHERE account_id = @account_id AND status = 'open' ORDER BY issued_at FOR UPDATE;
+
+-- name: VoidInvoice :execrows
+UPDATE invoices SET status = 'void', next_attempt_at = NULL WHERE id = @id AND status = 'open';
+
+-- name: UnbillFees :execrows
+-- A voided invoice's fees are due again, and its credits waiting again.
+UPDATE sell_fees SET status = CASE status WHEN 'invoiced' THEN 'due' ELSE 'credit_due' END, invoice_id = NULL, updated_at = now()
+WHERE store_id = @store_id AND invoice_id = @invoice_id AND status IN ('invoiced', 'credited');
+
+-- name: SetAccountCollection :exec
+UPDATE billing_accounts SET collection = @collection, updated_at = now() WHERE id = @id;
+
+-- name: HasPrepaidDue :one
+-- Fees taken from the balance and not invoiced yet: the month's invoice
+-- (paid from the balance) still has to take their tax.
+SELECT EXISTS (SELECT 1 FROM sell_fees WHERE store_id = @store_id AND prepaid AND status IN ('due', 'credit_due')) AS pending;
