@@ -92,3 +92,4 @@ supersedes it.
 | [0084](0084-paying-fees-from-the-prepaid-balance.md) | Paying pay-as-you-sell fees from the prepaid balance | Accepted |
 | [0085](0085-topping-up-the-balance.md) | Topping up the prepaid balance on Paymob's page | Accepted |
 | [0086](0086-the-card-with-a-minimum.md) | The card with a minimum | Accepted |
+| [0087](0087-switching-to-pay-as-you-sell.md) | Switching an unpaid store to pay as you sell, and choosing the way to pay | Accepted |
