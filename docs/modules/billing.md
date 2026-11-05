@@ -290,6 +290,16 @@ platform provider):
   - opens the store's account when it has none.
 
   Agencies' stores have no balance.
+- **Paying from the balance** (ADR-0084), for an account whose
+  `collection` is `balance`:
+  - a delivered order's fee is a `fee` entry, once per order, and the
+    fee is marked `sell_fees.prepaid`;
+  - a return is a `fee_refund` at once, before or after the invoice;
+  - the month's invoice is paid from the balance, which gives one
+    `invoice` entry: its tax;
+  - running out puts the store past due (then ADR-0082's path), coming
+    back restores it, and a low balance is told (`balance_low`,
+    `balance_empty`, `balance_restored`).
 
 ## The subscription lifecycle
 

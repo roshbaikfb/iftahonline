@@ -109,6 +109,8 @@ Submit these templates to Meta as **Utility**, Arabic and English:
 | `billing_payment_failed_v1` | ar: «{{1}}: تعذّر تحصيل الفاتورة {{2}} بقيمة {{3}}. سنحاول مرة أخرى، وإذا لم تُدفع يُغلق المتجر يوم {{4}} مع الاحتفاظ ببياناته. ادفع أو غيّر البطاقة من صفحة الفوترة.» en: "{{1}}: we could not charge invoice {{2}} ({{3}}). We will try again; if it stays unpaid, the store closes on {{4}}, its data kept. Pay or change the card on the billing page." |
 | `billing_store_suspended_v1` | ar: «{{1}}: أُغلق المتجر لفاتورة غير مدفوعة. بياناته محفوظة؛ ادفع الفاتورة ليعود.» en: "{{1}}: the store is closed for an unpaid invoice. Its data is kept; pay the invoice to open it again." |
 | `billing_store_free_v1` | ar: «{{1}}: الفاتورة لم تُدفع، فصار متجرك على الباقة المجانية. يبقى مفتوحًا مع إعلانات المنصة، ويُغلق يوم {{2}} إذا لم تُدفع. ادفع من صفحة الفوترة لترجع باقتك.» en: "{{1}}: the invoice is unpaid, so the store is on the free plan. It stays open with the platform's ads and closes on {{2}} if still unpaid. Pay on the billing page to get your plan back." |
+| `billing_balance_low_v1` | ar: «{{1}}: رصيدك {{2}}. اشحنه قبل أن ينفد حتى لا يتوقف شيء في متجرك.» en: "{{1}}: your balance is {{2}}. Top it up before it runs out so nothing stops in your store." |
+| `billing_balance_empty_v1` | ar: «{{1}}: نفد رصيدك، وعليك {{2}} رسوم طلبات سُلّمت. اشحن قبل {{3}} وإلا ينتقل متجرك إلى الباقة المجانية.» en: "{{1}}: your balance ran out and owes {{2}} in fees of delivered orders. Top it up before {{3}}, or the store moves to the free plan." |
 | `billing_payment_received_v1` | ar: «{{1}}: دُفعت الفاتورة {{2}} بقيمة {{3}}. شكرًا لك.» en: "{{1}}: invoice {{2}} ({{3}}) is paid. Thank you." |
 
 ## HTTP API (tag `messaging`)
