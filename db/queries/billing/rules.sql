@@ -18,3 +18,12 @@ ON CONFLICT (country) DO UPDATE SET rate_bps = excluded.rate_bps, name_ar = excl
 
 -- name: DeleteTax :execrows
 DELETE FROM tax_rates WHERE country = @country AND country <> 'ZZ';
+
+-- name: ListFXRates :many
+-- Each store currency's rate to the dollar (ADR-0090).
+SELECT currency::text, per_usd_micros, updated_at FROM fx_rates ORDER BY currency;
+
+-- name: SaveFXRate :exec
+-- The console's (app_admin).
+INSERT INTO fx_rates (currency, per_usd_micros) VALUES (@currency, @per_usd_micros)
+ON CONFLICT (currency) DO UPDATE SET per_usd_micros = excluded.per_usd_micros, updated_at = now();

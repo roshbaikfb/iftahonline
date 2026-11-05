@@ -13,7 +13,7 @@ import (
 )
 
 const getFeeRule = `-- name: GetFeeRule :one
-SELECT rate_bps, min_minor, max_minor FROM plan_fees WHERE plan_id = $1 AND currency = $2
+SELECT rate_bps, fixed_minor, min_minor, max_minor FROM plan_fees WHERE plan_id = $1 AND currency = $2
 `
 
 type GetFeeRuleParams struct {
@@ -22,20 +22,27 @@ type GetFeeRuleParams struct {
 }
 
 type GetFeeRuleRow struct {
-	RateBps  int32
-	MinMinor int64
-	MaxMinor *int64
+	RateBps    int32
+	FixedMinor int64
+	MinMinor   int64
+	MaxMinor   *int64
 }
 
 func (q *Queries) GetFeeRule(ctx context.Context, arg GetFeeRuleParams) (GetFeeRuleRow, error) {
 	row := q.db.QueryRow(ctx, getFeeRule, arg.PlanID, arg.Currency)
 	var i GetFeeRuleRow
-	err := row.Scan(&i.RateBps, &i.MinMinor, &i.MaxMinor)
+	err := row.Scan(
+		&i.RateBps,
+		&i.FixedMinor,
+		&i.MinMinor,
+		&i.MaxMinor,
+	)
 	return i, err
 }
 
 const getSellFee = `-- name: GetSellFee :one
-SELECT order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, status, delivered_at, returned_at, prepaid
+SELECT order_id, period, plan_id, base_minor, rate_bps, fixed_minor, fee_minor, currency, status, delivered_at, returned_at, prepaid,
+  order_currency, order_base_minor, rate_micros
 FROM sell_fees WHERE store_id = $1 AND order_id = $2
 `
 
@@ -45,17 +52,21 @@ type GetSellFeeParams struct {
 }
 
 type GetSellFeeRow struct {
-	OrderID     ulid.ID
-	Period      time.Time
-	PlanID      ulid.ID
-	BaseMinor   int64
-	RateBps     int32
-	FeeMinor    int64
-	Currency    string
-	Status      string
-	DeliveredAt time.Time
-	ReturnedAt  *time.Time
-	Prepaid     bool
+	OrderID        ulid.ID
+	Period         time.Time
+	PlanID         ulid.ID
+	BaseMinor      int64
+	RateBps        int32
+	FixedMinor     int64
+	FeeMinor       int64
+	Currency       string
+	Status         string
+	DeliveredAt    time.Time
+	ReturnedAt     *time.Time
+	Prepaid        bool
+	OrderCurrency  *string
+	OrderBaseMinor *int64
+	RateMicros     *int64
 }
 
 func (q *Queries) GetSellFee(ctx context.Context, arg GetSellFeeParams) (GetSellFeeRow, error) {
@@ -67,32 +78,42 @@ func (q *Queries) GetSellFee(ctx context.Context, arg GetSellFeeParams) (GetSell
 		&i.PlanID,
 		&i.BaseMinor,
 		&i.RateBps,
+		&i.FixedMinor,
 		&i.FeeMinor,
 		&i.Currency,
 		&i.Status,
 		&i.DeliveredAt,
 		&i.ReturnedAt,
 		&i.Prepaid,
+		&i.OrderCurrency,
+		&i.OrderBaseMinor,
+		&i.RateMicros,
 	)
 	return i, err
 }
 
 const insertSellFee = `-- name: InsertSellFee :execrows
-INSERT INTO sell_fees (store_id, order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, delivered_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO sell_fees (store_id, order_id, period, plan_id, base_minor, rate_bps, fixed_minor, fee_minor, currency, delivered_at,
+  order_currency, order_base_minor, rate_micros)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+  $11, $12, $13)
 ON CONFLICT (store_id, order_id) DO NOTHING
 `
 
 type InsertSellFeeParams struct {
-	StoreID     ulid.ID
-	OrderID     ulid.ID
-	Period      time.Time
-	PlanID      ulid.ID
-	BaseMinor   int64
-	RateBps     int32
-	FeeMinor    int64
-	Currency    string
-	DeliveredAt time.Time
+	StoreID        ulid.ID
+	OrderID        ulid.ID
+	Period         time.Time
+	PlanID         ulid.ID
+	BaseMinor      int64
+	RateBps        int32
+	FixedMinor     int64
+	FeeMinor       int64
+	Currency       string
+	DeliveredAt    time.Time
+	OrderCurrency  *string
+	OrderBaseMinor *int64
+	RateMicros     *int64
 }
 
 // Once per order: a retried or repeated delivery adds nothing.
@@ -104,9 +125,13 @@ func (q *Queries) InsertSellFee(ctx context.Context, arg InsertSellFeeParams) (i
 		arg.PlanID,
 		arg.BaseMinor,
 		arg.RateBps,
+		arg.FixedMinor,
 		arg.FeeMinor,
 		arg.Currency,
 		arg.DeliveredAt,
+		arg.OrderCurrency,
+		arg.OrderBaseMinor,
+		arg.RateMicros,
 	)
 	if err != nil {
 		return 0, err

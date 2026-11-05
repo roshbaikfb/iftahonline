@@ -153,7 +153,11 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 			}
 		}
 		if ok && !out.Agency && sub.CanSwitchToPays() {
-			out.Switch, err = switchOffer(ctx, tx, info.Currency)
+			cur, cErr := billedTx(ctx, tx, known(info))
+			if cErr != nil {
+				return cErr
+			}
+			out.Switch, err = switchOffer(ctx, tx, cur)
 		}
 		return err
 	})
@@ -171,8 +175,10 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 // SwitchOffer is what moving to pay as you sell costs and how its fees
 // may be paid (ADR-0087).
 type SwitchOffer struct {
-	RateBps int32               // the fee on delivered orders, in the store's currency
-	Offered []domain.Collection // the ways the platform offers now
+	Currency   string              // the one the store is billed in
+	RateBps    int32               // the fee on delivered orders' goods
+	FixedMinor int64               // and the fixed amount per order, in Currency (ADR-0090)
+	Offered    []domain.Collection // the ways the platform offers now
 }
 
 // switchOffer is the offer in currency; nil when pay as you sell is not
@@ -193,7 +199,7 @@ func switchOffer(ctx context.Context, tx pgx.Tx, currency string) (*SwitchOffer,
 	if err != nil || len(settings.Offered()) == 0 {
 		return nil, err
 	}
-	return &SwitchOffer{RateBps: rule.RateBps, Offered: settings.Offered()}, nil
+	return &SwitchOffer{Currency: currency, RateBps: rule.RateBps, FixedMinor: rule.FixedMinor, Offered: settings.Offered()}, nil
 }
 
 // Payer is who pays a checkout, as the gateway asks.

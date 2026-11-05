@@ -7,6 +7,7 @@ package billingdb
 
 import (
 	"context"
+	"time"
 )
 
 const deletePaymentRule = `-- name: DeletePaymentRule :execrows
@@ -31,6 +32,37 @@ func (q *Queries) DeleteTax(ctx context.Context, country string) (int64, error) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const listFXRates = `-- name: ListFXRates :many
+SELECT currency::text, per_usd_micros, updated_at FROM fx_rates ORDER BY currency
+`
+
+type ListFXRatesRow struct {
+	Currency     string
+	PerUsdMicros int64
+	UpdatedAt    time.Time
+}
+
+// Each store currency's rate to the dollar (ADR-0090).
+func (q *Queries) ListFXRates(ctx context.Context) ([]ListFXRatesRow, error) {
+	rows, err := q.db.Query(ctx, listFXRates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFXRatesRow{}
+	for rows.Next() {
+		var i ListFXRatesRow
+		if err := rows.Scan(&i.Currency, &i.PerUsdMicros, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPaymentRules = `-- name: ListPaymentRules :many
@@ -91,6 +123,22 @@ func (q *Queries) ListTaxes(ctx context.Context) ([]TaxRate, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveFXRate = `-- name: SaveFXRate :exec
+INSERT INTO fx_rates (currency, per_usd_micros) VALUES ($1, $2)
+ON CONFLICT (currency) DO UPDATE SET per_usd_micros = excluded.per_usd_micros, updated_at = now()
+`
+
+type SaveFXRateParams struct {
+	Currency     string
+	PerUsdMicros int64
+}
+
+// The console's (app_admin).
+func (q *Queries) SaveFXRate(ctx context.Context, arg SaveFXRateParams) error {
+	_, err := q.db.Exec(ctx, saveFXRate, arg.Currency, arg.PerUsdMicros)
+	return err
 }
 
 const savePaymentRule = `-- name: SavePaymentRule :exec

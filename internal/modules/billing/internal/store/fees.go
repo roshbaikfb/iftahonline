@@ -31,7 +31,7 @@ func FeeRule(ctx context.Context, tx Tx, plan ulid.ID, currency string) (r domai
 	case err != nil:
 		return r, false, fmt.Errorf("billing store: fee rule: %w", err)
 	}
-	return domain.FeeRule{RateBps: row.RateBps, MinMinor: row.MinMinor, MaxMinor: row.MaxMinor}, true, nil
+	return domain.FeeRule{RateBps: row.RateBps, FixedMinor: row.FixedMinor, MinMinor: row.MinMinor, MaxMinor: row.MaxMinor}, true, nil
 }
 
 // InsertSellFee records a delivered order's fee once; inserted is false
@@ -41,10 +41,14 @@ func InsertSellFee(ctx context.Context, tx Tx, f domain.SellFee) (inserted bool,
 	if err != nil {
 		return false, err
 	}
-	n, err := billingdb.New(tx).InsertSellFee(ctx, billingdb.InsertSellFeeParams{
+	p := billingdb.InsertSellFeeParams{
 		StoreID: store, OrderID: f.OrderID, Period: f.Period, PlanID: f.PlanID, BaseMinor: f.BaseMinor,
-		RateBps: f.RateBps, FeeMinor: f.FeeMinor, Currency: f.Currency, DeliveredAt: f.DeliveredAt,
-	})
+		RateBps: f.RateBps, FixedMinor: f.FixedMinor, FeeMinor: f.FeeMinor, Currency: f.Currency, DeliveredAt: f.DeliveredAt,
+	}
+	if f.OrderCurrency != "" {
+		p.OrderCurrency, p.OrderBaseMinor, p.RateMicros = &f.OrderCurrency, &f.OrderBaseMinor, &f.RateMicros
+	}
+	n, err := billingdb.New(tx).InsertSellFee(ctx, p)
 	if err != nil {
 		return false, fmt.Errorf("billing store: insert sell fee: %w", err)
 	}
@@ -68,10 +72,14 @@ func SellFee(ctx context.Context, tx Tx, order ulid.ID) (f domain.SellFee, ok bo
 	if err != nil {
 		return f, false, err
 	}
-	return domain.SellFee{
-		OrderID: r.OrderID, Period: r.Period, PlanID: r.PlanID, BaseMinor: r.BaseMinor, RateBps: r.RateBps, FeeMinor: r.FeeMinor,
-		Currency: r.Currency, Status: st, DeliveredAt: r.DeliveredAt, ReturnedAt: at(r.ReturnedAt), Prepaid: r.Prepaid,
-	}, true, nil
+	f = domain.SellFee{
+		OrderID: r.OrderID, Period: r.Period, PlanID: r.PlanID, BaseMinor: r.BaseMinor, RateBps: r.RateBps, FixedMinor: r.FixedMinor,
+		FeeMinor: r.FeeMinor, Currency: r.Currency, Status: st, DeliveredAt: r.DeliveredAt, ReturnedAt: at(r.ReturnedAt), Prepaid: r.Prepaid,
+	}
+	if r.OrderCurrency != nil && r.OrderBaseMinor != nil && r.RateMicros != nil {
+		f.OrderCurrency, f.OrderBaseMinor, f.RateMicros = *r.OrderCurrency, *r.OrderBaseMinor, *r.RateMicros
+	}
+	return f, true, nil
 }
 
 // MarkSellFeePrepaid records that the order's fee was taken from the

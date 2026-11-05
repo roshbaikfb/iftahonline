@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 
@@ -74,5 +75,63 @@ func TestPaymentRulesAndTaxesFromTheConsole(t *testing.T) {
 	}
 	if _, err = f.cli.PaymentRules(ctx); !errs.Is(err, errs.KindUnavailable) {
 		t.Fatalf("cli: %v", err)
+	}
+}
+
+// TestFXRatesAndMinimumsFromTheConsole: a rate needs a reason and is
+// recorded first with the one it replaces; saving the minimums keeps
+// the currencies left out (ADR-0090). The pound only: other tests read
+// the riyal's and the dirham's seeded rates.
+func TestFXRatesAndMinimumsFromTheConsole(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	ctx, me := f.signedIn(t)
+
+	rates, err := f.svc.FXRates(ctx)
+	if err != nil || len(rates) < 2 {
+		t.Fatalf("rates = %+v, %v", rates, err)
+	}
+	pound := billing.FXRate{Currency: "EGP", PerUSDMicros: 48_000_000}
+	if err = f.svc.SaveFXRate(ctx, pound, ""); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("no reason: %v", err)
+	}
+	if err = f.svc.SaveFXRate(ctx, billing.FXRate{Currency: "EGP", PerUSDMicros: -1}, "a bad rate"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a negative rate: %v", err)
+	}
+	for _, r := range []billing.FXRate{pound, {Currency: "EGP", PerUSDMicros: 48_500_000}} {
+		if err = f.svc.SaveFXRate(ctx, r, "the bank's rate today"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := f.svc.Audit(ctx, app.AuditQuery{}, "", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(page.Items, func(e app.AuditItem) bool {
+		return e.AdminID != nil && *e.AdminID == me.Admin.ID && e.Action == "billing.fx_rate_saved" && e.TargetID == "EGP"
+	}) {
+		t.Error("billing.fx_rate_saved not in the admin log")
+	}
+	if _, err = f.cli.FXRates(ctx); !errs.Is(err, errs.KindUnavailable) {
+		t.Fatalf("cli: %v", err)
+	}
+
+	before, err := f.deps.Collection.CollectionSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.deps.Collection.SaveCollectionSettings(context.Background(), before) })
+	if _, err = f.svc.SaveCollectionSettings(ctx, false, false, map[string]int64{"USD": 2000}, "x"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("a short reason: %v", err)
+	}
+	if _, err = f.svc.SaveCollectionSettings(ctx, false, false, map[string]int64{"USD": 5}, "too little"); !errs.Is(err, errs.KindValidation) {
+		t.Fatalf("out of bounds: %v", err)
+	}
+	got, err := f.svc.SaveCollectionSettings(ctx, before.Prepaid, before.Card, map[string]int64{"USD": 2000}, "the dollar's minimum")
+	if err != nil || got.Minimums["USD"] != 2000 || got.Minimums["EGP"] != before.Minimums["EGP"] || got.Minimums["SAR"] != before.Minimums["SAR"] {
+		t.Fatalf("saved = %+v, %v", got, err)
+	}
+	if _, err = f.cli.SaveCollectionSettings(ctx, false, false, map[string]int64{"USD": 2000}, "no collection"); err == nil {
+		t.Fatal("saved without billing's collection")
 	}
 }

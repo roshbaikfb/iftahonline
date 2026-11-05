@@ -24,28 +24,34 @@ func (s *Service) CollectionSettings(ctx context.Context) (billing.CollectionSet
 	return s.d.Collection.CollectionSettings(ctx)
 }
 
-// SaveCollectionSettings writes them, recorded first (refused settings
-// leave nothing to record).
-func (s *Service) SaveCollectionSettings(ctx context.Context, c billing.CollectionSettings, rawReason string) error {
+// SaveCollectionSettings writes the ways and the minimums given, recorded
+// first (refused settings leave nothing to record). A currency left out
+// keeps its minimum (ADR-0090), so the saved settings are returned.
+func (s *Service) SaveCollectionSettings(ctx context.Context, prepaid, card bool, minimums map[string]int64, rawReason string) (billing.CollectionSettings, error) {
 	who, ok := IdentityFrom(ctx)
 	if !ok {
-		return errNoSession
+		return billing.CollectionSettings{}, errNoSession
 	}
 	if s.d.Collection == nil {
-		return errNoCollection
+		return billing.CollectionSettings{}, errNoCollection
 	}
 	reason, err := domain.ValidateReason(rawReason)
 	if err != nil {
-		return err
+		return billing.CollectionSettings{}, err
 	}
+	current, err := s.d.Collection.CollectionSettings(ctx)
+	if err != nil {
+		return billing.CollectionSettings{}, err
+	}
+	c := current.Merge(prepaid, card, minimums)
 	if err = c.Validate(); err != nil {
-		return err
+		return billing.CollectionSettings{}, err
 	}
 	if err = s.audit(ctx, &who.AdminID, "billing.collection_saved", "billing_settings", "collection",
 		map[string]any{"reason": reason, "prepaid": c.Prepaid, "card": c.Card, "minimums": c.Minimums}); err != nil {
-		return err
+		return billing.CollectionSettings{}, err
 	}
-	return s.d.Collection.SaveCollectionSettings(ctx, c)
+	return c, s.d.Collection.SaveCollectionSettings(ctx, c)
 }
 
 // StoreBalance is store id's prepaid balance and its latest entries.

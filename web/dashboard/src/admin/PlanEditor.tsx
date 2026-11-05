@@ -257,7 +257,7 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
             </div>
             <div className="price-rows">
               {currencies.map((c) => {
-                const f = draft.fees[c] ?? { rate: '', min: '', max: '' };
+                const f = draft.fees[c] ?? { rate: '', fixed: '', min: '', max: '' };
                 const set = (patch: Partial<typeof f>) => {
                   edit({ fees: { ...draft.fees, [c]: { ...f, ...patch } } });
                 };
@@ -267,6 +267,10 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
                     <label>
                       <span className="field-label">النسبة %</span>
                       <input aria-label={`${c} النسبة`} value={f.rate} onChange={(e) => { set({ rate: e.target.value }); }} inputMode="decimal" dir="ltr" />
+                    </label>
+                    <label>
+                      <span className="field-label">مبلغ ثابت لكل طلب</span>
+                      <input aria-label={`${c} مبلغ ثابت`} value={f.fixed} onChange={(e) => { set({ fixed: e.target.value }); }} inputMode="decimal" dir="ltr" />
                     </label>
                     <label>
                       <span className="field-label">حد أدنى</span>

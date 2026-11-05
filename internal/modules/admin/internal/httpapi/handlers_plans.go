@@ -98,8 +98,9 @@ func toPlan(p billing.PlanVersion) AdminPlan {
 		out.Grants = append(out.Grants, AdminPlanGrant{Feature: key, Unlimited: &unlimited, Value: &value})
 	}
 	for i, f := range p.Fees {
-		minMinor := f.MinMinor
-		out.Fees[i] = AdminPlanFee{Currency: AdminPlanFeeCurrency(f.Currency), RateBps: int(f.RateBps), MinMinor: &minMinor, MaxMinor: f.MaxMinor}
+		minMinor, fixed := f.MinMinor, f.FixedMinor
+		out.Fees[i] = AdminPlanFee{Currency: AdminPlanFeeCurrency(f.Currency), RateBps: int(f.RateBps), FixedMinor: &fixed, MinMinor: &minMinor,
+			MaxMinor: f.MaxMinor}
 	}
 	return out
 }
@@ -141,6 +142,9 @@ func fromPlanInput(in AdminPlanInput) (billing.PlanVersion, error) {
 			fee := billing.CurrencyFee{Currency: string(f.Currency), FeeRule: billing.FeeRule{RateBps: int32(min(max(f.RateBps, -1), 10001)), MaxMinor: f.MaxMinor}} //nolint:gosec // clamped
 			if f.MinMinor != nil {
 				fee.MinMinor = *f.MinMinor
+			}
+			if f.FixedMinor != nil {
+				fee.FixedMinor = *f.FixedMinor
 			}
 			v.Fees = append(v.Fees, fee)
 		}

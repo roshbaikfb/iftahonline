@@ -85,7 +85,7 @@ func (s *Service) SwitchAgencyStores(ctx context.Context, id ulid.ID, stores []u
 
 // CreateAgency opens an agency account. It is recorded once billing has
 // given it its ID: a refused creation leaves nothing to record.
-func (s *Service) CreateAgency(ctx context.Context, name, currency, planCode, rawReason string) (AgencyDetail, error) {
+func (s *Service) CreateAgency(ctx context.Context, name, currency, country, planCode, rawReason string) (AgencyDetail, error) {
 	who, a, err := s.agencies(ctx)
 	if err != nil {
 		return AgencyDetail{}, err
@@ -94,12 +94,12 @@ func (s *Service) CreateAgency(ctx context.Context, name, currency, planCode, ra
 	if err != nil {
 		return AgencyDetail{}, err
 	}
-	ag, err := a.CreateAgency(ctx, name, currency, planCode)
+	ag, err := a.CreateAgency(ctx, name, currency, country, planCode)
 	if err != nil {
 		return AgencyDetail{}, err
 	}
 	if err = s.audit(ctx, &who.AdminID, "agency.created", "agency", ag.ID.String(),
-		map[string]any{"reason": reason, "name": ag.Name, "currency": ag.Currency, "plan_code": ag.PlanCode}); err != nil {
+		map[string]any{"reason": reason, "name": ag.Name, "currency": ag.Currency, "country": ag.Country, "plan_code": ag.PlanCode}); err != nil {
 		return AgencyDetail{}, err
 	}
 	return AgencyDetail{Agency: ag, Stores: []ulid.ID{}}, nil

@@ -23,6 +23,7 @@ var (
 	ErrInvalidRatio     = errors.New("money: invalid allocation ratios")
 	ErrInvalidRounding  = errors.New("money: invalid rounding mode")
 	ErrSyntax           = errors.New("money: invalid amount syntax")
+	ErrInvalidRate      = errors.New("money: invalid exchange rate")
 )
 
 // Currency is an ISO 4217 code supported by the platform.
@@ -257,6 +258,39 @@ func (m Money) Allocate(ratios ...int64) ([]Money, error) {
 		remainder -= step
 	}
 	return parts, nil
+}
+
+// RateScale is the fixed point of an exchange rate: a rate is the units
+// of one currency per unit of another, times RateScale (3.75 is
+// 3_750_000).
+const RateScale = 1_000_000
+
+// Convert returns m in currency to at rate, the units of m's currency per
+// one unit of to times RateScale: 375.00 SAR at 3_750_000 is 100.00 USD.
+// Currencies of different precision are scaled. Rounded with mode.
+func (m Money) Convert(to Currency, rate int64, mode RoundingMode) (Money, error) {
+	if err := m.valid(); err != nil {
+		return Money{}, err
+	}
+	toInfo, ok := to.info()
+	if !ok {
+		return Money{}, fmt.Errorf("%w: %q", ErrUnknownCurrency, to)
+	}
+	if rate <= 0 {
+		return Money{}, ErrInvalidRate
+	}
+	from, _ := m.currency.info()
+	// amount × 10^to × scale ÷ (10^from × rate): the factors are at most
+	// 10^3 × 10^6 and 10^3 × rate, so only a vast rate overflows.
+	hi, den := bits.Mul64(from.scale, uint64(rate))
+	if hi != 0 || den > math.MaxInt64 {
+		return Money{}, ErrOverflow
+	}
+	v, err := mulDiv(m.amount, int64(toInfo.scale)*RateScale, int64(den), mode) //nolint:gosec // both factors are bounded above.
+	if err != nil {
+		return Money{}, err
+	}
+	return Money{amount: v, currency: to}, nil
 }
 
 // mulDiv computes a*b/d with a 128-bit intermediate and the given rounding.

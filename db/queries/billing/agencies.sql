@@ -6,7 +6,7 @@ VALUES (@id, 'agency', @name, @currency, @country, @plan_code);
 
 -- name: ListAgencies :many
 SELECT id::uuid AS id, name::text AS name, currency::text AS currency, plan_code::text AS plan_code,
-       created_at::timestamptz AS created_at, stores::bigint AS stores
+       created_at::timestamptz AS created_at, stores::bigint AS stores, country::text AS country
 FROM app.agency_accounts();
 
 -- name: LockAgency :one

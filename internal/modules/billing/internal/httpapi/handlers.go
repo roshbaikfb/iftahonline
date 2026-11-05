@@ -102,10 +102,14 @@ func toBilling(s app.Summary) Billing {
 		out.Collection = &c
 	}
 	if s.Switch != nil {
+		cur := BillingSwitchOfferCurrency(s.Switch.Currency)
+		fixed := s.Switch.FixedMinor
 		o := struct {
-			Offered []BillingSwitchOfferOffered `json:"offered"`
-			RateBps int                         `json:"rate_bps"`
-		}{RateBps: int(s.Switch.RateBps), Offered: make([]BillingSwitchOfferOffered, len(s.Switch.Offered))}
+			Currency   *BillingSwitchOfferCurrency `json:"currency,omitempty"`
+			FixedMinor *int64                      `json:"fixed_minor,omitempty"`
+			Offered    []BillingSwitchOfferOffered `json:"offered"`
+			RateBps    int                         `json:"rate_bps"`
+		}{Currency: &cur, FixedMinor: &fixed, RateBps: int(s.Switch.RateBps), Offered: make([]BillingSwitchOfferOffered, len(s.Switch.Offered))}
 		for i, w := range s.Switch.Offered {
 			o.Offered[i] = BillingSwitchOfferOffered(w)
 		}
@@ -173,7 +177,8 @@ func (h *Handlers) ListBillingPlans(ctx context.Context, _ ListBillingPlansReque
 			MonthlyMinor: p.Monthly, AnnualMinor: p.Annual, Current: p.Current, TrialAvailable: p.TrialAvailable,
 			Grants: make([]BillingGrant, 0, len(p.Grants))}
 		if p.Fee != nil {
-			bp.Fee = &BillingPlanFee{RateBps: int(p.Fee.RateBps), MinMinor: p.Fee.MinMinor, MaxMinor: p.Fee.MaxMinor}
+			fixed := p.Fee.FixedMinor
+			bp.Fee = &BillingPlanFee{RateBps: int(p.Fee.RateBps), FixedMinor: &fixed, MinMinor: p.Fee.MinMinor, MaxMinor: p.Fee.MaxMinor}
 		}
 		for _, key := range slices.Sorted(maps.Keys(p.Grants)) {
 			g := p.Grants[key]

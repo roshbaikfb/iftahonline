@@ -61,7 +61,7 @@ type Balance struct {
 }
 
 // StoreBalance is the balance of the store-in-ctx's own account; a store
-// never invoiced has none yet, so 0 in its currency.
+// never invoiced has none yet, so 0 in the currency it would open in.
 func (s *Service) StoreBalance(ctx context.Context) (Balance, error) {
 	var out Balance
 	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
@@ -81,7 +81,8 @@ func (s *Service) StoreBalance(ctx context.Context) (Balance, error) {
 			if iErr != nil {
 				return iErr
 			}
-			out = Balance{Currency: info.Currency, MinimumMinor: settings.Minimums[info.Currency], Offered: settings.Offered()}
+			cur := info.billed()
+			out = Balance{Currency: cur, MinimumMinor: settings.Minimums[cur], Offered: settings.Offered()}
 			out.Level = domain.LevelOf(0, out.MinimumMinor)
 			return nil
 		}
@@ -149,29 +150,18 @@ func (s *Service) storeInfo(ctx context.Context) (StoreInfo, error) {
 	return s.stores(ctx)
 }
 
-// ownBalanceTx is the store-in-ctx's own account, opened when it has
-// none (in info's currency), behind its wall, and its balance locked.
-// A store with no billing row, and an agency's store, are conflicts.
+// ownBalanceTx is the store-in-ctx's own account (storeAccountTx),
+// behind its wall, and its balance locked. A store with no billing row,
+// and an agency's store, are conflicts.
 func (s *Service) ownBalanceTx(ctx context.Context, tx pgx.Tx, info StoreInfo) (ulid.ID, store.Balance, error) {
-	account, has, err := store.SubscriptionAccount(ctx, tx)
+	acct, err := s.storeAccountTx(ctx, tx, info)
 	if errors.Is(err, store.ErrNoSubscription) {
 		return ulid.ID{}, store.Balance{}, errNoBilling
 	}
 	if err != nil {
 		return ulid.ID{}, store.Balance{}, err
 	}
-	if !has {
-		if info.Currency == "" {
-			return ulid.ID{}, store.Balance{}, errors.New("billing: no stores")
-		}
-		account = s.ids.New()
-		if err = store.OpenStoreAccount(ctx, tx, domain.Account{ID: account, Kind: domain.AccountStore, Name: info.Name,
-			Currency: info.Currency, Country: domain.CountryOf(info.Currency)}); err != nil {
-			return ulid.ID{}, store.Balance{}, err
-		}
-	} else if err = store.UseAccount(ctx, tx, account); err != nil {
-		return ulid.ID{}, store.Balance{}, err
-	}
+	account := acct.ID
 	b, err := store.LockBalance(ctx, tx, account)
 	if err != nil {
 		return ulid.ID{}, store.Balance{}, err

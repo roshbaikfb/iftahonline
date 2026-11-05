@@ -11,6 +11,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
+	countries "github.com/roshbaikfb/iftahonline/internal/platform/country"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/event"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -28,7 +29,8 @@ var (
 	errNoAgency         = errs.NotFound("agency_not_found", "agency not found")
 	errAgencyPlan       = errs.Validation(errs.FieldError{Field: "plan_code", Code: "invalid", Message: "an agency plan on sale"})
 	errAgencyName       = errs.Validation(errs.FieldError{Field: "name", Code: "invalid", Message: "1 to 120 characters"})
-	errAgencyCurrency   = errs.Validation(errs.FieldError{Field: "currency", Code: "invalid", Message: "EGP, SAR or AED"})
+	errAgencyCurrency   = errs.Validation(errs.FieldError{Field: "currency", Code: "invalid", Message: "EGP in Egypt, USD elsewhere"})
+	errAgencyCountry    = errs.Validation(errs.FieldError{Field: "country", Code: "invalid", Message: "the agency's country (ISO 3166-1 alpha-2): Egypt's pays in EGP, the others' in USD"})
 	errCurrencyMismatch = errs.Conflict("currency_mismatch", "the store's currency is not the agency's")
 	errAlreadyMember    = errs.Conflict("already_member", "the store is in this agency")
 	errOpenInvoice      = errs.Conflict("open_invoice", "the store's own account has an open invoice: settle it first")
@@ -36,18 +38,26 @@ var (
 	errPlanOffSale      = errs.Conflict("plan_off_sale", "the agency's plan is not on sale")
 )
 
-// CreateAgency opens an agency account in currency, on the agency plan
-// planCode.
-func (s *Service) CreateAgency(ctx context.Context, rawName, currency, planCode string) (Agency, error) {
+// CreateAgency opens an agency account of country, billed in currency
+// (its country's: ADR-0090), on the agency plan planCode. An empty
+// country is Egypt for the pound.
+func (s *Service) CreateAgency(ctx context.Context, rawName, currency, country, planCode string) (Agency, error) {
 	name := strings.TrimSpace(rawName)
 	if n := utf8.RuneCountInString(name); n < 1 || n > 120 {
 		return Agency{}, errAgencyName
 	}
-	if !domain.Billed(currency) {
+	if !domain.OnSale(currency) {
 		return Agency{}, errAgencyCurrency
 	}
+	if country == "" && currency == "EGP" {
+		country = "EG"
+	}
+	country, ok := countries.Normalize(country)
+	if !ok || domain.BillingCurrency(country) != currency {
+		return Agency{}, errAgencyCountry
+	}
 	a := Agency{Account: domain.Account{ID: s.ids.New(), Kind: domain.AccountAgency, Name: name, Currency: currency,
-		Country: domain.CountryOf(currency)}, PlanCode: planCode, CreatedAt: s.now().UTC()}
+		Country: country}, PlanCode: planCode, CreatedAt: s.now().UTC()}
 	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) error {
 		p, ok, err := store.ActivePlan(ctx, tx, planCode)
 		if err != nil {
@@ -126,6 +136,12 @@ func (s *Service) JoinAgency(ctx context.Context, agency ulid.ID) error {
 		if err != nil && !errors.Is(err, store.ErrNoSubscription) {
 			return err
 		}
+		// The store joins in the currency it is billed in: its own
+		// account's, or its country's (ADR-0090).
+		billed, err := billedTx(ctx, tx, known(info))
+		if err != nil {
+			return err
+		}
 		if err = store.UseAccount(ctx, tx, agency); err != nil {
 			return err
 		}
@@ -137,7 +153,7 @@ func (s *Service) JoinAgency(ctx context.Context, agency ulid.ID) error {
 			return errNoAgency
 		case hasOld && old == agency:
 			return errAlreadyMember
-		case a.Currency != info.Currency:
+		case a.Currency != billed:
 			return errCurrencyMismatch
 		}
 		if hasOld {

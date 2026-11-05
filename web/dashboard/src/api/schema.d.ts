@@ -3024,6 +3024,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/fx-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Each store currency's rate to the dollar
+         * @description A pay-as-you-sell fee is in the currency its account is billed in:
+         *     the pound in Egypt, the dollar elsewhere. An order in another
+         *     currency is converted at its currency's rate when it is delivered,
+         *     and the fee keeps that rate (ADR-0090).
+         */
+        get: operations["adminListFXRates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/fx-rates/{currency}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A store currency other than the dollar. */
+                currency: "EGP" | "SAR" | "AED";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a currency's rate to the dollar
+         * @description It reaches the fees of orders delivered after it. Recorded in the admin log first.
+         */
+        put: operations["adminSaveFXRate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/collection": {
         parameters: {
             query?: never;
@@ -5688,6 +5734,11 @@ export interface components {
             name: string;
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * @description The agency's country
+             * @example SA
+             */
+            country?: string;
             plan_code: string;
             /** Format: int64 */
             stores: number;
@@ -5715,8 +5766,16 @@ export interface components {
         };
         AdminAgencyInput: {
             name: string;
-            /** @enum {string} */
+            /**
+             * @description Its country's: EGP in Egypt, USD elsewhere (ADR-0090).
+             * @enum {string}
+             */
             currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * @description The agency's country; Egypt when absent with EGP.
+             * @example SA
+             */
+            country?: string;
             plan_code: string;
             /** @description Kept in the admin audit log. */
             reason: string;
@@ -6027,6 +6086,25 @@ export interface components {
             /** @description Kept in the admin audit log. */
             reason: string;
         };
+        AdminFXRate: {
+            /** @enum {string} */
+            currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * Format: int64
+             * @description The currency's units per dollar, times 10^6: the riyal's 3.75 is 3750000.
+             * @example 3750000
+             */
+            per_usd_micros: number;
+        };
+        AdminFXRates: {
+            items: components["schemas"]["AdminFXRate"][];
+        };
+        AdminFXRateInput: {
+            /** Format: int64 */
+            per_usd_micros: number;
+            /** @description Kept in the admin audit log. */
+            reason: string;
+        };
         AdminCollectionSettings: {
             /** @description Merchants may pay their fees from a prepaid balance. */
             prepaid_enabled: boolean;
@@ -6044,6 +6122,7 @@ export interface components {
         AdminCollectionSettingsInput: {
             prepaid_enabled: boolean;
             card_enabled: boolean;
+            /** @description The currencies given; one left out keeps its minimum (ADR-0090). */
             minimums: components["schemas"]["AdminCollectionMinimum"][];
             /** @description Kept in the admin audit log. */
             reason: string;
@@ -6595,6 +6674,12 @@ export interface components {
             currency: "EGP" | "SAR" | "AED" | "USD";
             /** @description 250 is 2.5%. */
             rate_bps: number;
+            /**
+             * Format: int64
+             * @description Added to every delivered order's fee: $0.04 is 4 (ADR-0090).
+             * @default 0
+             */
+            fixed_minor: number;
             /**
              * Format: int64
              * @default 0
@@ -8312,6 +8397,16 @@ export interface components {
             switch_offer?: {
                 /** @description The fee on each delivered order's goods */
                 rate_bps: number;
+                /**
+                 * Format: int64
+                 * @description And the fixed amount per order, in currency (ADR-0090).
+                 */
+                fixed_minor?: number;
+                /**
+                 * @description The currency the store is billed in.
+                 * @enum {string}
+                 */
+                currency?: "EGP" | "SAR" | "AED" | "USD";
                 offered: ("balance" | "card")[];
             };
             cancel_at_period_end?: boolean;
@@ -8431,6 +8526,11 @@ export interface components {
         BillingPlanFee: {
             /** @description 250 is 2.5%. */
             rate_bps: number;
+            /**
+             * Format: int64
+             * @description Added to every delivered order's fee (ADR-0090).
+             */
+            fixed_minor?: number;
             /** Format: int64 */
             min_minor: number;
             /** Format: int64 */
@@ -12777,6 +12877,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListFXRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFXRates"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSaveFXRate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A store currency other than the dollar. */
+                currency: "EGP" | "SAR" | "AED";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminFXRateInput"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFXRate"];
+                };
             };
             default: components["responses"]["Problem"];
         };

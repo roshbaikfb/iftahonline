@@ -121,8 +121,9 @@ func (v PlanVersion) Validate() error {
 	return nil
 }
 
-// checkPrices: a paid plan sells a monthly price in each currency (an
-// annual one is optional); other plans sell nothing.
+// checkPrices: a paid plan sells a monthly price in each currency on sale
+// (an annual one is optional, as are the legacy currencies' prices for
+// the accounts still billed in them); other plans sell nothing.
 func (v PlanVersion) checkPrices() []errs.FieldError {
 	var fe []errs.FieldError
 	seen := map[string]bool{}
@@ -160,8 +161,8 @@ func (v PlanVersion) checkPrices() []errs.FieldError {
 	return fe
 }
 
-// checkFees: pay as you sell has a fee rule in each currency; no other
-// kind has one.
+// checkFees: pay as you sell has a fee rule in each currency on sale (a
+// legacy currency's is optional); no other kind has one.
 func (v PlanVersion) checkFees() []errs.FieldError {
 	if v.Kind != KindPays {
 		if len(v.Fees) > 0 {
@@ -173,9 +174,9 @@ func (v PlanVersion) checkFees() []errs.FieldError {
 	seen := map[string]bool{}
 	for i, f := range v.Fees {
 		field := fmt.Sprintf("fees[%d]", i)
-		if !Billed(f.Currency) || f.RateBps < 0 || f.RateBps > 10000 || f.MinMinor < 0 ||
-			f.MaxMinor != nil && *f.MaxMinor < f.MinMinor || seen[f.Currency] {
-			fe = append(fe, errs.FieldError{Field: field, Code: "invalid", Message: "one per currency; a rate of 0 to 10000 bps; 0 <= min <= max"})
+		if !Billed(f.Currency) || f.RateBps < 0 || f.RateBps > 10000 || f.FixedMinor < 0 || f.FixedMinor > maxMinimum ||
+			f.MinMinor < 0 || f.MaxMinor != nil && *f.MaxMinor < f.MinMinor || seen[f.Currency] {
+			fe = append(fe, errs.FieldError{Field: field, Code: "invalid", Message: "one per currency; a rate of 0 to 10000 bps; a fixed amount of 0 or more; 0 <= min <= max"})
 		}
 		seen[f.Currency] = true
 	}

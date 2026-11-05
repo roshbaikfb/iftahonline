@@ -46,6 +46,7 @@ func paidVersion(code string, egp int64) domain.PlanVersion {
 			{Currency: "EGP", Cycle: domain.Monthly, AmountMinor: egp},
 			{Currency: "SAR", Cycle: domain.Monthly, AmountMinor: 1000},
 			{Currency: "AED", Cycle: domain.Monthly, AmountMinor: 1000},
+			{Currency: "USD", Cycle: domain.Monthly, AmountMinor: 300},
 		},
 		Grants: domain.Grants{"products": {Value: 10}, "coupons": {Value: 1}, "staff": {Unlimited: true}},
 	}
@@ -108,8 +109,9 @@ func TestPublishPlanVersions(t *testing.T) {
 		mine[0].Grants["staff"] != (domain.Grant{Unlimited: true}) || mine[0].Grants["products"].Value != 10 {
 		t.Fatalf("versions = %+v", mine)
 	}
-	// The seeded pay-as-you-sell plan lists its fees.
-	if i := slices.IndexFunc(plans, func(p domain.PlanVersion) bool { return p.Kind == domain.KindPays && p.Active }); i < 0 || len(plans[i].Fees) != 3 {
+	// The seeded pay-as-you-sell plan lists its fees: the dollar's too
+	// (ADR-0090).
+	if i := slices.IndexFunc(plans, func(p domain.PlanVersion) bool { return p.Kind == domain.KindPays && p.Active }); i < 0 || len(plans[i].Fees) != 4 {
 		t.Fatalf("pays fees missing: %+v", plans)
 	}
 

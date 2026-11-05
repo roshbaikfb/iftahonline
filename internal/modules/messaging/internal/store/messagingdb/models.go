@@ -324,6 +324,7 @@ type BillingSetting struct {
 	MinimumSarMinor int64
 	MinimumAedMinor int64
 	UpdatedAt       time.Time
+	MinimumUsdMinor int64
 }
 
 type CarrierConnection struct {
@@ -469,6 +470,12 @@ type FoundingProgram struct {
 	Seats       int32
 	DiscountBps int32
 	UpdatedAt   time.Time
+}
+
+type FxRate struct {
+	Currency     string
+	PerUsdMicros int64
+	UpdatedAt    time.Time
 }
 
 type InventoryLevel struct {
@@ -777,11 +784,12 @@ type PlanEntitlement struct {
 }
 
 type PlanFee struct {
-	PlanID   ulid.ID
-	Currency string
-	RateBps  int32
-	MinMinor int64
-	MaxMinor *int64
+	PlanID     ulid.ID
+	Currency   string
+	RateBps    int32
+	MinMinor   int64
+	MaxMinor   *int64
+	FixedMinor int64
 }
 
 type PlanPrice struct {
@@ -961,21 +969,25 @@ type RiverQueue struct {
 }
 
 type SellFee struct {
-	StoreID     ulid.ID
-	OrderID     ulid.ID
-	Period      time.Time
-	PlanID      ulid.ID
-	BaseMinor   int64
-	RateBps     int32
-	FeeMinor    int64
-	Currency    string
-	Status      string
-	DeliveredAt time.Time
-	ReturnedAt  *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	InvoiceID   *ulid.ID
-	Prepaid     bool
+	StoreID        ulid.ID
+	OrderID        ulid.ID
+	Period         time.Time
+	PlanID         ulid.ID
+	BaseMinor      int64
+	RateBps        int32
+	FeeMinor       int64
+	Currency       string
+	Status         string
+	DeliveredAt    time.Time
+	ReturnedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	InvoiceID      *ulid.ID
+	Prepaid        bool
+	FixedMinor     int64
+	OrderCurrency  *string
+	OrderBaseMinor *int64
+	RateMicros     *int64
 }
 
 type Shipment struct {

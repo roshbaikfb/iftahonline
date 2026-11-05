@@ -47,8 +47,8 @@ func billingOrders(f orders.Fulfilment) billing.Orders {
 	}
 }
 
-// billingStores adapts tenancy to what invoices need: a store's name and
-// currency.
+// billingStores adapts tenancy to what invoices need: a store's name,
+// currency and country (its billing currency's, ADR-0090).
 func billingStores(ten *tenancy.Module) billing.Stores {
 	stores := ten.Service()
 	return func(ctx context.Context) (billing.StoreInfo, error) {
@@ -56,7 +56,7 @@ func billingStores(ten *tenancy.Module) billing.Stores {
 		if err != nil {
 			return billing.StoreInfo{}, err
 		}
-		return billing.StoreInfo{Name: st.Name, Currency: string(st.Currency)}, nil
+		return billing.StoreInfo{Name: st.Name, Currency: string(st.Currency), Country: st.Country}, nil
 	}
 }
 

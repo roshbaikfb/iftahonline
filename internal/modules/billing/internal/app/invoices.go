@@ -20,7 +20,66 @@ import (
 // StoreInfo is what invoices need of a store.
 type StoreInfo struct {
 	Name     string
-	Currency string
+	Currency string // what the store sells in
+	Country  string // the merchant's (ADR-0088); empty is its currency's
+}
+
+// country is the merchant's country.
+func (i StoreInfo) country() string {
+	if i.Country != "" {
+		return i.Country
+	}
+	return domain.CountryOf(i.Currency)
+}
+
+// billed is the currency a store opening an account now is billed in
+// (ADR-0090): the pound in Egypt, the dollar elsewhere. An account keeps
+// the currency it opened in.
+func (i StoreInfo) billed() string { return domain.BillingCurrency(i.country()) }
+
+// billedTx is the currency the store in ctx is billed in: its account's,
+// or the one it would open in (StoreInfo.billed, read from info only
+// then). It leaves tx behind the account's wall when it has one.
+func billedTx(ctx context.Context, tx pgx.Tx, info func() (StoreInfo, error)) (string, error) {
+	account, has, err := accountOf(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	if !has {
+		i, iErr := info()
+		return i.billed(), iErr
+	}
+	if err = store.UseAccount(ctx, tx, account); err != nil {
+		return "", err
+	}
+	a, err := store.Account(ctx, tx, account)
+	return a.Currency, err
+}
+
+// known is info already read, for billedTx.
+func known(info StoreInfo) func() (StoreInfo, error) {
+	return func() (StoreInfo, error) { return info, nil }
+}
+
+// storeAccountTx is the store-in-ctx's account, and puts tx behind its
+// wall: its own or its agency's, or one opened now in its country's
+// billing currency when it has none.
+func (s *Service) storeAccountTx(ctx context.Context, tx pgx.Tx, info StoreInfo) (domain.Account, error) {
+	account, has, err := store.SubscriptionAccount(ctx, tx)
+	if err != nil {
+		return domain.Account{}, err
+	}
+	if !has {
+		if info.Currency == "" {
+			return domain.Account{}, errors.New("billing: no stores")
+		}
+		a := domain.Account{ID: s.ids.New(), Kind: domain.AccountStore, Name: info.Name, Currency: info.billed(), Country: info.country()}
+		return a, store.OpenStoreAccount(ctx, tx, a)
+	}
+	if err = store.UseAccount(ctx, tx, account); err != nil {
+		return domain.Account{}, err
+	}
+	return store.Account(ctx, tx, account)
 }
 
 // Stores reads the store in ctx; cmd/platform adapts tenancy.
@@ -88,21 +147,14 @@ func (s *Service) InvoiceStore(ctx context.Context, period time.Time) error {
 		return err
 	}
 	return postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		account, ok, err := store.SubscriptionAccount(ctx, tx)
+		acct, err := s.storeAccountTx(ctx, tx, info)
 		if errors.Is(err, store.ErrNoSubscription) {
 			return nil // nothing to bill: fees and renewals need a plan
 		}
 		if err != nil {
 			return err
 		}
-		if !ok {
-			account = s.ids.New()
-			if err = store.OpenStoreAccount(ctx, tx, domain.Account{ID: account, Kind: domain.AccountStore, Name: info.Name,
-				Currency: info.Currency, Country: domain.CountryOf(info.Currency)}); err != nil {
-				return err
-			}
-		}
-		if _, err = s.jobs.InsertTx(ctx, tx, InvoiceAccountArgs{AccountID: account, Period: period}, jobs.Unique()); err != nil {
+		if _, err = s.jobs.InsertTx(ctx, tx, InvoiceAccountArgs{AccountID: acct.ID, Period: period}, jobs.Unique()); err != nil {
 			return fmt.Errorf("billing: enqueue account invoice: %w", err)
 		}
 		return nil

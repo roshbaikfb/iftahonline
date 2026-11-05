@@ -22,7 +22,7 @@ SELECT plan_id, currency, cycle, amount_minor FROM plan_prices ORDER BY plan_id,
 SELECT plan_id, feature, value FROM plan_entitlements ORDER BY plan_id, feature;
 
 -- name: ListAllPlanFees :many
-SELECT plan_id, currency, rate_bps, min_minor, max_minor FROM plan_fees ORDER BY plan_id, currency;
+SELECT plan_id, currency, rate_bps, fixed_minor, min_minor, max_minor FROM plan_fees ORDER BY plan_id, currency;
 
 -- name: LockPlanCode :exec
 -- Serializes publications of one plan code until the transaction ends.
@@ -49,7 +49,7 @@ INSERT INTO plan_prices (plan_id, currency, cycle, amount_minor) VALUES (@plan_i
 INSERT INTO plan_entitlements (plan_id, feature, value) VALUES (@plan_id, @feature, @value);
 
 -- name: InsertPlanFee :exec
-INSERT INTO plan_fees (plan_id, currency, rate_bps, min_minor, max_minor) VALUES (@plan_id, @currency, @rate_bps, @min_minor, @max_minor);
+INSERT INTO plan_fees (plan_id, currency, rate_bps, fixed_minor, min_minor, max_minor) VALUES (@plan_id, @currency, @rate_bps, @fixed_minor, @min_minor, @max_minor);
 
 -- name: PlanSubscribers :many
 -- Subscriptions on each plan version that are trialing, active or past

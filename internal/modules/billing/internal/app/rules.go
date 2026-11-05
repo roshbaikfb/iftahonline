@@ -100,3 +100,22 @@ func (s *Service) RemoveTax(ctx context.Context, country string) error {
 		return err
 	})
 }
+
+// FXRates are each store currency's rate to the dollar (ADR-0090).
+func (s *Service) FXRates(ctx context.Context) ([]domain.FXRate, error) {
+	var out []domain.FXRate
+	err := postgres.InTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		out, txErr = store.FXRates(ctx, tx)
+		return txErr
+	})
+	return out, err
+}
+
+// SaveFXRate checks and writes a currency's rate (the console's pool): the
+// fees of orders delivered after it convert at it.
+func (s *Service) SaveFXRate(ctx context.Context, r domain.FXRate) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+	return postgres.InTx(ctx, s.db, func(tx pgx.Tx) error { return store.SaveFXRate(ctx, tx, r) })
+}

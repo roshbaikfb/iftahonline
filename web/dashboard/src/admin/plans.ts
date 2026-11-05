@@ -7,7 +7,9 @@ export type PlanInput = components['schemas']['AdminPlanInput'];
 export type Feature = components['schemas']['AdminFeature'];
 export type Kind = Plan['kind'];
 
-export const currencies = ['EGP', 'SAR', 'AED'] as const;
+// currencies are billing's: the pound and the dollar on sale, then the
+// riyal and the dirham that older accounts are still billed in (ADR-0090).
+export const currencies = ['EGP', 'USD', 'SAR', 'AED'] as const;
 export const cycles = ['monthly', 'annual'] as const;
 type Currency = (typeof currencies)[number];
 type Cycle = (typeof cycles)[number];
@@ -25,7 +27,7 @@ export interface Draft {
   sort: string;
   public: boolean;
   prices: Record<string, string>; // "EGP-monthly" -> "649.00"
-  fees: Record<string, { rate: string; min: string; max: string }>; // by currency
+  fees: Record<string, { rate: string; fixed: string; min: string; max: string }>; // by currency
   grants: Record<string, { value: string; unlimited: boolean }>; // by feature; empty value: not granted
 }
 
@@ -48,7 +50,12 @@ export function draftFrom(p: Plan | undefined, kind: Kind = 'subscription'): Dra
   };
   for (const pr of p?.prices ?? []) d.prices[priceKey(pr.currency, pr.cycle)] = toMajor(pr.amount_minor);
   for (const f of p?.fees ?? []) {
-    d.fees[f.currency] = { rate: bpToPercent(f.rate_bps), min: toMajor(f.min_minor), max: f.max_minor === undefined ? '' : toMajor(f.max_minor) };
+    d.fees[f.currency] = {
+      rate: bpToPercent(f.rate_bps),
+      fixed: f.fixed_minor ? toMajor(f.fixed_minor) : '',
+      min: toMajor(f.min_minor),
+      max: f.max_minor === undefined ? '' : toMajor(f.max_minor),
+    };
   }
   for (const g of p?.grants ?? []) d.grants[g.feature] = { value: g.unlimited ? '' : String(g.value ?? 0), unlimited: g.unlimited };
   return d;
@@ -83,10 +90,12 @@ export function toInput(d: Draft, reason: string): PlanInput | string {
       const f = d.fees[c];
       if (!f?.rate.trim()) continue;
       const rate = percentToBp(f.rate);
+      const fixed = f.fixed.trim() ? toMinor(f.fixed) : 0;
       const min = f.min.trim() ? toMinor(f.min) : 0;
       const max = f.max.trim() ? toMinor(f.max) : undefined;
-      if (rate === undefined || min === undefined || (f.max.trim() && max === undefined)) return `رسوم ${c} غير صحيحة`;
-      fees.push(max === undefined ? { currency: c, rate_bps: rate, min_minor: min } : { currency: c, rate_bps: rate, min_minor: min, max_minor: max });
+      if (rate === undefined || fixed === undefined || min === undefined || (f.max.trim() && max === undefined)) return `رسوم ${c} غير صحيحة`;
+      const fee = { currency: c, rate_bps: rate, fixed_minor: fixed, min_minor: min };
+      fees.push(max === undefined ? fee : { ...fee, max_minor: max });
     }
     input.fees = fees;
   }
@@ -115,9 +124,8 @@ export function byCode(plans: Plan[]): { code: string; head: Plan; versions: Pla
   });
 }
 
-// currencyName is every currency's name, the dollar included (stores may
-// sell in it, ADR-0088); billing's own prices are in currencies.
-export const currencyName: Record<Currency | 'USD', string> = {
+// currencyName is every currency's name.
+export const currencyName: Record<Currency, string> = {
   EGP: 'الجنيه المصري',
   SAR: 'الريال السعودي',
   AED: 'الدرهم الإماراتي',
@@ -163,9 +171,12 @@ export function headline(p: Plan): { price: string; per: string; sub: string } {
 
 // otherPrices are a card's monthly prices outside Egypt, for its title.
 export function otherPrices(p: Plan): string {
-  return (['SAR', 'AED'] as const)
-    .map((c) => priceOf(p, c, 'monthly'))
-    .flatMap((v, i) => (v === undefined ? [] : [`${money(v, i === 0 ? 'SAR' : 'AED')} شهريًا`]))
+  return currencies
+    .filter((c) => c !== 'EGP')
+    .flatMap((c) => {
+      const v = priceOf(p, c, 'monthly');
+      return v === undefined ? [] : [`${money(v, c)} شهريًا`];
+    })
     .join(' · ');
 }
 

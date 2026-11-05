@@ -66,15 +66,16 @@ func (q *Queries) InsertPlan(ctx context.Context, arg InsertPlanParams) error {
 }
 
 const insertPlanFee = `-- name: InsertPlanFee :exec
-INSERT INTO plan_fees (plan_id, currency, rate_bps, min_minor, max_minor) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO plan_fees (plan_id, currency, rate_bps, fixed_minor, min_minor, max_minor) VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertPlanFeeParams struct {
-	PlanID   ulid.ID
-	Currency string
-	RateBps  int32
-	MinMinor int64
-	MaxMinor *int64
+	PlanID     ulid.ID
+	Currency   string
+	RateBps    int32
+	FixedMinor int64
+	MinMinor   int64
+	MaxMinor   *int64
 }
 
 func (q *Queries) InsertPlanFee(ctx context.Context, arg InsertPlanFeeParams) error {
@@ -82,6 +83,7 @@ func (q *Queries) InsertPlanFee(ctx context.Context, arg InsertPlanFeeParams) er
 		arg.PlanID,
 		arg.Currency,
 		arg.RateBps,
+		arg.FixedMinor,
 		arg.MinMinor,
 		arg.MaxMinor,
 	)
@@ -142,22 +144,32 @@ func (q *Queries) LatestPlanVersion(ctx context.Context, code string) (LatestPla
 }
 
 const listAllPlanFees = `-- name: ListAllPlanFees :many
-SELECT plan_id, currency, rate_bps, min_minor, max_minor FROM plan_fees ORDER BY plan_id, currency
+SELECT plan_id, currency, rate_bps, fixed_minor, min_minor, max_minor FROM plan_fees ORDER BY plan_id, currency
 `
 
-func (q *Queries) ListAllPlanFees(ctx context.Context) ([]PlanFee, error) {
+type ListAllPlanFeesRow struct {
+	PlanID     ulid.ID
+	Currency   string
+	RateBps    int32
+	FixedMinor int64
+	MinMinor   int64
+	MaxMinor   *int64
+}
+
+func (q *Queries) ListAllPlanFees(ctx context.Context) ([]ListAllPlanFeesRow, error) {
 	rows, err := q.db.Query(ctx, listAllPlanFees)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PlanFee{}
+	items := []ListAllPlanFeesRow{}
 	for rows.Next() {
-		var i PlanFee
+		var i ListAllPlanFeesRow
 		if err := rows.Scan(
 			&i.PlanID,
 			&i.Currency,
 			&i.RateBps,
+			&i.FixedMinor,
 			&i.MinMinor,
 			&i.MaxMinor,
 		); err != nil {

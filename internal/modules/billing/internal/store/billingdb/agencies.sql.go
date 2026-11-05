@@ -104,7 +104,7 @@ func (q *Queries) InsertAgency(ctx context.Context, arg InsertAgencyParams) erro
 
 const listAgencies = `-- name: ListAgencies :many
 SELECT id::uuid AS id, name::text AS name, currency::text AS currency, plan_code::text AS plan_code,
-       created_at::timestamptz AS created_at, stores::bigint AS stores
+       created_at::timestamptz AS created_at, stores::bigint AS stores, country::text AS country
 FROM app.agency_accounts()
 `
 
@@ -115,6 +115,7 @@ type ListAgenciesRow struct {
 	PlanCode  string
 	CreatedAt time.Time
 	Stores    int64
+	Country   string
 }
 
 func (q *Queries) ListAgencies(ctx context.Context) ([]ListAgenciesRow, error) {
@@ -133,6 +134,7 @@ func (q *Queries) ListAgencies(ctx context.Context) ([]ListAgenciesRow, error) {
 			&i.PlanCode,
 			&i.CreatedAt,
 			&i.Stores,
+			&i.Country,
 		); err != nil {
 			return nil, err
 		}

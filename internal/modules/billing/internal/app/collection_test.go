@@ -12,7 +12,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 )
 
-var approvedMinimums = map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000} //nolint:gochecknoglobals // a test constant
+var approvedMinimums = map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000, "USD": 1000} //nolint:gochecknoglobals // a test constant
 
 // TestCollectionSettings: both ways start off with the approved
 // minimums; only the console's role may change them, within bounds
@@ -33,11 +33,11 @@ func TestCollectionSettings(t *testing.T) {
 	})
 
 	got, err := f.svc.CollectionSettings(t.Context())
-	if err != nil || got.Prepaid || got.Card || len(got.Minimums) != 3 || got.Minimums["EGP"] != 30000 || got.Minimums["SAR"] != 10000 ||
-		got.Minimums["AED"] != 10000 {
+	if err != nil || got.Prepaid || got.Card || len(got.Minimums) != 4 || got.Minimums["EGP"] != 30000 || got.Minimums["SAR"] != 10000 ||
+		got.Minimums["AED"] != 10000 || got.Minimums["USD"] != 1000 {
 		t.Fatalf("defaults = %+v, %v", got, err)
 	}
-	want := domain.CollectionSettings{Prepaid: true, Card: true, Minimums: map[string]int64{"EGP": 50000, "SAR": 15000, "AED": 15000}}
+	want := domain.CollectionSettings{Prepaid: true, Card: true, Minimums: map[string]int64{"EGP": 50000, "SAR": 15000, "AED": 15000, "USD": 1500}}
 	if err = f.svc.SaveCollectionSettings(t.Context(), want); err == nil {
 		t.Fatal("the merchants' role changed the settings")
 	}

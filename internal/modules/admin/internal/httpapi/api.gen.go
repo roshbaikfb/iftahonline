@@ -412,6 +412,30 @@ func (e AdminDuplicatePaymentCurrency) Valid() bool {
 	}
 }
 
+// Defines values for AdminFXRateCurrency.
+const (
+	AdminFXRateCurrencyAED AdminFXRateCurrency = "AED"
+	AdminFXRateCurrencyEGP AdminFXRateCurrency = "EGP"
+	AdminFXRateCurrencySAR AdminFXRateCurrency = "SAR"
+	AdminFXRateCurrencyUSD AdminFXRateCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the AdminFXRateCurrency enum.
+func (e AdminFXRateCurrency) Valid() bool {
+	switch e {
+	case AdminFXRateCurrencyAED:
+		return true
+	case AdminFXRateCurrencyEGP:
+		return true
+	case AdminFXRateCurrencySAR:
+		return true
+	case AdminFXRateCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminFailedReasonOutcome.
 const (
 	AdminFailedReasonOutcomeDeclined AdminFailedReasonOutcome = "declined"
@@ -1318,6 +1342,30 @@ func (e BillingStatus) Valid() bool {
 	}
 }
 
+// Defines values for BillingSwitchOfferCurrency.
+const (
+	BillingSwitchOfferCurrencyAED BillingSwitchOfferCurrency = "AED"
+	BillingSwitchOfferCurrencyEGP BillingSwitchOfferCurrency = "EGP"
+	BillingSwitchOfferCurrencySAR BillingSwitchOfferCurrency = "SAR"
+	BillingSwitchOfferCurrencyUSD BillingSwitchOfferCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the BillingSwitchOfferCurrency enum.
+func (e BillingSwitchOfferCurrency) Valid() bool {
+	switch e {
+	case BillingSwitchOfferCurrencyAED:
+		return true
+	case BillingSwitchOfferCurrencyEGP:
+		return true
+	case BillingSwitchOfferCurrencySAR:
+		return true
+	case BillingSwitchOfferCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingSwitchOfferOffered.
 const (
 	BillingSwitchOfferOfferedBalance BillingSwitchOfferOffered = "balance"
@@ -1910,6 +1958,10 @@ type AdminAds struct {
 
 // AdminAgency defines model for AdminAgency.
 type AdminAgency struct {
+	// Country The agency's country
+	//
+	// Example: SA
+	Country   *string             `json:"country,omitempty"`
 	CreatedAt time.Time           `json:"created_at"`
 	Currency  AdminAgencyCurrency `json:"currency"`
 
@@ -1934,6 +1986,12 @@ type AdminAgencyDetail struct {
 
 // AdminAgencyInput defines model for AdminAgencyInput.
 type AdminAgencyInput struct {
+	// Country The agency's country; Egypt when absent with EGP.
+	//
+	// Example: SA
+	Country *string `json:"country,omitempty"`
+
+	// Currency Its country's: EGP in Egypt, USD elsewhere (ADR-0090).
 	Currency AdminAgencyInputCurrency `json:"currency"`
 	Name     string                   `json:"name"`
 	PlanCode string                   `json:"plan_code"`
@@ -1942,7 +2000,7 @@ type AdminAgencyInput struct {
 	Reason string `json:"reason"`
 }
 
-// AdminAgencyInputCurrency defines model for AdminAgencyInput.Currency.
+// AdminAgencyInputCurrency Its country's: EGP in Egypt, USD elsewhere (ADR-0090).
 type AdminAgencyInputCurrency string
 
 // AdminAgencyList defines model for AdminAgencyList.
@@ -2143,7 +2201,9 @@ type AdminCollectionSettings struct {
 
 // AdminCollectionSettingsInput defines model for AdminCollectionSettingsInput.
 type AdminCollectionSettingsInput struct {
-	CardEnabled    bool                     `json:"card_enabled"`
+	CardEnabled bool `json:"card_enabled"`
+
+	// Minimums The currencies given; one left out keeps its minimum (ADR-0090).
 	Minimums       []AdminCollectionMinimum `json:"minimums"`
 	PrepaidEnabled bool                     `json:"prepaid_enabled"`
 
@@ -2209,6 +2269,32 @@ type AdminDuplicatePaymentCurrency string
 // AdminDuplicatePaymentList defines model for AdminDuplicatePaymentList.
 type AdminDuplicatePaymentList struct {
 	Items []AdminDuplicatePayment `json:"items"`
+}
+
+// AdminFXRate defines model for AdminFXRate.
+type AdminFXRate struct {
+	Currency AdminFXRateCurrency `json:"currency"`
+
+	// PerUsdMicros The currency's units per dollar, times 10^6: the riyal's 3.75 is 3750000.
+	//
+	// Example: 3750000
+	PerUsdMicros int64 `json:"per_usd_micros"`
+}
+
+// AdminFXRateCurrency defines model for AdminFXRate.Currency.
+type AdminFXRateCurrency string
+
+// AdminFXRateInput defines model for AdminFXRateInput.
+type AdminFXRateInput struct {
+	PerUsdMicros int64 `json:"per_usd_micros"`
+
+	// Reason Kept in the admin audit log.
+	Reason string `json:"reason"`
+}
+
+// AdminFXRates defines model for AdminFXRates.
+type AdminFXRates struct {
+	Items []AdminFXRate `json:"items"`
 }
 
 // AdminFailedReason defines model for AdminFailedReason.
@@ -2735,8 +2821,11 @@ type AdminPlan struct {
 // AdminPlanFee defines model for AdminPlanFee.
 type AdminPlanFee struct {
 	Currency AdminPlanFeeCurrency `json:"currency"`
-	MaxMinor *int64               `json:"max_minor,omitempty"`
-	MinMinor *int64               `json:"min_minor,omitempty"`
+
+	// FixedMinor Added to every delivered order's fee: $0.04 is 4 (ADR-0090).
+	FixedMinor *int64 `json:"fixed_minor,omitempty"`
+	MaxMinor   *int64 `json:"max_minor,omitempty"`
+	MinMinor   *int64 `json:"min_minor,omitempty"`
 
 	// RateBps 250 is 2.5%.
 	RateBps int `json:"rate_bps"`
@@ -3400,7 +3489,12 @@ type Billing struct {
 
 	// SwitchOffer Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided.
 	SwitchOffer *struct {
-		Offered []BillingSwitchOfferOffered `json:"offered"`
+		// Currency The currency the store is billed in.
+		Currency *BillingSwitchOfferCurrency `json:"currency,omitempty"`
+
+		// FixedMinor And the fixed amount per order, in currency (ADR-0090).
+		FixedMinor *int64                      `json:"fixed_minor,omitempty"`
+		Offered    []BillingSwitchOfferOffered `json:"offered"`
 
 		// RateBps The fee on each delivered order's goods
 		RateBps int `json:"rate_bps"`
@@ -3419,6 +3513,9 @@ type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingSwitchOfferCurrency The currency the store is billed in.
+type BillingSwitchOfferCurrency string
 
 // BillingSwitchOfferOffered defines model for Billing.SwitchOffer.Offered.
 type BillingSwitchOfferOffered string
@@ -3830,6 +3927,9 @@ type AdminSaveCollectionSettingsJSONRequestBody = AdminCollectionSettingsInput
 // AdminMarkDuplicateRefundedJSONRequestBody defines body for AdminMarkDuplicateRefunded for application/json ContentType.
 type AdminMarkDuplicateRefundedJSONRequestBody = AdminRefundInput
 
+// AdminSaveFXRateJSONRequestBody defines body for AdminSaveFXRate for application/json ContentType.
+type AdminSaveFXRateJSONRequestBody = AdminFXRateInput
+
 // AdminSavePaymentRuleJSONRequestBody defines body for AdminSavePaymentRule for application/json ContentType.
 type AdminSavePaymentRuleJSONRequestBody = AdminPaymentRuleInput
 
@@ -4018,6 +4118,12 @@ type ServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(w http.ResponseWriter, r *http.Request, paymentId ULID)
+	// AdminListFXRates Each store currency's rate to the dollar
+	// (GET /admin/v1/billing/fx-rates)
+	AdminListFXRates(w http.ResponseWriter, r *http.Request)
+	// AdminSaveFXRate Set a currency's rate to the dollar
+	// (PUT /admin/v1/billing/fx-rates/{currency})
+	AdminSaveFXRate(w http.ResponseWriter, r *http.Request, currency string)
 	// AdminListPaymentRules How each country's merchants are paid
 	// (GET /admin/v1/billing/payment-rules)
 	AdminListPaymentRules(w http.ResponseWriter, r *http.Request)
@@ -4717,6 +4823,46 @@ func (siw *ServerInterfaceWrapper) AdminMarkDuplicateRefunded(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminMarkDuplicateRefunded(w, r, paymentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListFXRates operation middleware
+func (siw *ServerInterfaceWrapper) AdminListFXRates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListFXRates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSaveFXRate operation middleware
+func (siw *ServerInterfaceWrapper) AdminSaveFXRate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "currency" -------------
+	var currency string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "currency", r.PathValue("currency"), &currency, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "currency", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSaveFXRate(w, r, currency)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6746,6 +6892,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/taxes", wrapper.AdminListTaxes)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/taxes/{country}", wrapper.AdminSaveTax)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/billing/taxes/{country}/remove", wrapper.AdminRemoveTax)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/fx-rates", wrapper.AdminListFXRates)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/fx-rates/{currency}", wrapper.AdminSaveFXRate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminGetCollectionSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/admin/v1/billing/collection", wrapper.AdminSaveCollectionSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/billing/summary", wrapper.AdminBillingSummary)
@@ -7569,6 +7717,84 @@ type AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONResponse struct 
 }
 
 func (response AdminMarkDuplicateRefundeddefaultApplicationProblemPlusJSONResponse) VisitAdminMarkDuplicateRefundedResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListFXRatesRequestObject struct {
+}
+
+type AdminListFXRatesResponseObject interface {
+	VisitAdminListFXRatesResponse(w http.ResponseWriter) error
+}
+
+type AdminListFXRates200JSONResponse AdminFXRates
+
+func (response AdminListFXRates200JSONResponse) VisitAdminListFXRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListFXRatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListFXRatesdefaultApplicationProblemPlusJSONResponse) VisitAdminListFXRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFXRateRequestObject struct {
+	Currency string `json:"currency"`
+	Body     *AdminSaveFXRateJSONRequestBody
+}
+
+type AdminSaveFXRateResponseObject interface {
+	VisitAdminSaveFXRateResponse(w http.ResponseWriter) error
+}
+
+type AdminSaveFXRate200JSONResponse AdminFXRate
+
+func (response AdminSaveFXRate200JSONResponse) VisitAdminSaveFXRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSaveFXRatedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSaveFXRatedefaultApplicationProblemPlusJSONResponse) VisitAdminSaveFXRateResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10417,6 +10643,12 @@ type StrictServerInterface interface {
 	// AdminMarkDuplicateRefunded Record a duplicate payment refunded on the gateway
 	// (POST /admin/v1/billing/duplicates/{payment_id}/refunded)
 	AdminMarkDuplicateRefunded(ctx context.Context, request AdminMarkDuplicateRefundedRequestObject) (AdminMarkDuplicateRefundedResponseObject, error)
+	// AdminListFXRates Each store currency's rate to the dollar
+	// (GET /admin/v1/billing/fx-rates)
+	AdminListFXRates(ctx context.Context, request AdminListFXRatesRequestObject) (AdminListFXRatesResponseObject, error)
+	// AdminSaveFXRate Set a currency's rate to the dollar
+	// (PUT /admin/v1/billing/fx-rates/{currency})
+	AdminSaveFXRate(ctx context.Context, request AdminSaveFXRateRequestObject) (AdminSaveFXRateResponseObject, error)
 	// AdminListPaymentRules How each country's merchants are paid
 	// (GET /admin/v1/billing/payment-rules)
 	AdminListPaymentRules(ctx context.Context, request AdminListPaymentRulesRequestObject) (AdminListPaymentRulesResponseObject, error)
@@ -11271,6 +11503,63 @@ func (sh *strictHandler) AdminMarkDuplicateRefunded(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminMarkDuplicateRefundedResponseObject); ok {
 		if err := validResponse.VisitAdminMarkDuplicateRefundedResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListFXRates operation middleware
+func (sh *strictHandler) AdminListFXRates(w http.ResponseWriter, r *http.Request) {
+	var request AdminListFXRatesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListFXRates(ctx, request.(AdminListFXRatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListFXRates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListFXRatesResponseObject); ok {
+		if err := validResponse.VisitAdminListFXRatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSaveFXRate operation middleware
+func (sh *strictHandler) AdminSaveFXRate(w http.ResponseWriter, r *http.Request, currency string) {
+	var request AdminSaveFXRateRequestObject
+
+	request.Currency = currency
+
+	var body AdminSaveFXRateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSaveFXRate(ctx, request.(AdminSaveFXRateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSaveFXRate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSaveFXRateResponseObject); ok {
+		if err := validResponse.VisitAdminSaveFXRateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -186,7 +186,7 @@ func TestAgencyStoreIsSentToSupport(t *testing.T) {
 func TestSwitchAgencyStores(t *testing.T) {
 	t.Parallel()
 	d := newDunning(t)
-	a, err := d.svc.CreateAgency(t.Context(), "وكالة مدار", "EGP", "agency")
+	a, err := d.svc.CreateAgency(t.Context(), "وكالة مدار", "EGP", "", "agency")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestSwitchAgencyStores(t *testing.T) {
 	}
 
 	// An agency that owes nothing has nothing to switch.
-	paid, err := d.svc.CreateAgency(t.Context(), "وكالة النيل", "EGP", "agency")
+	paid, err := d.svc.CreateAgency(t.Context(), "وكالة النيل", "EGP", "", "agency")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestSwitchAgencyStores(t *testing.T) {
 func TestSwitchAgencyStoresRefusals(t *testing.T) {
 	t.Parallel()
 	d := newDunning(t)
-	a, err := d.svc.CreateAgency(t.Context(), "وكالة الدلتا", "EGP", "agency")
+	a, err := d.svc.CreateAgency(t.Context(), "وكالة الدلتا", "EGP", "", "agency")
 	if err != nil {
 		t.Fatal(err)
 	}

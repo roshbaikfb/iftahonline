@@ -73,8 +73,8 @@ func (s *Service) viewTx(ctx context.Context, tx pgx.Tx) (view, error) {
 	return v, err
 }
 
-// Offers lists the plans the store in ctx may choose, priced in its
-// currency.
+// Offers lists the plans the store in ctx may choose, priced in the
+// currency it is billed in.
 func (s *Service) Offers(ctx context.Context) (Offers, error) {
 	if s.stores == nil {
 		return Offers{}, errors.New("billing: no stores")
@@ -83,10 +83,13 @@ func (s *Service) Offers(ctx context.Context) (Offers, error) {
 	if err != nil {
 		return Offers{}, err
 	}
-	out := Offers{Currency: info.Currency}
+	var out Offers
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		v, txErr := s.viewTx(ctx, tx)
 		if txErr != nil {
+			return txErr
+		}
+		if out.Currency, txErr = billedTx(ctx, tx, known(info)); txErr != nil {
 			return txErr
 		}
 		if out.Features, txErr = store.Features(ctx, tx); txErr != nil {
@@ -97,7 +100,7 @@ func (s *Service) Offers(ctx context.Context) (Offers, error) {
 			return txErr
 		}
 		onPlan := v.sub.PlanApplies(s.now()) || v.sub.Kind == domain.KindFree
-		for _, o := range onSale(plans, info.Currency) {
+		for _, o := range onSale(plans, out.Currency) {
 			o.Current = onPlan && o.Code == v.current.Code
 			o.TrialAvailable = o.Kind.Paid() && o.TrialDays > 0 && !v.sub.TrialUsed && v.current.Kind == domain.KindFree
 			out.Plans = append(out.Plans, o)
@@ -230,16 +233,9 @@ func (s *Service) writeChoiceTx(ctx context.Context, tx pgx.Tx, v view, next dom
 }
 
 // subscribeInvoiceTx writes the first period's invoice of p for the store
-// in ctx, in its own account (opened now if it has none), replacing an
-// unpaid earlier one. The subscription itself waits for the payment.
+// in ctx, in its own account (opened now if it has none) and its
+// currency, replacing an unpaid earlier one. The subscription itself waits for the payment.
 func (s *Service) subscribeInvoiceTx(ctx context.Context, tx pgx.Tx, v view, p domain.Plan, cycle domain.Cycle, info StoreInfo) (ulid.ID, error) {
-	price, sold, err := store.PlanPrice(ctx, tx, p.ID, info.Currency, cycle)
-	if err != nil {
-		return ulid.ID{}, err
-	}
-	if !sold {
-		return ulid.ID{}, errNoPrice
-	}
 	self, err := tenant.FromContext(ctx)
 	if err != nil {
 		return ulid.ID{}, fmt.Errorf("billing: %w", err)
@@ -249,18 +245,18 @@ func (s *Service) subscribeInvoiceTx(ctx context.Context, tx pgx.Tx, v view, p d
 			return ulid.ID{}, err
 		}
 	}
-	account, has, err := store.SubscriptionAccount(ctx, tx)
+	acct, err := s.storeAccountTx(ctx, tx, info)
 	if err != nil {
 		return ulid.ID{}, err
 	}
-	acct := domain.Account{ID: account, Kind: domain.AccountStore, Name: info.Name, Currency: info.Currency, Country: domain.CountryOf(info.Currency)}
-	if !has {
-		acct.ID = s.ids.New()
-		if err = store.OpenStoreAccount(ctx, tx, acct); err != nil {
-			return ulid.ID{}, err
-		}
-	} else if err = store.UseAccount(ctx, tx, account); err != nil {
+	// Priced in the account's currency: a Gulf store's opens in dollars,
+	// an older one's stays in riyals or dirhams (ADR-0090).
+	price, sold, err := store.PlanPrice(ctx, tx, p.ID, acct.Currency, cycle)
+	if err != nil {
 		return ulid.ID{}, err
+	}
+	if !sold {
+		return ulid.ID{}, errNoPrice
 	}
 	if err = store.VoidSubscribeInvoices(ctx, tx, acct.ID); err != nil {
 		return ulid.ID{}, err
@@ -287,7 +283,7 @@ func (s *Service) subscribeInvoiceTx(ctx context.Context, tx pgx.Tx, v view, p d
 		return ulid.ID{}, errNoPrice // a free price: nothing to pay
 	}
 	now := s.now().UTC()
-	inv := store.Invoice{ID: s.ids.New(), Account: acct.ID, Period: domain.PeriodOf(now), Currency: info.Currency, Totals: totals, Issued: now, Lines: lines}
+	inv := store.Invoice{ID: s.ids.New(), Account: acct.ID, Period: domain.PeriodOf(now), Currency: acct.Currency, Totals: totals, Issued: now, Lines: lines}
 	if _, err = store.InsertSubscribeInvoice(ctx, tx, inv, store.Subscribe{ForStore: self.ID, Plan: p.ID, Cycle: cycle}); err != nil {
 		return ulid.ID{}, err
 	}

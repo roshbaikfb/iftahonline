@@ -379,7 +379,7 @@ func TestConsolePlanCatalog(t *testing.T) {
 
 	plan := fmt.Sprintf(`{"code":%q,"kind":"subscription","name_ar":"نمو","name_en":"Growth","trial_days":7,
 		"prices":[{"currency":"EGP","cycle":"monthly","amount_minor":9900},{"currency":"SAR","cycle":"monthly","amount_minor":1900},
-		          {"currency":"AED","cycle":"monthly","amount_minor":1900}],
+		          {"currency":"AED","cycle":"monthly","amount_minor":1900},{"currency":"USD","cycle":"monthly","amount_minor":500}],
 		"grants":[{"feature":%q,"value":1},{"feature":"products","unlimited":true}],"reason":"launch"}`, code, key)
 	r = f.do(t, http.MethodPost, adminHost, "/admin/v1/plans", plan, withCookie(sess), sameOrigin)
 	if r.status != http.StatusCreated || r.body["version"] != float64(1) || r.body["active"] != true || len(r.body["grants"].([]any)) != 2 {
@@ -590,8 +590,14 @@ func TestConsoleAgencies(t *testing.T) {
 		t.Fatalf("cross-site = %d", r.status)
 	}
 	r := f.do(t, http.MethodPost, adminHost, "/admin/v1/agencies", create, withCookie(sess), sameOrigin)
-	if r.status != http.StatusCreated {
+	if r.status != http.StatusCreated || r.body["agency"].(map[string]any)["country"] != "EG" {
 		t.Fatalf("create = %d %v", r.status, r.body)
+	}
+	// Outside Egypt an agency is billed in dollars, in its own country (ADR-0090).
+	gulf := `{"name":"وكالة الخليج","currency":"USD","country":"AE","plan_code":"agency","reason":"a Gulf agency"}`
+	if g := f.do(t, http.MethodPost, adminHost, "/admin/v1/agencies", gulf, withCookie(sess), sameOrigin); g.status != http.StatusCreated ||
+		g.body["agency"].(map[string]any)["country"] != "AE" || g.body["agency"].(map[string]any)["currency"] != "USD" {
+		t.Fatalf("a Gulf agency = %d %v", g.status, g.body)
 	}
 	id := r.body["agency"].(map[string]any)["id"].(string)
 	base := "/admin/v1/agencies/" + id
@@ -648,6 +654,8 @@ func TestConsoleAgencies(t *testing.T) {
 		status             int
 	}{
 		{http.MethodPost, "/admin/v1/agencies", `{"name":"وكالة","currency":"EGP","plan_code":"pro","reason":"bad plan"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/agencies", `{"name":"وكالة","currency":"SAR","plan_code":"agency","reason":"the riyal"}`, http.StatusUnprocessableEntity},
+		{http.MethodPost, "/admin/v1/agencies", `{"name":"وكالة","currency":"USD","country":"EG","plan_code":"agency","reason":"dollars in Egypt"}`, http.StatusUnprocessableEntity},
 		{http.MethodPost, "/admin/v1/agencies", ``, http.StatusBadRequest},
 		{http.MethodGet, "/admin/v1/agencies/junk", "", http.StatusNotFound},
 		{http.MethodGet, "/admin/v1/agencies/" + f.ids.New().String(), "", http.StatusNotFound},
@@ -964,7 +972,7 @@ func TestConsoleCollection(t *testing.T) {
 	viewer := f.loginAs(t, "viewer")
 	t.Cleanup(func() {
 		if err := billing.NewCollection(f.adminPool).SaveCollectionSettings(context.Background(),
-			billing.CollectionSettings{Minimums: map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000}}); err != nil {
+			billing.CollectionSettings{Minimums: map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000, "USD": 1000}}); err != nil {
 			t.Error(err)
 		}
 	})
@@ -973,8 +981,9 @@ func TestConsoleCollection(t *testing.T) {
 		t.Fatalf("anonymous = %d", r.status)
 	}
 	r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/collection", "", withCookie(viewer))
-	if mins, _ := r.body["minimums"].([]any); r.status != http.StatusOK || r.body["prepaid_enabled"] != false || len(mins) != 3 ||
-		mins[0].(map[string]any)["currency"] != "EGP" || mins[0].(map[string]any)["minimum_minor"] != float64(30000) {
+	if mins, _ := r.body["minimums"].([]any); r.status != http.StatusOK || r.body["prepaid_enabled"] != false || len(mins) != 4 ||
+		mins[0].(map[string]any)["currency"] != "EGP" || mins[0].(map[string]any)["minimum_minor"] != float64(30000) ||
+		mins[1].(map[string]any)["currency"] != "USD" || mins[1].(map[string]any)["minimum_minor"] != float64(1000) {
 		t.Fatalf("get = %d %v", r.status, r.body)
 	}
 	save := `{"prepaid_enabled":true,"card_enabled":true,"minimums":[{"currency":"EGP","minimum_minor":50000},` +
@@ -989,9 +998,19 @@ func TestConsoleCollection(t *testing.T) {
 		r.body["prepaid_enabled"] != true || r.body["card_enabled"] != true {
 		t.Fatalf("save = %d %v", r.status, r.body)
 	}
+	// A currency left out keeps its minimum (ADR-0090): a console that
+	// knows fewer currencies changes none of the others.
+	only := `{"prepaid_enabled":true,"card_enabled":true,"minimums":[{"currency":"USD","minimum_minor":2000}],"reason":"the dollar's"}`
+	if r = f.do(t, http.MethodPut, adminHost, "/admin/v1/billing/collection", only, withCookie(sess), sameOrigin); r.status != http.StatusOK {
+		t.Fatalf("save the dollar's = %d %v", r.status, r.body)
+	}
+	if mins, _ := r.body["minimums"].([]any); len(mins) != 4 || mins[0].(map[string]any)["minimum_minor"] != float64(50000) ||
+		mins[1].(map[string]any)["minimum_minor"] != float64(2000) {
+		t.Fatalf("saved = %v", r.body)
+	}
 	for _, bad := range []string{
 		strings.Replace(save, `"minimum_minor":50000`, `"minimum_minor":5`, 1),
-		strings.Replace(save, `,{"currency":"AED","minimum_minor":10000}`, ``, 1),
+		`{"prepaid_enabled":true,"card_enabled":true,"minimums":[],"reason":"none at all"}`,
 		strings.Replace(save, `{"currency":"AED"`, `{"currency":"SAR"`, 1),
 		strings.Replace(save, `"open both ways"`, `"x"`, 1),
 	} {
@@ -1153,6 +1172,62 @@ func TestConsolePaymentRulesAndTaxes(t *testing.T) {
 	}
 	if r = f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/taxes", "", withCookie(viewer)); r.status != http.StatusOK || len(r.body["items"].([]any)) < 4 {
 		t.Fatalf("taxes = %d %v", r.status, r.body)
+	}
+}
+
+// TestConsoleFXRates: each store currency's rate to the dollar from the
+// console (ADR-0090): the viewer reads, a manager sets it with a reason,
+// a rate out of bounds or the dollar itself is refused. The pound only:
+// the riyal's and the dirham's stay at their pegs.
+func TestConsoleFXRates(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	sess := f.login(t)
+	viewer := f.loginAs(t, "viewer")
+
+	if r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/fx-rates", ""); r.status != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d", r.status)
+	}
+	rates := func() map[string]any {
+		r := f.do(t, http.MethodGet, adminHost, "/admin/v1/billing/fx-rates", "", withCookie(viewer))
+		if r.status != http.StatusOK {
+			t.Fatalf("rates = %d %v", r.status, r.body)
+		}
+		out := map[string]any{}
+		for _, it := range r.body["items"].([]any) {
+			m := it.(map[string]any)
+			out[m["currency"].(string)] = m["per_usd_micros"]
+		}
+		return out
+	}
+	if got := rates(); got["SAR"] != float64(3_750_000) || got["AED"] != float64(3_672_500) {
+		t.Fatalf("seeded = %v", got)
+	}
+	rate := `{"per_usd_micros":48500000,"reason":"the bank's rate today"}`
+	cases := []struct {
+		path, body, token string
+		cross             bool
+		status            int
+	}{
+		{"/admin/v1/billing/fx-rates/EGP", rate, viewer, false, http.StatusForbidden},
+		{"/admin/v1/billing/fx-rates/EGP", rate, sess, true, http.StatusForbidden},
+		{"/admin/v1/billing/fx-rates/EGP", `{"per_usd_micros":0,"reason":"nothing"}`, sess, false, http.StatusUnprocessableEntity},
+		{"/admin/v1/billing/fx-rates/EGP", `{"per_usd_micros":48500000,"reason":"x"}`, sess, false, http.StatusUnprocessableEntity},
+		{"/admin/v1/billing/fx-rates/USD", rate, sess, false, http.StatusUnprocessableEntity},
+		{"/admin/v1/billing/fx-rates/EGP", ``, sess, false, http.StatusBadRequest},
+		{"/admin/v1/billing/fx-rates/EGP", rate, sess, false, http.StatusOK},
+	}
+	for _, c := range cases {
+		opts := []func(*http.Request){withCookie(c.token)}
+		if !c.cross {
+			opts = append(opts, sameOrigin)
+		}
+		if got := f.do(t, http.MethodPut, adminHost, c.path, c.body, opts...); got.status != c.status {
+			t.Errorf("PUT %s %s = %d %v; want %d", c.path, c.body, got.status, got.body, c.status)
+		}
+	}
+	if got := rates(); got["EGP"] != float64(48_500_000) {
+		t.Fatalf("the pound = %v", got)
 	}
 }
 

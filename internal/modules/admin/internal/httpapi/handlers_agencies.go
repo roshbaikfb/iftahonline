@@ -40,7 +40,11 @@ func (h *Handlers) AdminCreateAgency(ctx context.Context, req AdminCreateAgencyR
 		return nil, errBody
 	}
 	b := req.Body
-	d, err := h.svc.CreateAgency(ctx, b.Name, string(b.Currency), b.PlanCode, b.Reason)
+	country := ""
+	if b.Country != nil {
+		country = *b.Country
+	}
+	d, err := h.svc.CreateAgency(ctx, b.Name, string(b.Currency), country, b.PlanCode, b.Reason)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +105,12 @@ func (h *Handlers) AdminRemoveAgencyStore(ctx context.Context, req AdminRemoveAg
 }
 
 func toAgency(a billing.Agency) AdminAgency {
-	return AdminAgency{Id: a.ID.String(), Name: a.Name, Currency: AdminAgencyCurrency(a.Currency), PlanCode: a.PlanCode,
+	out := AdminAgency{Id: a.ID.String(), Name: a.Name, Currency: AdminAgencyCurrency(a.Currency), PlanCode: a.PlanCode,
 		Stores: a.Stores, CreatedAt: a.CreatedAt}
+	if a.Country != "" {
+		out.Country = &a.Country
+	}
+	return out
 }
 
 func toAgencyDetail(d app.AgencyDetail) AdminAgencyDetail {

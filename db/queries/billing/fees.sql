@@ -1,14 +1,17 @@
 -- name: GetFeeRule :one
-SELECT rate_bps, min_minor, max_minor FROM plan_fees WHERE plan_id = @plan_id AND currency = @currency;
+SELECT rate_bps, fixed_minor, min_minor, max_minor FROM plan_fees WHERE plan_id = @plan_id AND currency = @currency;
 
 -- name: InsertSellFee :execrows
 -- Once per order: a retried or repeated delivery adds nothing.
-INSERT INTO sell_fees (store_id, order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, delivered_at)
-VALUES (@store_id, @order_id, @period, @plan_id, @base_minor, @rate_bps, @fee_minor, @currency, @delivered_at)
+INSERT INTO sell_fees (store_id, order_id, period, plan_id, base_minor, rate_bps, fixed_minor, fee_minor, currency, delivered_at,
+  order_currency, order_base_minor, rate_micros)
+VALUES (@store_id, @order_id, @period, @plan_id, @base_minor, @rate_bps, @fixed_minor, @fee_minor, @currency, @delivered_at,
+  sqlc.narg(order_currency), sqlc.narg(order_base_minor), sqlc.narg(rate_micros))
 ON CONFLICT (store_id, order_id) DO NOTHING;
 
 -- name: GetSellFee :one
-SELECT order_id, period, plan_id, base_minor, rate_bps, fee_minor, currency, status, delivered_at, returned_at, prepaid
+SELECT order_id, period, plan_id, base_minor, rate_bps, fixed_minor, fee_minor, currency, status, delivered_at, returned_at, prepaid,
+  order_currency, order_base_minor, rate_micros
 FROM sell_fees WHERE store_id = @store_id AND order_id = @order_id;
 
 -- name: MarkSellFeePrepaid :exec
