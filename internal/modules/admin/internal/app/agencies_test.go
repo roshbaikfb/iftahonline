@@ -17,13 +17,13 @@ func TestAgenciesFromTheConsole(t *testing.T) {
 	ctx, me := f.signedIn(t)
 	shop := f.createStore(t)
 
-	if _, err := f.svc.CreateAgency(ctx, "وكالة", "EGP", "agency", "x"); !errs.Is(err, errs.KindValidation) {
+	if _, err := f.svc.CreateAgency(ctx, "وكالة", "EGP", "", "agency", "x"); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("no reason: %v", err)
 	}
-	if _, err := f.svc.CreateAgency(ctx, "وكالة", "EGP", "pro", "new agency"); !errs.Is(err, errs.KindValidation) {
+	if _, err := f.svc.CreateAgency(ctx, "وكالة", "EGP", "", "pro", "new agency"); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("not an agency plan: %v", err)
 	}
-	d, err := f.svc.CreateAgency(ctx, "وكالة الدلتا", "EGP", "agency", "new agency")
+	d, err := f.svc.CreateAgency(ctx, "وكالة الدلتا", "EGP", "", "agency", "new agency")
 	if err != nil || d.Agency.Name != "وكالة الدلتا" || len(d.Stores) != 0 {
 		t.Fatalf("create = %+v, %v", d, err)
 	}

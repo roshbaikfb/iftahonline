@@ -8,6 +8,7 @@ package billing
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -210,7 +211,7 @@ type Agency = app.Agency
 type Agencies interface {
 	// CreateAgency opens an agency account in currency on the agency plan
 	// planCode.
-	CreateAgency(ctx context.Context, name, currency, planCode string) (Agency, error)
+	CreateAgency(ctx context.Context, name, currency, country, planCode string) (Agency, error)
 	// Agencies lists every agency, newest first.
 	Agencies(ctx context.Context) ([]Agency, error)
 	// Agency is one agency and its stores.
@@ -366,8 +367,13 @@ func ParseCredit(amount int64, reason, reference string) (Credit, error) {
 	return domain.ParseCredit(amount, reason, reference)
 }
 
-// Currencies are the platform's, in the order the console shows them.
+// Currencies are those billing sells in now, in the order the console
+// shows them: EGP and USD (ADR-0090).
 func Currencies() []string { return domain.Currencies() }
+
+// AllCurrencies are those on sale and then the legacy ones, which older
+// accounts are still billed in (ADR-0090).
+func AllCurrencies() []string { return slices.Concat(domain.Currencies(), domain.Legacy()) }
 
 // CollectionConsole is the console's collection settings (NewCollection,
 // on the console's role).
@@ -389,6 +395,11 @@ type CollectionConsole interface {
 	SaveTax(ctx context.Context, t Tax) error
 	// RemoveTax removes a country's own tax (never ZZ's).
 	RemoveTax(ctx context.Context, country string) error
+	// FXRates are each store currency's rate to the dollar (ADR-0090).
+	FXRates(ctx context.Context) ([]FXRate, error)
+	// SaveFXRate checks and writes a currency's rate; it reaches the fees
+	// of orders delivered after it.
+	SaveFXRate(ctx context.Context, r FXRate) error
 }
 
 // Payment rules and taxes by the merchant's country (ADR-0089).
@@ -397,6 +408,9 @@ type (
 	PaymentRule = domain.PaymentRule
 	// Tax is a country's VAT on the platform's invoices.
 	Tax = domain.Tax
+	// FXRate is a currency's rate to the dollar, its units per dollar
+	// times money.RateScale (ADR-0090).
+	FXRate = domain.FXRate
 )
 
 // OtherCountries is the rule and tax row of every country without its own.

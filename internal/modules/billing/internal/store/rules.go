@@ -74,3 +74,24 @@ func DeleteTax(ctx context.Context, tx Tx, country string) (removed bool, err er
 	}
 	return n == 1, nil
 }
+
+// FXRates are each store currency's rate to the dollar (ADR-0090).
+func FXRates(ctx context.Context, tx Tx) ([]domain.FXRate, error) {
+	rows, err := billingdb.New(tx).ListFXRates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("billing store: fx rates: %w", err)
+	}
+	out := make([]domain.FXRate, len(rows))
+	for i, r := range rows {
+		out[i] = domain.FXRate{Currency: r.Currency, PerUSDMicros: r.PerUsdMicros}
+	}
+	return out, nil
+}
+
+// SaveFXRate writes a currency's rate (the console's role).
+func SaveFXRate(ctx context.Context, tx Tx, r domain.FXRate) error {
+	if err := billingdb.New(tx).SaveFXRate(ctx, billingdb.SaveFXRateParams{Currency: r.Currency, PerUsdMicros: r.PerUSDMicros}); err != nil {
+		return fmt.Errorf("billing store: save fx rate: %w", err)
+	}
+	return nil
+}

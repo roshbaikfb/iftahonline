@@ -111,3 +111,42 @@ func (s *Service) RemoveTax(ctx context.Context, country, rawReason string) erro
 	}
 	return c.RemoveTax(ctx, country)
 }
+
+// FXRates are each store currency's rate to the dollar (ADR-0090).
+func (s *Service) FXRates(ctx context.Context) ([]billing.FXRate, error) {
+	_, c, err := s.collection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.FXRates(ctx)
+}
+
+// SaveFXRate writes a currency's rate, recorded first with the one it
+// replaces.
+func (s *Service) SaveFXRate(ctx context.Context, r billing.FXRate, rawReason string) error {
+	who, c, err := s.collection(ctx)
+	if err != nil {
+		return err
+	}
+	reason, err := domain.ValidateReason(rawReason)
+	if err != nil {
+		return err
+	}
+	if err = r.Validate(); err != nil {
+		return err
+	}
+	rates, err := c.FXRates(ctx)
+	if err != nil {
+		return err
+	}
+	details := map[string]any{"reason": reason, "per_usd_micros": r.PerUSDMicros}
+	for _, old := range rates {
+		if old.Currency == r.Currency {
+			details["was_per_usd_micros"] = old.PerUSDMicros
+		}
+	}
+	if err = s.audit(ctx, &who.AdminID, "billing.fx_rate_saved", "fx_rate", r.Currency, details); err != nil {
+		return err
+	}
+	return c.SaveFXRate(ctx, r)
+}

@@ -49,6 +49,7 @@ func monthly(amount int64) []domain.Price {
 		{Currency: "EGP", Cycle: domain.Monthly, AmountMinor: amount},
 		{Currency: "SAR", Cycle: domain.Monthly, AmountMinor: amount},
 		{Currency: "AED", Cycle: domain.Monthly, AmountMinor: amount},
+		{Currency: "USD", Cycle: domain.Monthly, AmountMinor: amount},
 	}
 }
 
@@ -57,6 +58,7 @@ func fees() []domain.CurrencyFee {
 		{Currency: "EGP", FeeRule: domain.FeeRule{RateBps: 250}},
 		{Currency: "SAR", FeeRule: domain.FeeRule{RateBps: 250}},
 		{Currency: "AED", FeeRule: domain.FeeRule{RateBps: 250, MinMinor: 100, MaxMinor: i64(1000)}},
+		{Currency: "USD", FeeRule: domain.FeeRule{RateBps: 100, FixedMinor: 4}},
 	}
 }
 
@@ -81,13 +83,22 @@ func TestPlanVersionValidate(t *testing.T) {
 		{"trial on free", func(v *domain.PlanVersion) { v.Kind, v.Prices = domain.KindFree, nil }, []string{"trial_days"}},
 		{"trial too long", func(v *domain.PlanVersion) { v.TrialDays = 91 }, []string{"trial_days"}},
 		{"missing a currency", func(v *domain.PlanVersion) { v.Prices = v.Prices[1:] }, []string{"prices"}},
-		{"duplicate price", func(v *domain.PlanVersion) { v.Prices = append(v.Prices, v.Prices[0]) }, []string{"prices[4]"}},
+		{"missing the dollar", func(v *domain.PlanVersion) { v.Prices = slices.Delete(v.Prices, 3, 4) }, []string{"prices"}},
+		{"the legacy currencies are optional", func(v *domain.PlanVersion) { v.Prices = slices.Delete(v.Prices, 1, 3) }, nil},
+		{"duplicate price", func(v *domain.PlanVersion) { v.Prices = append(v.Prices, v.Prices[0]) }, []string{"prices[5]"}},
 		{"bad price", func(v *domain.PlanVersion) {
-			v.Prices = append(v.Prices, domain.Price{Currency: "USD", Cycle: domain.Monthly, AmountMinor: 1})
-		}, []string{"prices[4]"}},
+			v.Prices = append(v.Prices, domain.Price{Currency: "GBP", Cycle: domain.Monthly, AmountMinor: 1})
+		}, []string{"prices[5]"}},
 		{"free plan with a price", func(v *domain.PlanVersion) { v.Kind, v.TrialDays = domain.KindFree, 0 }, []string{"prices"}},
-		{"pays with a price", func(v *domain.PlanVersion) { v.Kind, v.TrialDays, v.Fees = domain.KindPays, 0, fees() }, []string{"prices[0]", "prices[1]", "prices[2]", "prices[3]"}},
-		{"pays without a fee", func(v *domain.PlanVersion) { v.Kind, v.TrialDays, v.Prices = domain.KindPays, 0, nil }, []string{"fees", "fees", "fees"}},
+		{"pays with a price", func(v *domain.PlanVersion) { v.Kind, v.TrialDays, v.Fees = domain.KindPays, 0, fees() }, []string{"prices[0]", "prices[1]", "prices[2]", "prices[3]", "prices[4]"}},
+		{"pays without a fee", func(v *domain.PlanVersion) { v.Kind, v.TrialDays, v.Prices = domain.KindPays, 0, nil }, []string{"fees", "fees"}},
+		{"pays without the dollar's fee", func(v *domain.PlanVersion) {
+			v.Kind, v.TrialDays, v.Prices, v.Fees = domain.KindPays, 0, nil, fees()[:3]
+		}, []string{"fees"}},
+		{"a negative fixed fee", func(v *domain.PlanVersion) {
+			v.Kind, v.TrialDays, v.Prices, v.Fees = domain.KindPays, 0, nil, fees()
+			v.Fees[3].FixedMinor = -1
+		}, []string{"fees[3]"}},
 		{"fees on a paid plan", func(v *domain.PlanVersion) { v.Fees = fees() }, []string{"fees"}},
 		{"bad fee", func(v *domain.PlanVersion) {
 			v.Kind, v.TrialDays, v.Prices, v.Fees = domain.KindPays, 0, nil, fees()

@@ -11,18 +11,18 @@ import (
 
 func TestCollectionSettings(t *testing.T) {
 	t.Parallel()
-	ok := map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000}
+	ok := map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000, "USD": 1000}
 	tests := []struct {
 		name     string
 		minimums map[string]int64
 		valid    bool
 	}{
 		{"the approved defaults", ok, true},
-		{"the bounds", map[string]int64{"EGP": 100, "SAR": 100_000_000, "AED": 100}, true},
-		{"below 1.00", map[string]int64{"EGP": 99, "SAR": 10000, "AED": 10000}, false},
-		{"above 1,000,000", map[string]int64{"EGP": 30000, "SAR": 100_000_001, "AED": 10000}, false},
-		{"a currency missing", map[string]int64{"EGP": 30000, "SAR": 10000}, false},
-		{"an unknown currency", map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000, "USD": 10000}, false},
+		{"the bounds", map[string]int64{"EGP": 100, "SAR": 100_000_000, "AED": 100, "USD": 100}, true},
+		{"below 1.00", map[string]int64{"EGP": 99, "SAR": 10000, "AED": 10000, "USD": 1000}, false},
+		{"above 1,000,000", map[string]int64{"EGP": 30000, "SAR": 100_000_001, "AED": 10000, "USD": 1000}, false},
+		{"a currency missing", map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000}, false},
+		{"an unknown currency", map[string]int64{"EGP": 30000, "SAR": 10000, "AED": 10000, "USD": 1000, "GBP": 10000}, false},
 		{"none", nil, false},
 	}
 	for _, tt := range tests {
@@ -34,6 +34,13 @@ func TestCollectionSettings(t *testing.T) {
 		if err != nil && (!errors.As(err, &e) || e.Kind != errs.KindValidation) {
 			t.Errorf("%s: not a validation error: %v", tt.name, err)
 		}
+	}
+	merged := domain.CollectionSettings{Minimums: ok}.Merge(true, false, map[string]int64{"USD": 2000})
+	if !merged.Prepaid || merged.Card || merged.Minimums["USD"] != 2000 || merged.Minimums["EGP"] != 30000 || ok["USD"] != 1000 {
+		t.Errorf("Merge = %+v (the others kept, the original untouched)", merged)
+	}
+	if m := (domain.CollectionSettings{}).Merge(false, false, map[string]int64{"EGP": 100}); m.Minimums["EGP"] != 100 {
+		t.Errorf("Merge on nothing = %+v", m)
 	}
 	offered := []struct {
 		prepaid, card bool
@@ -98,6 +105,20 @@ func TestParseCredit(t *testing.T) {
 	for _, tt := range bad {
 		if _, err := domain.ParseCredit(tt.amount, tt.reason, tt.reference); err == nil {
 			t.Errorf("%s: want an error", tt.name)
+		}
+	}
+}
+
+func TestBillingCurrencies(t *testing.T) {
+	t.Parallel()
+	for country, want := range map[string]string{"EG": "EGP", "SA": "USD", "AE": "USD", "KW": "USD", "GB": "USD"} {
+		if got := domain.BillingCurrency(country); got != want {
+			t.Errorf("BillingCurrency(%s) = %s, want %s", country, got, want)
+		}
+	}
+	for cur, want := range map[string][2]bool{"EGP": {true, true}, "USD": {true, true}, "SAR": {true, false}, "AED": {true, false}, "GBP": {false, false}} {
+		if got := [2]bool{domain.Billed(cur), domain.OnSale(cur)}; got != want {
+			t.Errorf("%s: billed, on sale = %v, want %v", cur, got, want)
 		}
 	}
 }

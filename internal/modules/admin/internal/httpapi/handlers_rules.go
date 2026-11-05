@@ -90,3 +90,28 @@ func (h *Handlers) AdminRemoveTax(ctx context.Context, req AdminRemoveTaxRequest
 	}
 	return AdminRemoveTax204Response{}, nil
 }
+
+// AdminListFXRates implements StrictServerInterface.
+func (h *Handlers) AdminListFXRates(ctx context.Context, _ AdminListFXRatesRequestObject) (AdminListFXRatesResponseObject, error) {
+	rates, err := h.svc.FXRates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := AdminListFXRates200JSONResponse{Items: make([]AdminFXRate, len(rates))}
+	for i, r := range rates {
+		out.Items[i] = AdminFXRate{Currency: AdminFXRateCurrency(r.Currency), PerUsdMicros: r.PerUSDMicros}
+	}
+	return out, nil
+}
+
+// AdminSaveFXRate implements StrictServerInterface.
+func (h *Handlers) AdminSaveFXRate(ctx context.Context, req AdminSaveFXRateRequestObject) (AdminSaveFXRateResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBody
+	}
+	r := billing.FXRate{Currency: string(req.Currency), PerUSDMicros: req.Body.PerUsdMicros}
+	if err := h.svc.SaveFXRate(ctx, r, req.Body.Reason); err != nil {
+		return nil, err
+	}
+	return AdminSaveFXRate200JSONResponse{Currency: AdminFXRateCurrency(r.Currency), PerUsdMicros: r.PerUSDMicros}, nil
+}

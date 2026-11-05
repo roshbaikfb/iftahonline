@@ -37,7 +37,7 @@ func (q *Queries) GetAccountBalance(ctx context.Context, id ulid.ID) (GetAccount
 }
 
 const getBillingSettings = `-- name: GetBillingSettings :one
-SELECT prepaid_enabled, card_enabled, minimum_egp_minor, minimum_sar_minor, minimum_aed_minor
+SELECT prepaid_enabled, card_enabled, minimum_egp_minor, minimum_sar_minor, minimum_aed_minor, minimum_usd_minor
 FROM billing_settings WHERE id = 1
 `
 
@@ -47,6 +47,7 @@ type GetBillingSettingsRow struct {
 	MinimumEgpMinor int64
 	MinimumSarMinor int64
 	MinimumAedMinor int64
+	MinimumUsdMinor int64
 }
 
 // The console's collection settings (ADR-0083): one row.
@@ -59,6 +60,7 @@ func (q *Queries) GetBillingSettings(ctx context.Context) (GetBillingSettingsRow
 		&i.MinimumEgpMinor,
 		&i.MinimumSarMinor,
 		&i.MinimumAedMinor,
+		&i.MinimumUsdMinor,
 	)
 	return i, err
 }
@@ -237,6 +239,7 @@ func (q *Queries) LockOpenInvoiceIDs(ctx context.Context, accountID ulid.ID) ([]
 const saveBillingSettings = `-- name: SaveBillingSettings :execrows
 UPDATE billing_settings SET prepaid_enabled = $1, card_enabled = $2,
   minimum_egp_minor = $3, minimum_sar_minor = $4, minimum_aed_minor = $5,
+  minimum_usd_minor = $6,
   updated_at = now()
 WHERE id = 1
 `
@@ -247,6 +250,7 @@ type SaveBillingSettingsParams struct {
 	MinimumEgpMinor int64
 	MinimumSarMinor int64
 	MinimumAedMinor int64
+	MinimumUsdMinor int64
 }
 
 func (q *Queries) SaveBillingSettings(ctx context.Context, arg SaveBillingSettingsParams) (int64, error) {
@@ -256,6 +260,7 @@ func (q *Queries) SaveBillingSettings(ctx context.Context, arg SaveBillingSettin
 		arg.MinimumEgpMinor,
 		arg.MinimumSarMinor,
 		arg.MinimumAedMinor,
+		arg.MinimumUsdMinor,
 	)
 	if err != nil {
 		return 0, err

@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -203,27 +204,53 @@ func (s *Service) OrderMoved(ctx context.Context, id ulid.ID) error {
 }
 
 // chargeTx records a delivered order's fee, when the plan in effect
-// charges one in its currency.
+// charges one in the currency the store is billed in. An order in
+// another currency is converted at the console's rate of the day, kept
+// with the fee (ADR-0090).
 func (s *Service) chargeTx(ctx context.Context, tx pgx.Tx, id ulid.ID, o Order) error {
 	plan, err := s.planTx(ctx, tx)
 	if err != nil {
 		return err
 	}
-	cur := string(o.Base.Currency())
+	// Without the store's details, its country is its orders' currency's.
+	cur, err := billedTx(ctx, tx, func() (StoreInfo, error) {
+		info, iErr := s.storeInfo(ctx)
+		if info.Currency == "" {
+			info.Currency = string(o.Base.Currency())
+		}
+		return info, iErr
+	})
+	if err != nil {
+		return err
+	}
 	rule, ok, err := store.FeeRule(ctx, tx, plan, cur)
 	if err != nil || !ok {
 		return err
 	}
-	base := o.Base.Amount()
-	fee := rule.Fee(base)
-	inserted, err := store.InsertSellFee(ctx, tx, domain.SellFee{
-		OrderID: id, Period: domain.PeriodOf(o.StatusAt), PlanID: plan, BaseMinor: base, RateBps: rule.RateBps,
-		FeeMinor: fee, Currency: cur, DeliveredAt: o.StatusAt,
-	})
+	f := domain.SellFee{OrderID: id, Period: domain.PeriodOf(o.StatusAt), PlanID: plan, RateBps: rule.RateBps,
+		FixedMinor: rule.FixedMinor, Currency: cur, DeliveredAt: o.StatusAt}
+	if from := string(o.Base.Currency()); from == cur {
+		f.BaseMinor = o.Base.Amount()
+		f.FeeMinor = rule.Fee(f.BaseMinor)
+	} else {
+		rates, rErr := store.FXRates(ctx, tx)
+		if rErr != nil {
+			return rErr
+		}
+		rate, known := domain.RateBetween(rates, from, cur)
+		if !known {
+			return fmt.Errorf("billing: no exchange rate from %s to %s", from, cur)
+		}
+		if f.BaseMinor, f.FeeMinor, err = rule.Charge(o.Base, cur, rate); err != nil {
+			return err
+		}
+		f.OrderCurrency, f.OrderBaseMinor, f.RateMicros = from, o.Base.Amount(), rate
+	}
+	inserted, err := store.InsertSellFee(ctx, tx, f)
 	if err != nil || !inserted {
 		return err
 	}
-	if err = s.prepayTx(ctx, tx, id, fee, cur); err != nil {
+	if err = s.prepayTx(ctx, tx, id, f.FeeMinor, cur); err != nil {
 		return err
 	}
 	return s.thresholdTx(ctx, tx, cur)

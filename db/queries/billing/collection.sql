@@ -1,11 +1,12 @@
 -- name: GetBillingSettings :one
 -- The console's collection settings (ADR-0083): one row.
-SELECT prepaid_enabled, card_enabled, minimum_egp_minor, minimum_sar_minor, minimum_aed_minor
+SELECT prepaid_enabled, card_enabled, minimum_egp_minor, minimum_sar_minor, minimum_aed_minor, minimum_usd_minor
 FROM billing_settings WHERE id = 1;
 
 -- name: SaveBillingSettings :execrows
 UPDATE billing_settings SET prepaid_enabled = @prepaid_enabled, card_enabled = @card_enabled,
   minimum_egp_minor = @minimum_egp_minor, minimum_sar_minor = @minimum_sar_minor, minimum_aed_minor = @minimum_aed_minor,
+  minimum_usd_minor = @minimum_usd_minor,
   updated_at = now()
 WHERE id = 1;
 

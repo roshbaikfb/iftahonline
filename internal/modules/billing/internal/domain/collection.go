@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -31,29 +32,63 @@ const (
 type CollectionSettings struct {
 	Prepaid  bool
 	Card     bool
-	Minimums map[string]int64 // by currency: EGP, SAR, AED
+	Minimums map[string]int64 // by currency: EGP and USD, and SAR and AED for older accounts
 }
 
 // Currencies are the ones billing sells in, in the order the console
-// shows them. The dollar joins with its prices and Stripe (ADR-0088's
-// G3); stores may sell in it before.
-func Currencies() []string { return []string{"EGP", "SAR", "AED"} }
+// shows them: the pound in Egypt, the dollar everywhere else (ADR-0090).
+func Currencies() []string { return []string{"EGP", "USD"} }
 
-// Billed reports whether billing sells in cur.
-func Billed(cur string) bool { return slices.Contains(Currencies(), cur) }
+// Legacy are the currencies billing sold in before the dollar: accounts
+// opened in them keep them (ADR-0090), and nothing new is sold in them.
+func Legacy() []string { return []string{"SAR", "AED"} }
 
-// Validate checks every currency has a minimum within bounds.
+// Billed reports whether an account may be billed in cur: a currency on
+// sale or a legacy one.
+func Billed(cur string) bool {
+	return slices.Contains(Currencies(), cur) || slices.Contains(Legacy(), cur)
+}
+
+// OnSale reports whether billing sells in cur now.
+func OnSale(cur string) bool { return slices.Contains(Currencies(), cur) }
+
+// BillingCurrency is the currency a merchant in country is billed in
+// (approved 2026-11-05): the pound in Egypt, the dollar elsewhere.
+func BillingCurrency(country string) string {
+	if country == "EG" {
+		return "EGP"
+	}
+	return "USD"
+}
+
+// Merge is c with the minimums given replacing its own: a currency left
+// out keeps its minimum, so a console that knows fewer currencies changes
+// none of the others.
+func (c CollectionSettings) Merge(prepaid, card bool, minimums map[string]int64) CollectionSettings {
+	out := CollectionSettings{Prepaid: prepaid, Card: card, Minimums: maps.Clone(c.Minimums)}
+	if out.Minimums == nil {
+		out.Minimums = map[string]int64{}
+	}
+	maps.Copy(out.Minimums, minimums)
+	return out
+}
+
+// Validate checks every currency billed in has a minimum within bounds,
+// and no other currency has one.
 func (c CollectionSettings) Validate() error {
 	var fe []errs.FieldError
-	for _, cur := range Currencies() {
+	for _, cur := range slices.Concat(Currencies(), Legacy()) {
 		if m, ok := c.Minimums[cur]; !ok || m < minMinimum || m > maxMinimum {
 			fe = append(fe, errs.FieldError{Field: "minimums." + cur, Code: "out_of_range", Message: "between 1 and 1,000,000"})
 		}
 	}
-	if len(c.Minimums) != len(Currencies()) && len(fe) == 0 {
-		fe = append(fe, errs.FieldError{Field: "minimums", Code: "invalid", Message: "one minimum per currency: EGP, SAR, AED"})
+	for cur := range c.Minimums {
+		if !Billed(cur) {
+			fe = append(fe, errs.FieldError{Field: "minimums." + cur, Code: "invalid", Message: "a currency billing sells in"})
+		}
 	}
 	if len(fe) > 0 {
+		slices.SortFunc(fe, func(a, b errs.FieldError) int { return strings.Compare(a.Field, b.Field) })
 		return errs.Validation(fe...)
 	}
 	return nil

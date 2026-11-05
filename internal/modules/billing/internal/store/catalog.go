@@ -101,7 +101,7 @@ func Plans(ctx context.Context, tx Tx) ([]domain.PlanVersion, error) {
 	for _, f := range fees {
 		if v := byID[f.PlanID]; v != nil {
 			v.Fees = append(v.Fees, domain.CurrencyFee{Currency: f.Currency,
-				FeeRule: domain.FeeRule{RateBps: f.RateBps, MinMinor: f.MinMinor, MaxMinor: f.MaxMinor}})
+				FeeRule: domain.FeeRule{RateBps: f.RateBps, FixedMinor: f.FixedMinor, MinMinor: f.MinMinor, MaxMinor: f.MaxMinor}})
 		}
 	}
 	return out, nil
@@ -193,7 +193,7 @@ func InsertPlanVersion(ctx context.Context, tx Tx, v domain.PlanVersion) error {
 	}
 	for _, f := range v.Fees {
 		if err = q.InsertPlanFee(ctx, billingdb.InsertPlanFeeParams{PlanID: v.ID, Currency: f.Currency, RateBps: f.RateBps,
-			MinMinor: f.MinMinor, MaxMinor: f.MaxMinor}); err != nil {
+			FixedMinor: f.FixedMinor, MinMinor: f.MinMinor, MaxMinor: f.MaxMinor}); err != nil {
 			return fmt.Errorf("billing store: insert plan fee: %w", err)
 		}
 	}

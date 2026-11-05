@@ -313,9 +313,10 @@ func TestPublicOffers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("USD offers: %v", err)
 	}
-	// The seeded plans are on sale in dollars too (unpriced). Parallel
-	// tests add plans of their own between the two reads, so the lists
-	// are compared by the seeded codes, not by length.
+	// The seeded plans are on sale in dollars, priced from the riyal's at
+	// 3.75 (ADR-0090). Parallel tests add plans of their own between the
+	// two reads, so the lists are compared by the seeded codes, not by
+	// length.
 	inUSD := map[string]bool{}
 	for _, o := range usd.Plans {
 		inUSD[o.Code] = true
@@ -326,8 +327,27 @@ func TestPublicOffers(t *testing.T) {
 		}
 	}
 	for _, o := range usd.Plans {
-		if o.Monthly != nil || o.Annual != nil || o.Fee != nil {
-			t.Errorf("%s is priced in USD: %+v", o.Code, o)
+		switch o.Code {
+		case "merchant", "pro", "brand":
+			if o.Monthly == nil || *o.Monthly <= 0 || o.Annual == nil {
+				t.Errorf("%s has no dollar price: %+v", o.Code, o)
+			}
+		case "pays":
+			if o.Fee == nil || o.Fee.Currency != "USD" {
+				t.Errorf("pays has no dollar fee: %+v", o.Fee)
+			}
 		}
 	}
+	if pro := byCodeIn(usd.Plans, "pro"); pro != nil && *pro.Monthly != 2640 {
+		t.Errorf("pro = %d cents, want the riyal's 99 at 3.75", *pro.Monthly)
+	}
+}
+
+func byCodeIn(plans []app.Offer, code string) *app.Offer {
+	for i := range plans {
+		if plans[i].Code == code {
+			return &plans[i]
+		}
+	}
+	return nil
 }

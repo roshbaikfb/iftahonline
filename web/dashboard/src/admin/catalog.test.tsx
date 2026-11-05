@@ -117,12 +117,26 @@ describe('plan editor helpers', () => {
   it('reads pay as you sell’s fees, and groups versions under the one on sale', () => {
     const pays = draftFrom(undefined, 'pays');
     pays.code = 'pays2';
-    pays.fees = { EGP: { rate: '2.5', min: '1', max: '' }, SAR: { rate: '3', min: '', max: '50' } };
+    pays.fees = {
+      EGP: { rate: '2.5', fixed: '', min: '1', max: '' },
+      USD: { rate: '1', fixed: '0.04', min: '', max: '' },
+      SAR: { rate: '3', fixed: '', min: '', max: '50' },
+    };
     const input = toInput(pays, 'نسبة');
     expect(typeof input !== 'string' && input.fees).toEqual([
-      { currency: 'EGP', rate_bps: 250, min_minor: 100 },
-      { currency: 'SAR', rate_bps: 300, min_minor: 0, max_minor: 5000 },
+      { currency: 'EGP', rate_bps: 250, fixed_minor: 0, min_minor: 100 },
+      { currency: 'USD', rate_bps: 100, fixed_minor: 4, min_minor: 0 },
+      { currency: 'SAR', rate_bps: 300, fixed_minor: 0, min_minor: 0, max_minor: 5000 },
     ]);
+    expect(toInput({ ...pays, fees: { USD: { rate: '1', fixed: 'four cents', min: '', max: '' } } }, 'x')).toBe('رسوم USD غير صحيحة');
+    const head = plans[0];
+    if (!head) throw new Error('no plan');
+    expect(draftFrom({ ...head, kind: 'pays', fees: [{ currency: 'USD', rate_bps: 100, fixed_minor: 4, min_minor: 0 }] }).fees['USD']).toEqual({
+      rate: '1',
+      fixed: '0.04',
+      min: '0',
+      max: '',
+    });
     expect(typeof input !== 'string' && input.prices).toBeUndefined();
     const groups = byCode(plans);
     expect(groups.map((g) => [g.code, g.head.version, g.versions.length])).toEqual([
@@ -148,8 +162,8 @@ describe('plan cards helpers', () => {
   it('writes each kind’s price line and the first limits', () => {
     expect(headline(plan({}))).toEqual({ price: '599 ج.م', per: '/ شهر', sub: '5,990 ج.م سنويًا · يوفّر شهرين' });
     expect(headline(plan({ prices: plan({}).prices.filter((x) => x.cycle === 'monthly') })).sub).toBe('');
-    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 250, min_minor: 0 }] }))).toEqual({ price: '2.5%', per: 'من كل طلب مسلّم', sub: 'بلا حد أدنى ولا أقصى' });
-    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 300, min_minor: 500, max_minor: 5000 }] })).sub).toBe('حد أدنى 5 ج.م · حد أقصى 50 ج.م');
+    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 250, fixed_minor: 0, min_minor: 0 }] }))).toEqual({ price: '2.5%', per: 'من كل طلب مسلّم', sub: 'بلا حد أدنى ولا أقصى' });
+    expect(headline(plan({ kind: 'pays', prices: [], fees: [{ currency: 'EGP', rate_bps: 300, fixed_minor: 0, min_minor: 500, max_minor: 5000 }] })).sub).toBe('حد أدنى 5 ج.م · حد أقصى 50 ج.م');
     expect(headline(plan({ kind: 'free', prices: [] }))).toEqual({ price: '0 ج.م', per: '', sub: 'بلا اشتراك' });
     expect(headline(plan({ kind: 'agency' })).sub).toBe('سعر واحد لكل متاجر الوكالة');
     expect(otherPrices(plan({}))).toBe('99 ر.س شهريًا · 99 د.إ شهريًا');

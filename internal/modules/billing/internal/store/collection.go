@@ -18,14 +18,15 @@ func CollectionSettings(ctx context.Context, tx Tx) (domain.CollectionSettings, 
 		return domain.CollectionSettings{}, fmt.Errorf("billing store: collection settings: %w", err)
 	}
 	return domain.CollectionSettings{Prepaid: r.PrepaidEnabled, Card: r.CardEnabled,
-		Minimums: map[string]int64{"EGP": r.MinimumEgpMinor, "SAR": r.MinimumSarMinor, "AED": r.MinimumAedMinor}}, nil
+		Minimums: map[string]int64{"EGP": r.MinimumEgpMinor, "SAR": r.MinimumSarMinor, "AED": r.MinimumAedMinor, "USD": r.MinimumUsdMinor}}, nil
 }
 
 // SaveCollectionSettings writes them (the console's role, app_admin).
 func SaveCollectionSettings(ctx context.Context, tx Tx, c domain.CollectionSettings) error {
 	n, err := billingdb.New(tx).SaveBillingSettings(ctx, billingdb.SaveBillingSettingsParams{
 		PrepaidEnabled: c.Prepaid, CardEnabled: c.Card,
-		MinimumEgpMinor: c.Minimums["EGP"], MinimumSarMinor: c.Minimums["SAR"], MinimumAedMinor: c.Minimums["AED"]})
+		MinimumEgpMinor: c.Minimums["EGP"], MinimumSarMinor: c.Minimums["SAR"], MinimumAedMinor: c.Minimums["AED"],
+		MinimumUsdMinor: c.Minimums["USD"]})
 	if err != nil {
 		return fmt.Errorf("billing store: save collection settings: %w", err)
 	}

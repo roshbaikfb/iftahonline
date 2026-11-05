@@ -34,18 +34,18 @@ func TestAgencies(t *testing.T) {
 	d := newDunning(t)
 	first, second := d.store(t), d.store(t)
 
-	if _, err := d.svc.CreateAgency(t.Context(), "وكالة", "EGP", "pro"); !errs.Is(err, errs.KindValidation) {
+	if _, err := d.svc.CreateAgency(t.Context(), "وكالة", "EGP", "", "pro"); !errs.Is(err, errs.KindValidation) {
 		t.Fatalf("a subscription plan: %v", err)
 	}
 	for name, err := range map[string]error{
-		"no name":      func() error { _, e := d.svc.CreateAgency(t.Context(), " ", "EGP", "agency"); return e }(),
-		"bad currency": func() error { _, e := d.svc.CreateAgency(t.Context(), "وكالة", "USD", "agency"); return e }(),
+		"no name":      func() error { _, e := d.svc.CreateAgency(t.Context(), " ", "EGP", "", "agency"); return e }(),
+		"bad currency": func() error { _, e := d.svc.CreateAgency(t.Context(), "وكالة", "GBP", "", "agency"); return e }(),
 	} {
 		if !errs.Is(err, errs.KindValidation) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	a, err := d.svc.CreateAgency(t.Context(), "وكالة النيل", "EGP", "agency")
+	a, err := d.svc.CreateAgency(t.Context(), "وكالة النيل", "EGP", "", "agency")
 	if err != nil || a.Country != "EG" || a.PlanCode != "agency" {
 		t.Fatalf("agency = %+v, %v", a, err)
 	}

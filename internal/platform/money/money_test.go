@@ -203,6 +203,48 @@ func TestPercentBP(t *testing.T) {
 	}
 }
 
+func TestConvert(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		amount  int64
+		from    money.Currency
+		to      money.Currency
+		rate    int64
+		mode    money.RoundingMode
+		want    int64
+		wantErr error
+	}{
+		{"riyal to dollar", 37500, money.SAR, money.USD, 3_750_000, money.RoundHalfUp, 10000, nil},
+		{"dirham to dollar rounds", 10000, money.AED, money.USD, 3_672_500, money.RoundHalfUp, 2723, nil}, // 27.229...
+		{"same currency at par", 12345, money.USD, money.USD, money.RateScale, money.RoundHalfUp, 12345, nil},
+		{"pound to dollar", 500000, money.EGP, money.USD, 50_000_000, money.RoundHalfUp, 10000, nil},
+		{"negative", -37500, money.SAR, money.USD, 3_750_000, money.RoundHalfUp, -10000, nil},
+		{"down truncates", 1, money.SAR, money.USD, 3_750_000, money.RoundDown, 0, nil},
+		{"zero rate", 100, money.SAR, money.USD, 0, money.RoundHalfUp, 0, money.ErrInvalidRate},
+		{"negative rate", 100, money.SAR, money.USD, -1, money.RoundHalfUp, 0, money.ErrInvalidRate},
+		{"unknown target", 100, money.SAR, money.Currency("GBP"), 1, money.RoundHalfUp, 0, money.ErrUnknownCurrency},
+		{"overflow", math.MaxInt64, money.USD, money.SAR, 1, money.RoundHalfUp, 0, money.ErrOverflow},
+		{"vast rate", 100, money.SAR, money.USD, math.MaxInt64, money.RoundHalfUp, 0, money.ErrOverflow},
+		{"bad mode", 100, money.SAR, money.USD, 3_750_000, money.RoundingMode(99), 0, money.ErrInvalidRounding},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := mustNew(t, tt.amount, tt.from).Convert(tt.to, tt.rate, tt.mode)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if err == nil && (got.Amount() != tt.want || got.Currency() != tt.to) {
+				t.Fatalf("got %v, want %d %s", got, tt.want, tt.to)
+			}
+		})
+	}
+	if _, err := (money.Money{}).Convert(money.USD, money.RateScale, money.RoundHalfUp); err == nil {
+		t.Fatal("the zero Money converted")
+	}
+}
+
 func TestAllocate(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

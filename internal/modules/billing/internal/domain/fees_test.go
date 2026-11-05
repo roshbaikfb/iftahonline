@@ -26,6 +26,11 @@ func TestFee(t *testing.T) {
 		{"nothing sold, no fee", domain.FeeRule{RateBps: 250, MinMinor: 500}, 0, 0},
 		{"a zero rate", domain.FeeRule{}, 100000, 0},
 		{"100%", domain.FeeRule{RateBps: 10000}, 12345, 12345},
+		{"a fixed amount per order", domain.FeeRule{FixedMinor: 4}, 1000, 4},
+		{"a rate and a fixed amount", domain.FeeRule{RateBps: 100, FixedMinor: 4}, 1000, 14},
+		{"the minimum over both", domain.FeeRule{RateBps: 100, FixedMinor: 4, MinMinor: 50}, 1000, 50},
+		{"the maximum over both", domain.FeeRule{RateBps: 100, FixedMinor: 40, MaxMinor: i64(30)}, 1000, 30},
+		{"the fixed amount never more than the order", domain.FeeRule{FixedMinor: 4}, 3, 3},
 		{"a large order does not overflow", domain.FeeRule{RateBps: 250}, 1_000_000_000_000, 25_000_000_000},
 	}
 	for _, tt := range tests {

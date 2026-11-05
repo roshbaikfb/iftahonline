@@ -24,7 +24,7 @@ func InsertAgency(ctx context.Context, tx Tx, a domain.Agency) error {
 }
 
 // Agencies lists every agency, newest first, through
-// app.agency_accounts (names and counts only).
+// app.agency_accounts (names, countries and counts only).
 func Agencies(ctx context.Context, tx Tx) ([]domain.Agency, error) {
 	rows, err := billingdb.New(tx).ListAgencies(ctx)
 	if err != nil {
@@ -33,7 +33,7 @@ func Agencies(ctx context.Context, tx Tx) ([]domain.Agency, error) {
 	out := make([]domain.Agency, len(rows))
 	for i, r := range rows {
 		out[i] = domain.Agency{Account: domain.Account{ID: r.ID, Kind: domain.AccountAgency, Name: r.Name, Currency: r.Currency,
-			Country: domain.CountryOf(r.Currency)}, PlanCode: r.PlanCode, Stores: r.Stores, CreatedAt: r.CreatedAt}
+			Country: r.Country}, PlanCode: r.PlanCode, Stores: r.Stores, CreatedAt: r.CreatedAt}
 	}
 	return out, nil
 }

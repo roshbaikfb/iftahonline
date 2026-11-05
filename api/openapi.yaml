@@ -3528,6 +3528,53 @@ paths:
           description: Removed.
         default:
           $ref: "#/components/responses/Problem"
+  /admin/v1/billing/fx-rates:
+    get:
+      tags: [admin]
+      operationId: adminListFXRates
+      summary: Each store currency's rate to the dollar
+      description: |
+        A pay-as-you-sell fee is in the currency its account is billed in:
+        the pound in Egypt, the dollar elsewhere. An order in another
+        currency is converted at its currency's rate when it is delivered,
+        and the fee keeps that rate (ADR-0090).
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The rates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFXRates" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/billing/fx-rates/{currency}:
+    parameters:
+      - name: currency
+        in: path
+        required: true
+        description: A store currency other than the dollar.
+        schema: { type: string, enum: [EGP, SAR, AED] }
+    put:
+      tags: [admin]
+      operationId: adminSaveFXRate
+      summary: Set a currency's rate to the dollar
+      description: It reaches the fees of orders delivered after it. Recorded in the admin log first.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminFXRateInput" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFXRate" }
+        default:
+          $ref: "#/components/responses/Problem"
   /admin/v1/billing/collection:
     get:
       tags: [admin]
@@ -6636,6 +6683,7 @@ components:
         id: { $ref: "#/components/schemas/ULID" }
         name: { type: string }
         currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        country: { type: string, example: SA, description: The agency's country, for its invoices' tax. }
         plan_code: { type: string }
         stores: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
@@ -6674,7 +6722,8 @@ components:
       required: [name, currency, plan_code, reason]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
-        currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        currency: { type: string, enum: [EGP, SAR, AED, USD], description: "Its country's: EGP in Egypt, USD elsewhere (ADR-0090)." }
+        country: { type: string, pattern: "^[A-Z]{2}$", example: SA, description: "The agency's country; Egypt when absent with EGP." }
         plan_code: { type: string, pattern: "^[a-z][a-z_]{1,31}$" }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminAds:
@@ -6997,6 +7046,25 @@ components:
         name_ar: { type: string, minLength: 1, maxLength: 60 }
         name_en: { type: string, minLength: 1, maxLength: 60 }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
+    AdminFXRate:
+      type: object
+      required: [currency, per_usd_micros]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        per_usd_micros: { type: integer, format: int64, example: 3750000, description: "The currency's units per dollar, times 10^6: the riyal's 3.75 is 3750000." }
+    AdminFXRates:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFXRate" }
+    AdminFXRateInput:
+      type: object
+      required: [per_usd_micros, reason]
+      properties:
+        per_usd_micros: { type: integer, format: int64, minimum: 1, maximum: 1000000000000 }
+        reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminCollectionSettings:
       type: object
       required: [prepaid_enabled, card_enabled, minimums]
@@ -7021,8 +7089,9 @@ components:
         card_enabled: { type: boolean }
         minimums:
           type: array
-          minItems: 3
-          maxItems: 3
+          description: The currencies given; one left out keeps its minimum (ADR-0090).
+          minItems: 1
+          maxItems: 4
           items: { $ref: "#/components/schemas/AdminCollectionMinimum" }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminStoreBalance:
@@ -7491,6 +7560,7 @@ components:
       properties:
         currency: { type: string, enum: [EGP, SAR, AED, USD] }
         rate_bps: { type: integer, minimum: 0, maximum: 10000, description: "250 is 2.5%." }
+        fixed_minor: { type: integer, format: int64, minimum: 0, maximum: 100000000, default: 0, description: "Added to every delivered order's fee: $0.04 is 4 (ADR-0090)." }
         min_minor: { type: integer, format: int64, minimum: 0, default: 0 }
         max_minor: { type: integer, format: int64, minimum: 0 }
     AdminPlanInput:
@@ -7514,7 +7584,7 @@ components:
           items: { $ref: "#/components/schemas/AdminPlanGrant" }
         fees:
           type: array
-          maxItems: 3
+          maxItems: 4
           items: { $ref: "#/components/schemas/AdminPlanFee" }
         reason: { type: string, minLength: 3, maxLength: 500, description: Kept in the admin audit log. }
     AdminPlan:
@@ -9228,6 +9298,8 @@ components:
           required: [rate_bps, offered]
           properties:
             rate_bps: { type: integer, description: The fee on each delivered order's goods, in basis points. }
+            fixed_minor: { type: integer, format: int64, description: "And the fixed amount per order, in currency (ADR-0090)." }
+            currency: { type: string, enum: [EGP, SAR, AED, USD], description: The currency the store is billed in. }
             offered:
               type: array
               items: { type: string, enum: [balance, card] }
@@ -9333,6 +9405,7 @@ components:
       required: [rate_bps, min_minor]
       properties:
         rate_bps: { type: integer, description: "250 is 2.5%." }
+        fixed_minor: { type: integer, format: int64, description: "Added to every delivered order's fee (ADR-0090)." }
         min_minor: { type: integer, format: int64 }
         max_minor: { type: integer, format: int64 }
     BillingGrant:

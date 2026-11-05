@@ -324,6 +324,7 @@ type BillingSetting struct {
 	MinimumSarMinor int64
 	MinimumAedMinor int64
 	UpdatedAt       pgtype.Timestamptz
+	MinimumUsdMinor int64
 }
 
 type CarrierConnection struct {
@@ -469,6 +470,12 @@ type FoundingProgram struct {
 	Seats       int32
 	DiscountBps int32
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type FxRate struct {
+	Currency     string
+	PerUsdMicros int64
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type InventoryLevel struct {
@@ -777,11 +784,12 @@ type PlanEntitlement struct {
 }
 
 type PlanFee struct {
-	PlanID   ulid.ID
-	Currency string
-	RateBps  int32
-	MinMinor int64
-	MaxMinor pgtype.Int8
+	PlanID     ulid.ID
+	Currency   string
+	RateBps    int32
+	MinMinor   int64
+	MaxMinor   pgtype.Int8
+	FixedMinor int64
 }
 
 type PlanPrice struct {
@@ -961,21 +969,25 @@ type RiverQueue struct {
 }
 
 type SellFee struct {
-	StoreID     ulid.ID
-	OrderID     ulid.ID
-	Period      time.Time
-	PlanID      ulid.ID
-	BaseMinor   int64
-	RateBps     int32
-	FeeMinor    int64
-	Currency    string
-	Status      string
-	DeliveredAt pgtype.Timestamptz
-	ReturnedAt  pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	InvoiceID   pgtype.UUID
-	Prepaid     bool
+	StoreID        ulid.ID
+	OrderID        ulid.ID
+	Period         time.Time
+	PlanID         ulid.ID
+	BaseMinor      int64
+	RateBps        int32
+	FeeMinor       int64
+	Currency       string
+	Status         string
+	DeliveredAt    pgtype.Timestamptz
+	ReturnedAt     pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	InvoiceID      pgtype.UUID
+	Prepaid        bool
+	FixedMinor     int64
+	OrderCurrency  pgtype.Text
+	OrderBaseMinor pgtype.Int8
+	RateMicros     pgtype.Int8
 }
 
 type Shipment struct {

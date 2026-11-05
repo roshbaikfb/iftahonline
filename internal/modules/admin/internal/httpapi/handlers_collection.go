@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
+	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 )
 
 // AdminGetCollectionSettings implements StrictServerInterface.
@@ -21,11 +22,18 @@ func (h *Handlers) AdminSaveCollectionSettings(ctx context.Context, req AdminSav
 		return nil, errBody
 	}
 	b := req.Body
-	c := billing.CollectionSettings{Prepaid: b.PrepaidEnabled, Card: b.CardEnabled, Minimums: make(map[string]int64, len(b.Minimums))}
-	for _, m := range b.Minimums {
-		c.Minimums[string(m.Currency)] = m.MinimumMinor
+	if len(b.Minimums) == 0 {
+		return nil, errs.Validation(errs.FieldError{Field: "minimums", Code: "required", Message: "at least one currency's minimum"})
 	}
-	if err := h.svc.SaveCollectionSettings(ctx, c, b.Reason); err != nil {
+	minimums := make(map[string]int64, len(b.Minimums))
+	for _, m := range b.Minimums {
+		if _, twice := minimums[string(m.Currency)]; twice {
+			return nil, errs.Validation(errs.FieldError{Field: "minimums", Code: "duplicate", Message: "one minimum per currency"})
+		}
+		minimums[string(m.Currency)] = m.MinimumMinor
+	}
+	c, err := h.svc.SaveCollectionSettings(ctx, b.PrepaidEnabled, b.CardEnabled, minimums, b.Reason)
+	if err != nil {
 		return nil, err
 	}
 	return AdminSaveCollectionSettings200JSONResponse(toCollectionSettings(c)), nil
@@ -33,7 +41,7 @@ func (h *Handlers) AdminSaveCollectionSettings(ctx context.Context, req AdminSav
 
 func toCollectionSettings(c billing.CollectionSettings) AdminCollectionSettings {
 	out := AdminCollectionSettings{PrepaidEnabled: c.Prepaid, CardEnabled: c.Card, Minimums: make([]AdminCollectionMinimum, 0, len(c.Minimums))}
-	for _, cur := range billing.Currencies() {
+	for _, cur := range billing.AllCurrencies() {
 		if m, ok := c.Minimums[cur]; ok {
 			out.Minimums = append(out.Minimums, AdminCollectionMinimum{Currency: AdminCollectionMinimumCurrency(cur), MinimumMinor: m})
 		}

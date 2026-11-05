@@ -57,7 +57,7 @@ func TestPaying(t *testing.T) {
 		}
 	})
 
-	agency, err := d.svc.CreateAgency(t.Context(), "وكالة الإيراد", "EGP", "agency")
+	agency, err := d.svc.CreateAgency(t.Context(), "وكالة الإيراد", "EGP", "", "agency")
 	if err != nil {
 		t.Fatal(err)
 	}

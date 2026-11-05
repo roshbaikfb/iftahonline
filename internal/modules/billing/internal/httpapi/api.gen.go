@@ -98,6 +98,30 @@ func (e BillingStatus) Valid() bool {
 	}
 }
 
+// Defines values for BillingSwitchOfferCurrency.
+const (
+	BillingSwitchOfferCurrencyAED BillingSwitchOfferCurrency = "AED"
+	BillingSwitchOfferCurrencyEGP BillingSwitchOfferCurrency = "EGP"
+	BillingSwitchOfferCurrencySAR BillingSwitchOfferCurrency = "SAR"
+	BillingSwitchOfferCurrencyUSD BillingSwitchOfferCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the BillingSwitchOfferCurrency enum.
+func (e BillingSwitchOfferCurrency) Valid() bool {
+	switch e {
+	case BillingSwitchOfferCurrencyAED:
+		return true
+	case BillingSwitchOfferCurrencyEGP:
+		return true
+	case BillingSwitchOfferCurrencySAR:
+		return true
+	case BillingSwitchOfferCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingSwitchOfferOffered.
 const (
 	BillingSwitchOfferOfferedBalance BillingSwitchOfferOffered = "balance"
@@ -456,7 +480,12 @@ type Billing struct {
 
 	// SwitchOffer Present while the unpaid store may move to pay as you sell at once (its grace and its free days): its open invoices are voided.
 	SwitchOffer *struct {
-		Offered []BillingSwitchOfferOffered `json:"offered"`
+		// Currency The currency the store is billed in.
+		Currency *BillingSwitchOfferCurrency `json:"currency,omitempty"`
+
+		// FixedMinor And the fixed amount per order, in currency (ADR-0090).
+		FixedMinor *int64                      `json:"fixed_minor,omitempty"`
+		Offered    []BillingSwitchOfferOffered `json:"offered"`
 
 		// RateBps The fee on each delivered order's goods
 		RateBps int `json:"rate_bps"`
@@ -475,6 +504,9 @@ type BillingNextCycle string
 
 // BillingStatus defines model for Billing.Status.
 type BillingStatus string
+
+// BillingSwitchOfferCurrency The currency the store is billed in.
+type BillingSwitchOfferCurrency string
 
 // BillingSwitchOfferOffered defines model for Billing.SwitchOffer.Offered.
 type BillingSwitchOfferOffered string
@@ -592,8 +624,10 @@ type BillingPlanKind string
 
 // BillingPlanFee Pay as you sell's fee on delivered orders.
 type BillingPlanFee struct {
-	MaxMinor *int64 `json:"max_minor,omitempty"`
-	MinMinor int64  `json:"min_minor"`
+	// FixedMinor Added to every delivered order's fee (ADR-0090).
+	FixedMinor *int64 `json:"fixed_minor,omitempty"`
+	MaxMinor   *int64 `json:"max_minor,omitempty"`
+	MinMinor   int64  `json:"min_minor"`
 
 	// RateBps 250 is 2.5%.
 	RateBps int `json:"rate_bps"`

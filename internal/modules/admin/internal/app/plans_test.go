@@ -48,7 +48,7 @@ func TestPlanCatalogIsAuditedFirst(t *testing.T) {
 		Plan: billing.Plan{Code: code, Kind: "subscription", NameAr: "نمو", NameEn: "Growth", Public: true},
 		Prices: []billing.Price{
 			{Currency: "EGP", Cycle: "monthly", AmountMinor: 100}, {Currency: "SAR", Cycle: "monthly", AmountMinor: 100},
-			{Currency: "AED", Cycle: "monthly", AmountMinor: 100},
+			{Currency: "AED", Cycle: "monthly", AmountMinor: 100}, {Currency: "USD", Cycle: "monthly", AmountMinor: 100},
 		},
 		Grants: billing.Grants{key: {Value: 1}},
 	}
