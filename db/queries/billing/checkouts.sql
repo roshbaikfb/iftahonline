@@ -1,6 +1,6 @@
 -- name: InsertCheckout :exec
-INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor)
-VALUES (@store_id, @id, @account_id, @invoice_id, @reference, @currency, @amount_minor);
+INSERT INTO billing_checkouts (store_id, id, account_id, invoice_id, reference, currency, amount_minor, purpose)
+VALUES (@store_id, @id, @account_id, sqlc.narg(invoice_id), @reference, @currency, @amount_minor, @purpose);
 
 -- name: SetCheckoutOrder :exec
 -- Paymob's order, once known (from the intention, or the transaction
@@ -10,9 +10,14 @@ WHERE store_id = @store_id AND reference = @reference AND paymob_order_id IS NUL
 
 -- name: GetCheckout :one
 -- By our reference or Paymob's order.
-SELECT id, account_id, invoice_id, reference, currency, amount_minor, status FROM billing_checkouts
+SELECT id, account_id, invoice_id, reference, currency, amount_minor, status, purpose FROM billing_checkouts
 WHERE store_id = @store_id
   AND ((@reference::text <> '' AND reference = @reference::text) OR (@paymob_order_id::text <> '' AND paymob_order_id = @paymob_order_id::text));
+
+-- name: MarkCheckoutPaid :execrows
+-- Once: a top-up's repeated callback finds it paid already. A checkout
+-- an earlier callback found unpaid (failed) can still be paid.
+UPDATE billing_checkouts SET status = 'paid', updated_at = now() WHERE store_id = @store_id AND id = @id AND status <> 'paid';
 
 -- name: SetCheckoutStatus :exec
 UPDATE billing_checkouts SET status = @status, updated_at = now() WHERE store_id = @store_id AND id = @id;

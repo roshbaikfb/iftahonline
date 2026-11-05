@@ -16,12 +16,16 @@ import (
 type Checkout struct {
 	ID          ulid.ID
 	Account     ulid.ID
-	Invoice     ulid.ID
+	Invoice     ulid.ID // zero for a top-up (ADR-0085)
 	Reference   string
 	Currency    string
 	AmountMinor int64
 	Status      string // open, paid, failed
 }
+
+// TopUp reports whether c tops up the balance rather than paying an
+// invoice.
+func (c Checkout) TopUp() bool { return c.Invoice.IsZero() }
 
 // InsertCheckout records a checkout of the store in ctx.
 func InsertCheckout(ctx context.Context, tx Tx, c Checkout) error {
@@ -29,8 +33,12 @@ func InsertCheckout(ctx context.Context, tx Tx, c Checkout) error {
 	if err != nil {
 		return err
 	}
-	if err = billingdb.New(tx).InsertCheckout(ctx, billingdb.InsertCheckoutParams{StoreID: store, ID: c.ID, AccountID: c.Account,
-		InvoiceID: c.Invoice, Reference: c.Reference, Currency: c.Currency, AmountMinor: c.AmountMinor}); err != nil {
+	p := billingdb.InsertCheckoutParams{StoreID: store, ID: c.ID, AccountID: c.Account, Reference: c.Reference,
+		Currency: c.Currency, AmountMinor: c.AmountMinor, Purpose: "topup"}
+	if !c.TopUp() {
+		p.InvoiceID, p.Purpose = &c.Invoice, "invoice"
+	}
+	if err = billingdb.New(tx).InsertCheckout(ctx, p); err != nil {
 		return fmt.Errorf("billing store: insert checkout: %w", err)
 	}
 	return nil
@@ -63,8 +71,25 @@ func FindCheckout(ctx context.Context, tx Tx, reference, order string) (Checkout
 	case err != nil:
 		return Checkout{}, false, fmt.Errorf("billing store: get checkout: %w", err)
 	}
-	return Checkout{ID: r.ID, Account: r.AccountID, Invoice: r.InvoiceID, Reference: r.Reference, Currency: r.Currency,
-		AmountMinor: r.AmountMinor, Status: r.Status}, true, nil
+	c := Checkout{ID: r.ID, Account: r.AccountID, Reference: r.Reference, Currency: r.Currency, AmountMinor: r.AmountMinor, Status: r.Status}
+	if r.InvoiceID != nil {
+		c.Invoice = *r.InvoiceID
+	}
+	return c, true, nil
+}
+
+// MarkCheckoutPaid marks a checkout of the store in ctx paid; marked is
+// false when it was paid already (a repeated callback).
+func MarkCheckoutPaid(ctx context.Context, tx Tx, id ulid.ID) (marked bool, err error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := billingdb.New(tx).MarkCheckoutPaid(ctx, billingdb.MarkCheckoutPaidParams{StoreID: store, ID: id})
+	if err != nil {
+		return false, fmt.Errorf("billing store: checkout paid: %w", err)
+	}
+	return n == 1, nil
 }
 
 // SetCheckoutStatus records a checkout's outcome.

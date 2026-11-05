@@ -19,6 +19,7 @@ const (
 	NoticeBalanceLow      NoticeKind = "balance_low"      // under half the minimum
 	NoticeBalanceEmpty    NoticeKind = "balance_empty"    // nothing left or owed: past due until GraceUntil
 	NoticeBalanceRestored NoticeKind = "balance_restored" // back above nothing: the store is back
+	NoticeToppedUp        NoticeKind = "topped_up"        // a top-up was paid (ADR-0085)
 )
 
 // Notice is a billing notice's facts.
@@ -57,6 +58,7 @@ type noticeTexts struct {
 	paidSubject, paid                                   string
 	lowSubject, low, emptySubject, empty, topUp         string
 	restoredSubject, restored                           string
+	toppedSubject, topped                               string
 }
 
 func textsFor(locale string) noticeTexts {
@@ -76,6 +78,7 @@ func textsFor(locale string) noticeTexts {
 			emptySubject: ": your balance ran out", empty: "Your balance owes %s in fees of delivered orders. Top it up; what is owed is taken from it first.",
 			topUp:           "\n\nTop up: ",
 			restoredSubject: ": your store is back", restored: "Your balance is %s again, and your store is back on its plan. Thank you.\n\n",
+			toppedSubject: ": balance topped up", topped: "We added %s to your balance. Thank you.\n\n",
 		}
 	}
 	return noticeTexts{
@@ -93,6 +96,7 @@ func textsFor(locale string) noticeTexts {
 		emptySubject: ": نفد رصيدك", empty: "عليك %s رسوم طلبات سُلّمت. اشحن رصيدك؛ يُخصم المستحق من أول شحنة.",
 		topUp:           "\n\nاشحن رصيدك: ",
 		restoredSubject: ": رجع متجرك", restored: "رصيدك الآن %s، ورجع متجرك على باقته. شكرًا لك.\n\n",
+		toppedSubject: ": تم شحن رصيدك", topped: "أضفنا %s إلى رصيدك. شكرًا لك.\n\n",
 	}
 }
 
@@ -136,6 +140,8 @@ func (n Notice) Email(locale, store, link string) (subject, text string) {
 		return store + w.emptySubject, text + w.topUp + link
 	case NoticeBalanceRestored:
 		return store + w.restoredSubject, fmt.Sprintf(w.restored, sum) + link
+	case NoticeToppedUp:
+		return store + w.toppedSubject, fmt.Sprintf(w.topped, sum) + link
 	default:
 		return store + w.paidSubject, fmt.Sprintf(w.paid, n.Invoice, sum) + link
 	}

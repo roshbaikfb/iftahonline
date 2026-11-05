@@ -316,6 +316,9 @@ func (s *Service) ProcessCallback(ctx context.Context, receipt ulid.ID) error {
 	if !paid {
 		return s.finishCheckout(ctx, receipt, c, "failed", "not_paid")
 	}
+	if c.TopUp() {
+		return s.toppedUp(ctx, receipt, c, txn)
+	}
 	duplicate, err := s.recordAttempt(ctx, c.Account, store.Attempt{ID: s.ids.New(), Invoice: c.Invoice, Account: c.Account,
 		Gateway: CheckoutGatewayName, Outcome: "approved", Reference: txn, AmountMinor: c.AmountMinor})
 	if err != nil {

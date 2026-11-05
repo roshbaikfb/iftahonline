@@ -83,6 +83,7 @@ type Entry struct {
 	Admin       ulid.ID // who added a manual entry
 	Order       ulid.ID // a fee's or a refund's order
 	Invoice     ulid.ID // an invoice entry's
+	Checkout    ulid.ID // a top-up's
 	CreatedAt   time.Time
 }
 
@@ -105,6 +106,9 @@ func AddEntry(ctx context.Context, tx Tx, e Entry) (added bool, err error) {
 	}
 	if !e.Invoice.IsZero() {
 		p.InvoiceID = &e.Invoice
+	}
+	if !e.Checkout.IsZero() {
+		p.CheckoutID = &e.Checkout
 	}
 	n, err := q.InsertBalanceEntry(ctx, p)
 	if err != nil {
@@ -140,6 +144,9 @@ func Entries(ctx context.Context, tx Tx, account ulid.ID, limit int32) ([]Entry,
 		}
 		if r.InvoiceID != nil {
 			e.Invoice = *r.InvoiceID
+		}
+		if r.CheckoutID != nil {
+			e.Checkout = *r.CheckoutID
 		}
 		out[i] = e
 	}

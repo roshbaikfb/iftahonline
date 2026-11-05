@@ -5629,6 +5629,60 @@ paths:
               schema: { $ref: "#/components/schemas/UsageMeters" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/balance:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [billing]
+      operationId: getBillingBalance
+      summary: The store's prepaid balance and its latest entries
+      description: |
+        Permission: billing.manage. Pay-as-you-sell fees are taken from it
+        when the store pays that way (ADR-0084); `offered` are the ways the
+        platform offers now. 0 for a store never invoiced. An agency's store
+        has none (409 agency_managed).
+      responses:
+        "200":
+          description: The balance and its latest 50 entries, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingBalance" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/billing/balance/topups:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [billing]
+      operationId: topUpBillingBalance
+      summary: Top up the balance on Paymob's page
+      description: |
+        Permission: billing.manage. At least the currency's minimum
+        (`minimum_minor`). The amount is added when Paymob confirms the
+        payment (its callback, checked by asking Paymob), once (ADR-0085).
+        409 prepaid_off while the balance is neither offered nor chosen;
+        503 when the currency has no checkout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_minor]
+              properties:
+                amount_minor: { type: integer, format: int64, minimum: 1, maximum: 100000000 }
+      responses:
+        "200":
+          description: The checkout page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkout_url]
+                properties:
+                  checkout_url: { type: string, format: uri }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/billing/invoices/{invoice_id}/pay:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -8855,6 +8909,35 @@ components:
         open_invoices:
           type: array
           items: { $ref: "#/components/schemas/OpenInvoice" }
+    BillingBalance:
+      type: object
+      required: [currency, balance_minor, minimum_minor, level, offered, entries]
+      properties:
+        currency: { type: string, enum: [EGP, SAR, AED] }
+        balance_minor: { type: integer, format: int64, description: Negative when fees of delivered orders are owed. }
+        minimum_minor: { type: integer, format: int64, description: "The least top-up; the low-balance notice is at half of it." }
+        level: { type: string, enum: [ok, low, debt] }
+        collection: { type: string, enum: [balance, card], description: The way the store pays its fees; absent until it chooses. }
+        offered:
+          type: array
+          description: The ways the platform offers now.
+          items: { type: string, enum: [balance, card] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/BillingBalanceEntry" }
+    BillingBalanceEntry:
+      type: object
+      required: [id, kind, amount_minor, balance_after_minor, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind:
+          type: string
+          enum: [topup, manual, fee, fee_refund, invoice]
+          description: An extensible list (ADR-0032); clients show a kind they do not know as a plain entry.
+        amount_minor: { type: integer, format: int64, description: Signed; a fee is negative. }
+        balance_after_minor: { type: integer, format: int64 }
+        reference: { type: string, description: "The invoice's number, the gateway's transaction, or the platform's note." }
+        created_at: { type: string, format: date-time }
     UsageMeters:
       type: object
       required: [items, ad_free]

@@ -270,6 +270,7 @@ type BalanceEntry struct {
 	CreatedAt         pgtype.Timestamptz
 	OrderID           pgtype.UUID
 	InvoiceID         pgtype.UUID
+	CheckoutID        pgtype.UUID
 }
 
 type BillingAccount struct {
@@ -295,7 +296,7 @@ type BillingCheckout struct {
 	StoreID       ulid.ID
 	ID            ulid.ID
 	AccountID     ulid.ID
-	InvoiceID     ulid.ID
+	InvoiceID     pgtype.UUID
 	Reference     string
 	PaymobOrderID pgtype.Text
 	Currency      string
@@ -303,6 +304,7 @@ type BillingCheckout struct {
 	Status        string
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	Purpose       string
 }
 
 type BillingPaymentMethod struct {

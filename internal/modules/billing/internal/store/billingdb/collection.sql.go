@@ -64,9 +64,10 @@ func (q *Queries) GetBillingSettings(ctx context.Context) (GetBillingSettingsRow
 }
 
 const insertBalanceEntry = `-- name: InsertBalanceEntry :execrows
-INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id)
+INSERT INTO balance_entries (id, account_id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id,
+                             checkout_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11)
+        $10, $11, $12)
 ON CONFLICT DO NOTHING
 `
 
@@ -82,6 +83,7 @@ type InsertBalanceEntryParams struct {
 	AdminID           *ulid.ID
 	OrderID           *ulid.ID
 	InvoiceID         *ulid.ID
+	CheckoutID        *ulid.ID
 }
 
 // An order's fee or refund, or an invoice, is written once: a repeat
@@ -99,6 +101,7 @@ func (q *Queries) InsertBalanceEntry(ctx context.Context, arg InsertBalanceEntry
 		arg.AdminID,
 		arg.OrderID,
 		arg.InvoiceID,
+		arg.CheckoutID,
 	)
 	if err != nil {
 		return 0, err
@@ -107,7 +110,7 @@ func (q *Queries) InsertBalanceEntry(ctx context.Context, arg InsertBalanceEntry
 }
 
 const listBalanceEntries = `-- name: ListBalanceEntries :many
-SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id, created_at
+SELECT id, kind, amount_minor, balance_after_minor, currency, reason, reference, admin_id, order_id, invoice_id, checkout_id, created_at
 FROM balance_entries
 WHERE account_id = $1
 ORDER BY created_at DESC, id DESC
@@ -130,6 +133,7 @@ type ListBalanceEntriesRow struct {
 	AdminID           *ulid.ID
 	OrderID           *ulid.ID
 	InvoiceID         *ulid.ID
+	CheckoutID        *ulid.ID
 	CreatedAt         time.Time
 }
 
@@ -154,6 +158,7 @@ func (q *Queries) ListBalanceEntries(ctx context.Context, arg ListBalanceEntries
 			&i.AdminID,
 			&i.OrderID,
 			&i.InvoiceID,
+			&i.CheckoutID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
