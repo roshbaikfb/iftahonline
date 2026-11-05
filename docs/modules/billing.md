@@ -336,6 +336,17 @@ platform provider):
   changes the way later. The billing summary carries `switch_offer`,
   `collection` and `agency`.
 
+## Payment rules and taxes by country (ADR-0089)
+
+- **`payment_rules`:** per merchant country, the gateway the platform
+  bills through and the storefront's card gateways (cash on delivery
+  always). ZZ is every other country. It is seeded EG → Paymob, ZZ →
+  Stripe. `PaymentRuleFor(country)` falls back to ZZ.
+- **`tax_rates`:** any country, plus ZZ (0% to start). An invoice's tax is
+  its account's country's rate, else ZZ's.
+- **The console** edits both (`NewCollection`); each change needs a
+  reason.
+
 ## The subscription lifecycle
 
 | From | Step | To |
