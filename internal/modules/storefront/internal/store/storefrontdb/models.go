@@ -742,6 +742,13 @@ type PaymentRefund struct {
 	UpdatedAt        time.Time
 }
 
+type PaymentRule struct {
+	Country        string
+	BillingGateway string
+	StoreGateways  []string
+	UpdatedAt      time.Time
+}
+
 type PaymentSetting struct {
 	StoreID       ulid.ID
 	DefaultMethod string

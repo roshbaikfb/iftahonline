@@ -32,7 +32,8 @@ SELECT member_store_id FROM billing_account_stores WHERE account_id = @account_i
 SELECT EXISTS (SELECT 1 FROM invoices WHERE account_id = @account_id AND period = @period AND purpose = 'monthly' AND status <> 'void');
 
 -- name: GetTaxRate :one
-SELECT rate_bps FROM tax_rates WHERE country = @country;
+-- The country's, else the others' (ZZ, ADR-0089).
+SELECT rate_bps FROM tax_rates WHERE country IN (@country, 'ZZ') ORDER BY country = 'ZZ' LIMIT 1;
 
 -- name: NextInvoiceNumber :one
 -- Gapless: the counter's row is locked until the invoice commits.

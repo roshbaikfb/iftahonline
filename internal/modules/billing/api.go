@@ -376,7 +376,34 @@ type CollectionConsole interface {
 	// SaveCollectionSettings checks and writes them; turning a way off
 	// reaches only accounts that choose after it.
 	SaveCollectionSettings(ctx context.Context, c CollectionSettings) error
+	// PaymentRules are every country's payment rule, the others' (ZZ)
+	// last (ADR-0089).
+	PaymentRules(ctx context.Context) ([]PaymentRule, error)
+	// SavePaymentRule checks and writes a country's rule.
+	SavePaymentRule(ctx context.Context, r PaymentRule) error
+	// RemovePaymentRule removes a country's own rule (never ZZ's).
+	RemovePaymentRule(ctx context.Context, country string) error
+	// Taxes are every country's tax, the others' (ZZ) last.
+	Taxes(ctx context.Context) ([]Tax, error)
+	// SaveTax checks and writes a country's tax.
+	SaveTax(ctx context.Context, t Tax) error
+	// RemoveTax removes a country's own tax (never ZZ's).
+	RemoveTax(ctx context.Context, country string) error
 }
+
+// Payment rules and taxes by the merchant's country (ADR-0089).
+type (
+	// PaymentRule is how a country's merchants are paid.
+	PaymentRule = domain.PaymentRule
+	// Tax is a country's VAT on the platform's invoices.
+	Tax = domain.Tax
+)
+
+// OtherCountries is the rule and tax row of every country without its own.
+const OtherCountries = domain.OtherCountries
+
+// PaymentGateways are the adapters a rule may name.
+func PaymentGateways() []string { return domain.Gateways() }
 
 var _ CollectionConsole = (*app.Service)(nil)
 
