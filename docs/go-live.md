@@ -115,6 +115,20 @@ seeds six plans whose **prices and limits are placeholders**:
   account's callback URL to `https://<api host>/v1/webhooks/paymob_billing`.
   In test mode, confirm that the intention's answer carries
   `intention_order_id` (ADR-0053).
+- **The platform's Stripe account (merchants outside Egypt, ADR-0091).**
+  1. In the UK company's Stripe account, create a restricted key with
+     write access to PaymentIntents, Checkout Sessions and Customers.
+  2. Add a webhook endpoint `https://<api host>/v1/webhooks/stripe_billing`
+     for the events `checkout.session.completed`,
+     `checkout.session.async_payment_succeeded`,
+     `checkout.session.async_payment_failed` and
+     `checkout.session.expired`.
+  3. Set `BILLING_STRIPE_SECRET_KEY` and `BILLING_STRIPE_WEBHOOK_SECRET`
+     (api and worker).
+  4. In test mode, pay an invoice, top up a balance, and let the dunning
+     charge the saved card, including a declined card (`4000 0000 0000
+     0002`) and one that asks for 3DS (`4000 0027 6000 3184`).
+  5. Then switch Gulf billing on.
 - **WhatsApp billing templates.** Have Meta approve the three merchant
   templates in `docs/modules/messaging.md` (ADR-0054). Until then, owners
   get billing notices by email only.
