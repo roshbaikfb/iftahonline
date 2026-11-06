@@ -79,6 +79,26 @@ the «أدمن» badge; on phones a top bar opens the sidebar as a drawer.
 
 Every change asks for a reason.
 
+## Countries in the console (G7, the approved mockups)
+
+- **Collection settings** (`/collection`) has three tabs:
+  - `?tab=ways`: the ways pay-as-you-sell fees are paid (ADR-0083).
+  - `?tab=countries`: the payment rules and taxes by country (ADR-0089).
+    Each table lists the countries by name, with the others' row (ZZ)
+    last; ZZ can be changed but never removed. Each change asks for a
+    reason.
+  - `?tab=fx`: the exchange rates (ADR-0090). A currency without a rate
+    is flagged: its fees wait.
+  - `billing.manage` edits all three; other roles see them read-only.
+- **A store's page** shows its country, and `stores.manage` changes it
+  (ADR-0088). The dialog says what changes (card gateways for new
+  connections, taxes on the next invoices) and what does not (the open
+  billing account's currency, the store's currency, the connected
+  gateway).
+- **The plan editor** lists the pound and the dollar first, each with
+  whom it bills. The riyal and the dirham, kept for older accounts, are
+  folded under them (ADR-0090).
+
 ## How it is wired (`cmd/platform`)
 
 - **Enabling it:** the api role serves the console only when
