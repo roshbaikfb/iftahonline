@@ -166,6 +166,9 @@ export function Layout({ storeId, children }: { storeId: string; children: React
             <div className="menu">
               <strong>{userName}</strong>
               <small dir="ltr">{me?.user.email}</small>
+              <Link className="button" to={`/stores/${storeId}/account`}>
+                حسابي
+              </Link>
               <button type="button" className="secondary" onClick={() => void signOut()}>
                 تسجيل الخروج
               </button>

@@ -15,6 +15,10 @@ SELECT * FROM users WHERE id = @id;
 -- name: UpdatePasswordHash :exec
 UPDATE users SET password_hash = @password_hash, updated_at = now() WHERE id = @id;
 
+-- name: UpdateUserName :one
+UPDATE users SET name = @name, updated_at = now() WHERE id = @id
+RETURNING *;
+
 -- name: GetUserByPhone :one
 SELECT * FROM users WHERE phone = @phone;
 

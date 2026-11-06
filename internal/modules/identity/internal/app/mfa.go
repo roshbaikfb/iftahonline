@@ -13,6 +13,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
+	"github.com/roshbaikfb/iftahonline/internal/platform/qr"
 	"github.com/roshbaikfb/iftahonline/internal/platform/totp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -33,6 +34,7 @@ func totpAAD(userID ulid.ID) []byte { return []byte("totp:" + userID.String()) }
 type TOTPSetup struct {
 	Secret string // base32, for manual entry
 	URI    string // otpauth://
+	QR     string // URI as a QR code, SVG
 }
 
 // SetupTOTP starts enrolment: a fresh sealed seed, not active until
@@ -64,7 +66,12 @@ func (s *Service) SetupTOTP(ctx context.Context) (TOTPSetup, error) {
 	if !pending {
 		return TOTPSetup{}, errMFAEnabled
 	}
-	return TOTPSetup{Secret: b32Encode(secret), URI: totp.URI(secret, TOTPIssuer, u.Email)}, nil
+	uri := totp.URI(secret, TOTPIssuer, u.Email)
+	svg, err := qr.SVG(uri)
+	if err != nil {
+		return TOTPSetup{}, err
+	}
+	return TOTPSetup{Secret: b32Encode(secret), URI: uri, QR: svg}, nil
 }
 
 // ConfirmTOTP enables 2FA once the user enters a valid code, and returns

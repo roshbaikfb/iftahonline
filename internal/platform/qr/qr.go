@@ -1,18 +1,20 @@
-package app
+// Package qr draws QR codes as SVG, for an authenticator app to scan
+// (the console's team invitations, the dashboard's account page).
+package qr
 
 import (
 	"fmt"
 	"strings"
 
-	"rsc.io/qr"
+	rscqr "rsc.io/qr"
 )
 
-// qrSVG draws text as a QR code in SVG, one path of dark modules with a
-// quiet zone of four, for the invitee's authenticator app to scan.
-func qrSVG(text string) (string, error) {
-	c, err := qr.Encode(text, qr.M)
+// SVG draws text as a QR code in SVG: one path of dark modules with a
+// quiet zone of four.
+func SVG(text string) (string, error) {
+	c, err := rscqr.Encode(text, rscqr.M)
 	if err != nil {
-		return "", fmt.Errorf("admin: qr: %w", err)
+		return "", fmt.Errorf("qr: %w", err)
 	}
 	const quiet = 4
 	n := c.Size + 2*quiet

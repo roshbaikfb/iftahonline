@@ -373,6 +373,32 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Change the signed-in user's name
+         * @description D4. The account page's «بياناتك». The email does not change here.
+         */
+        patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the password, knowing the current one
+         * @description D4. Every other session is signed out (this one stays) and the user
+         *     is emailed. A wrong current password is 422 with the field
+         *     current_password; repeated failures are throttled like logins.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -5498,6 +5524,8 @@ export interface components {
             /** @description Base32 seed for manual entry. */
             secret: string;
             otpauth_uri: string;
+            /** @description The otpauth URI as a QR code (SVG markup the server drew). */
+            qr_svg: string;
         };
         TOTPCode: {
             code: string;
@@ -9464,6 +9492,61 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The user, renamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: password */
+                    current_password: string;
+                    /** Format: password */
+                    new_password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

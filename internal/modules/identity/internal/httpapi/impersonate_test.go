@@ -100,6 +100,8 @@ func TestImpersonationIsAuditedAndScoped(t *testing.T) {
 		{"never another store of the owner", http.MethodGet, storeB, "", http.StatusNotFound},
 		{"read-only refuses a change", http.MethodPatch, storeA, `{"name":"x","locale":"ar","timezone":"UTC"}`, http.StatusForbidden},
 		{"never changes the account", http.MethodPost, "/v1/me/phone", `{"phone":"+201001234567"}`, http.StatusForbidden},
+		{"never renames the owner", http.MethodPatch, "/v1/me", `{"name":"x"}`, http.StatusForbidden},
+		{"never changes the password", http.MethodPost, "/v1/me/password", `{"current_password":"x","new_password":"a brand new password"}`, http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,6 +113,15 @@ func TestImpersonationIsAuditedAndScoped(t *testing.T) {
 
 	// A write session's change is attributed to the owner and names the admin.
 	writer := f.impersonate(t, a.storeID, admin, 5*time.Minute, true)
+	// Even a write session never changes the owner's account (D4).
+	for _, r := range []*http.Request{
+		newReq(t, http.MethodPatch, "/v1/me", `{"name":"x"}`, cookie(writer), sameOrigin),
+		newReq(t, http.MethodPost, "/v1/me/password", `{"current_password":"x","new_password":"a brand new password"}`, cookie(writer), sameOrigin),
+	} {
+		if res, m := f.do(t, r); res.StatusCode != http.StatusForbidden {
+			t.Fatalf("write session %s %s = %d %v", r.Method, r.URL.Path, res.StatusCode, m)
+		}
+	}
 	if res, m := f.do(t, newReq(t, http.MethodPatch, storeA, `{"name":"fixed","locale":"ar","timezone":"UTC"}`, cookie(writer), sameOrigin)); res.StatusCode != http.StatusOK {
 		t.Fatalf("write session change = %d %v", res.StatusCode, m)
 	}
@@ -142,9 +153,10 @@ func TestImpersonationIsAuditedAndScoped(t *testing.T) {
 		}
 	}
 	// Requests in A's store and on the account: the read and the write
-	// session's change served, the read-only change and phone refused.
+	// session's change served; refused: the read-only change, the phone,
+	// and the name and password from each session (D4), so 6.
 	// The 404 in B is recorded nowhere: it never reached a store.
-	if started != 2 || served != 3 || refused != 2 || changed != 1 {
+	if started != 2 || served != 3 || refused != 6 || changed != 1 {
 		t.Fatalf("started=%d served=%d refused=%d changed=%d", started, served, refused, changed)
 	}
 	// Nothing was written to B's log.

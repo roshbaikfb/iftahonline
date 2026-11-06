@@ -236,6 +236,9 @@ func TestTOTPLifecycle(t *testing.T) {
 	if err != nil || !strings.HasPrefix(setup.URI, "otpauth://totp/iftahonline:") {
 		t.Fatalf("setup = %+v, %v", setup, err)
 	}
+	if !strings.HasPrefix(setup.QR, "<svg ") {
+		t.Fatalf("setup QR = %.40q", setup.QR)
+	}
 	if _, err = f.svc.ConfirmTOTP(me, "000000"); !errs.Is(err, errs.KindUnauthenticated) {
 		t.Fatalf("wrong confirm: %v", err)
 	}
