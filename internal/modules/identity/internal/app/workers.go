@@ -161,7 +161,7 @@ func (w *DeviceAlertWorker) Work(ctx context.Context, job *river.Job[NewDeviceAl
 	if device == "" {
 		device = "unknown device"
 	}
-	security := strings.TrimRight(w.D.DashboardURL, "/") + "/settings/security"
+	security := strings.TrimRight(w.D.DashboardURL, "/") + "/account"
 	return w.D.Mailer.Send(ctx, mailer.Message{
 		To:      u.Email,
 		Subject: "تسجيل دخول جديد إلى حسابك على iftahonline",
@@ -172,12 +172,96 @@ func (w *DeviceAlertWorker) Work(ctx context.Context, job *river.Job[NewDeviceAl
 	})
 }
 
+// LinkEmailWorker sends a one-time link (D3): a password reset or an
+// email confirmation. The link is in the URL fragment, so it never
+// reaches a server log; a link used, replaced or expired meanwhile is not
+// sent.
+type LinkEmailWorker struct {
+	river.WorkerDefaults[LinkEmailArgs]
+	D WorkerDeps
+}
+
+// Timeout implements river.Worker.
+func (*LinkEmailWorker) Timeout(*river.Job[LinkEmailArgs]) time.Duration { return 30 * time.Second }
+
+// Work implements river.Worker.
+func (w *LinkEmailWorker) Work(ctx context.Context, job *river.Job[LinkEmailArgs]) error {
+	id := job.Args.TokenID
+	key := linkDeliveryKey(id)
+	d, found, err := readDelivery(ctx, w.D, key, linkAAD(id))
+	if err != nil || !found {
+		return err
+	}
+	t, err := store.TokenForSend(ctx, w.D.DB, id)
+	if errors.Is(err, domain.ErrNotFound) {
+		return w.D.Redis.Del(ctx, key).Err()
+	}
+	if err != nil {
+		return err
+	}
+	base := strings.TrimRight(w.D.DashboardURL, "/")
+	var msg mailer.Message
+	switch t.Purpose {
+	case store.PurposePasswordReset:
+		link := base + "/reset-password#" + d.Text
+		msg = mailer.Message{To: t.Email, Subject: "تعيين كلمة مرور جديدة لحسابك على iftahonline",
+			Text: fmt.Sprintf("مرحبًا %s،\n\nلتعيين كلمة مرور جديدة افتح الرابط التالي (يعمل ساعة واحدة ومرة واحدة):\n%s\n\n"+
+				"إذا لم تطلب ذلك فتجاهل هذه الرسالة؛ كلمة مرورك لم تتغير.\n\n"+
+				"Reset your iftahonline password (the link works once, for an hour): %s\nDidn't ask? Ignore this email.",
+				t.Name, link, link)}
+	case store.PurposeEmailVerify:
+		link := base + "/verify-email#" + d.Text
+		msg = mailer.Message{To: t.Email, Subject: "أكّد بريدك على iftahonline",
+			Text: fmt.Sprintf("مرحبًا %s،\n\nأكّد أن هذا بريدك لتصلك الفواتير وتنبيهات الطلبات، ولتستطيع استعادة حسابك. افتح الرابط التالي (يعمل يومين):\n%s\n\n"+
+				"Confirm your email on iftahonline (the link works for two days): %s",
+				t.Name, link, link)}
+	default:
+		return w.D.Redis.Del(ctx, key).Err()
+	}
+	if err = w.D.Mailer.Send(ctx, msg); err != nil {
+		return err
+	}
+	return w.D.Redis.Del(ctx, key).Err()
+}
+
+// PasswordChangedWorker tells a user their password changed, so a change
+// they did not make is seen.
+type PasswordChangedWorker struct {
+	river.WorkerDefaults[PasswordChangedArgs]
+	D WorkerDeps
+}
+
+// Timeout implements river.Worker.
+func (*PasswordChangedWorker) Timeout(*river.Job[PasswordChangedArgs]) time.Duration {
+	return 30 * time.Second
+}
+
+// Work implements river.Worker.
+func (w *PasswordChangedWorker) Work(ctx context.Context, job *river.Job[PasswordChangedArgs]) error {
+	u, err := store.UserByID(ctx, w.D.DB, job.Args.UserID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	at := job.Args.At.Format("2006-01-02 15:04")
+	forgot := strings.TrimRight(w.D.DashboardURL, "/") + "/forgot-password"
+	return w.D.Mailer.Send(ctx, mailer.Message{To: u.Email, Subject: "تغيّرت كلمة مرور حسابك على iftahonline",
+		Text: fmt.Sprintf("تغيّرت كلمة مرور حسابك في %s UTC، وخرجنا من الأجهزة الأخرى.\n\n"+
+			"إذا لم تكن أنت، عيّن كلمة مرور جديدة فورًا: %s\n\n"+
+			"Your iftahonline password changed at %s UTC; other devices were signed out. Not you? %s",
+			at, forgot, at, forgot)})
+}
+
 // RegisterWorkers adds every identity worker.
 func RegisterWorkers(workers *river.Workers, d WorkerDeps) error {
 	for _, add := range []func() error{
 		func() error { return river.AddWorkerSafely(workers, &SendOTPWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &InviteEmailWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &DeviceAlertWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &LinkEmailWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &PasswordChangedWorker{D: d}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("identity: %w", err)

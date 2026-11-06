@@ -128,6 +128,7 @@ func newFixture(t *testing.T) fixture {
 		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
 		OTPPerIP:         ratelimit.Limit{Burst: 50, Period: time.Hour},
 		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: time.Hour},
+		LinksPerEmail:    ratelimit.Limit{Burst: 2, Period: time.Hour},
 	}
 	keyring, err := secretbox.ParseKeyring("1:ZGV2LW9ubHktc2VjcmV0Ym94LWtleS0zMi1ieXRlcyE=")
 	if err != nil {

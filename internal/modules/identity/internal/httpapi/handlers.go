@@ -96,13 +96,19 @@ func (h *Handlers) Login(ctx context.Context, req LoginRequestObject) (LoginResp
 		return nil, errs.BadRequest("request body is required", nil)
 	}
 	res, err := h.svc.Login(ctx, req.Body.Email, req.Body.Password)
+	return signIn(res, err, req.Body.Client)
+}
+
+// signIn answers a sign-in (a login, a password reset): the second
+// factor's challenge when the account has one, else the session.
+func signIn(res app.AuthResult, err error, client *ClientKind) (LoginResponseObject, error) {
 	if err != nil {
 		return nil, err
 	}
 	if res.MFA != nil {
 		return Login202JSONResponse(mfaRequired(res.MFA)), nil
 	}
-	body, cookie := authResponse(res, mobile(req.Body.Client))
+	body, cookie := authResponse(res, mobile(client))
 	return Login200JSONResponse{Body: body, Headers: Login200ResponseHeaders{SetCookie: cookie}}, nil
 }
 

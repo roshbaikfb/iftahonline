@@ -41,6 +41,7 @@ type Limits struct {
 	OTPPerPhoneDay   ratelimit.Limit // codes sent to one number per day (SMS pumping)
 	OTPPerIP         ratelimit.Limit // codes requested from one IP
 	MFAFailPerUser   ratelimit.Limit // wrong second factors per user
+	LinksPerEmail    ratelimit.Limit // reset and confirmation emails per address (D3)
 }
 
 // DefaultLimits are conservative production defaults.
@@ -54,6 +55,7 @@ func DefaultLimits() Limits {
 		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
 		OTPPerIP:         ratelimit.Limit{Burst: 10, Period: time.Hour},
 		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: 15 * time.Minute},
+		LinksPerEmail:    ratelimit.Limit{Burst: 1, Period: time.Minute},
 	}
 }
 
@@ -180,6 +182,10 @@ func (s *Service) Signup(ctx context.Context, in SignupInput) (AuthResult, error
 			return prefixFields(txErr, "store.")
 		}
 		if txErr = store.InsertMembership(ctx, tx, userID, authz.RoleOwner); txErr != nil {
+			return txErr
+		}
+		// The first confirmation email, in the sign-up's transaction (D3).
+		if txErr = s.sendVerificationAtSignup(ctx, tx, u); txErr != nil {
 			return txErr
 		}
 		if txErr = s.onboarding.StartTx(ctx, tx); txErr != nil {

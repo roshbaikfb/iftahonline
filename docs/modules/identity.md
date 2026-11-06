@@ -265,7 +265,45 @@ A device is identified by:
 `user_devices` keeps only its SHA-256. A user's first device does not
 alert. Any later unknown device enqueues `identity.device.alert` in the
 session's transaction. The alert email gives the time, User-Agent and
-network prefix, never the full IP, and links to the security settings.
+network prefix, never the full IP, and links to the account page
+(`/account`).
+
+## Email links (D3)
+
+Two kinds of one-time link are emailed: resetting a forgotten password
+and confirming an email address.
+
+- **Storage:** `user_tokens` keeps only the SHA-256 of the 256-bit secret.
+  The secret waits sealed in Redis until the `identity.link.email` job
+  sends it, as with invitations. It travels in the URL fragment
+  (`/reset-password#…`, `/verify-email#…`), so it never reaches a server
+  log.
+- **One at a time:** a new link of a purpose closes the user's older ones.
+  A link works once. A reset link works for an hour, a confirmation link
+  for two days.
+- **Forgot:** `POST /v1/auth/password/forgot` answers 202 whether or not
+  the email has an account. It is limited per IP and to one email a
+  minute per address (`Limits.LinksPerEmail`).
+- **Reset:** `POST /v1/auth/password/reset/check` returns the email of an
+  open link without using it, so the page can show it.
+  `POST /v1/auth/password/reset` uses the link, sets the password, and
+  signs out every session. It also enqueues `identity.password.changed`,
+  which emails the user. It then signs in like a login: an account with
+  a second factor gets a 202 challenge, so a mailbox alone never bypasses
+  two-step verification. If the new password is refused, the transaction
+  rolls back and the link stays usable.
+- **Confirm:** sign-up sends the first link in its transaction.
+  `POST /v1/me/email/verification` sends a new one (nothing when already
+  confirmed). `POST /v1/auth/email/verify` needs no session, because the
+  link may open in another browser. It confirms only the address the link
+  was sent to. An account created from an invitation is confirmed already,
+  since the invitation reached that mailbox.
+- **Dashboard:**
+  - `/forgot-password` is linked from the login page.
+  - `/reset-password` and `/verify-email` are where the links land.
+  - A banner on every store screen asks for confirmation until the email
+    is confirmed, with a resend button.
+- Errors: a used, replaced or expired link is 404 `link_not_found`.
 
 ## Team: invitations and members
 
@@ -334,6 +372,7 @@ An invitation passes `entitlements.AdmitTx(staff)`:
 | `user_recovery_codes` | Platform-wide | SHA-256, one-time (`used_at`) |
 | `user_devices` | Platform-wide | SHA-256 of the device ID, last seen, UA, IP prefix |
 | `store_invitations` | Tenant (RLS) | `token_hash` unique, one open invitation per email per store |
+| `user_tokens` | Platform-wide | One-time email links (D3): `purpose` is password_reset or email_verify; `token_hash` unique; index on `(user_id, purpose)` |
 
 `member_self_read` is `FOR SELECT` and applies only to the user's own
 rows. It is the one extra permissive policy that the RLS catalog test

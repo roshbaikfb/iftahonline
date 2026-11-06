@@ -18,7 +18,10 @@ import { Feeds } from './pages/Feeds';
 import { Gateways } from './pages/Gateways';
 import { HomeEditor } from './pages/HomeEditor';
 import { Impersonate } from './pages/Impersonate';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { Invite } from './pages/Invite';
+import { ResetPassword } from './pages/ResetPassword';
+import { VerifyEmail } from './pages/VerifyEmail';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
 import { LandingEditor } from './pages/LandingEditor';
@@ -86,6 +89,9 @@ function Gate() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/impersonate" element={<Impersonate />} />
           <Route path="/invite" element={<Invite />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Login />} />
         </Routes>
       );
@@ -95,6 +101,9 @@ function Gate() {
           <Route path="/" element={<Home />} />
           <Route path="/impersonate" element={<Impersonate />} />
           <Route path="/invite" element={<Invite />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/stores/:storeId/setup" element={<Setup />} />
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
