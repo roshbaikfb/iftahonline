@@ -78,6 +78,12 @@ func TestDefaults(t *testing.T) {
 	if c.Identity.Argon2MemoryKiB != 19456 || c.Identity.Argon2Time != 2 || c.Identity.Argon2Threads != 1 || c.Identity.HashConcurrency != 8 {
 		t.Fatalf("unexpected identity defaults: %+v", c.Identity)
 	}
+	// The worker builds the console's module for its alerts when it has
+	// the console's database, and that module needs the hashing
+	// settings: without them the worker failed to start.
+	if w, wErr := config.Load(config.RoleWorker, env(base())); wErr != nil || w.Identity.Argon2MemoryKiB != 19456 || w.Identity.HashConcurrency != 8 {
+		t.Fatalf("the worker's identity settings: %+v, %v", w.Identity, wErr)
+	}
 	if _, err = config.Load(config.RoleAPI, env(with("ARGON2_MEMORY_KIB", "1024"))); err == nil {
 		t.Fatal("argon2 memory below 8 MiB must be rejected")
 	}
