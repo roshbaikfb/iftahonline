@@ -269,6 +269,32 @@ describe('console', () => {
     expect(await screen.findByText('أُعيد تفعيل المتجر.')).toBeInTheDocument();
   });
 
+  it("changes the store's country with a reason (ADR-0088)", async () => {
+    const calls = consoleRoutes({
+      [`GET /admin/v1/stores/${store}`]: () => ({ status: 200, body: { store: { ...storeRow.store, country: 'EG' }, domains: [] } }),
+      [`PUT /admin/v1/stores/${store}/country`]: () => ({ status: 200, body: { ...storeRow.store, country: 'SA' } }),
+    });
+    renderConsole({ kind: 'signed-in', admin }, `/stores/${store}`);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'غيّر البلد' }));
+    const dialog = screen.getByRole('dialog', { name: 'تغيير بلد المتجر' });
+    const country = within(dialog).getByLabelText('البلد الجديد');
+    // The store's own country is not offered.
+    expect(within(country).queryByRole('option', { name: 'مصر' })).toBeNull();
+    await user.selectOptions(country, 'SA');
+    expect(within(dialog).getByRole('list', { name: 'ما لا يتغير' })).toHaveTextContent('حساب الفوترة المفتوح يحتفظ بعملته');
+    await user.type(within(dialog).getByLabelText('السبب (إجباري، يُحفظ في سجل الأدمن)'), 'نقل نشاطه للرياض');
+    await user.click(within(dialog).getByRole('button', { name: 'غيّر البلد' }));
+
+    expect(await screen.findByText('غُيّر بلد المتجر.')).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'PUT' && c.path === `/admin/v1/stores/${store}/country`)?.body).toEqual({
+      country: 'SA',
+      reason: 'نقل نشاطه للرياض',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('shows a refused change', async () => {
     consoleRoutes({ [`POST /admin/v1/stores/${store}/impersonate`]: () => ({ status: 422, body: { title: 'Unprocessable', status: 422, detail: 'reason too short' } }) });
     renderConsole({ kind: 'signed-in', admin }, `/stores/${store}`);

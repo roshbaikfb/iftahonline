@@ -10,6 +10,10 @@ export type Kind = Plan['kind'];
 // currencies are billing's: the pound and the dollar on sale, then the
 // riyal and the dirham that older accounts are still billed in (ADR-0090).
 export const currencies = ['EGP', 'USD', 'SAR', 'AED'] as const;
+// onSale are the currencies new accounts open in; legacy those older
+// accounts may still be billed in.
+export const onSale = ['EGP', 'USD'] as const;
+export const legacy = ['SAR', 'AED'] as const;
 export const cycles = ['monthly', 'annual'] as const;
 type Currency = (typeof currencies)[number];
 type Cycle = (typeof cycles)[number];

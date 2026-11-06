@@ -12,6 +12,8 @@ import { ConsoleLayout } from './ConsoleLayout';
 import {
   byCode,
   currencies,
+  legacy,
+  onSale,
   currencyName,
   cycles,
   draftFrom,
@@ -29,6 +31,8 @@ import {
   type Plan,
 } from './plans';
 
+// currencyNote says which merchants a currency bills.
+const currencyNote = (c: string) => (c === 'EGP' ? 'تجار مصر · مطلوبة' : c === 'USD' ? 'باقي البلاد · مطلوبة' : 'الحسابات القديمة');
 
 // PlanEditorPage is one plan's page (the approved mockup): its basics,
 // prices or fees, what it grants, a sticky bar that publishes the next
@@ -70,7 +74,17 @@ export function PlanEditorPage() {
   );
 }
 
-function Editor({ head, versions, features, onCreated }: { head: Plan | undefined; versions: Plan[]; features: Feature[]; onCreated: (code: string) => Promise<void> }) {
+function Editor({
+  head,
+  versions,
+  features,
+  onCreated,
+}: {
+  head: Plan | undefined;
+  versions: Plan[];
+  features: Feature[];
+  onCreated: (code: string) => Promise<void>;
+}) {
   const isNew = !head;
   const [draft, setDraft] = useState<Draft>(() => draftFrom(head));
   const [current, setCurrent] = useState({ head, versions });
@@ -131,6 +145,101 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
     setNotice('أُوقف بيع الباقة. المشتركون عليها يبقون ويجددون الإصدار نفسه.');
   }
 
+  const priceRow = (c: (typeof currencies)[number]) => {
+    const m = toMinor(draft.prices[priceKey(c, 'monthly')] ?? '');
+    const y = toMinor(draft.prices[priceKey(c, 'annual')] ?? '');
+    const save = saving(m, y);
+    return (
+      <div key={c} className="price-row">
+        <strong>
+          {currencyName[c]}
+          <small className="muted">{currencyNote(c)}</small>
+        </strong>
+        {cycles.map((cy) => (
+          <label key={cy}>
+            <span className="field-label">{cy === 'monthly' ? 'شهري' : 'سنوي'}</span>
+            <span className="amount">
+              <input
+                aria-label={`${c} ${cy === 'monthly' ? 'شهري' : 'سنوي'}`}
+                value={draft.prices[priceKey(c, cy)] ?? ''}
+                onChange={(e) => {
+                  edit({ prices: { ...draft.prices, [priceKey(c, cy)]: e.target.value } });
+                }}
+                inputMode="decimal"
+                dir="ltr"
+              />
+              <span className="muted">{currencySymbol(c)}</span>
+              {cy === 'annual' && save && <span className="status store-active">{save}</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+    );
+  };
+
+  const feeRow = (c: (typeof currencies)[number]) => {
+    const f = draft.fees[c] ?? { rate: '', fixed: '', min: '', max: '' };
+    const set = (patch: Partial<typeof f>) => {
+      edit({ fees: { ...draft.fees, [c]: { ...f, ...patch } } });
+    };
+    return (
+      <div key={c} className="price-row fee-row">
+        <strong>
+          {currencyName[c]}
+          <small className="muted">{currencyNote(c)}</small>
+        </strong>
+        <label>
+          <span className="field-label">النسبة %</span>
+          <input
+            aria-label={`${c} النسبة`}
+            value={f.rate}
+            onChange={(e) => {
+              set({ rate: e.target.value });
+            }}
+            inputMode="decimal"
+            dir="ltr"
+          />
+        </label>
+        <label>
+          <span className="field-label">مبلغ ثابت لكل طلب</span>
+          <input
+            aria-label={`${c} مبلغ ثابت`}
+            value={f.fixed}
+            onChange={(e) => {
+              set({ fixed: e.target.value });
+            }}
+            inputMode="decimal"
+            dir="ltr"
+          />
+        </label>
+        <label>
+          <span className="field-label">حد أدنى</span>
+          <input
+            aria-label={`${c} أقل رسوم`}
+            value={f.min}
+            onChange={(e) => {
+              set({ min: e.target.value });
+            }}
+            inputMode="decimal"
+            dir="ltr"
+          />
+        </label>
+        <label>
+          <span className="field-label">حد أقصى</span>
+          <input
+            aria-label={`${c} أقصى رسوم`}
+            value={f.max}
+            onChange={(e) => {
+              set({ max: e.target.value });
+            }}
+            inputMode="decimal"
+            dir="ltr"
+          />
+        </label>
+      </div>
+    );
+  };
+
   return (
     <div className="plan-editor-page">
       <div className="plan-title">
@@ -164,13 +273,29 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
                 <div className="field">
                   <label>
                     <span className="field-label">الكود</span>
-                    <input value={draft.code} onChange={(e) => { edit({ code: e.target.value }); }} required pattern="[a-z][a-z_]{1,31}" dir="ltr" aria-describedby="code-hint" />
+                    <input
+                      value={draft.code}
+                      onChange={(e) => {
+                        edit({ code: e.target.value });
+                      }}
+                      required
+                      pattern="[a-z][a-z_]{1,31}"
+                      dir="ltr"
+                      aria-describedby="code-hint"
+                    />
                   </label>
-                  <small id="code-hint" className="muted">حروف إنجليزية صغيرة. لا يتغير بعد النشر.</small>
+                  <small id="code-hint" className="muted">
+                    حروف إنجليزية صغيرة. لا يتغير بعد النشر.
+                  </small>
                 </div>
                 <label>
                   <span className="field-label">النوع</span>
-                  <select value={draft.kind} onChange={(e) => { edit({ kind: e.target.value as Kind }); }}>
+                  <select
+                    value={draft.kind}
+                    onChange={(e) => {
+                      edit({ kind: e.target.value as Kind });
+                    }}
+                  >
                     {(Object.keys(kindLabel) as Kind[]).map((k) => (
                       <option key={k} value={k}>
                         {kindLabel[k]}
@@ -182,25 +307,58 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
             )}
             <label>
               <span className="field-label">الاسم بالعربية</span>
-              <input value={draft.name_ar} onChange={(e) => { edit({ name_ar: e.target.value }); }} required maxLength={80} />
+              <input
+                value={draft.name_ar}
+                onChange={(e) => {
+                  edit({ name_ar: e.target.value });
+                }}
+                required
+                maxLength={80}
+              />
             </label>
             <label>
               <span className="field-label">الاسم بالإنجليزية</span>
-              <input value={draft.name_en} onChange={(e) => { edit({ name_en: e.target.value }); }} required maxLength={80} dir="ltr" />
+              <input
+                value={draft.name_en}
+                onChange={(e) => {
+                  edit({ name_en: e.target.value });
+                }}
+                required
+                maxLength={80}
+                dir="ltr"
+              />
             </label>
             <div className="field">
               <label>
                 <span className="field-label">أيام التجربة</span>
-                <input value={draft.trial_days} onChange={(e) => { edit({ trial_days: e.target.value }); }} inputMode="numeric" aria-describedby="trial-hint" />
+                <input
+                  value={draft.trial_days}
+                  onChange={(e) => {
+                    edit({ trial_days: e.target.value });
+                  }}
+                  inputMode="numeric"
+                  aria-describedby="trial-hint"
+                />
               </label>
-              <small id="trial-hint" className="muted">0 بلا تجربة. حتى 90 يومًا.</small>
+              <small id="trial-hint" className="muted">
+                0 بلا تجربة. حتى 90 يومًا.
+              </small>
             </div>
             <div className="field">
               <label>
                 <span className="field-label">الترتيب في صفحة الباقات</span>
-                <input value={draft.sort} onChange={(e) => { edit({ sort: e.target.value }); }} inputMode="numeric" aria-describedby="sort-hint" />
+                <input
+                  value={draft.sort}
+                  onChange={(e) => {
+                    edit({ sort: e.target.value });
+                  }}
+                  inputMode="numeric"
+                  aria-describedby="sort-hint"
+                />
               </label>
-              <small id="sort-hint" className="muted">الأصغر يظهر أولًا.</small>
+              <small id="sort-hint" className="muted">
+                الأصغر يظهر أولًا.
+              </small>
             </div>
           </div>
           <label className="switch-row">
@@ -208,7 +366,14 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
               <strong>معروضة للتجار</strong>
               <small className="muted">المخفية لا تظهر في صفحة الفوترة، ومشتركوها يبقون عليها.</small>
             </span>
-            <input type="checkbox" role="switch" checked={draft.public} onChange={(e) => { edit({ public: e.target.checked }); }} />
+            <input
+              type="checkbox"
+              role="switch"
+              checked={draft.public}
+              onChange={(e) => {
+                edit({ public: e.target.checked });
+              }}
+            />
           </label>
         </section>
 
@@ -218,34 +383,12 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
               <h2 id="h-prices">الأسعار</h2>
               <span className="muted small">قبل الضريبة. السنوي يُعرض للتاجر مع ما يوفّره.</span>
             </div>
-            <div className="price-rows">
-              {currencies.map((c) => {
-                const m = toMinor(draft.prices[priceKey(c, 'monthly')] ?? '');
-                const y = toMinor(draft.prices[priceKey(c, 'annual')] ?? '');
-                const save = saving(m, y);
-                return (
-                  <div key={c} className="price-row">
-                    <strong>{currencyName[c]}</strong>
-                    {cycles.map((cy) => (
-                      <label key={cy}>
-                        <span className="field-label">{cy === 'monthly' ? 'شهري' : 'سنوي'}</span>
-                        <span className="amount">
-                          <input
-                            aria-label={`${c} ${cy === 'monthly' ? 'شهري' : 'سنوي'}`}
-                            value={draft.prices[priceKey(c, cy)] ?? ''}
-                            onChange={(e) => { edit({ prices: { ...draft.prices, [priceKey(c, cy)]: e.target.value } }); }}
-                            inputMode="decimal"
-                            dir="ltr"
-                          />
-                          <span className="muted">{currencySymbol(c)}</span>
-                          {cy === 'annual' && save && <span className="status store-active">{save}</span>}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
+            <div className="price-rows">{onSale.map((c) => priceRow(c))}</div>
+            <details className="legacy-currencies">
+              <summary>الريال والدرهم (الحسابات القديمة فقط)</summary>
+              <p className="muted small">اختيارية: تسري على الحسابات التي فُتحت بالريال أو الدرهم قبل الدولار. لا يُفتح بهما حساب جديد.</p>
+              <div className="price-rows">{legacy.map((c) => priceRow(c))}</div>
+            </details>
           </section>
         )}
 
@@ -255,35 +398,18 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
               <h2 id="h-fees">العمولة على الطلبات المسلّمة</h2>
               <span className="muted small">اترك الحد فارغًا إن لم يكن له حد.</span>
             </div>
-            <div className="price-rows">
-              {currencies.map((c) => {
-                const f = draft.fees[c] ?? { rate: '', fixed: '', min: '', max: '' };
-                const set = (patch: Partial<typeof f>) => {
-                  edit({ fees: { ...draft.fees, [c]: { ...f, ...patch } } });
-                };
-                return (
-                  <div key={c} className="price-row fee-row">
-                    <strong>{currencyName[c]}</strong>
-                    <label>
-                      <span className="field-label">النسبة %</span>
-                      <input aria-label={`${c} النسبة`} value={f.rate} onChange={(e) => { set({ rate: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                    </label>
-                    <label>
-                      <span className="field-label">مبلغ ثابت لكل طلب</span>
-                      <input aria-label={`${c} مبلغ ثابت`} value={f.fixed} onChange={(e) => { set({ fixed: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                    </label>
-                    <label>
-                      <span className="field-label">حد أدنى</span>
-                      <input aria-label={`${c} أقل رسوم`} value={f.min} onChange={(e) => { set({ min: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                    </label>
-                    <label>
-                      <span className="field-label">حد أقصى</span>
-                      <input aria-label={`${c} أقصى رسوم`} value={f.max} onChange={(e) => { set({ max: e.target.value }); }} inputMode="decimal" dir="ltr" />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="muted small">
+              نسبة من قيمة البضاعة + مبلغ ثابت لكل طلب، ثم الحد الأدنى والأقصى. لا تزيد العمولة أبدًا عن قيمة البضاعة، وأي خانة يمكن أن تكون صفرًا.
+            </p>
+            <div className="price-rows">{onSale.map((c) => feeRow(c))}</div>
+            <details className="legacy-currencies">
+              <summary>الريال والدرهم (الحسابات القديمة فقط)</summary>
+              <p className="muted small">اختيارية: تسري على الحسابات التي فُتحت بالريال أو الدرهم قبل الدولار. لا يُفتح بهما حساب جديد.</p>
+              <div className="price-rows">{legacy.map((c) => feeRow(c))}</div>
+            </details>
+            <p className="notice">
+              مثال بالدولار: طلب بـ 375 ريالًا وسعر الريال 3.75 يعني بضاعة بـ 100 دولار؛ العمولة = النسبة من 100 دولار + المبلغ الثابت، ثم الحدود.
+            </p>
           </section>
         )}
 
@@ -304,9 +430,25 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
                   <small className="muted">{g.unlimited ? 'بلا حد' : g.value.trim() ? featureKindLabel[f.kind] : 'غير متاحة في هذه الباقة'}</small>
                 </span>
                 <span className="limit-input">
-                  <input aria-label={f.name_ar} value={g.unlimited ? '' : g.value} disabled={g.unlimited} onChange={(e) => { setGrant(f.key, { value: e.target.value }); }} inputMode="numeric" dir="ltr" />
+                  <input
+                    aria-label={f.name_ar}
+                    value={g.unlimited ? '' : g.value}
+                    disabled={g.unlimited}
+                    onChange={(e) => {
+                      setGrant(f.key, { value: e.target.value });
+                    }}
+                    inputMode="numeric"
+                    dir="ltr"
+                  />
                   <label className="check">
-                    <input type="checkbox" checked={g.unlimited} onChange={(e) => { setGrant(f.key, { unlimited: e.target.checked }); }} /> بلا حد
+                    <input
+                      type="checkbox"
+                      checked={g.unlimited}
+                      onChange={(e) => {
+                        setGrant(f.key, { unlimited: e.target.checked });
+                      }}
+                    />{' '}
+                    بلا حد
                   </label>
                 </span>
               </div>
@@ -323,7 +465,15 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
                   </span>
                   <span className="switch-state">
                     <small className={on ? 'on' : 'muted'}>{on ? 'متاحة' : 'غير متاحة'}</small>
-                    <input type="checkbox" role="switch" aria-label={f.name_ar} checked={on} onChange={(e) => { setGrant(f.key, { value: e.target.checked ? '1' : '0', unlimited: false }); }} />
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label={f.name_ar}
+                      checked={on}
+                      onChange={(e) => {
+                        setGrant(f.key, { value: e.target.checked ? '1' : '0', unlimited: false });
+                      }}
+                    />
                   </span>
                 </label>
               );
@@ -360,7 +510,8 @@ function Editor({ head, versions, features, onCreated }: { head: Plan | undefine
           <ul>
             {current.versions.map((v) => (
               <li key={v.id}>
-                <bdi>v{v.version}</bdi> <span className="muted">· {stores(v.subscribers)}</span> {v.active && <span className="status store-active">على البيع الآن</span>}
+                <bdi>v{v.version}</bdi> <span className="muted">· {stores(v.subscribers)}</span>{' '}
+                {v.active && <span className="status store-active">على البيع الآن</span>}
               </li>
             ))}
           </ul>
