@@ -62,7 +62,11 @@ func (h *Handlers) ListPaymentConnections(ctx context.Context, _ ListPaymentConn
 	if err != nil {
 		return nil, err
 	}
-	out := ListPaymentConnections200JSONResponse{Gateways: h.svc.GatewayNames(), Connections: make([]PaymentConnection, len(list))}
+	names, err := h.svc.GatewayNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := ListPaymentConnections200JSONResponse{Gateways: names, Connections: make([]PaymentConnection, len(list))}
 	for i, c := range list {
 		out.Connections[i] = h.toConnection(store, c)
 	}

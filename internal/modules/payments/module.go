@@ -53,6 +53,9 @@ type Deps struct {
 	// Plan says whether the store's plan includes card payments
 	// (ADR-0046); nil includes them (tests).
 	Plan entitlements.Entitlements
+	// Allowed lists the gateways the store in ctx's country may connect,
+	// by its payment rule (ADR-0093; the api role); nil allows all.
+	Allowed func(ctx context.Context) ([]string, error)
 
 	// The shopper's checkout routes (api role, MountCheckout):
 	// Hosts checks return URLs, Limiter and ClientIP bound checkouts per
@@ -116,7 +119,7 @@ func New(d Deps) (*Module, error) {
 	}
 	gs, f := gateways(d.Gateways, d.PublicURL)
 	return &Module{svc: app.NewService(app.Deps{DB: d.Pool, IDs: d.IDs, Audit: d.Audit, Events: d.Events, Gateways: gs,
-		Sealer: d.Sealer, PublicURL: d.PublicURL, Orders: d.Orders, Jobs: d.Jobs, Inbox: d.Inbox, Plan: d.Plan}), fake: f, d: d}, nil
+		Sealer: d.Sealer, PublicURL: d.PublicURL, Orders: d.Orders, Jobs: d.Jobs, Inbox: d.Inbox, Plan: d.Plan, Allowed: d.Allowed}), fake: f, d: d}, nil
 }
 
 // Checkout is what the storefront uses to take card payments.

@@ -149,6 +149,12 @@ func NewShowcase(pool *pgxpool.Pool) Showcase {
 	return app.NewService(app.Deps{DB: pool})
 }
 
+// NewPaymentRules reads the payment rules on pool (the api role: read
+// only).
+func NewPaymentRules(pool *pgxpool.Pool) PaymentRuleReader {
+	return app.NewService(app.Deps{DB: pool})
+}
+
 // NewCatalog is the console's plan catalog on adminPool, the console's
 // role (app_admin): the only role that may change plans.
 func NewCatalog(adminPool *pgxpool.Pool, ids *ulid.Generator) Catalog {

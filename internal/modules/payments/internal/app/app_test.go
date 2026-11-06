@@ -236,6 +236,41 @@ func TestConnectStripe(t *testing.T) {
 	}
 }
 
+// TestGatewaysByCountry: a store lists and connects only its country's
+// gateways (and the fake one, in development); its rule's error stops a
+// connection (ADR-0093).
+func TestGatewaysByCountry(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	allowed, ruleErr := []string{paymob.Name}, error(nil)
+	svc := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Sealer: f.sealer(), Gateways: app.Gateways{
+		fake.Name: f.gw, paymob.Name: paymob.New(paymob.Options{BaseURL: "http://127.0.0.1:1"}), stripe.Name: stripe.New(stripe.Options{BaseURL: "http://127.0.0.1:1"}),
+	}, Orders: f.orders, Jobs: f.jobs, PublicURL: "https://api.example.com",
+		Allowed: func(context.Context) ([]string, error) { return allowed, ruleErr }})
+	names, err := svc.GatewayNames(f.ctxB)
+	if err != nil || strings.Join(names, ",") != fake.Name+","+paymob.Name {
+		t.Fatalf("an Egyptian store's gateways = %v, %v", names, err)
+	}
+	if _, err = svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1", WebhookSecret: "whsec_1"}); !isField(err, "gateway", "not_offered") {
+		t.Errorf("Stripe in Egypt: %v", err)
+	}
+	allowed = []string{stripe.Name}
+	if names, err = svc.GatewayNames(f.ctxB); err != nil || strings.Join(names, ",") != fake.Name+","+stripe.Name {
+		t.Fatalf("a Saudi store's gateways = %v, %v", names, err)
+	}
+	if _, err = svc.Connect(f.ctxB, app.ConnectInput{Gateway: paymob.Name, SecretKey: "sk", PublicKey: "pk", APIKey: "k", WebhookSecret: "s",
+		IntegrationIDs: []int{1}}); !isField(err, "gateway", "not_offered") {
+		t.Errorf("Paymob in Saudi Arabia: %v", err)
+	}
+	ruleErr = errors.New("no rule")
+	if _, err = svc.GatewayNames(f.ctxB); !errors.Is(err, ruleErr) {
+		t.Errorf("list without a rule: %v", err)
+	}
+	if _, err = svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1", WebhookSecret: "whsec_1"}); !errors.Is(err, ruleErr) {
+		t.Errorf("connect without a rule: %v", err)
+	}
+}
+
 // TestCheckout: a card order's shopper gets the gateway's page, with the
 // expiry scheduled an hour after the order; coming back reuses the page.
 func TestCheckout(t *testing.T) {
@@ -564,7 +599,7 @@ func TestPaymentsList(t *testing.T) {
 func TestWorkers(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	if names := f.svc.GatewayNames(); len(names) != 1 || names[0] != fake.Name {
+	if names, err := f.svc.GatewayNames(f.ctxA); err != nil || len(names) != 1 || names[0] != fake.Name {
 		t.Fatalf("gateways %v", names)
 	}
 	prov := f.svc.WebhookProviders()[0]

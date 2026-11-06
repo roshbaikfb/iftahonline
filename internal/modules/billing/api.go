@@ -375,6 +375,16 @@ func Currencies() []string { return domain.Currencies() }
 // accounts are still billed in (ADR-0090).
 func AllCurrencies() []string { return slices.Concat(domain.Currencies(), domain.Legacy()) }
 
+// PaymentRuleReader reads how a country's merchants are paid
+// (ADR-0089): the payments module offers its storefront gateways
+// (ADR-0093). NewPaymentRules.
+type PaymentRuleReader interface {
+	// PaymentRuleFor is country's own rule, or the others' (ZZ).
+	PaymentRuleFor(ctx context.Context, country string) (PaymentRule, error)
+}
+
+var _ PaymentRuleReader = (*app.Service)(nil)
+
 // CollectionConsole is the console's collection settings (NewCollection,
 // on the console's role).
 type CollectionConsole interface {
