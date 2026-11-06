@@ -1,5 +1,6 @@
 import type { components } from '../api/client';
 import type { OrderStatus } from './orders';
+import { canManageOrders } from './settings';
 
 export type RiskBand = components['schemas']['RiskBand'];
 export type OrderRisk = components['schemas']['OrderRisk'];
@@ -34,4 +35,4 @@ export const ruleLabel: Record<RiskRule, string> = {
 };
 
 // canManageRules: changing the rules needs orders.manage.
-export const canManageRules = (r: string | undefined) => r === 'owner' || r === 'manager' || r === 'support';
+export const canManageRules = canManageOrders;

@@ -5961,3 +5961,102 @@ td.plus {
 .user .menu .button {
   inline-size: 100%;
 }
+
+/* A phone order (D5): the customer and products, then the summary. */
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.new-order {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  gap: 1rem;
+  align-items: start;
+}
+.new-order-main {
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 0;
+}
+.new-order .card {
+  display: grid;
+  gap: 0.85rem;
+}
+.new-order h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.new-order p {
+  margin: 0;
+}
+.new-order label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.new-order .pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.85rem;
+}
+.new-order-sum {
+  position: sticky;
+  inset-block-start: 1rem;
+}
+.sum-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.sum-row.total {
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--line);
+  font-size: 1.1rem;
+}
+.picks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.picks li + li {
+  border-block-start: 1px solid var(--line);
+}
+.picks button {
+  inline-size: 100%;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 400;
+  padding: 0.6rem 0.8rem;
+}
+.picks button:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--text);
+}
+.new-order input,
+.new-order select,
+.new-order textarea {
+  inline-size: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
+}
+.new-order-sum {
+  min-inline-size: 0;
+}
+.new-order input.qty {
+  inline-size: 5rem;
+}
+@media (max-width: 860px) {
+  .new-order {
+    grid-template-columns: 1fr;
+  }
+  .new-order-sum {
+    position: static;
+  }
+}

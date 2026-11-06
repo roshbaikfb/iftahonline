@@ -15,6 +15,10 @@ export const roles: { id: Role; label: string; can: string }[] = [
 
 export const roleLabel = (r: Role) => roles.find((x) => x.id === r)?.label ?? r;
 
+// canManageOrders is a role with orders.manage: entering and moving
+// orders, and the risk rules (identity's RBAC matrix).
+export const canManageOrders = (r: string | undefined) => r === 'owner' || r === 'manager' || r === 'support';
+
 // useRole is the signed-in user's role in a store.
 export function useRole(storeId: string): Role | undefined {
   const { state } = useSession();

@@ -31,6 +31,7 @@ import { Messages } from './pages/Messages';
 import { Login } from './pages/Login';
 import { CustomerDetail } from './pages/CustomerDetail';
 import { Customers } from './pages/Customers';
+import { NewOrder } from './pages/NewOrder';
 import { OrderDetail } from './pages/OrderDetail';
 import { Orders } from './pages/Orders';
 import { Overview } from './pages/Overview';
@@ -117,6 +118,7 @@ function Gate() {
           <Route path="/stores/:storeId/setup" element={<Setup />} />
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />
+          <Route path="/stores/:storeId/orders/new" element={<NewOrder />} />
           <Route path="/stores/:storeId/orders/:orderId" element={<OrderDetail />} />
           <Route path="/stores/:storeId/customers" element={<Customers />} />
           <Route path="/stores/:storeId/customers/:customerId" element={<CustomerDetail />} />
