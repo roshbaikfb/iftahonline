@@ -482,7 +482,9 @@ func Load(role Role, lookup LookupFunc) (Config, error) {
 		c.Messaging = r.messaging(c.Env)
 		c.Billing = r.billing()
 	}
-	if role == RoleAPI || role == RoleAdmin {
+	// The worker too: it builds the console's module for its alerts,
+	// which checks these settings.
+	if role == RoleAPI || role == RoleAdmin || role == RoleWorker {
 		c.Identity = Identity{
 			Argon2MemoryKiB: uint32(r.int64("ARGON2_MEMORY_KIB", 19*1024, 8*1024, 1024*1024)), //nolint:gosec // bounded above.
 			Argon2Time:      uint32(r.int64("ARGON2_TIME", 2, 1, 10)),                         //nolint:gosec // bounded above.
