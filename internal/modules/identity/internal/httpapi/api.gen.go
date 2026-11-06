@@ -379,6 +379,21 @@ type InvitationList struct {
 	Items []Invitation `json:"items"`
 }
 
+// InvitationPreview defines model for InvitationPreview.
+type InvitationPreview struct {
+	// Email The invited email; joining is only as it.
+	Email     string    `json:"email"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// HasAccount The email has an account
+	HasAccount bool `json:"has_account"`
+
+	// InviterName Who invited; absent when that account is gone.
+	InviterName *string `json:"inviter_name,omitempty"`
+	Role        Role    `json:"role"`
+	StoreName   string  `json:"store_name"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// Client `mobile` returns the session token in the body instead of a cookie.
@@ -658,6 +673,12 @@ type CheckSlugAvailabilityParams struct {
 	Slug string `form:"slug" json:"slug"`
 }
 
+// PreviewInvitationJSONBody defines parameters for PreviewInvitation.
+type PreviewInvitationJSONBody struct {
+	// Token The part after `#` in the invitation link.
+	Token string `json:"token"`
+}
+
 // ListAuditLogParams defines parameters for ListAuditLog.
 type ListAuditLogParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -684,6 +705,9 @@ type SignupJSONRequestBody = SignupRequest
 
 // AcceptInvitationJSONRequestBody defines body for AcceptInvitation for application/json ContentType.
 type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
+
+// PreviewInvitationJSONRequestBody defines body for PreviewInvitation for application/json ContentType.
+type PreviewInvitationJSONRequestBody PreviewInvitationJSONBody
 
 // ConfirmTOTPJSONRequestBody defines body for ConfirmTOTP for application/json ContentType.
 type ConfirmTOTPJSONRequestBody = TOTPCode
@@ -732,6 +756,9 @@ type ServerInterface interface {
 	// AcceptInvitation Join a store from an invitation link
 	// (POST /v1/invitations/accept)
 	AcceptInvitation(w http.ResponseWriter, r *http.Request)
+	// PreviewInvitation What an invitation link is, before joining
+	// (POST /v1/invitations/preview)
+	PreviewInvitation(w http.ResponseWriter, r *http.Request)
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -924,6 +951,20 @@ func (siw *ServerInterfaceWrapper) AcceptInvitation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AcceptInvitation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewInvitation operation middleware
+func (siw *ServerInterfaceWrapper) PreviewInvitation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewInvitation(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1420,6 +1461,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/mfa", wrapper.VerifyMFA)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/start", wrapper.StartOTPLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/verify", wrapper.VerifyOTPLogin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invitations/preview", wrapper.PreviewInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invitations/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auth/slug-availability", wrapper.CheckSlugAvailability)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/impersonation", wrapper.ExchangeImpersonation)
@@ -1866,6 +1908,45 @@ type AcceptInvitationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AcceptInvitationdefaultApplicationProblemPlusJSONResponse) VisitAcceptInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewInvitationRequestObject struct {
+	Body *PreviewInvitationJSONRequestBody
+}
+
+type PreviewInvitationResponseObject interface {
+	VisitPreviewInvitationResponse(w http.ResponseWriter) error
+}
+
+type PreviewInvitation200JSONResponse InvitationPreview
+
+func (response PreviewInvitation200JSONResponse) VisitPreviewInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewInvitationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PreviewInvitationdefaultApplicationProblemPlusJSONResponse) VisitPreviewInvitationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2458,6 +2539,9 @@ type StrictServerInterface interface {
 	// AcceptInvitation Join a store from an invitation link
 	// (POST /v1/invitations/accept)
 	AcceptInvitation(ctx context.Context, request AcceptInvitationRequestObject) (AcceptInvitationResponseObject, error)
+	// PreviewInvitation What an invitation link is, before joining
+	// (POST /v1/invitations/preview)
+	PreviewInvitation(ctx context.Context, request PreviewInvitationRequestObject) (PreviewInvitationResponseObject, error)
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -2804,6 +2888,37 @@ func (sh *strictHandler) AcceptInvitation(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AcceptInvitationResponseObject); ok {
 		if err := validResponse.VisitAcceptInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewInvitation operation middleware
+func (sh *strictHandler) PreviewInvitation(w http.ResponseWriter, r *http.Request) {
+	var request PreviewInvitationRequestObject
+
+	var body PreviewInvitationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewInvitation(ctx, request.(PreviewInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewInvitationResponseObject); ok {
+		if err := validResponse.VisitPreviewInvitationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

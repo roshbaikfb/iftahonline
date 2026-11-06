@@ -285,6 +285,21 @@ network prefix, never the full IP, and links to the security settings.
   SHA-256(token) is stored. The token waits sealed in Redis until the
   email job sends it.
 
+### The invitation page (D2)
+
+The dashboard's `/invite` page (signed in or out) reads the link's
+fragment and asks `POST /v1/invitations/preview` (public, token in the
+body, throttled per IP like logins). The answer is the store's name, who
+invited, the role, the invited email, the expiry, and `has_account`. A
+used, expired, revoked or unknown link is 404 `invitation_not_found`.
+
+The page then joins:
+- a signed-in invitee as that email in one click;
+- a new one by creating the account (the email is fixed);
+- one with an account after signing in on the same URL.
+
+Someone signed in as another email is told to sign out.
+
 ### Accepting
 
 `POST /v1/invitations/accept` works in one of two ways:

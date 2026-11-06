@@ -368,6 +368,10 @@ func (f fixture) inviteToken(t *testing.T, store tenant.StoreID, id ulid.ID) str
 	if len(c.mail) != 1 {
 		t.Fatalf("invitation mails = %d", len(c.mail))
 	}
+	// The role is said in Arabic in the Arabic part (D2).
+	if strings.Contains(c.mail[0].Text, "بدور: support") || strings.Contains(c.mail[0].Text, "بدور: shipping") || strings.Contains(c.mail[0].Text, "بدور: manager") {
+		t.Fatalf("an English role in the Arabic text: %q", c.mail[0].Text)
+	}
 	_, after, ok := strings.Cut(c.mail[0].Text, "/invite#")
 	if !ok {
 		t.Fatalf("no link in %q", c.mail[0].Text)
@@ -401,6 +405,19 @@ func TestInvitations(t *testing.T) {
 		t.Fatalf("token = %q", token)
 	}
 
+	// The invitation page reads the link first (D2): the store, who
+	// invited, the role, the email, and that it has no account yet.
+	pv, err := f.svc.PreviewInvitation(f.device(t), token)
+	if err != nil || pv.Email != newEmail || pv.Role != authz.RoleSupport || pv.StoreName == "" || pv.InviterName == "" || pv.HasAccount ||
+		pv.ExpiresAt.IsZero() {
+		t.Fatalf("preview = %+v, %v", pv, err)
+	}
+	for name, bad := range map[string]string{"empty": "", "not a token": "x", "another store's": owner.StoreID.String()[:25] + "Z.secret"} {
+		if _, err = f.svc.PreviewInvitation(f.device(t), bad); !errs.Is(err, errs.KindNotFound) {
+			t.Errorf("preview %s: %v", name, err)
+		}
+	}
+
 	// New account: name and password are validated, then the account,
 	// membership and session are created together.
 	if _, err = f.svc.AcceptInvitation(f.device(t), app.AcceptInput{Token: token, Name: "", Password: "short"}); !errs.Is(err, errs.KindValidation) {
@@ -417,6 +434,9 @@ func TestInvitations(t *testing.T) {
 	if _, err = f.svc.AcceptInvitation(t.Context(), app.AcceptInput{Token: token, Name: "x", Password: goodPassword}); !errs.Is(err, errs.KindNotFound) {
 		t.Fatalf("token reuse: %v", err)
 	}
+	if _, err = f.svc.PreviewInvitation(f.device(t), token); !errs.Is(err, errs.KindNotFound) {
+		t.Fatalf("preview of an accepted link: %v", err)
+	}
 	if _, err = f.svc.Invite(octx, newEmail, "manager"); !errs.Is(err, errs.KindConflict) {
 		t.Fatalf("invite an existing member: %v", err)
 	}
@@ -428,6 +448,9 @@ func TestInvitations(t *testing.T) {
 		t.Fatal(err)
 	}
 	tok2 := f.inviteToken(t, owner.StoreID, inv2.ID)
+	if pv, err = f.svc.PreviewInvitation(f.device(t), tok2); err != nil || !pv.HasAccount {
+		t.Fatalf("preview for an existing account = %+v, %v", pv, err)
+	}
 	if _, err = f.svc.AcceptInvitation(t.Context(), app.AcceptInput{Token: tok2}); !errs.Is(err, errs.KindUnauthenticated) {
 		t.Fatalf("existing account, anonymous: %v", err)
 	}

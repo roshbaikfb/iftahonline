@@ -312,6 +312,8 @@ func TestAuthValidationAndErrors(t *testing.T) {
 		{"revoke malformed id", newReq(t, http.MethodDelete, "/v1/me/sessions/nope", "", bearer(acc.token)), http.StatusNotFound, "session_not_found"},
 		{"audit bad cursor", newReq(t, http.MethodGet, "/v1/stores/"+acc.storeID+"/audit-log?cursor=!!", "", bearer(acc.token)), http.StatusUnprocessableEntity, "validation_failed"},
 		{"audit limit too large", newReq(t, http.MethodGet, "/v1/stores/"+acc.storeID+"/audit-log?limit=999", "", bearer(acc.token)), http.StatusUnprocessableEntity, ""},
+		{"invitation preview of nothing", newReq(t, http.MethodPost, "/v1/invitations/preview", `{"token":"nope"}`), http.StatusNotFound, "invitation_not_found"},
+		{"invitation preview malformed", newReq(t, http.MethodPost, "/v1/invitations/preview", `{"token":`), http.StatusBadRequest, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

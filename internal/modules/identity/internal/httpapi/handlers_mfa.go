@@ -248,3 +248,21 @@ func (h *Handlers) RevokeInvitation(ctx context.Context, req RevokeInvitationReq
 	}
 	return RevokeInvitation204Response{}, nil
 }
+
+// PreviewInvitation implements StrictServerInterface: the invitation page
+// shows what the link is before the invitee joins (D2).
+func (h *Handlers) PreviewInvitation(ctx context.Context, req PreviewInvitationRequestObject) (PreviewInvitationResponseObject, error) {
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	p, err := h.svc.PreviewInvitation(ctx, req.Body.Token)
+	if err != nil {
+		return nil, err
+	}
+	out := PreviewInvitation200JSONResponse{StoreName: p.StoreName, Role: Role(p.Role), Email: p.Email, ExpiresAt: p.ExpiresAt,
+		HasAccount: p.HasAccount}
+	if p.InviterName != "" {
+		out.InviterName = &p.InviterName
+	}
+	return out, nil
+}

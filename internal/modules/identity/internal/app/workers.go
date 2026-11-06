@@ -17,6 +17,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/notify"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
+	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
 	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
@@ -127,7 +128,7 @@ func (w *InviteEmailWorker) Work(ctx context.Context, job *river.Job[InviteEmail
 		Subject: fmt.Sprintf("دعوة للانضمام إلى %s على iftahonline", st.Name),
 		Text: fmt.Sprintf("تمت دعوتك للانضمام إلى فريق متجر \"%s\" بدور: %s.\n\nلقبول الدعوة افتح الرابط التالي (صالح حتى %s):\n%s\n\n"+
 			"You have been invited to join \"%s\" on iftahonline as %s.\nAccept: %s\n\nإذا لم تكن تتوقع هذه الدعوة فتجاهل هذه الرسالة.",
-			st.Name, inv.Role, inv.ExpiresAt.UTC().Format("2006-01-02"), link, st.Name, inv.Role, link),
+			st.Name, roleArabic(inv.Role), inv.ExpiresAt.UTC().Format("2006-01-02"), link, st.Name, inv.Role, link),
 	}
 	if err := w.D.Mailer.Send(ctx, msg); err != nil {
 		return err
@@ -183,4 +184,20 @@ func RegisterWorkers(workers *river.Workers, d WorkerDeps) error {
 		}
 	}
 	return nil
+}
+
+// roleArabic names an invited role in the email's Arabic part, as the
+// dashboard does; the English part keeps the role's key.
+func roleArabic(r authz.Role) string {
+	switch r {
+	case authz.RoleManager:
+		return "مدير"
+	case authz.RoleSupport:
+		return "خدمة العملاء"
+	case authz.RoleShipping:
+		return "الشحن"
+	case authz.RoleOwner:
+		return "المالك"
+	}
+	return string(r)
 }
