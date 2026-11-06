@@ -8996,18 +8996,19 @@ components:
           description: Where the gateway notifies this connection's payments (sent with every payment; active connections).
     ConnectPaymentGatewayInput:
       type: object
-      required: [gateway, webhook_secret]
+      required: [gateway]
       description: >-
         The merchant's keys. Each gateway needs its own: Paymob the secret,
-        public and API keys, the HMAC secret and integration IDs; Stripe the
-        secret (or restricted) key and the webhook endpoint's signing secret
-        (ADR-0092). A key a gateway needs and is missing is a validation error.
+        public and API keys, the HMAC secret and integration IDs; Stripe only
+        the secret (or restricted) key, as the platform creates the webhook
+        endpoint in the merchant's account and keeps its secret (ADR-0094).
+        A key a gateway needs and is missing is a validation error.
       properties:
         gateway: { type: string, example: paymob }
         secret_key: { type: string, maxLength: 512, format: password }
         public_key: { type: string, maxLength: 512 }
         api_key: { type: string, maxLength: 1024, format: password, description: "Paymob: for transaction inquiries. Stripe: none." }
-        webhook_secret: { type: string, maxLength: 512, format: password, description: "The gateway's webhook signing secret (Paymob: HMAC; Stripe: whsec_)." }
+        webhook_secret: { type: string, maxLength: 512, format: password, description: "The gateway's webhook signing secret (Paymob: HMAC). Stripe: none, the platform creates it." }
         integration_ids:
           type: array
           maxItems: 10
@@ -9370,9 +9371,10 @@ components:
         unlimited: { type: boolean }
     BillingPlans:
       type: object
-      required: [currency, features, plans]
+      required: [currency, tax_bps, features, plans]
       properties:
         currency: { type: string, enum: [EGP, SAR, AED, USD] }
+        tax_bps: { type: integer, minimum: 0, maximum: 5000, example: 1500, description: "The tax on the store's invoices, by its country (ADR-0089): the prices are before it." }
         features:
           type: array
           items: { $ref: "#/components/schemas/BillingFeature" }

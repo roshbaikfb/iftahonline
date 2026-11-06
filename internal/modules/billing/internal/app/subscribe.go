@@ -30,6 +30,9 @@ type Offer struct {
 // features.
 type Offers struct {
 	Currency string
+	// TaxBps is the tax on the store's invoices, by its country
+	// (ADR-0089): the prices are before it.
+	TaxBps   int32
 	Features []domain.Feature
 	Plans    []Offer
 }
@@ -90,6 +93,9 @@ func (s *Service) Offers(ctx context.Context) (Offers, error) {
 			return txErr
 		}
 		if out.Currency, txErr = billedTx(ctx, tx, known(info)); txErr != nil {
+			return txErr
+		}
+		if out.TaxBps, txErr = store.TaxRate(ctx, tx, info.country()); txErr != nil {
 			return txErr
 		}
 		if out.Features, txErr = store.Features(ctx, tx); txErr != nil {

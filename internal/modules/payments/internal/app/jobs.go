@@ -49,6 +49,37 @@ type ProcessWebhookArgs struct {
 // Kind implements river.JobArgs.
 func (ProcessWebhookArgs) Kind() string { return "payments.process_webhook" }
 
+// UnprovisionArgs deletes a disconnected connection's webhook endpoint at
+// its gateway (ADR-0094).
+type UnprovisionArgs struct {
+	jobs.TenantArgs
+	ConnectionID ulid.ID `json:"connection_id"`
+}
+
+// Kind implements river.JobArgs.
+func (UnprovisionArgs) Kind() string { return "payments.unprovision_webhook" }
+
+// Unprovision runs UnprovisionArgs: the endpoint the platform created for
+// a connection, deleted once it is disconnected.
+func (s *Service) Unprovision(ctx context.Context, id ulid.ID) error {
+	c, err := s.connection(ctx, id)
+	if errors.Is(err, ErrConnectionNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	g, creds, err := s.open(ctx, c, true)
+	if err != nil {
+		return err
+	}
+	p, ok := g.(gateway.Provisioner)
+	if !ok {
+		return nil
+	}
+	return p.Unprovision(ctx, creds)
+}
+
 // ExpirePayment runs ExpirePaymentArgs: it asks the gateway one last
 // time; a payment still not paid expires, and its order is cancelled when
 // none of its payments is open or captured.
@@ -409,7 +440,17 @@ func (s *Service) AddWorkers(w *river.Workers) error {
 		river.AddWorkerSafely(w, &webhookWorker{svc: s}),
 		river.AddWorkerSafely(w, &syncWorker{svc: s}),
 		river.AddWorkerSafely(w, &expireOrderWorker{svc: s}),
+		river.AddWorkerSafely(w, &unprovisionWorker{svc: s}),
 	)
+}
+
+type unprovisionWorker struct {
+	river.WorkerDefaults[UnprovisionArgs]
+	svc *Service
+}
+
+func (w *unprovisionWorker) Work(ctx context.Context, job *river.Job[UnprovisionArgs]) error {
+	return w.svc.Unprovision(ctx, job.Args.ConnectionID)
 }
 
 type expireWorker struct {

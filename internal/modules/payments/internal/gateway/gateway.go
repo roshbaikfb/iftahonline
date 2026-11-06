@@ -50,6 +50,9 @@ type Credentials struct {
 	WebhookSecret  string `json:"webhook_secret"`  // Paymob: the HMAC secret
 	APIKey         string `json:"api_key"`         // Paymob: for transaction inquiries
 	IntegrationIDs []int  `json:"integration_ids"` // Paymob: the card integrations offered
+	// WebhookID is the endpoint a Provisioner created at the gateway for
+	// the connection (Stripe), so that disconnecting deletes it.
+	WebhookID string `json:"webhook_id,omitempty"`
 }
 
 // String implements fmt.Stringer.
@@ -137,6 +140,16 @@ func RequiredKeys(g Gateway) Keys {
 		return k.NeedsKeys()
 	}
 	return Keys{WebhookSecret: true, APIKey: true}
+}
+
+// Provisioner is implemented by gateways whose webhook endpoint the
+// platform creates in the merchant's account (Stripe, ADR-0094): the
+// merchant gives a key, and Provision returns the credentials with the
+// endpoint's secret and ID. Unprovision deletes it; an endpoint already
+// gone is no error.
+type Provisioner interface {
+	Provision(ctx context.Context, creds Credentials, webhookURL string) (Credentials, error)
+	Unprovision(ctx context.Context, creds Credentials) error
 }
 
 // IntegrationIDsNeeded is implemented by gateways whose accounts route

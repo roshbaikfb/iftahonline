@@ -178,6 +178,29 @@ describe('Gateways', () => {
     });
   });
 
+  it('connects Stripe with one restricted key, beside cash on delivery (ADR-0094)', async () => {
+    const calls = mockAPI({
+      ...storeRoute,
+      [`GET ${base}/payments/gateways`]: () => ({ status: 200, body: { gateways: ['stripe'], connections: [] } }),
+      [`POST ${base}/payments/gateways`]: () => ({
+        status: 201,
+        body: { id: 'G2', gateway: 'stripe', status: 'active', created_at: '2026-11-06T10:00:00Z' },
+      }),
+    });
+    renderAt(`/stores/${store}/gateways`);
+    const user = userEvent.setup();
+    expect(await screen.findByRole('region', { name: 'الدفع عند الاستلام' })).toHaveTextContent('مفعّل');
+    const key = await screen.findByLabelText(/المفتاح المحدود \(Restricted key\)/);
+    // Stripe takes no API key or webhook secret: the platform makes the endpoint.
+    expect(screen.queryByLabelText('API key')).toBeNull();
+    expect(screen.queryByLabelText('سر الإشعارات')).toBeNull();
+    expect(screen.getByText('Webhook Endpoints: Write')).toBeInTheDocument();
+    await user.type(key, 'rk_live_1');
+    await user.click(screen.getByRole('button', { name: 'اربط Stripe' }));
+    expect(await screen.findByText(/تم الربط/)).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ gateway: 'stripe', secret_key: 'rk_live_1' });
+  });
+
   it('refuses integration IDs that are not numbers', async () => {
     const calls = mockAPI({
       ...storeRoute,

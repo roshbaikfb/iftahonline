@@ -8060,7 +8060,7 @@ export interface components {
             /** @description Where the gateway notifies this connection's payments (sent with every payment; active connections). */
             webhook_url?: string;
         };
-        /** @description The merchant's keys. Each gateway needs its own: Paymob the secret, public and API keys, the HMAC secret and integration IDs; Stripe the secret (or restricted) key and the webhook endpoint's signing secret (ADR-0092). A key a gateway needs and is missing is a validation error. */
+        /** @description The merchant's keys. Each gateway needs its own: Paymob the secret, public and API keys, the HMAC secret and integration IDs; Stripe only the secret (or restricted) key, as the platform creates the webhook endpoint in the merchant's account and keeps its secret (ADR-0094). A key a gateway needs and is missing is a validation error. */
         ConnectPaymentGatewayInput: {
             /** @example paymob */
             gateway: string;
@@ -8074,9 +8074,9 @@ export interface components {
             api_key?: string;
             /**
              * Format: password
-             * @description The gateway's webhook signing secret (Paymob: HMAC; Stripe: whsec_).
+             * @description The gateway's webhook signing secret (Paymob: HMAC). Stripe: none, the platform creates it.
              */
-            webhook_secret: string;
+            webhook_secret?: string;
             /** @description The gateway's card integration IDs (Paymob). */
             integration_ids?: number[];
         };
@@ -8496,6 +8496,11 @@ export interface components {
         BillingPlans: {
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED" | "USD";
+            /**
+             * @description The tax on the store's invoices, by its country (ADR-0089): the prices are before it.
+             * @example 1500
+             */
+            tax_bps: number;
             features: components["schemas"]["BillingFeature"][];
             plans: components["schemas"]["BillingPlan"][];
         };

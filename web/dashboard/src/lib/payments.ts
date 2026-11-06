@@ -34,7 +34,7 @@ export function refundable(p: Payment): number {
   return p.status === 'paid' || p.status === 'partially_refunded' ? p.amount_minor - p.refunded_minor : 0;
 }
 
-const gatewayName: Record<string, string> = { paymob: 'Paymob', fakepay: 'بوابة دفع تجريبية' };
+const gatewayName: Record<string, string> = { paymob: 'Paymob', stripe: 'Stripe', fakepay: 'بوابة دفع تجريبية' };
 
 // gatewayLabel names a gateway for merchants.
 export function gatewayLabel(g: string): string {

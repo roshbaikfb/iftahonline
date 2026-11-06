@@ -167,7 +167,7 @@ func (h *Handlers) ListBillingPlans(ctx context.Context, _ ListBillingPlansReque
 	if err != nil {
 		return nil, err
 	}
-	out := ListBillingPlans200JSONResponse{Currency: BillingPlansCurrency(o.Currency), Features: make([]BillingFeature, len(o.Features)),
+	out := ListBillingPlans200JSONResponse{Currency: BillingPlansCurrency(o.Currency), TaxBps: int(o.TaxBps), Features: make([]BillingFeature, len(o.Features)),
 		Plans: make([]BillingPlan, len(o.Plans))}
 	for i, f := range o.Features {
 		out.Features[i] = BillingFeature{Key: f.Key, Kind: BillingFeatureKind(f.Kind), NameAr: f.NameAr, NameEn: f.NameEn}

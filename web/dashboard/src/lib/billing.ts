@@ -109,7 +109,9 @@ export function planPrice(p: BillingPlan, cycle: Cycle, currency: string): { pri
   if (p.kind === 'free') return { price: money(0, currency), note: 'للأبد' };
   if (p.kind === 'pays') {
     const rate = p.fee ? `${(p.fee.rate_bps / 100).toLocaleString('en-US')}%` : '';
-    return { price: rate, note: 'من الطلبات المسلّمة فقط' };
+    // A fixed amount per order beside the rate (ADR-0090).
+    const fixed = p.fee?.fixed_minor ? ` + ${money(p.fee.fixed_minor, currency)} لكل طلب` : '';
+    return { price: rate + fixed, note: 'من الطلبات المسلّمة فقط' };
   }
   const monthly = p.monthly_minor;
   const annual = p.annual_minor;
@@ -216,3 +218,9 @@ export function supportLink(number: string, invoice?: string): string {
 // billingChanged tells the screens the store's billing moved (a switch,
 // a change of the way to pay), so they read it again.
 export const billingChanged = 'billing:changed';
+
+// taxNote is what a paid plan's price is before: the store's country's
+// tax (ADR-0089); "" without one.
+export function taxNote(bps: number): string {
+  return bps > 0 ? `قبل ضريبة القيمة المضافة (${(bps / 100).toLocaleString('en-US')}%)` : '';
+}

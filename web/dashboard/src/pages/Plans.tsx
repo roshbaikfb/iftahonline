@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
-import { annualSaving, grantText, leave, planPoints, planPrice, sold, type BillingPlan, type BillingPlans, type Cycle } from '../lib/billing';
+import { annualSaving, grantText, leave, planPoints, planPrice, sold, taxNote, type BillingPlan, type BillingPlans, type Cycle } from '../lib/billing';
 import { problemMessage } from '../lib/problem';
 import { useRole } from '../lib/settings';
 
@@ -98,6 +98,7 @@ export function Plans() {
       <div className="plans-head">
         <h1>اختر الباقة المناسبة لمتجرك</h1>
         <p className="muted">كل الباقات المدفوعة فيها تجربة مجانية مرة واحدة لكل متجر، بدون بطاقة. تقدر تغيّر باقتك في أي وقت.</p>
+        {currency === 'USD' && <p className="notice">متجرك خارج مصر، فاشتراكك بالدولار ويُدفع بالبطاقة عبر Stripe. أسعار منتجاتك تبقى بعملة متجرك.</p>}
         <div className="segmented narrow-seg" role="group" aria-label="دورة الدفع">
           <button
             type="button"
@@ -133,6 +134,7 @@ export function Plans() {
               <div className="plan-price">
                 <strong>{price}</strong>
                 <span className="muted small">{note}</span>
+                {p.kind !== 'free' && taxNote(data?.tax_bps ?? 0) && <span className="muted small">{taxNote(data?.tax_bps ?? 0)}</span>}
               </div>
               <ul className="plan-points">
                 {planPoints(p, data?.features ?? []).map((pt) => (

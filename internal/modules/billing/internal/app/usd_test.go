@@ -92,8 +92,9 @@ func TestDollarBilling(t *testing.T) {
 	f.subscribe(riyadh, t, "pays", "active", "")
 
 	offers, err := svc.Offers(riyadh)
-	if err != nil || offers.Currency != "USD" {
-		t.Fatalf("offers = %s, %v", offers.Currency, err)
+	// In dollars, before Saudi Arabia's VAT (seeded at 15%).
+	if err != nil || offers.Currency != "USD" || offers.TaxBps != 1500 {
+		t.Fatalf("offers = %s %d, %v", offers.Currency, offers.TaxBps, err)
 	}
 	for _, o := range offers.Plans {
 		if o.Kind == domain.KindPays && (o.Fee == nil || o.Fee.Currency != "USD") {

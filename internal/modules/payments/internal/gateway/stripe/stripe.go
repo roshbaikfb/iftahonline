@@ -21,6 +21,7 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,8 +58,9 @@ type Gateway struct {
 }
 
 var (
-	_ gateway.Gateway    = (*Gateway)(nil)
-	_ gateway.KeysNeeded = (*Gateway)(nil)
+	_ gateway.Gateway     = (*Gateway)(nil)
+	_ gateway.KeysNeeded  = (*Gateway)(nil)
+	_ gateway.Provisioner = (*Gateway)(nil)
 )
 
 // New returns the adapter.
@@ -77,19 +79,70 @@ func New(o Options) *Gateway {
 func (*Gateway) Name() string { return Name }
 
 // NeedsKeys implements gateway.KeysNeeded: the secret (or restricted)
-// key and the webhook endpoint's signing secret; Stripe has no API key
-// of Paymob's kind.
-func (*Gateway) NeedsKeys() gateway.Keys { return gateway.Keys{SecretKey: true, WebhookSecret: true} }
+// key only. The webhook endpoint, and its signing secret, the platform
+// creates (Provision); Stripe has no API key of Paymob's kind.
+func (*Gateway) NeedsKeys() gateway.Keys { return gateway.Keys{SecretKey: true} }
 
 var (
 	referenceRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
 	sessionRE   = regexp.MustCompile(`^cs_[A-Za-z0-9_]{1,250}$`)
 	intentRE    = regexp.MustCompile(`^pi_[A-Za-z0-9_]{1,250}$`)
+	endpointRE  = regexp.MustCompile(`^we_[A-Za-z0-9_]{1,250}$`)
 )
 
-// keysOK reports whether creds are shaped as Stripe's keys.
+// keysOK reports whether creds hold a Stripe secret or restricted key.
 func keysOK(c gateway.Credentials) bool {
-	return (strings.HasPrefix(c.SecretKey, "sk_") || strings.HasPrefix(c.SecretKey, "rk_")) && strings.HasPrefix(c.WebhookSecret, "whsec_")
+	return strings.HasPrefix(c.SecretKey, "sk_") || strings.HasPrefix(c.SecretKey, "rk_")
+}
+
+// Events are what the connection's endpoint subscribes to: its payments'
+// sessions.
+func Events() []string {
+	return []string{"checkout.session.completed", "checkout.session.async_payment_succeeded",
+		"checkout.session.async_payment_failed", "checkout.session.expired"}
+}
+
+// Provision implements gateway.Provisioner: a webhook endpoint at
+// webhookURL in the merchant's account, for Events, on the pinned API
+// version. Its secret is Stripe's to give once, in this answer. The
+// idempotency key is the URL (one per connection): a request whose answer
+// was lost is sent again for the same endpoint.
+func (g *Gateway) Provision(ctx context.Context, creds gateway.Credentials, webhookURL string) (gateway.Credentials, error) {
+	if !keysOK(creds) {
+		return gateway.Credentials{}, gateway.ErrAuth
+	}
+	if !strings.HasPrefix(webhookURL, "https://") {
+		return gateway.Credentials{}, fmt.Errorf("%w: the webhook URL must be https", gateway.ErrRejected)
+	}
+	form := url.Values{"url": {webhookURL}, "api_version": {stripe.APIVersion}, "description": {"Iftah Online"}}
+	for i, e := range Events() {
+		form.Set("enabled_events["+strconv.Itoa(i)+"]", e)
+	}
+	var out struct {
+		ID     string `json:"id"`
+		Secret string `json:"secret"`
+	}
+	if _, err := g.client(creds).Do(ctx, http.MethodPost, "/v1/webhook_endpoints", form, "webhook:"+webhookURL, &out); err != nil {
+		return gateway.Credentials{}, gatewayErr(err)
+	}
+	if !endpointRE.MatchString(out.ID) || !strings.HasPrefix(out.Secret, "whsec_") {
+		return gateway.Credentials{}, errors.New("stripe: the webhook endpoint has no ID or secret")
+	}
+	creds.WebhookID, creds.WebhookSecret = out.ID, out.Secret
+	return creds, nil
+}
+
+// Unprovision implements gateway.Provisioner: the connection's endpoint
+// deleted; one already gone (or never made) is no error.
+func (g *Gateway) Unprovision(ctx context.Context, creds gateway.Credentials) error {
+	if creds.WebhookID == "" {
+		return nil
+	}
+	if !endpointRE.MatchString(creds.WebhookID) {
+		return retry.Permanent(fmt.Errorf("%w: %q is not a Stripe webhook endpoint", gateway.ErrRejected, creds.WebhookID))
+	}
+	_, err := g.client(creds).Do(ctx, http.MethodDelete, "/v1/webhook_endpoints/"+url.PathEscape(creds.WebhookID), nil, "", nil)
+	return gatewayErr(err)
 }
 
 func (g *Gateway) client(c gateway.Credentials) *stripe.Client {
@@ -110,8 +163,9 @@ func gatewayErr(err error) error {
 	return err
 }
 
-// Verify implements gateway.Gateway: the keys are Stripe's, and the
-// secret key lists Checkout Sessions (what a restricted key needs).
+// Verify implements gateway.Gateway: the key is Stripe's, and it lists
+// Checkout Sessions (what a restricted key needs; Provision then checks
+// it may create webhook endpoints).
 func (g *Gateway) Verify(ctx context.Context, creds gateway.Credentials) error {
 	if !keysOK(creds) {
 		return gateway.ErrAuth
@@ -266,16 +320,8 @@ func (g *Gateway) VerifyWebhook(creds gateway.Credentials, req gateway.WebhookRe
 	return g.ParseWebhook(req.Body)
 }
 
-// sessionEvent reports whether an event is about a payment's session;
-// the merchant's endpoint subscribes to these only.
-func sessionEvent(typ string) bool {
-	switch typ {
-	case "checkout.session.completed", "checkout.session.async_payment_succeeded",
-		"checkout.session.async_payment_failed", "checkout.session.expired":
-		return true
-	}
-	return false
-}
+// sessionEvent reports whether an event is about a payment's session.
+func sessionEvent(typ string) bool { return slices.Contains(Events(), typ) }
 
 // ParseWebhook implements gateway.Gateway: an event about one of our
 // payments' sessions. Stripe sends an event again with its ID.

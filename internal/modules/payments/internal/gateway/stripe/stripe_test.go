@@ -38,8 +38,9 @@ func creds() gateway.Credentials {
 // PaymentIntent within what it received.
 type standIn struct {
 	mu       sync.Mutex
-	sessions map[string]map[string]any // by ID
-	byKey    map[string]string         // idempotency key → session ID
+	sessions map[string]map[string]any    // by ID
+	byKey    map[string]string            // idempotency key → session ID
+	hooks    map[string]map[string]string // webhook endpoints by ID
 	forms    []map[string]string
 	n        int
 	down     bool
@@ -48,7 +49,7 @@ type standIn struct {
 
 func newStandIn(t *testing.T) (*standIn, *stripe.Gateway) {
 	t.Helper()
-	s := &standIn{sessions: map[string]map[string]any{}, byKey: map[string]string{}, now: time.Unix(1_800_000_000, 0)}
+	s := &standIn{sessions: map[string]map[string]any{}, byKey: map[string]string{}, hooks: map[string]map[string]string{}, now: time.Unix(1_800_000_000, 0)}
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
 	g := stripe.New(stripe.Options{BaseURL: srv.URL, Client: srv.Client(), Retry: &fast, Now: func() time.Time { return s.now }})
@@ -107,6 +108,29 @@ func (s *standIn) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(http.StatusOK, cs)
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/webhook_endpoints":
+		s.forms = append(s.forms, form)
+		if id, ok := s.byKey[r.Header.Get("Idempotency-Key")]; ok {
+			reply(http.StatusOK, map[string]any{"id": id, "secret": s.hooks[id]["secret"]})
+			return
+		}
+		if !strings.HasPrefix(form["url"], "https://") {
+			reply(http.StatusBadRequest, map[string]any{"error": map[string]any{"type": "invalid_request_error", "message": "Invalid URL"}})
+			return
+		}
+		s.n++
+		id := "we_test_" + strconv.Itoa(s.n)
+		s.byKey[r.Header.Get("Idempotency-Key")] = id
+		s.hooks[id] = map[string]string{"url": form["url"], "secret": whsec}
+		reply(http.StatusOK, map[string]any{"id": id, "secret": whsec})
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/v1/webhook_endpoints/"):
+		id := strings.TrimPrefix(r.URL.Path, "/v1/webhook_endpoints/")
+		if _, ok := s.hooks[id]; !ok {
+			reply(http.StatusNotFound, map[string]any{"error": map[string]any{"message": "No such webhook endpoint"}})
+			return
+		}
+		delete(s.hooks, id)
+		reply(http.StatusOK, map[string]any{"id": id, "deleted": true})
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/refunds":
 		s.forms = append(s.forms, form)
 		amount, _ := strconv.ParseInt(form["amount"], 10, 64)
@@ -291,21 +315,25 @@ func TestCreatePayment(t *testing.T) {
 func TestVerifyKeys(t *testing.T) {
 	t.Parallel()
 	s, g := newStandIn(t)
-	if k := g.NeedsKeys(); !k.SecretKey || !k.WebhookSecret || k.APIKey || k.PublicKey {
+	// Only the key: the platform creates the endpoint and its secret
+	// (ADR-0094).
+	if k := g.NeedsKeys(); !k.SecretKey || k.WebhookSecret || k.APIKey || k.PublicKey {
 		t.Fatalf("keys = %+v", k)
 	}
 	if gateway.RequiredKeys(g) != g.NeedsKeys() {
 		t.Fatal("RequiredKeys")
 	}
 	for name, c := range map[string]gateway.Credentials{
-		"a publishable key":    {SecretKey: "pk_live_1", WebhookSecret: whsec},
-		"no endpoint secret":   {SecretKey: secretKey},
-		"a Paymob HMAC":        {SecretKey: secretKey, WebhookSecret: "ABCDEF"},
-		"a key Stripe refuses": {SecretKey: "sk_live_wrong", WebhookSecret: whsec},
+		"a publishable key":    {SecretKey: "pk_live_1"},
+		"no key":               {},
+		"a key Stripe refuses": {SecretKey: "sk_live_wrong"},
 	} {
 		if err := g.Verify(t.Context(), c); !errors.Is(err, gateway.ErrAuth) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	if err := g.Verify(t.Context(), gateway.Credentials{SecretKey: secretKey}); err != nil {
+		t.Fatalf("a key alone: %v", err)
 	}
 	s.down = true
 	if err := g.Verify(t.Context(), creds()); err == nil || errors.Is(err, gateway.ErrAuth) {
@@ -407,4 +435,61 @@ func FuzzParseWebhook(f *testing.F) {
 			t.Fatalf("accepted %q as %+v", body, ev)
 		}
 	})
+}
+
+// TestProvision: the connection's webhook endpoint is created in the
+// merchant's account, for the four session events, on the pinned API
+// version, once per URL; disconnecting deletes it, and one already gone
+// is no error (ADR-0094).
+func TestProvision(t *testing.T) {
+	t.Parallel()
+	s, g := newStandIn(t)
+	url := "https://api.example.com/v1/webhooks/stripe/01JSTORE/01JCONN"
+	c, err := g.Provision(t.Context(), gateway.Credentials{SecretKey: secretKey}, url)
+	if err != nil || c.WebhookID != "we_test_1" || c.WebhookSecret != whsec || c.SecretKey != secretKey {
+		t.Fatalf("provisioned = %+v, %v", c, err)
+	}
+	f := s.forms[0]
+	for i, e := range stripe.Events() {
+		if got := f["enabled_events["+strconv.Itoa(i)+"]"]; got != e {
+			t.Errorf("event %d = %q, want %q", i, got, e)
+		}
+	}
+	if f["url"] != url || f["api_version"] != platformstripe.APIVersion {
+		t.Errorf("endpoint = %v", f)
+	}
+	// Sent again (a lost answer): the same endpoint.
+	if again, aErr := g.Provision(t.Context(), gateway.Credentials{SecretKey: secretKey}, url); aErr != nil || again.WebhookID != c.WebhookID {
+		t.Fatalf("again = %+v, %v", again, aErr)
+	}
+	for name, tc := range map[string]struct {
+		creds gateway.Credentials
+		url   string
+		want  error
+	}{
+		"a publishable key": {gateway.Credentials{SecretKey: "pk_test_1"}, url, gateway.ErrAuth},
+		"a refused key":     {gateway.Credentials{SecretKey: "rk_test_wrong"}, url, gateway.ErrAuth},
+		"plain http":        {gateway.Credentials{SecretKey: secretKey}, "http://api.example.com/x", gateway.ErrRejected},
+	} {
+		if _, err = g.Provision(t.Context(), tc.creds, tc.url); !errors.Is(err, tc.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+
+	if err = g.Unprovision(t.Context(), c); err != nil || len(s.hooks) != 0 {
+		t.Fatalf("unprovision = %v (%d left)", err, len(s.hooks))
+	}
+	if err = g.Unprovision(t.Context(), c); err != nil {
+		t.Fatalf("already gone: %v", err)
+	}
+	if err = g.Unprovision(t.Context(), gateway.Credentials{SecretKey: secretKey}); err != nil {
+		t.Fatalf("none made: %v", err)
+	}
+	if err = g.Unprovision(t.Context(), gateway.Credentials{SecretKey: secretKey, WebhookID: "x"}); !errors.Is(err, gateway.ErrRejected) {
+		t.Fatalf("not an endpoint: %v", err)
+	}
+	s.down = true
+	if _, err = g.Provision(t.Context(), gateway.Credentials{SecretKey: secretKey}, url+"2"); err == nil || errors.Is(err, gateway.ErrAuth) {
+		t.Fatalf("Stripe down: %v", err)
+	}
 }

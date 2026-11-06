@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/money"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	platformstripe "github.com/roshbaikfb/iftahonline/internal/platform/stripe"
 	"github.com/roshbaikfb/iftahonline/internal/platform/tenant"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testinfra"
 	"github.com/roshbaikfb/iftahonline/internal/platform/testkit"
@@ -200,39 +204,93 @@ func TestConnect(t *testing.T) {
 	}
 }
 
-// TestConnectStripe: Stripe needs the secret key and the endpoint
-// secret, and no API key; Paymob still needs its API key (ADR-0092).
+// TestConnectStripe: Stripe needs the secret key only, and no API key;
+// Paymob still needs its API key (ADR-0092). Connecting creates the
+// connection's webhook endpoint in the merchant's account, whose secret
+// is kept; a refused endpoint refuses the key; disconnecting deletes the
+// endpoint in a job (ADR-0094).
 func TestConnectStripe(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
+	var mu sync.Mutex
+	endpoints, refuse := map[string]string{}, false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer rk_test_1" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		_ = r.ParseForm()
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/webhook_endpoints":
+			if refuse {
+				w.WriteHeader(http.StatusForbidden) // a restricted key without Webhook Endpoints: Write
+				return
+			}
+			id := "we_" + strconv.Itoa(len(endpoints)+1)
+			endpoints[id] = r.Form.Get("url")
+			_, _ = w.Write([]byte(`{"id":"` + id + `","secret":"whsec_made"}`))
+		case r.Method == http.MethodDelete:
+			delete(endpoints, strings.TrimPrefix(r.URL.Path, "/v1/webhook_endpoints/"))
+			_, _ = w.Write([]byte(`{"deleted":true}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		}
 	}))
 	t.Cleanup(srv.Close)
 	svc := app.NewService(app.Deps{DB: f.pool, IDs: f.ids, Sealer: f.sealer(), Gateways: app.Gateways{
 		stripe.Name: stripe.New(stripe.Options{BaseURL: srv.URL, Client: srv.Client()}),
 		paymob.Name: paymob.New(paymob.Options{BaseURL: "http://127.0.0.1:1"}),
 	}, Orders: f.orders, Jobs: f.jobs, PublicURL: "https://api.example.com"})
-	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, WebhookSecret: "whsec_1"}); !isField(err, "secret_key", "invalid") {
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name}); !isField(err, "secret_key", "invalid") {
 		t.Errorf("no secret key: %v", err)
 	}
-	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_wrong", WebhookSecret: "whsec_1"}); !isField(err, "secret_key", "refused") {
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_wrong"}); !isField(err, "secret_key", "refused") {
 		t.Errorf("a refused key: %v", err)
 	}
 	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: paymob.Name, SecretKey: "sk", PublicKey: "pk", WebhookSecret: "s", IntegrationIDs: []int{1}}); !isField(err, "api_key", "invalid") {
 		t.Errorf("Paymob without its API key: %v", err)
 	}
-	c, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1", WebhookSecret: "whsec_1"})
+	refuse = true
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1"}); !isField(err, "secret_key", "refused") {
+		t.Errorf("a key that may not create endpoints: %v", err)
+	}
+	refuse = false
+	c, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1"})
 	if err != nil || c.Gateway != stripe.Name {
 		t.Fatalf("connect = %+v, %v", c, err)
 	}
 	id, _ := tenant.FromContext(f.ctxB)
-	if u := svc.WebhookURL(id, c); !strings.Contains(u, "/v1/webhooks/stripe/") {
-		t.Errorf("webhook URL = %s", u)
+	u := svc.WebhookURL(id, c)
+	if !strings.Contains(u, "/v1/webhooks/stripe/") || endpoints["we_1"] != u {
+		t.Fatalf("webhook URL = %s, endpoints %v", u, endpoints)
+	}
+	// The endpoint's secret is the connection's: its events verify.
+	body := []byte(`{"id":"evt_1","type":"checkout.session.completed","data":{"object":{"object":"checkout.session","client_reference_id":"01JREF"}}}`)
+	h := http.Header{"Stripe-Signature": {platformstripe.Sign("whsec_made", body, time.Now())}}
+	var prov webhooks.Provider
+	for _, p := range svc.WebhookProviders() {
+		if p.Name() == stripe.Name {
+			prov = p
+		}
+	}
+	if v, vErr := prov.Verify(f.ctxB, c.ID, webhooks.Request{Header: h, Body: body}); vErr != nil || v.EventID != "evt_1" {
+		t.Fatalf("an event of the endpoint = %+v, %v", v, vErr)
+	}
+
+	f.jobs.Args = nil
+	if err = svc.Disconnect(f.ctxB, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if kinds := f.jobs.Kinds(); !slices.Contains(kinds, "payments.unprovision_webhook") {
+		t.Fatalf("jobs = %v", kinds)
+	}
+	if err = svc.Unprovision(f.ctxB, c.ID); err != nil || len(endpoints) != 0 {
+		t.Fatalf("unprovision = %v, endpoints %v", err, endpoints)
+	}
+	if err = svc.Unprovision(f.ctxB, f.ids.New()); err != nil {
+		t.Fatalf("an unknown connection: %v", err)
 	}
 }
 
