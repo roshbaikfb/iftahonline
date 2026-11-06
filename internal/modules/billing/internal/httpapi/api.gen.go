@@ -17,6 +17,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BillingBillingGateway.
+const (
+	BillingBillingGatewayPaymob BillingBillingGateway = "paymob"
+	BillingBillingGatewayStripe BillingBillingGateway = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the BillingBillingGateway enum.
+func (e BillingBillingGateway) Valid() bool {
+	switch e {
+	case BillingBillingGatewayPaymob:
+		return true
+	case BillingBillingGatewayStripe:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingCollection.
 const (
 	BillingCollectionBalance BillingCollection = "balance"
@@ -134,6 +152,24 @@ func (e BillingSwitchOfferOffered) Valid() bool {
 	case BillingSwitchOfferOfferedBalance:
 		return true
 	case BillingSwitchOfferOfferedCard:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BillingBalanceBillingGateway.
+const (
+	BillingBalanceBillingGatewayPaymob BillingBalanceBillingGateway = "paymob"
+	BillingBalanceBillingGatewayStripe BillingBalanceBillingGateway = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the BillingBalanceBillingGateway enum.
+func (e BillingBalanceBillingGateway) Valid() bool {
+	switch e {
+	case BillingBalanceBillingGatewayPaymob:
+		return true
+	case BillingBalanceBillingGatewayStripe:
 		return true
 	default:
 		return false
@@ -437,8 +473,11 @@ func (e PolicySlug) Valid() bool {
 // Billing defines model for Billing.
 type Billing struct {
 	// Agency An agency pays for the store: the platform switches it to pay as you sell (ADR-0087).
-	Agency            *bool `json:"agency,omitempty"`
-	CancelAtPeriodEnd *bool `json:"cancel_at_period_end,omitempty"`
+	Agency *bool `json:"agency,omitempty"`
+
+	// BillingGateway Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one.
+	BillingGateway    *BillingBillingGateway `json:"billing_gateway,omitempty"`
+	CancelAtPeriodEnd *bool                  `json:"cancel_at_period_end,omitempty"`
 
 	// Card The card on file; absent without one.
 	//
@@ -493,6 +532,9 @@ type Billing struct {
 	TrialEndsAt *time.Time `json:"trial_ends_at,omitempty"`
 }
 
+// BillingBillingGateway Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one.
+type BillingBillingGateway string
+
 // BillingCollection How the store's account pays pay-as-you-sell fees; absent until it chooses.
 type BillingCollection string
 
@@ -516,6 +558,9 @@ type BillingBalance struct {
 	// BalanceMinor Negative when fees of delivered orders are owed.
 	BalanceMinor int64 `json:"balance_minor"`
 
+	// BillingGateway Where the store tops up, by its country's payment rule (ADR-0089); absent without one.
+	BillingGateway *BillingBalanceBillingGateway `json:"billing_gateway,omitempty"`
+
 	// Collection The way the store pays its fees; absent until it chooses.
 	Collection *BillingBalanceCollection `json:"collection,omitempty"`
 	Currency   BillingBalanceCurrency    `json:"currency"`
@@ -528,6 +573,9 @@ type BillingBalance struct {
 	// Offered The ways the platform offers now.
 	Offered []BillingBalanceOffered `json:"offered"`
 }
+
+// BillingBalanceBillingGateway Where the store tops up, by its country's payment rule (ADR-0089); absent without one.
+type BillingBalanceBillingGateway string
 
 // BillingBalanceCollection The way the store pays its fees; absent until it chooses.
 type BillingBalanceCollection string

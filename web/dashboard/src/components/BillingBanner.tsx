@@ -2,7 +2,7 @@ import { useEffect, useState, type SubmitEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import { api } from '../api/client';
-import { billingChanged, collectionLabel, dateAr, feeOf, lateText, leave, monthAr, rateText, supportLink, type Billing, type Collection } from '../lib/billing';
+import { billingChanged, collectionLabel, dateAr, feeOf, lateText, leave, monthAr, rateText, supportLink, type Billing, type Collection, payGateway } from '../lib/billing';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { useRole } from '../lib/settings';
@@ -198,7 +198,7 @@ function SwitchDialog({ storeId, billing, onDone, onClose }: { storeId: string; 
                     {w === 'balance'
                       ? 'تشحن رصيدًا، ونخصم رسوم كل طلب عند تسليمه.'
                       : disabled
-                        ? 'لا توجد بطاقة محفوظة: تُحفظ بطاقتك عند أول دفع على صفحة Paymob.'
+                        ? `لا توجد بطاقة محفوظة: تُحفظ بطاقتك عند أول دفع على صفحة ${payGateway(billing.billing_gateway)}.`
                         : 'نسحب الرسوم عندما تبلغ الحد الأدنى أو في آخر الشهر، أيهما أسبق.'}
                   </small>
                 </span>

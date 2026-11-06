@@ -112,7 +112,7 @@ func newFixture(t *testing.T) fixture {
 		Counters: map[domain.Feature]app.Counter{domain.Products: products(f.storeB)}})
 	pol, err := authz.NewPolicy(map[authz.Role][]authz.Permission{
 		authz.RoleOwner:   authz.Permissions(),
-		authz.RoleManager: {authz.PermOrdersRead},
+		authz.RoleManager: {authz.PermOrdersRead, authz.PermStoreRead},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -166,4 +166,39 @@ func TestUsageCrossTenant(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/stores/"+f.storeB.String()+"/usage", nil)
 	r.Header.Set("Authorization", "Bearer "+tokOwnerA)
 	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "getUsage", Request: r, Leaks: []string{"44"}})
+}
+
+func getPath(t *testing.T, h http.Handler, s tenant.StoreID, token, path string) (int, map[string]any) {
+	t.Helper()
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/stores/"+s.String()+path, nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	var body map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	return rec.Code, body
+}
+
+// TestGetPlanFeatures: any member reads what the plan includes, to lock a
+// form before a refusal; the fixture's plan grants no flag and leaves room
+// in every counted feature.
+func TestGetPlanFeatures(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	for _, tok := range []string{tokOwnerA, tokManagerA} {
+		code, body := getPath(t, f.h, f.storeA, tok, "/plan-features")
+		included, _ := body["included"].([]any)
+		full, _ := body["full"].([]any)
+		if code != http.StatusOK || included == nil || len(included) != 0 || full == nil || len(full) != 0 {
+			t.Fatalf("plan features = %d %v", code, body)
+		}
+	}
+}
+
+func TestPlanFeaturesCrossTenant(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/stores/"+f.storeB.String()+"/plan-features", nil)
+	r.Header.Set("Authorization", "Bearer "+tokOwnerA)
+	testkit.AssertCrossTenantDenied(t, &crossTenant, f.h, testkit.CrossTenantCase{OperationID: "getPlanFeatures", Request: r})
 }

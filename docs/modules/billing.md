@@ -368,6 +368,14 @@ platform provider):
 - **Agencies** are created in their country's currency: EGP in Egypt,
   USD elsewhere, with the country.
 
+## Where the store pays (D1, 2026-11-06)
+
+`GET /v1/stores/{id}/billing` and `…/billing/balance` carry
+`billing_gateway` (paymob or stripe): the payment rule of the account's
+country, or the store's before it has an account (ADR-0089). The
+dashboard names that gateway in its card and top-up texts; it no longer
+assumes Paymob.
+
 ## Tax on the plans (ADR-0094)
 
 The merchant's plans (`GET /v1/stores/{id}/billing/plans`) carry

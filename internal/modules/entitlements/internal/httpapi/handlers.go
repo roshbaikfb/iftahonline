@@ -65,3 +65,23 @@ func (h *Handlers) GetUsage(ctx context.Context, _ GetUsageRequestObject) (GetUs
 	}
 	return out, nil
 }
+
+// GetPlanFeatures implements StrictServerInterface: any member reads what
+// the plan includes, so the dashboard locks a form before a refusal.
+func (h *Handlers) GetPlanFeatures(ctx context.Context, _ GetPlanFeaturesRequestObject) (GetPlanFeaturesResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermStoreRead); err != nil {
+		return nil, err
+	}
+	pf, err := h.svc.PlanFeatures(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := GetPlanFeatures200JSONResponse{Included: make([]PlanFeaturesIncluded, len(pf.Included)), Full: make([]PlanFeaturesFull, len(pf.Full))}
+	for i, f := range pf.Included {
+		out.Included[i] = PlanFeaturesIncluded(f)
+	}
+	for i, f := range pf.Full {
+		out.Full[i] = PlanFeaturesFull(f)
+	}
+	return out, nil
+}

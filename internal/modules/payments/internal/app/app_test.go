@@ -253,7 +253,9 @@ func TestConnectStripe(t *testing.T) {
 		t.Errorf("Paymob without its API key: %v", err)
 	}
 	refuse = true
-	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1"}); !isField(err, "secret_key", "refused") {
+	// The key works, but may not make the endpoint: said apart from a
+	// refused key, so the merchant knows which permission to add.
+	if _, err := svc.Connect(f.ctxB, app.ConnectInput{Gateway: stripe.Name, SecretKey: "rk_test_1"}); !isField(err, "secret_key", "webhook_refused") {
 		t.Errorf("a key that may not create endpoints: %v", err)
 	}
 	refuse = false

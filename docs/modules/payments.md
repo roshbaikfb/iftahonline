@@ -114,6 +114,9 @@ The return URL must be an http(s) URL on a host of the same store
     platform creates the connection's webhook endpoint in the merchant's
     account and keeps its secret (`gateway.Provisioner`, ADR-0094);
     disconnecting deletes it (`payments.unprovision_webhook`).
+  - A key that works but may not make the endpoint is a validation error
+    `secret_key` `webhook_refused`, apart from a refused key (`refused`),
+    so the merchant knows to add "Webhook Endpoints: Write".
   - Unverified until the sandbox run:
     `STRIPE_SANDBOX_SECRET_KEY=… STRIPE_SANDBOX_WEBHOOK_SECRET=… go test ./internal/modules/payments/internal/gateway/stripe/`.
 - **By country** (ADR-0093): a store lists and connects only the

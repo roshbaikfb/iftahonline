@@ -30,27 +30,81 @@ func (e MessageTextKind) Valid() bool {
 	}
 }
 
+// Defines values for PlanFeaturesFull.
+const (
+	PlanFeaturesFullCustomDomains PlanFeaturesFull = "custom_domains"
+	PlanFeaturesFullProducts      PlanFeaturesFull = "products"
+	PlanFeaturesFullStaff         PlanFeaturesFull = "staff"
+)
+
+// Valid indicates whether the value is a known member of the PlanFeaturesFull enum.
+func (e PlanFeaturesFull) Valid() bool {
+	switch e {
+	case PlanFeaturesFullCustomDomains:
+		return true
+	case PlanFeaturesFullProducts:
+		return true
+	case PlanFeaturesFullStaff:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlanFeaturesIncluded.
+const (
+	AdFree       PlanFeaturesIncluded = "ad_free"
+	CardPayments PlanFeaturesIncluded = "card_payments"
+	Coupons      PlanFeaturesIncluded = "coupons"
+	Feeds        PlanFeaturesIncluded = "feeds"
+	Pixels       PlanFeaturesIncluded = "pixels"
+	Profit       PlanFeaturesIncluded = "profit"
+	RiskRules    PlanFeaturesIncluded = "risk_rules"
+)
+
+// Valid indicates whether the value is a known member of the PlanFeaturesIncluded enum.
+func (e PlanFeaturesIncluded) Valid() bool {
+	switch e {
+	case AdFree:
+		return true
+	case CardPayments:
+		return true
+	case Coupons:
+		return true
+	case Feeds:
+		return true
+	case Pixels:
+		return true
+	case Profit:
+		return true
+	case RiskRules:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UsageMeterFeature.
 const (
-	CustomDomains  UsageMeterFeature = "custom_domains"
-	Messages       UsageMeterFeature = "messages"
-	OrdersPerMonth UsageMeterFeature = "orders_per_month"
-	Products       UsageMeterFeature = "products"
-	Staff          UsageMeterFeature = "staff"
+	UsageMeterFeatureCustomDomains  UsageMeterFeature = "custom_domains"
+	UsageMeterFeatureMessages       UsageMeterFeature = "messages"
+	UsageMeterFeatureOrdersPerMonth UsageMeterFeature = "orders_per_month"
+	UsageMeterFeatureProducts       UsageMeterFeature = "products"
+	UsageMeterFeatureStaff          UsageMeterFeature = "staff"
 )
 
 // Valid indicates whether the value is a known member of the UsageMeterFeature enum.
 func (e UsageMeterFeature) Valid() bool {
 	switch e {
-	case CustomDomains:
+	case UsageMeterFeatureCustomDomains:
 		return true
-	case Messages:
+	case UsageMeterFeatureMessages:
 		return true
-	case OrdersPerMonth:
+	case UsageMeterFeatureOrdersPerMonth:
 		return true
-	case Products:
+	case UsageMeterFeatureProducts:
 		return true
-	case Staff:
+	case UsageMeterFeatureStaff:
 		return true
 	default:
 		return false
@@ -108,6 +162,21 @@ type FieldError struct {
 
 // MessageTextKind The kinds whose SMS text a store writes.
 type MessageTextKind string
+
+// PlanFeatures defines model for PlanFeatures.
+type PlanFeatures struct {
+	// Full The counted features with no room for one more.
+	Full []PlanFeaturesFull `json:"full"`
+
+	// Included The on/off features the store's plan grants.
+	Included []PlanFeaturesIncluded `json:"included"`
+}
+
+// PlanFeaturesFull defines model for PlanFeatures.Full.
+type PlanFeaturesFull string
+
+// PlanFeaturesIncluded defines model for PlanFeatures.Included.
+type PlanFeaturesIncluded string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -202,6 +271,9 @@ type VariantID = ULID
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetPlanFeatures What the store's plan includes, for locking forms before a refusal
+	// (GET /v1/stores/{store_id}/plan-features)
+	GetPlanFeatures(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// GetUsage The store's usage against what it is granted
 	// (GET /v1/stores/{store_id}/usage)
 	GetUsage(w http.ResponseWriter, r *http.Request, storeId StoreID)
@@ -215,6 +287,32 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetPlanFeatures operation middleware
+func (siw *ServerInterfaceWrapper) GetPlanFeatures(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlanFeatures(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetUsage operation middleware
 func (siw *ServerInterfaceWrapper) GetUsage(w http.ResponseWriter, r *http.Request) {
@@ -362,12 +460,52 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/plan-features", wrapper.GetPlanFeatures)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/usage", wrapper.GetUsage)
 
 	return m
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type GetPlanFeaturesRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type GetPlanFeaturesResponseObject interface {
+	VisitGetPlanFeaturesResponse(w http.ResponseWriter) error
+}
+
+type GetPlanFeatures200JSONResponse PlanFeatures
+
+func (response GetPlanFeatures200JSONResponse) VisitGetPlanFeaturesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlanFeaturesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPlanFeaturesdefaultApplicationProblemPlusJSONResponse) VisitGetPlanFeaturesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetUsageRequestObject struct {
 	StoreId StoreID `json:"store_id"`
@@ -410,6 +548,9 @@ func (response GetUsagedefaultApplicationProblemPlusJSONResponse) VisitGetUsageR
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetPlanFeatures What the store's plan includes, for locking forms before a refusal
+	// (GET /v1/stores/{store_id}/plan-features)
+	GetPlanFeatures(ctx context.Context, request GetPlanFeaturesRequestObject) (GetPlanFeaturesResponseObject, error)
 	// GetUsage The store's usage against what it is granted
 	// (GET /v1/stores/{store_id}/usage)
 	GetUsage(ctx context.Context, request GetUsageRequestObject) (GetUsageResponseObject, error)
@@ -452,6 +593,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetPlanFeatures operation middleware
+func (sh *strictHandler) GetPlanFeatures(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request GetPlanFeaturesRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlanFeatures(ctx, request.(GetPlanFeaturesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlanFeatures")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlanFeaturesResponseObject); ok {
+		if err := validResponse.VisitGetPlanFeaturesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetUsage operation middleware

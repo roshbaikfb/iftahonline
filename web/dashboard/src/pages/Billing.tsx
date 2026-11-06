@@ -19,6 +19,7 @@ import {
   type Billing as BillingData,
   type BillingPlans,
   type UsageMeter,
+  payGateway,
 } from '../lib/billing';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
@@ -246,9 +247,11 @@ export function Billing() {
                 <span className="muted small">نسحب منها التجديد تلقائيًا</span>
               </div>
             ) : (
-              <p className="muted">لا توجد بطاقة محفوظة. تُحفظ بطاقتك عند أول دفع على صفحة Paymob.</p>
+              <p className="muted">لا توجد بطاقة محفوظة. تُحفظ بطاقتك عند أول دفع على صفحة {payGateway(billing.billing_gateway)}.</p>
             )}
-            <p className="muted small">بيانات البطاقة عند Paymob فقط؛ لا تمر على خوادمنا. لتغييرها ادفع فاتورتك القادمة ببطاقة أخرى.</p>
+            <p className="muted small">
+              بيانات البطاقة عند {payGateway(billing.billing_gateway)} فقط؛ لا تمر على خوادمنا. لتغييرها ادفع فاتورتك القادمة ببطاقة أخرى.
+            </p>
             <p className="muted small">تفضّل التحويل البنكي؟ تواصل معنا وسنؤكد الدفع يدويًا.</p>
           </section>
         </div>
@@ -265,7 +268,7 @@ export function Billing() {
               <div key={m.feature}>
                 <div className="bill-meter-head">
                   <span>{meterLabel[m.feature]}</span>
-                  <strong className={meterLevel(m) === 'ok' ? '' : 'warn'}>{meterText(m)}</strong>
+                  <strong className={meterLevel(m) === 'nearly' || meterLevel(m) === 'reached' ? 'warn' : ''}>{meterText(m)}</strong>
                 </div>
                 <div
                   className={`meter ${meterLevel(m)}`}

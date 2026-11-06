@@ -72,6 +72,10 @@ func (h *Handlers) summary(ctx context.Context) (Billing, error) {
 func toBilling(s app.Summary) Billing {
 	out := Billing{PlanNameAr: s.PlanNameAr, PlanNameEn: s.PlanNameEn, Status: BillingStatus(s.Status),
 		OpenInvoices: make([]OpenInvoice, len(s.OpenInvoices))}
+	if s.Gateway != "" {
+		g := BillingBillingGateway(s.Gateway)
+		out.BillingGateway = &g
+	}
 	if s.Cycle != "" {
 		c := BillingCycle(s.Cycle)
 		out.Cycle = &c

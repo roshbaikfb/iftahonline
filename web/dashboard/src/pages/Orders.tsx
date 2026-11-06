@@ -8,6 +8,7 @@ import {
   dayStart,
   money,
   paymentPill,
+  phoneExample,
   selectedLabel,
   statusLabel,
   statuses,
@@ -69,6 +70,17 @@ async function fetchPage(storeId: string, q: ListQuery): Promise<Page> {
 // that appears; the current filter exports as CSV.
 export function Orders() {
   const { storeId = '' } = useParams();
+  // The phone search's hint follows the store's country.
+  const [country, setCountry] = useState<string | undefined>();
+  useEffect(() => {
+    let live = true;
+    void api.GET('/v1/stores/{store_id}', { params: { path: { store_id: storeId } } }).then(({ data }) => {
+      if (live && data) setCountry(data.country);
+    });
+    return () => {
+      live = false;
+    };
+  }, [storeId]);
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<Order[]>([]);
   const [next, setNext] = useState<string | undefined>();
@@ -246,7 +258,7 @@ export function Orders() {
       <form className="filters" onSubmit={applyFilters} aria-label="تصفية الطلبات" key={paramsKey}>
         <label className="grow">
           رقم الموبايل
-          <input name="phone" type="tel" defaultValue={params.get('phone') ?? ''} dir="ltr" placeholder="01012345678" />
+          <input name="phone" type="tel" defaultValue={params.get('phone') ?? ''} dir="ltr" placeholder={phoneExample(country)} />
         </label>
         <label>
           من

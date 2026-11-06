@@ -3,7 +3,9 @@ import { useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { dateTime } from '../lib/orders';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { domainStatus, failureReasons, maxCustomDomains, useRole } from '../lib/settings';
 
@@ -16,6 +18,7 @@ type Routing = components['schemas']['DomainRouting'];
 // store; one of the working ones is the main address.
 export function Domains() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'custom_domains');
   const role = useRole(storeId);
   const manage = role === 'owner' || role === 'manager'; // domains.manage
   const [domains, setDomains] = useState<Domain[] | null>(null);
@@ -119,6 +122,7 @@ export function Domains() {
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="custom_domains" full />}
       {!domains ? (
         !error && <p role="status">جارٍ التحميل…</p>
       ) : (
@@ -195,7 +199,7 @@ export function Domains() {
                     }}
                   />
                 </label>
-                <button type="submit" className="primary" disabled={busy !== '' || !host.trim()}>
+                <button type="submit" className="primary" disabled={busy !== '' || !host.trim() || locked}>
                   {busy === 'add' ? 'جارٍ الإضافة…' : 'أضف'}
                 </button>
               </form>

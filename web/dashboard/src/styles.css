@@ -5683,3 +5683,38 @@ td.plus {
 .cod-card h2 {
   margin: 0;
 }
+
+/* A form the store's plan rules out, said before the merchant fills it. */
+.plan-lock {
+  margin-block-end: 1rem;
+}
+.plan-lock a {
+  font-weight: 700;
+}
+
+/* A segmented choice ("30 يومًا") stays on one line. */
+.segmented button {
+  white-space: nowrap;
+}
+
+/* Stripe's key permissions, one per line (the gateways page). */
+.perm-list {
+  margin: 0.35rem 0 0;
+  padding-inline-start: 1.1rem;
+  display: grid;
+  gap: 0.15rem;
+}
+.perm-list bdi {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+/* The gateways page gives the connect form room for Stripe's steps. */
+.split.gateways-split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+}
+@media (max-width: 56rem) {
+  .split.gateways-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

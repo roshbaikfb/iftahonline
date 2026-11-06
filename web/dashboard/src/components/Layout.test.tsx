@@ -66,7 +66,7 @@ describe('Layout', () => {
     // an order's page belongs to the orders screen
     expect(within(nav).getByRole('link', { name: 'الطلبات' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'الشحنات' })).not.toHaveAttribute('aria-current');
-    expect(within(nav).getByRole('link', { name: 'الدفع بالبطاقة' })).toHaveAttribute('href', `/stores/${a}/gateways`);
+    expect(within(nav).getByRole('link', { name: 'طرق الدفع' })).toHaveAttribute('href', `/stores/${a}/gateways`);
     expect(within(nav).getByRole('link', { name: 'العملاء' })).toHaveAttribute('href', `/stores/${a}/customers`);
     expect(within(nav).getByRole('link', { name: 'التصميم' })).toHaveAttribute('href', `/stores/${a}/design`);
     expect(within(nav).getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', `/stores/${a}/home-page`);

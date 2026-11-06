@@ -201,6 +201,40 @@ describe('Gateways', () => {
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ gateway: 'stripe', secret_key: 'rk_live_1' });
   });
 
+  it('says in Arabic why Stripe was refused, and locks a plan without card payments (D1)', async () => {
+    mockAPI({
+      ...storeRoute,
+      [`GET ${base}/payments/gateways`]: () => ({ status: 200, body: { gateways: ['stripe'], connections: [] } }),
+      [`GET ${base}/plan-features`]: () => ({ status: 200, body: { included: [], full: [] } }),
+      [`POST ${base}/payments/gateways`]: () => ({
+        status: 422,
+        body: { title: 'Unprocessable', status: 422, errors: [{ field: 'secret_key', code: 'webhook_refused', message: 'the key works, but…' }] },
+      }),
+    });
+    renderAt(`/stores/${store}/gateways`);
+    expect(await screen.findByRole('heading', { name: 'طرق الدفع' })).toBeInTheDocument();
+    expect(await screen.findByRole('note')).toHaveTextContent('باقتك الحالية لا تشمل الدفع بالبطاقة.');
+    expect(screen.getByRole('button', { name: 'اربط Stripe' })).toBeDisabled();
+    expect(screen.getByText('Developers › API keys › Create restricted key')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toContain('Webhook Endpoints: Write');
+  });
+
+  it('says a Stripe key that may not make the endpoint apart from a refused key (D1)', async () => {
+    mockAPI({
+      ...storeRoute,
+      [`GET ${base}/payments/gateways`]: () => ({ status: 200, body: { gateways: ['stripe'], connections: [] } }),
+      [`POST ${base}/payments/gateways`]: () => ({
+        status: 422,
+        body: { title: 'Unprocessable', status: 422, errors: [{ field: 'secret_key', code: 'webhook_refused', message: 'the key works, but…' }] },
+      }),
+    });
+    renderAt(`/stores/${store}/gateways`);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/المفتاح المحدود/), 'rk_live_1');
+    await user.click(screen.getByRole('button', { name: 'اربط Stripe' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('قَبِل Stripe المفتاح، لكنه رفض إنشاء رابط الإشعارات');
+  });
+
   it('refuses integration IDs that are not numbers', async () => {
     const calls = mockAPI({
       ...storeRoute,

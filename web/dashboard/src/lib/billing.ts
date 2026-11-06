@@ -83,23 +83,27 @@ export const meterNote: Record<UsageMeter['feature'], string> = {
   custom_domains: '',
 };
 
-export type Level = 'ok' | 'nearly' | 'reached';
+// none: the plan does not include the feature at all (a limit of 0),
+// which is no warning.
+export type Level = 'ok' | 'nearly' | 'reached' | 'none';
 
 // meterLevel warns at 80% and at the limit, as the notices do.
 export function meterLevel(m: UsageMeter): Level {
   if (m.unlimited || m.limit === undefined) return 'ok';
-  if (m.used >= m.limit) return 'reached'; // a limit of 0 is reached from the start
+  if (m.limit === 0) return 'none';
+  if (m.used >= m.limit) return 'reached';
   return m.used / m.limit >= 0.8 ? 'nearly' : 'ok';
 }
 
 export function meterText(m: UsageMeter): string {
   if (m.unlimited || m.limit === undefined) return `${count(m.used)} / بلا حد`;
+  if (m.limit === 0) return 'غير متاحة في باقتك';
   return `${count(m.used)} / ${count(m.limit)}`;
 }
 
 export function meterPercent(m: UsageMeter): number {
   if (m.unlimited || m.limit === undefined) return 0;
-  if (m.limit === 0) return 100;
+  if (m.limit === 0) return 0;
   return Math.min(100, Math.round((m.used / m.limit) * 100));
 }
 
@@ -222,5 +226,14 @@ export const billingChanged = 'billing:changed';
 // taxNote is what a paid plan's price is before: the store's country's
 // tax (ADR-0089); "" without one.
 export function taxNote(bps: number): string {
-  return bps > 0 ? `قبل ضريبة القيمة المضافة (${(bps / 100).toLocaleString('en-US')}%)` : '';
+  // The rate is isolated left-to-right (LRI … PDI): in Arabic text "15%"
+  // would otherwise show as "%15".
+  return bps > 0 ? `قبل ضريبة القيمة المضافة (\u2066${(bps / 100).toLocaleString('en-US')}%\u2069)` : '';
+}
+
+// payGateway names where the store pays the platform (ADR-0089): Stripe
+// outside Egypt, Paymob in it. Older answers without the field are
+// Paymob's.
+export function payGateway(g: string | undefined): string {
+  return g === 'stripe' ? 'Stripe' : 'Paymob';
 }
