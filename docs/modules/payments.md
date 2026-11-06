@@ -110,8 +110,10 @@ The return URL must be an http(s) URL on a host of the same store
     and latest charge; refunds from `/v1/refunds`.
   - Webhooks carry `Stripe-Signature` (HMAC-SHA256 with the endpoint's
     `whsec_`), for the `checkout.session.*` events.
-  - Keys: the secret or restricted key and the endpoint secret, no API
-    key (`gateway.KeysNeeded`).
+  - Keys: the secret or restricted key only (`gateway.KeysNeeded`). The
+    platform creates the connection's webhook endpoint in the merchant's
+    account and keeps its secret (`gateway.Provisioner`, ADR-0094);
+    disconnecting deletes it (`payments.unprovision_webhook`).
   - Unverified until the sandbox run:
     `STRIPE_SANDBOX_SECRET_KEY=… STRIPE_SANDBOX_WEBHOOK_SECRET=… go test ./internal/modules/payments/internal/gateway/stripe/`.
 - **By country** (ADR-0093): a store lists and connects only the
