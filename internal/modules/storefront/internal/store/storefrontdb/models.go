@@ -1378,6 +1378,17 @@ type UserSession struct {
 	ReadOnly       bool
 }
 
+type UserToken struct {
+	ID        ulid.ID
+	UserID    ulid.ID
+	Purpose   string
+	TokenHash []byte
+	Email     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    pgtype.Timestamptz
+}
+
 type Variant struct {
 	ID             ulid.ID
 	StoreID        ulid.ID

@@ -257,6 +257,12 @@ func (s *Service) joinTx(ctx context.Context, tx pgx.Tx, inv store.Invitation, u
 		if err != nil {
 			return AcceptResult{}, err
 		}
+		// The invitation's link reached this address: it is confirmed (D3).
+		if _, err = store.SetEmailVerified(ctx, tx, created.ID, created.Email); err != nil {
+			return AcceptResult{}, err
+		}
+		now := s.now()
+		created.EmailVerifiedAt = &now
 		user = created
 	}
 	err := store.AddMember(ctx, tx, user.ID, inv.Role)

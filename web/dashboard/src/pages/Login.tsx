@@ -65,10 +65,13 @@ export function Login() {
                 البريد الإلكتروني
                 <input name="email" type="email" autoComplete="username" required dir="ltr" />
               </label>
-              <label>
-                كلمة المرور
-                <input name="password" type="password" autoComplete="current-password" required dir="ltr" />
-              </label>
+              <div className="field">
+                <div className="label-row">
+                  <label htmlFor="login-password">كلمة المرور</label>
+                  <Link to="/forgot-password">نسيت كلمة المرور؟</Link>
+                </div>
+                <input id="login-password" name="password" type="password" autoComplete="current-password" required dir="ltr" />
+              </div>
             </>
           ) : (
             <label>

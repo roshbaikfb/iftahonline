@@ -296,6 +296,121 @@ paths:
               schema: { $ref: "#/components/schemas/MFARequired" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/auth/password/forgot:
+    post:
+      tags: [identity]
+      operationId: forgotPassword
+      summary: Email a link to set a new password
+      description: |
+        D3. When the email has an active account, a link that works once,
+        for an hour, is emailed (a newer one replaces it). The answer is the
+        same either way, so it never says whether an email has an account.
+        Limited per IP and to one email a minute per address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, maxLength: 254 }
+      responses:
+        "202":
+          description: Accepted; a link was sent if the email has an account.
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/password/reset:
+    post:
+      tags: [identity]
+      operationId: resetPassword
+      summary: Set a new password from the emailed link
+      description: |
+        D3. The link (the fragment of `/reset-password#…`) is used once.
+        Every session is signed out and the user is emailed. Then it signs
+        in like a login: 202 asks for the second factor when the account
+        has one. A used, replaced or expired link is 404 link_not_found.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, maxLength: 64 }
+                password: { type: string, maxLength: 128, format: password }
+                client: { $ref: "#/components/schemas/ClientKind" }
+      responses:
+        "200":
+          description: Password set; signed in.
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "202":
+          description: Password set; complete sign-in with `POST /v1/auth/mfa`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFARequired" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/password/reset/check:
+    post:
+      tags: [identity]
+      operationId: checkResetLink
+      summary: Check a reset link before asking for the new password
+      description: |
+        D3. Answers the email the open link is for (the page shows it, and a
+        password manager files the new password under it) without using the
+        link. A used, replaced or expired link is 404 link_not_found.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: The link is open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkEmail" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/auth/email/verify:
+    post:
+      tags: [identity]
+      operationId: verifyEmail
+      summary: Confirm an email from the emailed link
+      description: |
+        D3. No session needed: the link may open in another browser. A
+        used, replaced or expired link is 404 link_not_found.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: Confirmed; the email confirmed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkEmail" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/auth/mfa:
     post:
       tags: [identity]
@@ -488,6 +603,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/email/verification:
+    post:
+      tags: [identity]
+      operationId: sendEmailVerification
+      summary: Email the signed-in user a link confirming their email
+      description: |
+        D3. Nothing when the email is confirmed already. One a minute
+        (429 sooner). The link works for two days.
+      responses:
+        "202":
+          description: Sent (or confirmed already).
         default:
           $ref: "#/components/responses/Problem"
   /v1/me/phone:
@@ -6363,6 +6491,12 @@ components:
         name: { type: string, maxLength: 100, description: For a new account. }
         password: { type: string, maxLength: 128, format: password, description: For a new account. }
         client: { $ref: "#/components/schemas/ClientKind" }
+    LinkEmail:
+      type: object
+      description: The email a one-time link (D3) is for.
+      required: [email]
+      properties:
+        email: { type: string }
     InvitationPreview:
       type: object
       required: [store_name, role, email, expires_at, has_account]

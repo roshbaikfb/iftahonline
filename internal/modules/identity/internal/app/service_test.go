@@ -67,6 +67,7 @@ func testLimits() app.Limits {
 		OTPPerPhoneDay:   ratelimit.Limit{Burst: 10, Period: 24 * time.Hour},
 		OTPPerIP:         ratelimit.Limit{Burst: 10, Period: time.Hour},
 		MFAFailPerUser:   ratelimit.Limit{Burst: 10, Period: time.Hour},
+		LinksPerEmail:    ratelimit.Limit{Burst: 2, Period: time.Hour},
 	}
 }
 

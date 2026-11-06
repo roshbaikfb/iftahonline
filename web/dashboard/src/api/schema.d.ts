@@ -107,6 +107,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a link to set a new password
+         * @description D3. When the email has an active account, a link that works once,
+         *     for an hour, is emailed (a newer one replaces it). The answer is the
+         *     same either way, so it never says whether an email has an account.
+         *     Limited per IP and to one email a minute per address.
+         */
+        post: operations["forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password from the emailed link
+         * @description D3. The link (the fragment of `/reset-password#…`) is used once.
+         *     Every session is signed out and the user is emailed. Then it signs
+         *     in like a login: 202 asks for the second factor when the account
+         *     has one. A used, replaced or expired link is 404 link_not_found.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password/reset/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a reset link before asking for the new password
+         * @description D3. Answers the email the open link is for (the page shows it, and a
+         *     password manager files the new password under it) without using the
+         *     link. A used, replaced or expired link is 404 link_not_found.
+         */
+        post: operations["checkResetLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an email from the emailed link
+         * @description D3. No session needed: the link may open in another browser. A
+         *     used, replaced or expired link is 404 link_not_found.
+         */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/mfa": {
         parameters: {
             query?: never;
@@ -281,6 +370,27 @@ export interface paths {
         get: operations["getMe"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/email/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email the signed-in user a link confirming their email
+         * @description D3. Nothing when the email is confirmed already. One a minute
+         *     (429 sooner). The link works for two days.
+         */
+        post: operations["sendEmailVerification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5445,6 +5555,10 @@ export interface components {
             password?: string;
             client?: components["schemas"]["ClientKind"];
         };
+        /** @description The email a one-time link (D3) is for. */
+        LinkEmail: {
+            email: string;
+        };
         InvitationPreview: {
             store_name: string;
             /** @description Who invited; absent when that account is gone. */
@@ -9007,6 +9121,125 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted; a link was sent if the email has an account. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    /** Format: password */
+                    password: string;
+                    client?: components["schemas"]["ClientKind"];
+                };
+            };
+        };
+        responses: {
+            /** @description Password set; signed in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Password set; complete sign-in with `POST /v1/auth/mfa`. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MFARequired"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    checkResetLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The link is open. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkEmail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Confirmed; the email confirmed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkEmail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     verifyMFA: {
         parameters: {
             query?: never;
@@ -9231,6 +9464,25 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    sendEmailVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent (or confirmed already). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

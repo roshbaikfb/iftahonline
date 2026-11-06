@@ -394,6 +394,11 @@ type InvitationPreview struct {
 	StoreName   string  `json:"store_name"`
 }
 
+// LinkEmail The email a one-time link (D3) is for.
+type LinkEmail struct {
+	Email string `json:"email"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// Client `mobile` returns the session token in the body instead of a cookie.
@@ -668,6 +673,29 @@ type StoreID = ULID
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
 
+// VerifyEmailJSONBody defines parameters for VerifyEmail.
+type VerifyEmailJSONBody struct {
+	Token string `json:"token"`
+}
+
+// ForgotPasswordJSONBody defines parameters for ForgotPassword.
+type ForgotPasswordJSONBody struct {
+	Email string `json:"email"`
+}
+
+// ResetPasswordJSONBody defines parameters for ResetPassword.
+type ResetPasswordJSONBody struct {
+	// Client `mobile` returns the session token in the body instead of a cookie.
+	Client   *ClientKind `json:"client,omitempty"`
+	Password string      `json:"password"`
+	Token    string      `json:"token"`
+}
+
+// CheckResetLinkJSONBody defines parameters for CheckResetLink.
+type CheckResetLinkJSONBody struct {
+	Token string `json:"token"`
+}
+
 // CheckSlugAvailabilityParams defines parameters for CheckSlugAvailability.
 type CheckSlugAvailabilityParams struct {
 	Slug string `form:"slug" json:"slug"`
@@ -685,6 +713,9 @@ type ListAuditLogParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
+type VerifyEmailJSONRequestBody VerifyEmailJSONBody
+
 // ExchangeImpersonationJSONRequestBody defines body for ExchangeImpersonation for application/json ContentType.
 type ExchangeImpersonationJSONRequestBody = ImpersonationExchange
 
@@ -699,6 +730,15 @@ type StartOTPLoginJSONRequestBody = PhoneRequest
 
 // VerifyOTPLoginJSONRequestBody defines body for VerifyOTPLogin for application/json ContentType.
 type VerifyOTPLoginJSONRequestBody = CodeVerifyRequest
+
+// ForgotPasswordJSONRequestBody defines body for ForgotPassword for application/json ContentType.
+type ForgotPasswordJSONRequestBody ForgotPasswordJSONBody
+
+// ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
+type ResetPasswordJSONRequestBody ResetPasswordJSONBody
+
+// CheckResetLinkJSONRequestBody defines body for CheckResetLink for application/json ContentType.
+type CheckResetLinkJSONRequestBody CheckResetLinkJSONBody
 
 // SignupJSONRequestBody defines body for Signup for application/json ContentType.
 type SignupJSONRequestBody = SignupRequest
@@ -729,6 +769,9 @@ type UpdateMemberRoleJSONRequestBody = MemberRoleUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// VerifyEmail Confirm an email from the emailed link
+	// (POST /v1/auth/email/verify)
+	VerifyEmail(w http.ResponseWriter, r *http.Request)
 	// ExchangeImpersonation Exchange a console's one-time code for its support session
 	// (POST /v1/auth/impersonation)
 	ExchangeImpersonation(w http.ResponseWriter, r *http.Request)
@@ -747,6 +790,15 @@ type ServerInterface interface {
 	// VerifyOTPLogin Sign in with the code from the phone
 	// (POST /v1/auth/otp/verify)
 	VerifyOTPLogin(w http.ResponseWriter, r *http.Request)
+	// ForgotPassword Email a link to set a new password
+	// (POST /v1/auth/password/forgot)
+	ForgotPassword(w http.ResponseWriter, r *http.Request)
+	// ResetPassword Set a new password from the emailed link
+	// (POST /v1/auth/password/reset)
+	ResetPassword(w http.ResponseWriter, r *http.Request)
+	// CheckResetLink Check a reset link before asking for the new password
+	// (POST /v1/auth/password/reset/check)
+	CheckResetLink(w http.ResponseWriter, r *http.Request)
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(w http.ResponseWriter, r *http.Request)
@@ -762,6 +814,9 @@ type ServerInterface interface {
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// SendEmailVerification Email the signed-in user a link confirming their email
+	// (POST /v1/me/email/verification)
+	SendEmailVerification(w http.ResponseWriter, r *http.Request)
 	// SetupTOTP Start two-factor enrolment
 	// (POST /v1/me/mfa/totp)
 	SetupTOTP(w http.ResponseWriter, r *http.Request)
@@ -814,6 +869,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// VerifyEmail operation middleware
+func (siw *ServerInterfaceWrapper) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyEmail(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ExchangeImpersonation operation middleware
 func (siw *ServerInterfaceWrapper) ExchangeImpersonation(w http.ResponseWriter, r *http.Request) {
@@ -890,6 +959,48 @@ func (siw *ServerInterfaceWrapper) VerifyOTPLogin(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyOTPLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ForgotPassword operation middleware
+func (siw *ServerInterfaceWrapper) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ForgotPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetPassword operation middleware
+func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckResetLink operation middleware
+func (siw *ServerInterfaceWrapper) CheckResetLink(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckResetLink(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -979,6 +1090,20 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendEmailVerification operation middleware
+func (siw *ServerInterfaceWrapper) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendEmailVerification(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1458,6 +1583,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/signup", wrapper.Signup)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/login", wrapper.Login)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/forgot", wrapper.ForgotPassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/reset", wrapper.ResetPassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/reset/check", wrapper.CheckResetLink)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/email/verify", wrapper.VerifyEmail)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/mfa", wrapper.VerifyMFA)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/start", wrapper.StartOTPLogin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/verify", wrapper.VerifyOTPLogin)
@@ -1467,6 +1596,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/impersonation", wrapper.ExchangeImpersonation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/email/verification", wrapper.SendEmailVerification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone", wrapper.StartPhoneVerification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone/verify", wrapper.VerifyPhone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/mfa/totp", wrapper.SetupTOTP)
@@ -1486,6 +1616,45 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type VerifyEmailRequestObject struct {
+	Body *VerifyEmailJSONRequestBody
+}
+
+type VerifyEmailResponseObject interface {
+	VisitVerifyEmailResponse(w http.ResponseWriter) error
+}
+
+type VerifyEmail200JSONResponse LinkEmail
+
+func (response VerifyEmail200JSONResponse) VisitVerifyEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyEmaildefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response VerifyEmaildefaultApplicationProblemPlusJSONResponse) VisitVerifyEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ExchangeImpersonationRequestObject struct {
 	Body *ExchangeImpersonationJSONRequestBody
@@ -1782,6 +1951,141 @@ func (response VerifyOTPLogindefaultApplicationProblemPlusJSONResponse) VisitVer
 	return err
 }
 
+type ForgotPasswordRequestObject struct {
+	Body *ForgotPasswordJSONRequestBody
+}
+
+type ForgotPasswordResponseObject interface {
+	VisitForgotPasswordResponse(w http.ResponseWriter) error
+}
+
+type ForgotPassword202Response struct {
+}
+
+func (response ForgotPassword202Response) VisitForgotPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ForgotPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ForgotPassworddefaultApplicationProblemPlusJSONResponse) VisitForgotPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetPasswordRequestObject struct {
+	Body *ResetPasswordJSONRequestBody
+}
+
+type ResetPasswordResponseObject interface {
+	VisitResetPasswordResponse(w http.ResponseWriter) error
+}
+
+type ResetPassword200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type ResetPassword200JSONResponse struct {
+	Body    AuthResponse
+	Headers ResetPassword200ResponseHeaders
+}
+
+func (response ResetPassword200JSONResponse) VisitResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetPassword202JSONResponse MFARequired
+
+func (response ResetPassword202JSONResponse) VisitResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResetPassworddefaultApplicationProblemPlusJSONResponse) VisitResetPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckResetLinkRequestObject struct {
+	Body *CheckResetLinkJSONRequestBody
+}
+
+type CheckResetLinkResponseObject interface {
+	VisitCheckResetLinkResponse(w http.ResponseWriter) error
+}
+
+type CheckResetLink200JSONResponse LinkEmail
+
+func (response CheckResetLink200JSONResponse) VisitCheckResetLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckResetLinkdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CheckResetLinkdefaultApplicationProblemPlusJSONResponse) VisitCheckResetLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SignupRequestObject struct {
 	Body *SignupJSONRequestBody
 }
@@ -1985,6 +2289,38 @@ type GetMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendEmailVerificationRequestObject struct {
+}
+
+type SendEmailVerificationResponseObject interface {
+	VisitSendEmailVerificationResponse(w http.ResponseWriter) error
+}
+
+type SendEmailVerification202Response struct {
+}
+
+func (response SendEmailVerification202Response) VisitSendEmailVerificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SendEmailVerificationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SendEmailVerificationdefaultApplicationProblemPlusJSONResponse) VisitSendEmailVerificationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2512,6 +2848,9 @@ func (response UpdateMemberRoledefaultApplicationProblemPlusJSONResponse) VisitU
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// VerifyEmail Confirm an email from the emailed link
+	// (POST /v1/auth/email/verify)
+	VerifyEmail(ctx context.Context, request VerifyEmailRequestObject) (VerifyEmailResponseObject, error)
 	// ExchangeImpersonation Exchange a console's one-time code for its support session
 	// (POST /v1/auth/impersonation)
 	ExchangeImpersonation(ctx context.Context, request ExchangeImpersonationRequestObject) (ExchangeImpersonationResponseObject, error)
@@ -2530,6 +2869,15 @@ type StrictServerInterface interface {
 	// VerifyOTPLogin Sign in with the code from the phone
 	// (POST /v1/auth/otp/verify)
 	VerifyOTPLogin(ctx context.Context, request VerifyOTPLoginRequestObject) (VerifyOTPLoginResponseObject, error)
+	// ForgotPassword Email a link to set a new password
+	// (POST /v1/auth/password/forgot)
+	ForgotPassword(ctx context.Context, request ForgotPasswordRequestObject) (ForgotPasswordResponseObject, error)
+	// ResetPassword Set a new password from the emailed link
+	// (POST /v1/auth/password/reset)
+	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// CheckResetLink Check a reset link before asking for the new password
+	// (POST /v1/auth/password/reset/check)
+	CheckResetLink(ctx context.Context, request CheckResetLinkRequestObject) (CheckResetLinkResponseObject, error)
 	// Signup Create an account and its first store
 	// (POST /v1/auth/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
@@ -2545,6 +2893,9 @@ type StrictServerInterface interface {
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// SendEmailVerification Email the signed-in user a link confirming their email
+	// (POST /v1/me/email/verification)
+	SendEmailVerification(ctx context.Context, request SendEmailVerificationRequestObject) (SendEmailVerificationResponseObject, error)
 	// SetupTOTP Start two-factor enrolment
 	// (POST /v1/me/mfa/totp)
 	SetupTOTP(ctx context.Context, request SetupTOTPRequestObject) (SetupTOTPResponseObject, error)
@@ -2626,6 +2977,37 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// VerifyEmail operation middleware
+func (sh *strictHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var request VerifyEmailRequestObject
+
+	var body VerifyEmailJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyEmail(ctx, request.(VerifyEmailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyEmail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyEmailResponseObject); ok {
+		if err := validResponse.VisitVerifyEmailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ExchangeImpersonation operation middleware
@@ -2807,6 +3189,99 @@ func (sh *strictHandler) VerifyOTPLogin(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ForgotPassword operation middleware
+func (sh *strictHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var request ForgotPasswordRequestObject
+
+	var body ForgotPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ForgotPassword(ctx, request.(ForgotPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ForgotPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ForgotPasswordResponseObject); ok {
+		if err := validResponse.VisitForgotPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResetPassword operation middleware
+func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var request ResetPasswordRequestObject
+
+	var body ResetPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResetPassword(ctx, request.(ResetPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResetPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
+		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckResetLink operation middleware
+func (sh *strictHandler) CheckResetLink(w http.ResponseWriter, r *http.Request) {
+	var request CheckResetLinkRequestObject
+
+	var body CheckResetLinkJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckResetLink(ctx, request.(CheckResetLinkRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckResetLink")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckResetLinkResponseObject); ok {
+		if err := validResponse.VisitCheckResetLinkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Signup operation middleware
 func (sh *strictHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	var request SignupRequestObject
@@ -2943,6 +3418,30 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendEmailVerification operation middleware
+func (sh *strictHandler) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
+	var request SendEmailVerificationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendEmailVerification(ctx, request.(SendEmailVerificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendEmailVerification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendEmailVerificationResponseObject); ok {
+		if err := validResponse.VisitSendEmailVerificationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
