@@ -11,6 +11,7 @@ import { field } from '../session';
 import type { Entry } from './audit';
 import { AuditRow } from './AuditRow';
 import { ConsoleLayout } from './ConsoleLayout';
+import { countryName, storeCountries } from './countries';
 import { BalanceCard } from './BalanceCard';
 import { Dialog } from './Dialog';
 import { dateTimeAr, initial, storeStatusLabel } from './lib';
@@ -67,7 +68,7 @@ export function StorePage() {
   // The role decides which actions show (ADR-0077); the server refuses the rest.
   const can = useCan();
   const [support, setSupport] = useState<{ url: string; expires: string } | null>(null);
-  const [dialog, setDialog] = useState<{ kind: 'override' } | { kind: 'clear'; feature: Feature } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: 'override' } | { kind: 'clear'; feature: Feature } | { kind: 'country' } | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -211,7 +212,23 @@ export function StorePage() {
                 {store.name} <span className={`status store-${store.status}`}>{storeStatusLabel[store.status]}</span>
               </h1>
               <p className="muted">
-                <bdi className="ltr">{host}</bdi> · {currencyName[store.currency]} · أُنشئ {dateLong(store.created_at)}
+                <bdi className="ltr">{host}</bdi> · {store.country ? `${countryName(store.country)} · ` : ''}
+                {currencyName[store.currency]} · أُنشئ {dateLong(store.created_at)}
+                {can('stores.manage') && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        setError('');
+                        setDialog({ kind: 'country' });
+                      }}
+                    >
+                      غيّر البلد
+                    </button>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -561,6 +578,71 @@ export function StorePage() {
             setDialog(null);
           }}
         />
+      )}
+      {dialog?.kind === 'country' && store && (
+        <Dialog
+          title="تغيير بلد المتجر"
+          error={error}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            void act(
+              () => api.PUT('/admin/v1/stores/{store_id}/country', { ...path, body: { country: field(form, 'country'), reason: field(form, 'reason') } }),
+              'غُيّر بلد المتجر.',
+            ).then((refused) => {
+              if (!refused) setDialog(null);
+            });
+          }}
+          onClose={() => {
+            setDialog(null);
+          }}
+        >
+          <label>
+            <span className="field-label">البلد الجديد</span>
+            <select name="country" required defaultValue={storeCountries.find((c) => c !== store.country)}>
+              {storeCountries
+                .filter((c) => c !== store.country)
+                .map((c) => (
+                  <option key={c} value={c}>
+                    {countryName(c)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <ul className="change-list" aria-label="ما يتغير">
+            <li>
+              <strong>ما يتغير</strong>
+            </li>
+            <li>• بوابات البطاقات المتاحة للمتجر حسب قاعدة البلد الجديد، للربط الجديد فقط.</li>
+            <li>• الضريبة على فواتيره القادمة حسب جدول البلد الجديد.</li>
+          </ul>
+          <ul className="change-list keeps" aria-label="ما لا يتغير">
+            <li>
+              <strong>ما لا يتغير</strong>
+            </li>
+            <li>• حساب الفوترة المفتوح يحتفظ بعملته.</li>
+            <li>• عملة المتجر وأسعار منتجاته.</li>
+            <li>• بوابة البطاقات المربوطة تبقى تعمل حتى يفصلها التاجر.</li>
+          </ul>
+          <label>
+            <span className="field-label">السبب (إجباري، يُحفظ في سجل الأدمن)</span>
+            <textarea name="reason" required minLength={3} maxLength={500} rows={3} />
+          </label>
+          <div className="actions">
+            <button type="submit" className="primary" disabled={busy}>
+              غيّر البلد
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setDialog(null);
+              }}
+            >
+              إلغاء
+            </button>
+          </div>
+        </Dialog>
       )}
       {dialog?.kind === 'clear' && (
         <Dialog

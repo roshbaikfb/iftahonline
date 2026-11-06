@@ -215,6 +215,13 @@ describe('plans screen', () => {
     expect(within(editor).getByText('يوفّر شهرين')).toBeInTheDocument();
     expect(editor).toHaveTextContent('على الباقة الآن 23 مشتركًا. ينتقل كلٌّ منهم إلى v2 عند تجديده القادم');
     expect(screen.getByText('سجل الإصدارات').closest('details')).toHaveTextContent('v1 · 20 مشتركًا');
+    // The pound and the dollar first, each with whom it bills; the riyal
+    // and the dirham, for older accounts, folded under them (ADR-0090).
+    const prices = within(editor).getByRole('region', { name: 'الأسعار' });
+    expect(prices).toHaveTextContent('باقي البلاد · مطلوبة');
+    const legacy = within(prices).getByText('الريال والدرهم (الحسابات القديمة فقط)').closest('details');
+    expect(legacy).not.toHaveAttribute('open');
+    expect(legacy).toContainElement(within(prices).getByLabelText('SAR شهري'));
     const egp = within(editor).getByLabelText('EGP شهري');
     await user.clear(egp);
     await user.type(egp, '649');
