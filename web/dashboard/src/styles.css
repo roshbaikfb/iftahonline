@@ -6060,3 +6060,22 @@ td.plus {
     position: static;
   }
 }
+
+/* «سجل النشاط» (D6). */
+.activity {
+  display: grid;
+  gap: 0.75rem;
+}
+.activity .nowrap {
+  white-space: nowrap;
+}
+.activity td a {
+  color: var(--navy);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.activity-more {
+  display: flex;
+  justify-content: center;
+}

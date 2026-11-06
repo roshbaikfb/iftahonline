@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { api } from './api/client';
 
 import { Account } from './pages/Account';
+import { ActivityLog } from './pages/ActivityLog';
 import { Balance } from './pages/Balance';
 import { Billing } from './pages/Billing';
 import { Carriers } from './pages/Carriers';
@@ -132,6 +133,7 @@ function Gate() {
           <Route path="/stores/:storeId/pages" element={<Pages />} />
           <Route path="/stores/:storeId/domains" element={<Domains />} />
           <Route path="/stores/:storeId/team" element={<Team />} />
+          <Route path="/stores/:storeId/activity" element={<ActivityLog />} />
           <Route path="/stores/:storeId/settings" element={<StoreSettings />} />
           <Route path="/stores/:storeId/pages/new" element={<LandingEditor />} />
           <Route path="/stores/:storeId/pages/:pageId" element={<LandingEditor />} />
