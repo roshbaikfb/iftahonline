@@ -88,7 +88,7 @@ func (h *Handlers) SetupTOTP(ctx context.Context, _ SetupTOTPRequestObject) (Set
 	if err != nil {
 		return nil, err
 	}
-	return SetupTOTP200JSONResponse{Secret: s.Secret, OtpauthUri: s.URI}, nil
+	return SetupTOTP200JSONResponse{Secret: s.Secret, OtpauthUri: s.URI, QrSvg: s.QR}, nil
 }
 
 // ConfirmTOTP implements StrictServerInterface.

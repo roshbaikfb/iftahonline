@@ -10,6 +10,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/platform/authtoken"
 	"github.com/roshbaikfb/iftahonline/internal/platform/email"
 	"github.com/roshbaikfb/iftahonline/internal/platform/errs"
+	"github.com/roshbaikfb/iftahonline/internal/platform/qr"
 	"github.com/roshbaikfb/iftahonline/internal/platform/totp"
 	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
@@ -311,7 +312,7 @@ func (s *Service) LookupInvite(ctx context.Context, raw string) (InviteView, err
 		return InviteView{}, err
 	}
 	uri := totp.URI(seed, TOTPIssuer, inv.Email)
-	svg, err := qrSVG(uri)
+	svg, err := qr.SVG(uri)
 	if err != nil {
 		return InviteView{}, err
 	}

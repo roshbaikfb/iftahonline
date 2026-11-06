@@ -598,6 +598,9 @@ type TOTPCode struct {
 type TOTPSetup struct {
 	OtpauthUri string `json:"otpauth_uri"`
 
+	// QrSvg The otpauth URI as a QR code (SVG markup the server drew).
+	QrSvg string `json:"qr_svg"`
+
 	// Secret Base32 seed for manual entry.
 	Secret string `json:"secret"`
 }
@@ -707,6 +710,17 @@ type PreviewInvitationJSONBody struct {
 	Token string `json:"token"`
 }
 
+// UpdateMeJSONBody defines parameters for UpdateMe.
+type UpdateMeJSONBody struct {
+	Name string `json:"name"`
+}
+
+// ChangePasswordJSONBody defines parameters for ChangePassword.
+type ChangePasswordJSONBody struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 // ListAuditLogParams defines parameters for ListAuditLog.
 type ListAuditLogParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -749,11 +763,17 @@ type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
 // PreviewInvitationJSONRequestBody defines body for PreviewInvitation for application/json ContentType.
 type PreviewInvitationJSONRequestBody PreviewInvitationJSONBody
 
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody UpdateMeJSONBody
+
 // ConfirmTOTPJSONRequestBody defines body for ConfirmTOTP for application/json ContentType.
 type ConfirmTOTPJSONRequestBody = TOTPCode
 
 // DisableTOTPJSONRequestBody defines body for DisableTOTP for application/json ContentType.
 type DisableTOTPJSONRequestBody = DisableTOTPRequest
+
+// ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
+type ChangePasswordJSONRequestBody ChangePasswordJSONBody
 
 // StartPhoneVerificationJSONRequestBody defines body for StartPhoneVerification for application/json ContentType.
 type StartPhoneVerificationJSONRequestBody = PhoneRequest
@@ -814,6 +834,9 @@ type ServerInterface interface {
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// UpdateMe Change the signed-in user's name
+	// (PATCH /v1/me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
 	// SendEmailVerification Email the signed-in user a link confirming their email
 	// (POST /v1/me/email/verification)
 	SendEmailVerification(w http.ResponseWriter, r *http.Request)
@@ -826,6 +849,9 @@ type ServerInterface interface {
 	// DisableTOTP Disable two-factor authentication
 	// (POST /v1/me/mfa/totp/disable)
 	DisableTOTP(w http.ResponseWriter, r *http.Request)
+	// ChangePassword Change the password, knowing the current one
+	// (POST /v1/me/password)
+	ChangePassword(w http.ResponseWriter, r *http.Request)
 	// StartPhoneVerification Send a code to a phone number to add to the account
 	// (POST /v1/me/phone)
 	StartPhoneVerification(w http.ResponseWriter, r *http.Request)
@@ -1099,6 +1125,20 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SendEmailVerification operation middleware
 func (siw *ServerInterfaceWrapper) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 
@@ -1146,6 +1186,20 @@ func (siw *ServerInterfaceWrapper) DisableTOTP(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DisableTOTP(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangePassword operation middleware
+func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangePassword(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1596,6 +1650,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/impersonation", wrapper.ExchangeImpersonation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/me", wrapper.UpdateMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/password", wrapper.ChangePassword)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/email/verification", wrapper.SendEmailVerification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone", wrapper.StartPhoneVerification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/phone/verify", wrapper.VerifyPhone)
@@ -2300,6 +2356,45 @@ func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeRespons
 	return err
 }
 
+type UpdateMeRequestObject struct {
+	Body *UpdateMeJSONRequestBody
+}
+
+type UpdateMeResponseObject interface {
+	VisitUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type UpdateMe200JSONResponse User
+
+func (response UpdateMe200JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMedefaultApplicationProblemPlusJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SendEmailVerificationRequestObject struct {
 }
 
@@ -2431,6 +2526,39 @@ type DisableTOTPdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DisableTOTPdefaultApplicationProblemPlusJSONResponse) VisitDisableTOTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePasswordRequestObject struct {
+	Body *ChangePasswordJSONRequestBody
+}
+
+type ChangePasswordResponseObject interface {
+	VisitChangePasswordResponse(w http.ResponseWriter) error
+}
+
+type ChangePassword204Response struct {
+}
+
+func (response ChangePassword204Response) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ChangePassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChangePassworddefaultApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2893,6 +3021,9 @@ type StrictServerInterface interface {
 	// GetMe The signed-in user and their stores
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// UpdateMe Change the signed-in user's name
+	// (PATCH /v1/me)
+	UpdateMe(ctx context.Context, request UpdateMeRequestObject) (UpdateMeResponseObject, error)
 	// SendEmailVerification Email the signed-in user a link confirming their email
 	// (POST /v1/me/email/verification)
 	SendEmailVerification(ctx context.Context, request SendEmailVerificationRequestObject) (SendEmailVerificationResponseObject, error)
@@ -2905,6 +3036,9 @@ type StrictServerInterface interface {
 	// DisableTOTP Disable two-factor authentication
 	// (POST /v1/me/mfa/totp/disable)
 	DisableTOTP(ctx context.Context, request DisableTOTPRequestObject) (DisableTOTPResponseObject, error)
+	// ChangePassword Change the password, knowing the current one
+	// (POST /v1/me/password)
+	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
 	// StartPhoneVerification Send a code to a phone number to add to the account
 	// (POST /v1/me/phone)
 	StartPhoneVerification(ctx context.Context, request StartPhoneVerificationRequestObject) (StartPhoneVerificationResponseObject, error)
@@ -3425,6 +3559,37 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UpdateMe operation middleware
+func (sh *strictHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMeRequestObject
+
+	var body UpdateMeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMe(ctx, request.(UpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMeResponseObject); ok {
+		if err := validResponse.VisitUpdateMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SendEmailVerification operation middleware
 func (sh *strictHandler) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 	var request SendEmailVerificationRequestObject
@@ -3528,6 +3693,37 @@ func (sh *strictHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DisableTOTPResponseObject); ok {
 		if err := validResponse.VisitDisableTOTPResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangePassword operation middleware
+func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	var request ChangePasswordRequestObject
+
+	var body ChangePasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangePassword(ctx, request.(ChangePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
+		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

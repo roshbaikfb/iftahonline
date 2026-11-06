@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { api } from './api/client';
 
+import { Account } from './pages/Account';
 import { Balance } from './pages/Balance';
 import { Billing } from './pages/Billing';
 import { Carriers } from './pages/Carriers';
@@ -72,6 +73,15 @@ function Home() {
   if (!first) return <p className="empty">لست عضوًا في أي متجر بعد.</p>;
   if (!to) return <p role="status">جارٍ التحميل…</p>;
   return <Navigate to={to} replace />;
+}
+
+// FirstStore opens a store page that is about the user, not one store
+// (/account, linked from emails), inside the first store's frame.
+function FirstStore({ page }: { page: string }) {
+  const { state } = useSession();
+  const first = state.kind === 'signed-in' ? state.me.memberships[0] : undefined;
+  if (!first) return <Navigate to="/" replace />;
+  return <Navigate to={`/stores/${first.store_id}/${page}`} replace />;
 }
 
 // Routes is the dashboard once the session is known: the login page for
@@ -145,6 +155,8 @@ function Gate() {
           <Route path="/stores/:storeId/billing" element={<Billing />} />
           <Route path="/stores/:storeId/billing/plans" element={<Plans />} />
           <Route path="/stores/:storeId/billing/balance" element={<Balance />} />
+          <Route path="/stores/:storeId/account" element={<Account />} />
+          <Route path="/account" element={<FirstStore page="account" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       );

@@ -81,6 +81,18 @@ func SetPasswordHash(ctx context.Context, db Tx, id ulid.ID, hash string) error 
 	return nil
 }
 
+// SetUserName renames a user and returns them.
+func SetUserName(ctx context.Context, db Tx, id ulid.ID, name string) (domain.User, error) {
+	r, err := identitydb.New(db).UpdateUserName(ctx, identitydb.UpdateUserNameParams{ID: id, Name: name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.User{}, fmt.Errorf("identity store: rename user: %w", err)
+	}
+	return toUser(r), nil
+}
+
 func toUser(r identitydb.User) domain.User {
 	u := domain.User{
 		ID: r.ID, Email: r.Email, EmailVerifiedAt: r.EmailVerifiedAt, Name: r.Name, PasswordHash: r.PasswordHash,

@@ -189,8 +189,9 @@ per IP. It is advisory: sign-up checks again (422 `store.slug` `taken`).
 
 **Enrolment:**
 
-1. `POST /v1/me/mfa/totp` returns a seed: base32 plus an `otpauth://` URI,
-   which the dashboard shows as a QR code. The seed is sealed with
+1. `POST /v1/me/mfa/totp` returns a seed: base32, an `otpauth://` URI and
+   `qr_svg`, the URI as a QR code drawn by the server (`platform/qr`, shared
+   with the console's team invitations). The seed is sealed with
    `secretbox` (AAD `totp:<user>`) and is not active yet.
 2. `POST /v1/me/mfa/totp/confirm` with a valid code enables 2FA and returns
    **10 recovery codes**, shown once and stored as SHA-256.
@@ -213,6 +214,29 @@ per IP. It is advisory: sign-up checks again (422 `store.slug` `taken`).
 
 **Disabling:** `POST /v1/me/mfa/totp/disable` needs the password **and** a
 current code, so a stolen session alone cannot remove 2FA.
+
+## The account page (D4)
+
+«حسابي» (`/stores/{id}/account`; `/account` opens it in the first store,
+and the new-device alert links there) holds the user's own account, the
+same for every store:
+
+- **Name:** `PATCH /v1/me` (1 to 100 characters). The email does not change.
+- **Password:** `POST /v1/me/password` takes the current password and the
+  new one. A wrong current password is 422 on the field `current_password`,
+  and failures are throttled per user like logins, so a stolen session
+  cannot guess it. The change signs out every other session, keeps this
+  one, and emails the user (`identity.password.changed`).
+- **Phone, 2FA and devices:** the existing `/v1/me/phone`,
+  `/v1/me/mfa/totp*` and `/v1/me/sessions` endpoints. The page asks for a
+  seed only while 2FA is off, shows the recovery codes once with copy and
+  download, and names devices from their User-Agent ("Chrome على Windows").
+- **Phone sign-in:** the login page has a «كود على الموبايل» tab
+  (`/v1/auth/otp/*`). A number without `+` is read in the browser's
+  country (by time zone), else Egypt. The page shows the number masked,
+  and a new code can be asked for after a minute.
+- **Support sessions** (ADR-0055) see the page but change nothing: Scope
+  refuses account writes outside the store, and the page asks for no seed.
 
 ## Phone
 

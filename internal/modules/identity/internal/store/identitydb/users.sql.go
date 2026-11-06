@@ -227,6 +227,37 @@ func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHash
 	return err
 }
 
+const updateUserName = `-- name: UpdateUserName :one
+UPDATE users SET name = $1, updated_at = now() WHERE id = $2
+RETURNING id, email, email_verified_at, name, password_hash, status, created_at, updated_at, phone, phone_verified_at, totp_secret, totp_enabled_at, totp_last_step
+`
+
+type UpdateUserNameParams struct {
+	Name string
+	ID   ulid.ID
+}
+
+func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserName, arg.Name, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.Name,
+		&i.PasswordHash,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+		&i.TotpSecret,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+	)
+	return i, err
+}
+
 const upsertDevice = `-- name: UpsertDevice :one
 INSERT INTO user_devices (user_id, device_hash, user_agent, ip_prefix)
 VALUES ($1, $2, $3, $4)

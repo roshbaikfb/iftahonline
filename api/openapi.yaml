@@ -605,6 +605,52 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         default:
           $ref: "#/components/responses/Problem"
+    patch:
+      tags: [identity]
+      operationId: updateMe
+      summary: Change the signed-in user's name
+      description: D4. The account page's «بياناتك». The email does not change here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 400 }
+      responses:
+        "200":
+          description: The user, renamed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/me/password:
+    post:
+      tags: [identity]
+      operationId: changePassword
+      summary: Change the password, knowing the current one
+      description: |
+        D4. Every other session is signed out (this one stays) and the user
+        is emailed. A wrong current password is 422 with the field
+        current_password; repeated failures are throttled like logins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, maxLength: 512, format: password }
+                new_password: { type: string, maxLength: 128, format: password }
+      responses:
+        "204":
+          description: Changed.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/me/email/verification:
     post:
       tags: [identity]
@@ -6417,10 +6463,11 @@ components:
         client: { $ref: "#/components/schemas/ClientKind" }
     TOTPSetup:
       type: object
-      required: [secret, otpauth_uri]
+      required: [secret, otpauth_uri, qr_svg]
       properties:
         secret: { type: string, description: Base32 seed for manual entry. }
         otpauth_uri: { type: string }
+        qr_svg: { type: string, description: The otpauth URI as a QR code (SVG markup the server drew). }
     TOTPCode:
       type: object
       required: [code]
