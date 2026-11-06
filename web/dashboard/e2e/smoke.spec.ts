@@ -132,7 +132,7 @@ test('a merchant connects a card gateway and reads the COD report', async ({ pag
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
   await expect(page).toHaveURL(/\/home$/);
 
-  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'الدفع بالبطاقة', exact: true }).click();
+  await page.getByRole('navigation', { name: 'القائمة الرئيسية' }).getByRole('link', { name: 'طرق الدفع', exact: true }).click();
   await page.getByRole('combobox', { name: 'البوابة' }).selectOption({ label: 'بوابة دفع تجريبية' });
   await page.getByLabel('API key').fill('demo-gateway-key');
   await page.getByLabel('سر الإشعارات').fill('demo-webhook-secret');

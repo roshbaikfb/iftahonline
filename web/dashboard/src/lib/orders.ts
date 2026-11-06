@@ -97,3 +97,9 @@ export function selectedLabel(n: number): string {
   if (n <= 10) return `${String(n)} طلبات محددة`;
   return `${String(n)} طلبًا محددًا`;
 }
+
+// phoneExample is a local mobile number in the store's country, as the
+// phone search's hint: Egypt's by default.
+export function phoneExample(country: string | undefined): string {
+  return country === 'SA' || country === 'AE' ? '0501234567' : '01012345678';
+}

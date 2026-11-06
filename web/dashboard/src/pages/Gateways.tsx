@@ -3,8 +3,10 @@ import { useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { dateTime } from '../lib/orders';
 import { gatewayLabel } from '../lib/payments';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { field } from '../session';
 
@@ -15,6 +17,29 @@ type ConnectInput = components['schemas']['ConnectPaymentGatewayInput'];
 // platform creates the webhook endpoint itself.
 const stripePermissions = ['Checkout Sessions: Write', 'PaymentIntents: Read', 'Refunds: Write', 'Webhook Endpoints: Write'];
 
+// connectMessages say a refused connection in Arabic, by field and code
+// (the server's are English).
+const connectMessages: Record<string, string> = {
+  'secret_key:refused': 'رفضت البوابة هذه المفاتيح. تأكد أنك نسختها كاملة من حساب الوضع الحقيقي (live).',
+  'secret_key:invalid': 'الصق المفتاح السري كما هو من حسابك في البوابة.',
+  'secret_key:webhook_refused': 'قَبِل Stripe المفتاح، لكنه رفض إنشاء رابط الإشعارات. أضف للمفتاح صلاحية Webhook Endpoints: Write ثم أعد المحاولة.',
+  'api_key:invalid': 'الصق الـ API key كما هو من حسابك في البوابة.',
+  'webhook_secret:invalid': 'الصق سر الإشعارات كما هو من حسابك في البوابة.',
+  'integration_ids:required': 'اكتب رقم تكامل البطاقات (Integration ID) من حسابك في Paymob.',
+  'gateway:not_offered': 'هذه البوابة غير متاحة في بلد متجرك.',
+  'gateway:unknown': 'هذه البوابة غير متاحة.',
+};
+
+// connectError is a refused connection's message for the merchant.
+function connectError(err: unknown): string {
+  const fields = (err as { errors?: { field: string; code: string }[] } | undefined)?.errors ?? [];
+  for (const f of fields) {
+    const m = connectMessages[`${f.field}:${f.code}`];
+    if (m) return m;
+  }
+  return problemMessage(err);
+}
+
 // Gateways connects the store's own account at a card gateway (ADR-0029;
 // the owner only), among those of the store's country (ADR-0093). The
 // keys are checked with the gateway, then kept encrypted and never shown
@@ -23,6 +48,7 @@ const stripePermissions = ['Checkout Sessions: Write', 'PaymentIntents: Read', '
 // checkout offers card payment beside cash on delivery.
 export function Gateways() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'card_payments');
   const [list, setList] = useState<Connections | null>(null);
   const [gateway, setGateway] = useState('');
   const [error, setError] = useState('');
@@ -75,7 +101,7 @@ export function Gateways() {
     const { error: err } = await api.POST('/v1/stores/{store_id}/payments/gateways', { params: { path: { store_id: storeId } }, body });
     setBusy(false);
     if (err) {
-      setError(problemMessage(err));
+      setError(connectError(err));
       return;
     }
     setNotice('تم الربط: صفحة الدفع في متجرك تعرض الآن الدفع بالبطاقة.');
@@ -95,9 +121,10 @@ export function Gateways() {
   return (
     <Layout storeId={storeId}>
       <div className="page-head">
-        <h1>الدفع بالبطاقة</h1>
+        <h1>طرق الدفع</h1>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="card_payments" />}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
@@ -111,7 +138,7 @@ export function Gateways() {
         <span className="status st-on">مفعّل</span>
       </section>
       {list && (
-        <div className={!active && list.gateways.length > 0 ? 'split' : undefined}>
+        <div className={!active && list.gateways.length > 0 ? 'split gateways-split' : undefined}>
           <section className="card">
             <h2>بوابة الدفع</h2>
             {list.connections.length === 0 ? (
@@ -158,14 +185,14 @@ export function Gateways() {
                 <>
                   <ol className="steps-list">
                     <li>
-                      في Stripe: <bdi className="ltr">Developers ← API keys ← Create restricted key</bdi>، وأعطه الصلاحيات:{' '}
-                      {stripePermissions.map((p, i) => (
-                        <span key={p}>
-                          {i > 0 && '، '}
-                          <bdi className="ltr">{p}</bdi>
-                        </span>
-                      ))}
-                      .
+                      في Stripe افتح <bdi className="ltr">Developers › API keys › Create restricted key</bdi>، وأعطه هذه الصلاحيات:
+                      <ul className="perm-list">
+                        {stripePermissions.map((p) => (
+                          <li key={p}>
+                            <bdi className="ltr">{p}</bdi>
+                          </li>
+                        ))}
+                      </ul>
                     </li>
                     <li>الصق المفتاح هنا. سننشئ رابط الإشعارات في حسابك تلقائيًا.</li>
                   </ol>
@@ -217,7 +244,7 @@ export function Gateways() {
                   <input name="integration_ids" required inputMode="numeric" dir="ltr" placeholder="4567890" />
                 </label>
               )}
-              <button type="submit" disabled={busy}>
+              <button type="submit" disabled={busy || locked}>
                 {busy ? 'جارٍ التحقق من المفاتيح…' : gateway === 'stripe' ? 'اربط Stripe' : 'ربط'}
               </button>
             </form>

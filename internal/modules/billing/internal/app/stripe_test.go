@@ -137,7 +137,8 @@ func TestStripeCheckout(t *testing.T) {
 		t.Fatalf("invoice = %s", s)
 	}
 	sum, err := d.svc.Summary(ctx)
-	if err != nil || sum.Card != "VISA •••• 4242" || len(sum.OpenInvoices) != 0 {
+	// A Saudi merchant pays on Stripe: the page says so (ADR-0089).
+	if err != nil || sum.Card != "VISA •••• 4242" || len(sum.OpenInvoices) != 0 || sum.Gateway != "stripe" {
 		t.Fatalf("summary = %+v, %v", sum, err)
 	}
 	var gateway string

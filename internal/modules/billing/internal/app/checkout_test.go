@@ -114,7 +114,7 @@ func TestPayNowSavesTheCardAndRestores(t *testing.T) {
 
 	sum, err := d.svc.Summary(ctx)
 	if err != nil || sum.Status != "suspended" || sum.Card != "" || len(sum.OpenInvoices) != 1 || sum.PlanNameEn != "Pro" ||
-		!sum.Held || !sum.ClosesAt.IsZero() {
+		!sum.Held || !sum.ClosesAt.IsZero() || sum.Gateway != "paymob" {
 		t.Fatalf("summary before = %+v, %v", sum, err)
 	}
 	link, err := d.svc.PayNow(ctx, invoice, app.Payer{})

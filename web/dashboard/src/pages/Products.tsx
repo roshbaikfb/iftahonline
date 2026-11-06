@@ -3,9 +3,11 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { SamplesBanner } from '../components/SamplesBanner';
 import { count } from '../lib/home';
 import { money } from '../lib/orders';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import {
   priceLine,
@@ -96,6 +98,7 @@ function rowID(r: Row): string {
 // filters, a bulk bar for the selected, and a page at a time.
 export function Products() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'products');
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<Row[]>([]);
   const [next, setNext] = useState<string | undefined>();
@@ -331,6 +334,7 @@ export function Products() {
         )}
         {notice && <p role="status" className="ok-note">{notice}</p>}
         {error && <p role="alert">{error}</p>}
+        {locked && <PlanLock storeId={storeId} feature="products" full />}
 
         <div className="scroll">
           <table className="products-table">

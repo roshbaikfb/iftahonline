@@ -94,7 +94,7 @@ describe('StoreSettings', () => {
     expect(screen.getByRole('radio', { name: /الدفع عند الاستلام/ })).toBeChecked();
     const payCard = screen.getByRole('heading', { name: 'طريقة الدفع الافتراضية' }).closest('section');
     if (!payCard) throw new Error('no payment card');
-    expect(within(payCard).getByRole('link', { name: 'الدفع بالبطاقة' })).toHaveAttribute('href', `/stores/${store}/gateways`);
+    expect(within(payCard).getByRole('link', { name: 'طرق الدفع' })).toHaveAttribute('href', `/stores/${store}/gateways`);
   });
 
   it('chooses card when a gateway is connected, and hides the choice from those who cannot make it', async () => {
@@ -257,6 +257,32 @@ describe('Team', () => {
     await waitFor(() => {
       expect(screen.queryByText('دعوات لم تُقبل بعد')).toBeNull();
     });
+  });
+
+  it('says the plan has no room for another member before the owner invites (D1)', async () => {
+    const calls = routes({ [`GET ${base}/plan-features`]: () => ({ status: 200, body: { included: [], full: ['staff'] } }) });
+    renderAt(`/stores/${store}/team`);
+    const user = userEvent.setup();
+    const lock = await screen.findByRole('note');
+    expect(lock).toHaveTextContent('وصلت إلى حد باقتك في أعضاء الفريق.');
+    expect(within(lock).getByRole('link', { name: 'رقِّ باقتك لتضيف المزيد' })).toHaveAttribute('href', `/stores/${store}/billing/plans`);
+    await user.type(screen.getByLabelText('البريد الإلكتروني'), 'ali@example.com');
+    expect(screen.getByRole('button', { name: 'أرسل الدعوة' })).toBeDisabled();
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+
+  it("says the plan's refusal in Arabic when the server refuses (D1)", async () => {
+    routes({
+      [`POST ${base}/invitations`]: () => ({
+        status: 403,
+        body: { title: 'Forbidden', status: 403, code: 'plan_limit', detail: "the store's plan allows 1 staff; upgrade the plan to add more" },
+      }),
+    });
+    renderAt(`/stores/${store}/team`);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('البريد الإلكتروني'), 'ali@example.com');
+    await user.click(screen.getByRole('button', { name: 'أرسل الدعوة' }));
+    expect(await screen.findByText('وصلت إلى حد باقتك في أعضاء الفريق (1). رقِّ باقتك من «الفوترة والباقة» لتضيف المزيد.')).toBeInTheDocument();
   });
 
   it('shows others the team without managing it', async () => {

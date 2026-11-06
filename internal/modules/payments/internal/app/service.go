@@ -49,6 +49,11 @@ var (
 	errKeysRefused        = errs.Validation(errs.FieldError{Field: "secret_key", Code: "refused", Message: "the gateway refused these keys"})
 	errNoIntegration      = errs.Validation(errs.FieldError{Field: "integration_ids", Code: "required", Message: "give the card integration ID(s) from the gateway"})
 	errNotOffered         = errs.Validation(errs.FieldError{Field: "gateway", Code: "not_offered", Message: "this gateway is not offered in the store's country"})
+	// errWebhookRefused: the key was accepted, but the gateway refused to
+	// make the connection's webhook endpoint (ADR-0094): a restricted key
+	// without that permission, or a URL it cannot reach.
+	errWebhookRefused = errs.Validation(errs.FieldError{Field: "secret_key", Code: "webhook_refused",
+		Message: "the key works, but the gateway refused to create the webhook endpoint: give it Webhook Endpoints write access"})
 )
 
 // Allowed lists the gateways the store in ctx's country may connect: its
@@ -240,7 +245,7 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 		defer pcancel()
 		switch creds, err = prov.Provision(pctx, creds, webhooks.URL(s.publicURL, in.Gateway, storeID, id)); {
 		case errors.Is(err, gateway.ErrAuth), errors.Is(err, gateway.ErrRejected):
-			return domain.Connection{}, errKeysRefused
+			return domain.Connection{}, errWebhookRefused
 		case err != nil:
 			return domain.Connection{}, errs.Unavailable(30*time.Second, fmt.Errorf("payments: %s webhook endpoint: %w", in.Gateway, err))
 		}

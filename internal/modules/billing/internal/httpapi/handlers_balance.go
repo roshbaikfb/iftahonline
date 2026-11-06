@@ -23,6 +23,10 @@ func (h *Handlers) GetBillingBalance(ctx context.Context, _ GetBillingBalanceReq
 		c := BillingBalanceCollection(b.Collection)
 		out.Collection = &c
 	}
+	if b.Gateway != "" {
+		g := BillingBalanceBillingGateway(b.Gateway)
+		out.BillingGateway = &g
+	}
 	for i, o := range b.Offered {
 		out.Offered[i] = BillingBalanceOffered(o)
 	}

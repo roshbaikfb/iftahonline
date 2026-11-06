@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { effectOn, emptyForm, normalizeCode, randomCode, serverErrors, summaryLines, toForm, toInput, type Coupon, type CouponKind, type Form } from '../lib/coupons';
 import { timezones } from '../lib/settings';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { currencySymbol } from '../lib/orders';
 
@@ -24,6 +26,7 @@ const sampleSubtotal = 50000;
 // phone the summary leads and the buttons stay at the bottom.
 export function CouponEditor() {
   const { storeId = '', couponId } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'coupons');
   const navigate = useNavigate();
   const [store, setStore] = useState({ currency: 'EGP', timezone: 'Africa/Cairo', slug: '' });
   const [coupon, setCoupon] = useState<Coupon | null>(null);
@@ -124,12 +127,13 @@ export function CouponEditor() {
           <Link className="button" to={list}>
             إلغاء
           </Link>
-          <button type="button" className="primary" disabled={busy} onClick={() => void save()}>
+          <button type="button" className="primary" disabled={busy || (!couponId && locked)} onClick={() => void save()}>
             {busy ? 'جارٍ الحفظ…' : 'حفظ الكوبون'}
           </button>
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="coupons" />}
       <p className="summary-line phone-only" aria-hidden="true">
         {lines.join(' · ')}
       </p>

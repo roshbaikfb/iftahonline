@@ -113,12 +113,15 @@ describe('billing helpers', () => {
   it('warns at 80% and at the limit, and shows unlimited', () => {
     expect(meterLevel({ feature: 'messages', kind: 'monthly', used: 1710, limit: 2000, unlimited: false })).toBe('nearly');
     expect(meterLevel({ feature: 'messages', kind: 'monthly', used: 2000, limit: 2000, unlimited: false })).toBe('reached');
-    expect(meterLevel({ feature: 'messages', kind: 'monthly', used: 0, limit: 0, unlimited: false })).toBe('reached');
+    // A limit of 0 is a feature the plan does not include, not one used
+    // up: no warning and an empty bar (the QA walkthrough, 2026-11-06).
+    expect(meterLevel({ feature: 'messages', kind: 'monthly', used: 0, limit: 0, unlimited: false })).toBe('none');
+    expect(meterText({ feature: 'custom_domains', kind: 'count', used: 0, limit: 0, unlimited: false })).toBe('غير متاحة في باقتك');
     expect(meterLevel({ feature: 'orders_per_month', kind: 'monthly', used: 10, limit: 30, unlimited: false })).toBe('ok');
     expect(meterLevel({ feature: 'products', kind: 'count', used: 9000, unlimited: true })).toBe('ok');
     expect(meterText({ feature: 'products', kind: 'count', used: 9000, unlimited: true })).toBe('9,000 / بلا حد');
     expect(meterPercent({ feature: 'staff', kind: 'count', used: 5, limit: 2, unlimited: false })).toBe(100);
-    expect(meterPercent({ feature: 'messages', kind: 'monthly', used: 0, limit: 0, unlimited: false })).toBe(100);
+    expect(meterPercent({ feature: 'messages', kind: 'monthly', used: 0, limit: 0, unlimited: false })).toBe(0);
   });
 
   it('prices by cycle, shows the fee and the free plan, and the grants', () => {
@@ -129,7 +132,7 @@ describe('billing helpers', () => {
     expect(planPrice(pays, 'monthly', 'EGP')).toEqual({ price: '2.5%', note: 'من الطلبات المسلّمة فقط' });
     // A fixed amount per order beside the rate (ADR-0090).
     expect(planPrice({ ...pays, fee: { rate_bps: 100, fixed_minor: 4, min_minor: 0 } }, 'monthly', 'USD').price).toBe(`1% + ${money(4, 'USD')} لكل طلب`);
-    expect(taxNote(1500)).toBe('قبل ضريبة القيمة المضافة (15%)');
+    expect(taxNote(1500)).toBe('قبل ضريبة القيمة المضافة (\u206615%\u2069)');
     expect(taxNote(0)).toBe('');
     expect(planPrice(free, 'annual', 'EGP').price).toBe('0 ج.م');
     expect(planPrice(plan({ monthly_minor: 100 }), 'annual', 'EGP')).toEqual({ price: '—', note: 'غير متاحة سنويًا' });
@@ -145,6 +148,25 @@ describe('billing helpers', () => {
 });
 
 describe('Billing', () => {
+  it('names Stripe for a store billed on it, and a plan without a feature without a warning (D1)', async () => {
+    routes(
+      { ...activeBilling, card: undefined, billing_gateway: 'stripe' },
+      {
+        [`GET ${base}/usage`]: () => ({
+          status: 200,
+          body: { items: [{ feature: 'custom_domains', kind: 'count', used: 0, limit: 0, unlimited: false }], ad_free: false },
+        }),
+      },
+    );
+    renderAt(`/stores/${store}/billing`);
+    expect(await screen.findByText('لا توجد بطاقة محفوظة. تُحفظ بطاقتك عند أول دفع على صفحة Stripe.')).toBeInTheDocument();
+    expect(screen.queryByText(/Paymob/)).toBeNull();
+    const meter = screen.getByRole('meter', { name: 'الدومينات الخاصة' });
+    expect(meter).toHaveAttribute('aria-valuenow', '0');
+    expect(meter).not.toHaveClass('reached');
+    expect(screen.getByText('غير متاحة في باقتك')).not.toHaveClass('warn');
+  });
+
   it('shows a trial, the meters and the way to choose', async () => {
     routes(trialBilling);
     renderAt(`/stores/${store}/billing`);
@@ -255,7 +277,7 @@ describe('Plans', () => {
     const pro = await screen.findByRole('region', { name: 'برو' });
     expect(within(pro).getByText('باقتك الحالية')).toBeInTheDocument();
     expect(within(pro).getByText('599 ج.م')).toBeInTheDocument();
-    expect(within(pro).getByText('قبل ضريبة القيمة المضافة (14%)')).toBeInTheDocument();
+    expect(within(pro).getByText('قبل ضريبة القيمة المضافة (\u206614%\u2069)')).toBeInTheDocument();
     expect(screen.queryByText(/فاشتراكك بالدولار/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'سنوي — شهران مجانًا' }));
     expect(within(pro).getByText('5,990 ج.م')).toBeInTheDocument();

@@ -213,7 +213,7 @@ export function StoreSettings() {
                       'يبدأ العميل بالبطاقة، ويمكنه اختيار الدفع عند الاستلام.'
                     ) : (
                       <>
-                        اربط بوابة دفع أولًا من <Link to={`/stores/${storeId}/gateways`}>الدفع بالبطاقة</Link>.
+                        اربط بوابة دفع أولًا من <Link to={`/stores/${storeId}/gateways`}>طرق الدفع</Link>.
                       </>
                     )}
                   </span>

@@ -76,6 +76,9 @@ type Summary struct {
 	// discount (ADR-0074); 0 when the store is not (or no longer) one.
 	FoundingSeat int
 	FoundingBps  int32
+	// Gateway is where the store pays the platform: paymob or stripe, by
+	// its country's payment rule (ADR-0089); "" without one.
+	Gateway string
 }
 
 func (s *Service) checkoutGateway(name string) (CheckoutGateway, bool) {
@@ -99,27 +102,43 @@ func (s *Service) checkoutGateways() []string {
 // and the platform's URL for its callbacks.
 func (s *Service) canCheckout() bool { return s.publicURL != "" && len(s.checkoutGateways()) > 0 }
 
+// billingGatewayTx names the gateway the store in ctx pays the platform
+// on: its account's country's payment rule (ADR-0089), or the store's
+// country's before it has an account; "" without a rule. tx is behind
+// account when has.
+func billingGatewayTx(ctx context.Context, tx pgx.Tx, account ulid.ID, has bool, info StoreInfo) (string, error) {
+	country := info.country()
+	if has {
+		acct, err := store.Account(ctx, tx, account)
+		if err != nil {
+			return "", err
+		}
+		country = acct.Country
+	}
+	rules, err := store.PaymentRules(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	rule, ok := domain.RuleFor(rules, country)
+	if !ok {
+		return "", nil
+	}
+	return rule.BillingGateway, nil
+}
+
 // checkoutForTx is the gateway account opens its checkouts on: its
 // country's billing gateway (ADR-0089), when the platform has it. tx is
 // behind account.
 func (s *Service) checkoutForTx(ctx context.Context, tx pgx.Tx, account ulid.ID) (string, CheckoutGateway, error) {
-	acct, err := store.Account(ctx, tx, account)
+	name, err := billingGatewayTx(ctx, tx, account, true, StoreInfo{})
 	if err != nil {
 		return "", nil, err
 	}
-	rules, err := store.PaymentRules(ctx, tx)
-	if err != nil {
-		return "", nil, err
-	}
-	rule, ok := domain.RuleFor(rules, acct.Country)
+	gw, ok := s.checkoutGateway(name)
 	if !ok {
 		return "", nil, errCheckoutOff
 	}
-	gw, ok := s.checkoutGateway(rule.BillingGateway)
-	if !ok {
-		return "", nil, errCheckoutOff
-	}
-	return rule.BillingGateway, gw, nil
+	return name, gw, nil
 }
 
 // openPage opens c's page on gw, where the merchant comes back to back
@@ -219,6 +238,9 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 			if out.OpenInvoices, err = store.OpenInvoices(ctx, tx, account); err != nil {
 				return err
 			}
+		}
+		if out.Gateway, err = billingGatewayTx(ctx, tx, account, has, info); err != nil {
+			return err
 		}
 		if ok && !out.Agency && sub.CanSwitchToPays() {
 			cur, cErr := billedTx(ctx, tx, known(info))

@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { conditionsLabel, couponState, discountLabel, validityLabel, type Coupon } from '../lib/coupons';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 
 // Coupons lists the store's coupons (6g, the approved mockup): the code,
@@ -11,6 +13,7 @@ import { problemMessage } from '../lib/problem';
 // its state.
 export function Coupons() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'coupons');
   const [items, setItems] = useState<Coupon[] | null>(null);
   const [next, setNext] = useState('');
   const [store, setStore] = useState({ currency: 'EGP', timezone: 'Africa/Cairo' });
@@ -57,6 +60,7 @@ export function Coupons() {
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="coupons" />}
       {items === null && !error && <p role="status">جارٍ التحميل…</p>}
       {items?.length === 0 && (
         <section className="card empty-state">

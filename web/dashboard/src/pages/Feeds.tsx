@@ -3,7 +3,9 @@ import { useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import type { ProductFeed } from '../lib/marketing';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { storefrontURL } from '../lib/storefront';
 
@@ -13,6 +15,7 @@ import { storefrontURL } from '../lib/storefront';
 // old links.
 export function Feeds() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'feeds');
   const [feed, setFeed] = useState<ProductFeed | null>(null);
   const [slug, setSlug] = useState('');
   const [copied, setCopied] = useState('');
@@ -100,6 +103,7 @@ export function Feeds() {
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="feeds" />}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
@@ -114,7 +118,7 @@ export function Feeds() {
             <li>السعر قبل الخصم وبعده، ورابط يفتح المنتج على المقاس نفسه.</li>
             <li>لا يحوي أي بيانات عملاء أو طلبات.</li>
           </ul>
-          <button type="button" className="primary" disabled={busy} onClick={() => void renew('الكتالوج يعمل. انسخ الرابطين إلى المنصتين.')}>
+          <button type="button" className="primary" disabled={busy || locked} onClick={() => void renew('الكتالوج يعمل. انسخ الرابطين إلى المنصتين.')}>
             تشغيل الكتالوج
           </button>
         </section>

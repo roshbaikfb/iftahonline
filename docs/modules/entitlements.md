@@ -69,6 +69,24 @@ Design: [ADR-0038](../adr/0038-entitlements-platform-accounts-mailer.md)
 
   `ad_free` is enforced from 7g.
 
+## Locking forms before a refusal (D1, 2026-11-06)
+
+- **`GET /v1/stores/{id}/plan-features`** (any member, `store.read`):
+  - `included`: the on/off features the plan grants;
+  - `full`: the counted ones with no room for one more (products, staff,
+    custom domains).
+
+  Monthly features never lock, so orders are never stopped.
+- **The dashboard** reads it (`usePlanFeatures`, `lockedFor`) and shows
+  `PlanLock` above a form the plan rules out. The owner gets a link to
+  the plans; others are told to ask the owner. The form's save stays
+  disabled. The lock is on:
+  - team invites, domains, coupons, pixels, the product feed and card
+    gateways;
+  - new products only (editing an existing product stays open).
+- **The server's refusal** (403 `plan_limit`, English) is said in Arabic
+  by `problemMessage`, with the feature's name.
+
 ## Per-store overrides (ADR-0057)
 
 - **What:** `entitlement_overrides` (migration 00064) holds one row per

@@ -123,7 +123,7 @@ export function Overview() {
         { label: 'اربط شركة شحن', done: setup.carrier, to: 'carriers' },
         { label: 'حدّد مناطق الشحن', done: setup.zones, to: 'shipping' },
         { label: 'اربط بوابة الدفع', done: setup.gateway, to: 'gateways' },
-        { label: 'اربط الدومين الخاص', done: setup.domain, soon: true },
+        { label: 'اربط الدومين الخاص', done: setup.domain, to: 'domains' },
       ]
     : [];
   const doneSteps = steps.filter((s) => s.done).length;
@@ -181,7 +181,6 @@ export function Overview() {
                   </span>
                   <span className="label">{s.label}</span>
                   {s.done && <span className="visually-hidden">(تم)</span>}
-                  {!s.done && s.soon && <span className="soon-tag">قريبًا</span>}
                 </>
               );
               return (

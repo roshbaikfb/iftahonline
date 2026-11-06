@@ -5069,6 +5069,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/plan-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What the store's plan includes, for locking forms before a refusal
+         * @description Permission: store.read (any member). `included` are the on/off
+         *     features the plan grants; `full` the counted ones with no room for
+         *     one more (products, staff, custom domains): adding one would be
+         *     403 `plan_limit`. Monthly features never lock: orders are never
+         *     stopped.
+         */
+        get: operations["getPlanFeatures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/usage": {
         parameters: {
             query?: never;
@@ -8363,6 +8389,11 @@ export interface components {
             discount_bps: number;
         };
         Billing: {
+            /**
+             * @description Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one.
+             * @enum {string}
+             */
+            billing_gateway?: "paymob" | "stripe";
             plan_name_ar: string;
             plan_name_en: string;
             /** @enum {string} */
@@ -8435,6 +8466,11 @@ export interface components {
             collection: "balance" | "card";
         };
         BillingBalance: {
+            /**
+             * @description Where the store tops up, by its country's payment rule (ADR-0089); absent without one.
+             * @enum {string}
+             */
+            billing_gateway?: "paymob" | "stripe";
             /** @enum {string} */
             currency: "EGP" | "SAR" | "AED" | "USD";
             /**
@@ -8476,6 +8512,12 @@ export interface components {
             reference?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        PlanFeatures: {
+            /** @description The on/off features the store's plan grants. */
+            included: ("card_payments" | "coupons" | "pixels" | "feeds" | "ad_free" | "risk_rules" | "profit")[];
+            /** @description The counted features with no room for one more. */
+            full: ("products" | "staff" | "custom_domains")[];
         };
         UsageMeters: {
             items: components["schemas"]["UsageMeter"][];
@@ -15571,6 +15613,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Billing"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlanFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan's features. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFeatures"];
                 };
             };
             default: components["responses"]["Problem"];

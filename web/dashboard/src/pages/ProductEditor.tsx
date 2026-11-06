@@ -3,11 +3,13 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { OptionEditor } from '../components/OptionEditor';
 import { ProductImages } from '../components/ProductImages';
 import { VariantsGrid } from '../components/VariantsGrid';
 import { build, draftOf, emptyDraft, maxOptions, maxVariants, newOption, regenerate, variantCount, type Draft, type OptionDraft } from '../lib/editor';
 import { count } from '../lib/home';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { productStatusLabel, type Category, type Product } from '../lib/products';
 import { storefrontURL } from '../lib/storefront';
@@ -25,6 +27,8 @@ export function ProductEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = !productId;
+  const plan = usePlanFeatures(storeId);
+  const locked = isNew && lockedFor(plan, 'products');
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [saved, setSaved] = useState<Product | null>(null);
   const [loading, setLoading] = useState(!isNew);
@@ -179,12 +183,13 @@ export function ProductEditor() {
               عرض في المتجر
             </a>
           )}
-          <button type="button" className="primary" disabled={saving} onClick={() => void save()}>
+          <button type="button" className="primary" disabled={saving || locked} onClick={() => void save()}>
             {saving ? 'جارٍ الحفظ…' : saved ? 'حفظ التغييرات' : 'حفظ المنتج'}
           </button>
         </div>
       </div>
       {failure && <p role="alert">{failure}</p>}
+      {locked && <PlanLock storeId={storeId} feature="products" full />}
       {notice && (
         <p role="status" className="ok-note">
           {notice}

@@ -1261,6 +1261,24 @@ func (e AdminStoreBalanceLevel) Valid() bool {
 	}
 }
 
+// Defines values for BillingBillingGateway.
+const (
+	BillingBillingGatewayPaymob BillingBillingGateway = "paymob"
+	BillingBillingGatewayStripe BillingBillingGateway = "stripe"
+)
+
+// Valid indicates whether the value is a known member of the BillingBillingGateway enum.
+func (e BillingBillingGateway) Valid() bool {
+	switch e {
+	case BillingBillingGatewayPaymob:
+		return true
+	case BillingBillingGatewayStripe:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingCollection.
 const (
 	BillingCollectionBalance BillingCollection = "balance"
@@ -3446,8 +3464,11 @@ type AdminTeamMember struct {
 // Billing defines model for Billing.
 type Billing struct {
 	// Agency An agency pays for the store: the platform switches it to pay as you sell (ADR-0087).
-	Agency            *bool `json:"agency,omitempty"`
-	CancelAtPeriodEnd *bool `json:"cancel_at_period_end,omitempty"`
+	Agency *bool `json:"agency,omitempty"`
+
+	// BillingGateway Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one.
+	BillingGateway    *BillingBillingGateway `json:"billing_gateway,omitempty"`
+	CancelAtPeriodEnd *bool                  `json:"cancel_at_period_end,omitempty"`
 
 	// Card The card on file; absent without one.
 	//
@@ -3501,6 +3522,9 @@ type Billing struct {
 	} `json:"switch_offer,omitempty"`
 	TrialEndsAt *time.Time `json:"trial_ends_at,omitempty"`
 }
+
+// BillingBillingGateway Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one.
+type BillingBillingGateway string
 
 // BillingCollection How the store's account pays pay-as-you-sell fees; absent until it chooses.
 type BillingCollection string

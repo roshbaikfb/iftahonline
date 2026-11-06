@@ -5842,6 +5842,27 @@ paths:
               schema: { $ref: "#/components/schemas/Billing" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/plan-features:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [entitlements]
+      operationId: getPlanFeatures
+      summary: What the store's plan includes, for locking forms before a refusal
+      description: |
+        Permission: store.read (any member). `included` are the on/off
+        features the plan grants; `full` the counted ones with no room for
+        one more (products, staff, custom domains): adding one would be
+        403 `plan_limit`. Monthly features never lock: orders are never
+        stopped.
+      responses:
+        "200":
+          description: The plan's features.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanFeatures" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/usage:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -9286,6 +9307,7 @@ components:
       type: object
       required: [plan_name_ar, plan_name_en, status, open_invoices]
       properties:
+        billing_gateway: { type: string, enum: [paymob, stripe], description: "Where the store pays the platform, by its country's payment rule (ADR-0089); absent without one." }
         plan_name_ar: { type: string }
         plan_name_en: { type: string }
         status: { type: string, enum: [trialing, active, past_due, suspended, cancelled] }
@@ -9327,6 +9349,7 @@ components:
       type: object
       required: [currency, balance_minor, minimum_minor, level, offered, entries]
       properties:
+        billing_gateway: { type: string, enum: [paymob, stripe], description: "Where the store tops up, by its country's payment rule (ADR-0089); absent without one." }
         currency: { type: string, enum: [EGP, SAR, AED, USD] }
         balance_minor: { type: integer, format: int64, description: Negative when fees of delivered orders are owed. }
         minimum_minor: { type: integer, format: int64, description: "The least top-up; the low-balance notice is at half of it." }
@@ -9352,6 +9375,18 @@ components:
         balance_after_minor: { type: integer, format: int64 }
         reference: { type: string, description: "The invoice's number, the gateway's transaction, or the platform's note." }
         created_at: { type: string, format: date-time }
+    PlanFeatures:
+      type: object
+      required: [included, full]
+      properties:
+        included:
+          type: array
+          description: The on/off features the store's plan grants.
+          items: { type: string, enum: [card_payments, coupons, pixels, feeds, ad_free, risk_rules, profit] }
+        full:
+          type: array
+          description: The counted features with no room for one more.
+          items: { type: string, enum: [products, staff, custom_domains] }
     UsageMeters:
       type: object
       required: [items, ad_free]

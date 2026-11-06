@@ -58,6 +58,9 @@ type Balance struct {
 	Collection   domain.Collection   // "" until the account chooses
 	Offered      []domain.Collection // the ways the platform offers now
 	Entries      []BalanceEntry      // the latest, newest first
+	// Gateway is where the store tops up: its country's billing gateway
+	// (ADR-0089); "" without a rule. The store's own balance only.
+	Gateway string
 }
 
 // StoreBalance is the balance of the store-in-ctx's own account; a store
@@ -84,9 +87,14 @@ func (s *Service) StoreBalance(ctx context.Context) (Balance, error) {
 			cur := info.billed()
 			out = Balance{Currency: cur, MinimumMinor: settings.Minimums[cur], Offered: settings.Offered()}
 			out.Level = domain.LevelOf(0, out.MinimumMinor)
-			return nil
+			out.Gateway, iErr = billingGatewayTx(ctx, tx, account, false, info)
+			return iErr
 		}
-		return s.balanceTx(ctx, tx, account, settings, &out)
+		if err = s.balanceTx(ctx, tx, account, settings, &out); err != nil {
+			return err
+		}
+		out.Gateway, err = billingGatewayTx(ctx, tx, account, true, StoreInfo{})
+		return err
 	})
 	return out, err
 }

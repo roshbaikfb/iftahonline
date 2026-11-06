@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
-import { billingChanged, collectionLabel, dateAr, entryText, leave, signedMoney, topUpAmounts, type BillingBalance, type Collection } from '../lib/billing';
+import { billingChanged, collectionLabel, dateAr, entryText, leave, signedMoney, topUpAmounts, type BillingBalance, type Collection, payGateway } from '../lib/billing';
 import { money } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
 import { useRole } from '../lib/settings';
@@ -168,7 +168,7 @@ export function Balance() {
                 ادفع {money(other.trim() ? Math.round(Number(other) * 100) || 0 : amount, balance.currency)} بالبطاقة
               </button>
               <p className="muted small">
-                الدفع على صفحة Paymob، وبيانات البطاقة لا تمر على خوادمنا. تفضّل التحويل البنكي؟ تواصل معنا وسنضيف الرصيد بعد التأكد.
+                الدفع على صفحة {payGateway(balance.billing_gateway)}، وبيانات البطاقة لا تمر على خوادمنا. تفضّل التحويل البنكي؟ تواصل معنا وسنضيف الرصيد بعد التأكد.
               </p>
             </form>
           </div>

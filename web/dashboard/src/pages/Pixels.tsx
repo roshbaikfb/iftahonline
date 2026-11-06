@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 
 import { api } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import {
   consentChoices,
   draftOf,
@@ -17,6 +18,7 @@ import {
   type PixelProvider,
   type ProviderName,
 } from '../lib/marketing';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 
 // Pixels connects the store's ad and analytics providers (6g, the
@@ -25,6 +27,7 @@ import { problemMessage } from '../lib/problem';
 // for consent. Tokens are write-only: the page only says one is saved.
 export function Pixels() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'pixels');
   const [providers, setProviders] = useState<PixelProvider[]>([]);
   const [pixels, setPixels] = useState<Pixel[]>([]);
   const [pick, setPick] = useState<ProviderName>('meta');
@@ -145,6 +148,7 @@ export function Pixels() {
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="pixels" />}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
@@ -302,7 +306,7 @@ export function Pixels() {
               <p className="hint">من المتصفح فقط حاليًا.</p>
             )}
             <div className="panel-actions">
-              <button type="submit" disabled={busy}>
+              <button type="submit" disabled={busy || locked}>
                 {pixel ? 'حفظ' : 'ربط'}
               </button>
               {pixel && (

@@ -117,13 +117,14 @@ describe('Overview', () => {
     expect(screen.getByRole('link', { name: 'ملغاة: طلبان · 900 ج.م' })).toHaveAttribute('href', `/stores/${store}/orders?status=cancelled`);
     expect(screen.getByRole('link', { name: 'مرتجعة: طلب واحد · 450 ج.م' })).toBeInTheDocument();
 
-    // setup: a carrier only; samples are not "a first product"; screens to come say so
+    // setup: a carrier only; samples are not "a first product"; the
+    // domain step leads to the domains page (it works since U6e)
     const setup = await screen.findByRole('region', { name: 'أكمل إعداد متجرك' });
     expect(within(setup).getByText('1 من 5 خطوات')).toBeInTheDocument();
     expect(within(setup).getByRole('link', { name: 'حدّد مناطق الشحن' })).toHaveAttribute('href', `/stores/${store}/shipping`);
     expect(within(setup).queryByRole('link', { name: /اربط شركة شحن/ })).toBeNull();
     expect(within(setup).getByRole('link', { name: 'أضف أول منتج' })).toHaveAttribute('href', `/stores/${store}/products`);
-    expect(within(setup).getByText('اربط الدومين الخاص').closest('.step')).toHaveTextContent('قريبًا');
+    expect(within(setup).getByRole('link', { name: 'اربط الدومين الخاص' })).toHaveAttribute('href', `/stores/${store}/domains`);
 
     const attention = screen.getByRole('region', { name: 'يحتاج انتباهك' });
     expect(within(attention).getByText('7 طلبات تنتظر التأكيد')).toBeInTheDocument();

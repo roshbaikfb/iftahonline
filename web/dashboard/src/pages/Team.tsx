@@ -3,7 +3,9 @@ import { useParams } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
+import { PlanLock } from '../components/PlanLock';
 import { dateTime } from '../lib/orders';
+import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
 import { roleLabel, roles, useRole } from '../lib/settings';
 import { useSession } from '../session';
@@ -19,6 +21,7 @@ const assignable = roles.filter((r): r is (typeof roles)[number] & { id: Assigna
 // 5). Only the owner manages the team; the others see who is on it.
 export function Team() {
   const { storeId = '' } = useParams();
+  const locked = lockedFor(usePlanFeatures(storeId), 'staff');
   const role = useRole(storeId);
   const { state } = useSession();
   const me = state.kind === 'signed-in' ? state.me.user.id : '';
@@ -97,6 +100,7 @@ export function Team() {
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {locked && <PlanLock storeId={storeId} feature="staff" full />}
       {notice && (
         <p role="status" className="ok-note">
           {notice}
@@ -190,7 +194,7 @@ export function Team() {
                   </label>
                 ))}
               </fieldset>
-              <button type="submit" className="primary" disabled={busy || !email.trim()}>
+              <button type="submit" className="primary" disabled={busy || !email.trim() || locked}>
                 {busy ? 'جارٍ الإرسال…' : 'أرسل الدعوة'}
               </button>
             </form>
