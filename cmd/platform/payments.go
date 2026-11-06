@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 
+	"github.com/roshbaikfb/iftahonline/internal/modules/billing"
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity"
 	"github.com/roshbaikfb/iftahonline/internal/modules/messaging"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -51,8 +52,26 @@ func newPayments(c clients, ords orders.Payments, inbox webhooks.Inbox, ten *ten
 			return nil, linksErr
 		}
 		d.DepositLinks = links.ValidPayLink
+		d.Allowed = storeGateways(ten, billing.NewPaymentRules(c.pool))
 	}
 	return payments.New(d)
+}
+
+// storeGateways adapts tenancy and billing: the gateways the store in
+// ctx may connect are its country's payment rule's (ADR-0093).
+func storeGateways(ten *tenancy.Module, rules billing.PaymentRuleReader) func(ctx context.Context) ([]string, error) {
+	stores := ten.Service()
+	return func(ctx context.Context) ([]string, error) {
+		st, err := stores.GetStore(ctx)
+		if err != nil {
+			return nil, err
+		}
+		r, err := rules.PaymentRuleFor(ctx, st.Country)
+		if err != nil {
+			return nil, err
+		}
+		return r.StoreGateways, nil
+	}
 }
 
 // lateHandler is an event handler supplied after the bus subscriptions

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway"
+	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/gateway/fake"
 	"github.com/roshbaikfb/iftahonline/internal/modules/payments/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/webhooks"
 	"github.com/roshbaikfb/iftahonline/internal/platform/audit"
@@ -45,7 +47,12 @@ var (
 	errUnknownGateway     = errs.Validation(errs.FieldError{Field: "gateway", Code: "unknown", Message: "this gateway is not available"})
 	errKeysRefused        = errs.Validation(errs.FieldError{Field: "secret_key", Code: "refused", Message: "the gateway refused these keys"})
 	errNoIntegration      = errs.Validation(errs.FieldError{Field: "integration_ids", Code: "required", Message: "give the card integration ID(s) from the gateway"})
+	errNotOffered         = errs.Validation(errs.FieldError{Field: "gateway", Code: "not_offered", Message: "this gateway is not offered in the store's country"})
 )
+
+// Allowed lists the gateways the store in ctx's country may connect: its
+// payment rule's (ADR-0089); cmd/platform adapts billing and tenancy.
+type Allowed func(ctx context.Context) ([]string, error)
 
 // verifyTimeout bounds checking a merchant's keys while they wait.
 const verifyTimeout = 10 * time.Second
@@ -86,6 +93,7 @@ type Service struct {
 	jobs      jobs.Inserter
 	inbox     webhooks.Inbox
 	plan      entitlements.Entitlements
+	allowed   Allowed
 	now       func() time.Time
 }
 
@@ -104,6 +112,9 @@ type Deps struct {
 	// Plan says whether the store's plan includes card payments
 	// (ADR-0046); nil includes them (tests).
 	Plan entitlements.Entitlements
+	// Allowed lists the gateways the store's country may connect
+	// (ADR-0093); nil allows every configured one (tests, the worker).
+	Allowed Allowed
 }
 
 // NewService builds the service. A nil Audit or Events discards.
@@ -118,14 +129,31 @@ func NewService(d Deps) *Service {
 		d.Plan = entitlements.Unrestricted()
 	}
 	return &Service{db: d.DB, ids: d.IDs, audit: d.Audit, events: d.Events, gateways: d.Gateways, sealer: d.Sealer,
-		publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, inbox: d.Inbox, plan: d.Plan, now: time.Now}
+		publicURL: d.PublicURL, orders: d.Orders, jobs: d.Jobs, inbox: d.Inbox, plan: d.Plan, allowed: d.Allowed, now: time.Now}
 }
 
 // SetClock replaces the clock (expiry tests).
 func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
-// GatewayNames lists the gateways merchants may connect.
-func (s *Service) GatewayNames() []string { return s.gateways.Names() }
+// GatewayNames lists the gateways the store in ctx may connect: those
+// configured, of its country's (ADR-0093).
+func (s *Service) GatewayNames(ctx context.Context) ([]string, error) {
+	names := s.gateways.Names()
+	if s.allowed == nil {
+		return names, nil
+	}
+	allowed, err := s.allowed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(names, func(n string) bool { return !offered(n, allowed) }), nil
+}
+
+// offered reports whether gateway may be connected, among allowed: the
+// fake gateway (development, never production) always may.
+func offered(gateway string, allowed []string) bool {
+	return gateway == fake.Name || slices.Contains(allowed, gateway)
+}
 
 // ConnectInput is a merchant's keys, as pasted from the gateway's
 // dashboard.
@@ -151,6 +179,18 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 	g, ok := s.gateways[in.Gateway]
 	if !ok {
 		return domain.Connection{}, errUnknownGateway
+	}
+	// Only the gateways of the store's country (ADR-0093). A connection
+	// made before a rule changed stays: the merchant's shoppers keep
+	// paying until it disconnects.
+	if s.allowed != nil {
+		allowed, aErr := s.allowed(ctx)
+		if aErr != nil {
+			return domain.Connection{}, aErr
+		}
+		if !offered(in.Gateway, allowed) {
+			return domain.Connection{}, errNotOffered
+		}
 	}
 	var creds gateway.Credentials
 	var fields []errs.FieldError
