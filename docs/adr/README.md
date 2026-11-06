@@ -99,3 +99,4 @@ supersedes it.
 | [0091](0091-stripe-billing.md) | Stripe for the platform's billing outside Egypt | Accepted |
 | [0092](0092-stripe-for-storefronts.md) | Stripe for merchants' storefronts | Accepted |
 | [0093](0093-storefront-gateways-by-country.md) | A store's gateways follow its country | Accepted |
+| [0094](0094-stripe-webhook-endpoint-by-the-platform.md) | The platform creates a merchant's Stripe webhook endpoint | Accepted |

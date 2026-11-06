@@ -368,6 +368,12 @@ platform provider):
 - **Agencies** are created in their country's currency: EGP in Egypt,
   USD elsewhere, with the country.
 
+## Tax on the plans (ADR-0094)
+
+The merchant's plans (`GET /v1/stores/{id}/billing/plans`) carry
+`tax_bps`: the tax of the store's country (ADR-0089). Each paid plan shows
+that its price is before it.
+
 ## Stripe (ADR-0091)
 
 The `stripe` gateway bills merchants outside Egypt through the
