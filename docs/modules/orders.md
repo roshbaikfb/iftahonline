@@ -106,6 +106,22 @@ The order page also shows the coupon's discount (`discount_minor`,
 its own card, and the customer's confirmation by message (see
 [messaging](messaging.md)).
 
+**A phone order (D5): «طلب جديد»** (`/stores/{id}/orders/new`, a button
+on the orders page for roles with orders.manage) enters an order that came
+by phone or WhatsApp, through `createOrder`:
+
+- **Customer:** a number the store knows fills in the name (`customers?q=`)
+  and the last order's address (`orders?phone=&limit=1`), where the form is
+  still empty.
+- **Products:** found by name (`products/search`, then each hit's variants).
+  Only active products and visible variants are offered; sold-out ones are
+  shown but disabled.
+- **Summary:** delivery and the COD fee come from `shipping/quote`, as at
+  checkout. A coupon's discount is applied when the order is created.
+- **Retries:** one `Idempotency-Key` covers retries after a network
+  failure. A refused request gets a new key, since nothing was created.
+- **Result:** the order starts pending and the page opens it.
+
 ## Plan limit (ADR-0046)
 
 Every placed order counts one `orders_per_month` through

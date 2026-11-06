@@ -18,6 +18,7 @@ import {
   type OrderStatus,
 } from '../lib/orders';
 import { problemMessage } from '../lib/problem';
+import { canManageOrders, useRole } from '../lib/settings';
 import { bandLabel, type RiskBand } from '../lib/risk';
 import { field } from '../session';
 
@@ -70,6 +71,7 @@ async function fetchPage(storeId: string, q: ListQuery): Promise<Page> {
 // that appears; the current filter exports as CSV.
 export function Orders() {
   const { storeId = '' } = useParams();
+  const role = useRole(storeId);
   // The phone search's hint follows the store's country.
   const [country, setCountry] = useState<string | undefined>();
   useEffect(() => {
@@ -228,9 +230,16 @@ export function Orders() {
     <Layout storeId={storeId}>
       <div className="page-head">
         <h1>الطلبات</h1>
-        <a className="button" href={exportURL} download>
-          تصدير CSV
-        </a>
+        <div className="head-actions">
+          {canManageOrders(role) && (
+            <Link className="button primary" to={`/stores/${storeId}/orders/new`}>
+              طلب جديد
+            </Link>
+          )}
+          <a className="button" href={exportURL} download>
+            تصدير CSV
+          </a>
+        </div>
       </div>
 
       <div className="tabs" role="tablist" aria-label="حالة الطلب">
