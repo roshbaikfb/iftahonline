@@ -436,6 +436,20 @@ secrets or personal data.
 `GET /v1/stores/{id}/audit-log` (permission `audit.read`) returns entries
 newest first, keyset-paginated with `next_cursor`, up to 200 per page.
 
+The dashboard's «سجل النشاط» (D6, `/stores/{id}/activity`, for the owner)
+reads 50 at a time, with «عرض الأقدم» for the next page.
+
+- **Wording:** each action is said in Arabic as a verbal noun ("إلغاء
+  الطلب"), so the sentence never assumes who made the change. Useful
+  metadata is shown left-to-right: the domain, the gateway, the coupon
+  code, the roles. Orders and products link to their pages.
+- **Unknown actions:** an action the dashboard does not know yet reads
+  «تغيير في المتجر» (`web/dashboard/src/lib/activity.ts`). A new audit
+  action should get its sentence there.
+- **Who:** the actor is named from today's team (`members`). Otherwise it
+  reads «عضو سابق», «المتجر تلقائيًا» when there is no actor, or «فريق
+  دعم المنصة» for entries from a support session.
+
 ## Tests
 
 | What | Test |
