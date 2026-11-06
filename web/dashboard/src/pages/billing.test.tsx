@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { annualSaving, grantText, leave, meterLevel, meterPercent, meterText, planPoints, planPrice, sold, type BillingPlan, type BillingPlans } from '../lib/billing';
+import { annualSaving, grantText, leave, meterLevel, meterPercent, meterText, planPoints, planPrice, sold, taxNote, type BillingPlan, type BillingPlans } from '../lib/billing';
+import { money } from '../lib/orders';
 import type { Role } from '../lib/settings';
 import { SessionContext, type Session } from '../session';
 import { mockAPI, type Call } from '../test/api';
@@ -33,6 +34,7 @@ function plan(over: Partial<BillingPlan>): BillingPlan {
 
 const plans: BillingPlans = {
   currency: 'EGP',
+  tax_bps: 1400,
   features,
   plans: [
     plan({ code: 'free', kind: 'free', name_ar: 'المجانية', name_en: 'Free', trial_days: 0, grants: [{ feature: 'orders_per_month', unlimited: false, value: 30 }] }),
@@ -125,6 +127,10 @@ describe('billing helpers', () => {
     expect(planPrice(pro, 'monthly', 'EGP')).toEqual({ price: '599 ج.م', note: 'شهريًا' });
     expect(planPrice(pro, 'annual', 'EGP').price).toBe('5,990 ج.م');
     expect(planPrice(pays, 'monthly', 'EGP')).toEqual({ price: '2.5%', note: 'من الطلبات المسلّمة فقط' });
+    // A fixed amount per order beside the rate (ADR-0090).
+    expect(planPrice({ ...pays, fee: { rate_bps: 100, fixed_minor: 4, min_minor: 0 } }, 'monthly', 'USD').price).toBe(`1% + ${money(4, 'USD')} لكل طلب`);
+    expect(taxNote(1500)).toBe('قبل ضريبة القيمة المضافة (15%)');
+    expect(taxNote(0)).toBe('');
     expect(planPrice(free, 'annual', 'EGP').price).toBe('0 ج.م');
     expect(planPrice(plan({ monthly_minor: 100 }), 'annual', 'EGP')).toEqual({ price: '—', note: 'غير متاحة سنويًا' });
     expect(sold(plan({ monthly_minor: 100 }), 'annual')).toBe(false);
@@ -249,6 +255,8 @@ describe('Plans', () => {
     const pro = await screen.findByRole('region', { name: 'برو' });
     expect(within(pro).getByText('باقتك الحالية')).toBeInTheDocument();
     expect(within(pro).getByText('599 ج.م')).toBeInTheDocument();
+    expect(within(pro).getByText('قبل ضريبة القيمة المضافة (14%)')).toBeInTheDocument();
+    expect(screen.queryByText(/فاشتراكك بالدولار/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'سنوي — شهران مجانًا' }));
     expect(within(pro).getByText('5,990 ج.م')).toBeInTheDocument();
 

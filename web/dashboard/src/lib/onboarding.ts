@@ -9,18 +9,23 @@ export const wizardSteps = ['الحساب', 'المتجر', 'النشاط', 'ا�
 
 export interface Country {
   id: 'eg' | 'sa' | 'ae';
+  code: 'EG' | 'SA' | 'AE'; // ISO 3166-1, as the API takes it
   name: string;
   currencyName: string;
   currency: 'EGP' | 'SAR' | 'AED';
   timezone: string;
+  // How the country's merchants are paid (ADR-0088): their shoppers'
+  // cards, and their subscription's currency.
+  cards: string;
+  billedIn: string;
 }
 
 // The countries a store can sell in; the country sets the currency, which
 // does not change after sign-up.
 export const countries: Country[] = [
-  { id: 'eg', name: 'مصر', currencyName: 'جنيه مصري', currency: 'EGP', timezone: 'Africa/Cairo' },
-  { id: 'sa', name: 'السعودية', currencyName: 'ريال سعودي', currency: 'SAR', timezone: 'Asia/Riyadh' },
-  { id: 'ae', name: 'الإمارات', currencyName: 'درهم إماراتي', currency: 'AED', timezone: 'Asia/Dubai' },
+  { id: 'eg', code: 'EG', name: 'مصر', currencyName: 'جنيه مصري', currency: 'EGP', timezone: 'Africa/Cairo', cards: 'Paymob', billedIn: 'بالجنيه' },
+  { id: 'sa', code: 'SA', name: 'السعودية', currencyName: 'ريال سعودي', currency: 'SAR', timezone: 'Asia/Riyadh', cards: 'Stripe', billedIn: 'بالدولار' },
+  { id: 'ae', code: 'AE', name: 'الإمارات', currencyName: 'درهم إماراتي', currency: 'AED', timezone: 'Asia/Dubai', cards: 'Stripe', billedIn: 'بالدولار' },
 ];
 
 export interface ActivityCard {

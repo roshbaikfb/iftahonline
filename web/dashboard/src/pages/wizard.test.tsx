@@ -77,6 +77,10 @@ describe('Signup', () => {
     expect(slug).toHaveValue('beit-mona');
     await user.click(screen.getByRole('button', { name: /السعودية/ }));
     expect(screen.getByRole('button', { name: /السعودية/ })).toHaveAttribute('aria-pressed', 'true');
+    // What the country decides (ADR-0088): Stripe for cards, billed in dollars.
+    const summary = screen.getByLabelText('ما تحدده الدولة');
+    expect(summary).toHaveTextContent('عند الاستلام، أو بالبطاقة عبر Stripe');
+    expect(summary).toHaveTextContent('بالدولار');
     await user.click(screen.getByRole('button', { name: 'إنشاء المتجر' }));
 
     await waitFor(() => {
@@ -87,7 +91,7 @@ describe('Signup', () => {
       email: 'mona@example.com',
       password: 'correct horse battery',
       client: 'web',
-      store: { name: 'بيت منى', slug: 'beit-mona', currency: 'SAR', locale: 'ar', timezone: 'Asia/Riyadh' },
+      store: { name: 'بيت منى', slug: 'beit-mona', currency: 'SAR', country: 'SA', locale: 'ar', timezone: 'Asia/Riyadh' },
     });
   });
 

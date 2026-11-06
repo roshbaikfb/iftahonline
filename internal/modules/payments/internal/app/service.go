@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/riverqueue/river"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/entitlements"
 	"github.com/roshbaikfb/iftahonline/internal/modules/orders"
@@ -231,8 +232,31 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 		return domain.Connection{}, errs.Unavailable(30*time.Second, fmt.Errorf("payments: verify %s keys: %w", in.Gateway, err))
 	}
 	id := s.ids.New()
+	// The webhook endpoint, where the platform makes it (Stripe,
+	// ADR-0094): at this connection's URL, before the keys are kept.
+	prov, provisions := g.(gateway.Provisioner)
+	if provisions {
+		pctx, pcancel := context.WithTimeout(ctx, verifyTimeout)
+		defer pcancel()
+		switch creds, err = prov.Provision(pctx, creds, webhooks.URL(s.publicURL, in.Gateway, storeID, id)); {
+		case errors.Is(err, gateway.ErrAuth), errors.Is(err, gateway.ErrRejected):
+			return domain.Connection{}, errKeysRefused
+		case err != nil:
+			return domain.Connection{}, errs.Unavailable(30*time.Second, fmt.Errorf("payments: %s webhook endpoint: %w", in.Gateway, err))
+		}
+	}
+	// unprovision deletes the endpoint again when the connection is not
+	// kept (best effort: a stale endpoint only receives refused events).
+	unprovision := func() {
+		if provisions {
+			uctx, ucancel := context.WithTimeout(context.WithoutCancel(ctx), verifyTimeout)
+			defer ucancel()
+			_ = prov.Unprovision(uctx, creds) //nolint:errcheck // best effort, see above
+		}
+	}
 	sealed, err := s.sealer.SealJSON(ctx, creds, envelope.ConnectionAAD(module, in.Gateway, storeID, id))
 	if err != nil {
+		unprovision()
 		return domain.Connection{}, err
 	}
 	var c domain.Connection
@@ -246,6 +270,9 @@ func (s *Service) Connect(ctx context.Context, in ConnectInput) (domain.Connecti
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "payment_connection.created", TargetType: "payment_connection",
 			TargetID: id.String(), Metadata: map[string]any{"gateway": in.Gateway}})
 	})
+	if err != nil {
+		unprovision()
+	}
 	if errors.Is(err, store.ErrGatewayConnected) {
 		return domain.Connection{}, ErrGatewayConnected
 	}
@@ -271,6 +298,11 @@ func (s *Service) Disconnect(ctx context.Context, id ulid.ID) error {
 		}
 		if txErr = s.connectionChangedTx(ctx, tx, c); txErr != nil {
 			return txErr
+		}
+		if _, provisions := s.gateways[c.Gateway].(gateway.Provisioner); provisions {
+			if txErr = s.enqueueTx(ctx, tx, func(t jobs.TenantArgs) river.JobArgs { return UnprovisionArgs{TenantArgs: t, ConnectionID: id} }, nil); txErr != nil {
+				return txErr
+			}
 		}
 		return s.audit.RecordTx(ctx, tx, audit.Entry{Action: "payment_connection.disconnected", TargetType: "payment_connection",
 			TargetID: id.String(), Metadata: map[string]any{"gateway": c.Gateway}})

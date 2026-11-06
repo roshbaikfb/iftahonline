@@ -51,6 +51,7 @@ export function Signup() {
   const [slug, setSlug] = useState('');
   const [slugState, setSlugState] = useState<SlugState>({ kind: 'idle' });
   const [country, setCountry] = useState<Country['id']>('eg');
+  const chosen = countries.find((x) => x.id === country);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -89,7 +90,7 @@ export function Signup() {
         body: {
           ...account,
           client: 'web',
-          store: { name: storeName.trim(), slug, currency: c.currency, locale: 'ar', timezone: c.timezone },
+          store: { name: storeName.trim(), slug, currency: c.currency, country: c.code, locale: 'ar', timezone: c.timezone },
         },
       });
       if (err) {
@@ -247,7 +248,23 @@ export function Signup() {
                 </button>
               ))}
             </div>
-            <small>تحدد عملة المتجر ومحافظات الشحن، ولا تتغير بعد إنشاء المتجر.</small>
+            {chosen && (
+              <dl className="country-summary" aria-label="ما تحدده الدولة">
+                <div>
+                  <dt>عملة متجرك</dt>
+                  <dd>{chosen.currencyName}</dd>
+                </div>
+                <div>
+                  <dt>يدفع زبائنك</dt>
+                  <dd>عند الاستلام، أو بالبطاقة عبر {chosen.cards}</dd>
+                </div>
+                <div>
+                  <dt>اشتراكك في افتح أونلاين</dt>
+                  <dd>{chosen.billedIn}</dd>
+                </div>
+              </dl>
+            )}
+            <small>تحدد الدولة عملة المتجر ومحافظات الشحن وطرق الدفع، ولا تتغير بعد إنشاء المتجر إلا عن طريق الدعم.</small>
           </fieldset>
         </div>
         {error && <p role="alert">{error}</p>}

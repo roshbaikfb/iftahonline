@@ -638,6 +638,11 @@ type BillingPlans struct {
 	Currency BillingPlansCurrency `json:"currency"`
 	Features []BillingFeature     `json:"features"`
 	Plans    []BillingPlan        `json:"plans"`
+
+	// TaxBps The tax on the store's invoices, by its country (ADR-0089): the prices are before it.
+	//
+	// Example: 1500
+	TaxBps int `json:"tax_bps"`
 }
 
 // BillingPlansCurrency defines model for BillingPlans.Currency.

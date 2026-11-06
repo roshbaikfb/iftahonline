@@ -11,10 +11,16 @@ import { field } from '../session';
 type Connections = components['schemas']['PaymentConnections'];
 type ConnectInput = components['schemas']['ConnectPaymentGatewayInput'];
 
+// Stripe's restricted key needs these permissions (ADR-0094): the
+// platform creates the webhook endpoint itself.
+const stripePermissions = ['Checkout Sessions: Write', 'PaymentIntents: Read', 'Refunds: Write', 'Webhook Endpoints: Write'];
+
 // Gateways connects the store's own account at a card gateway (ADR-0029;
-// the owner only). The keys are checked with the gateway, then kept
-// encrypted and never shown again. Once connected, checkout offers card
-// payment.
+// the owner only), among those of the store's country (ADR-0093). The
+// keys are checked with the gateway, then kept encrypted and never shown
+// again. Stripe takes one restricted key: the platform creates its
+// webhook endpoint (ADR-0094, the approved mockup). Once connected,
+// checkout offers card payment beside cash on delivery.
 export function Gateways() {
   const { storeId = '' } = useParams();
   const [list, setList] = useState<Connections | null>(null);
@@ -47,7 +53,10 @@ export function Gateways() {
   async function connect(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const body: ConnectInput = { gateway, api_key: field(form, 'api_key').trim(), webhook_secret: field(form, 'webhook_secret').trim() };
+    const body: ConnectInput =
+      gateway === 'stripe'
+        ? { gateway, secret_key: field(form, 'secret_key').trim() }
+        : { gateway, api_key: field(form, 'api_key').trim(), webhook_secret: field(form, 'webhook_secret').trim() };
     if (gateway === 'paymob') {
       const ids = field(form, 'integration_ids')
         .split(/[\s,،]+/)
@@ -94,6 +103,13 @@ export function Gateways() {
           {notice}
         </p>
       )}
+      <section className="card cod-card" aria-labelledby="h-cod">
+        <div>
+          <h2 id="h-cod">الدفع عند الاستلام</h2>
+          <p className="hint">متاح دائمًا لكل الطلبات.</p>
+        </div>
+        <span className="status st-on">مفعّل</span>
+      </section>
       {list && (
         <div className={!active && list.gateways.length > 0 ? 'split' : undefined}>
           <section className="card">
@@ -138,6 +154,39 @@ export function Gateways() {
                   ))}
                 </select>
               </label>
+              {gateway === 'stripe' && (
+                <>
+                  <ol className="steps-list">
+                    <li>
+                      في Stripe: <bdi className="ltr">Developers ← API keys ← Create restricted key</bdi>، وأعطه الصلاحيات:{' '}
+                      {stripePermissions.map((p, i) => (
+                        <span key={p}>
+                          {i > 0 && '، '}
+                          <bdi className="ltr">{p}</bdi>
+                        </span>
+                      ))}
+                      .
+                    </li>
+                    <li>الصق المفتاح هنا. سننشئ رابط الإشعارات في حسابك تلقائيًا.</li>
+                  </ol>
+                  <label>
+                    المفتاح المحدود (Restricted key)
+                    <input
+                      name="secret_key"
+                      type="password"
+                      required
+                      maxLength={512}
+                      autoComplete="off"
+                      dir="ltr"
+                      pattern="(rk|sk)_.+"
+                      placeholder="rk_live_…"
+                    />
+                    <small className="hint">
+                      يبدأ بـ <bdi className="ltr">rk_</bdi>. المفتاح السري <bdi className="ltr">sk_</bdi> يصلح أيضًا، لكن المحدود أأمن.
+                    </small>
+                  </label>
+                </>
+              )}
               {gateway === 'paymob' && (
                 <>
                   <label>
@@ -150,14 +199,18 @@ export function Gateways() {
                   </label>
                 </>
               )}
-              <label>
-                API key
-                <input name="api_key" type="password" required maxLength={1024} autoComplete="off" dir="ltr" />
-              </label>
-              <label>
-                {gateway === 'paymob' ? 'HMAC secret' : 'سر الإشعارات'}
-                <input name="webhook_secret" type="password" required maxLength={512} autoComplete="off" dir="ltr" />
-              </label>
+              {gateway !== 'stripe' && (
+                <>
+                  <label>
+                    API key
+                    <input name="api_key" type="password" required maxLength={1024} autoComplete="off" dir="ltr" />
+                  </label>
+                  <label>
+                    {gateway === 'paymob' ? 'HMAC secret' : 'سر الإشعارات'}
+                    <input name="webhook_secret" type="password" required maxLength={512} autoComplete="off" dir="ltr" />
+                  </label>
+                </>
+              )}
               {gateway === 'paymob' && (
                 <label>
                   أرقام تكامل البطاقات (Integration IDs)
@@ -165,7 +218,7 @@ export function Gateways() {
                 </label>
               )}
               <button type="submit" disabled={busy}>
-                {busy ? 'جارٍ التحقق من المفاتيح…' : 'ربط'}
+                {busy ? 'جارٍ التحقق من المفاتيح…' : gateway === 'stripe' ? 'اربط Stripe' : 'ربط'}
               </button>
             </form>
           )}

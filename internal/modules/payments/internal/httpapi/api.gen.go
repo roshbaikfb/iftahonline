@@ -161,7 +161,7 @@ func (e PolicySlug) Valid() bool {
 	}
 }
 
-// ConnectPaymentGatewayInput The merchant's keys. Each gateway needs its own: Paymob the secret, public and API keys, the HMAC secret and integration IDs; Stripe the secret (or restricted) key and the webhook endpoint's signing secret (ADR-0092). A key a gateway needs and is missing is a validation error.
+// ConnectPaymentGatewayInput The merchant's keys. Each gateway needs its own: Paymob the secret, public and API keys, the HMAC secret and integration IDs; Stripe only the secret (or restricted) key, as the platform creates the webhook endpoint in the merchant's account and keeps its secret (ADR-0094). A key a gateway needs and is missing is a validation error.
 type ConnectPaymentGatewayInput struct {
 	// ApiKey Paymob: for transaction inquiries. Stripe: none.
 	ApiKey *string `json:"api_key,omitempty"`
@@ -174,8 +174,8 @@ type ConnectPaymentGatewayInput struct {
 	PublicKey      *string `json:"public_key,omitempty"`
 	SecretKey      *string `json:"secret_key,omitempty"`
 
-	// WebhookSecret The gateway's webhook signing secret (Paymob: HMAC; Stripe: whsec_).
-	WebhookSecret string `json:"webhook_secret"`
+	// WebhookSecret The gateway's webhook signing secret (Paymob: HMAC). Stripe: none, the platform creates it.
+	WebhookSecret *string `json:"webhook_secret,omitempty"`
 }
 
 // FieldError defines model for FieldError.
