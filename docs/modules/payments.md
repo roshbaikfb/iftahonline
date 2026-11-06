@@ -114,6 +114,10 @@ The return URL must be an http(s) URL on a host of the same store
     key (`gateway.KeysNeeded`).
   - Unverified until the sandbox run:
     `STRIPE_SANDBOX_SECRET_KEY=… STRIPE_SANDBOX_WEBHOOK_SECRET=… go test ./internal/modules/payments/internal/gateway/stripe/`.
+- **By country** (ADR-0093): a store lists and connects only the
+  `store_gateways` of its country's payment rule (the console's, through
+  `Deps.Allowed`), plus the fake gateway in development. A connection
+  made before a rule changed keeps working.
 - **`FetchStatus`** asks by `gateway.Ref`: our reference and the
   gateway's own payment (Paymob asks by ours, Stripe by its session).
 - **The webhook parsers** are fuzzed (`FuzzVerifyWebhook`,
