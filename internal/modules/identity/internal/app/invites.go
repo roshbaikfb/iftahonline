@@ -373,3 +373,57 @@ type NewDeviceAlertArgs struct {
 
 // Kind implements river.JobArgs.
 func (NewDeviceAlertArgs) Kind() string { return "identity.device.alert" }
+
+// InvitationPreview is what an invitation link is, before joining (D2):
+// the store, who invited, the role, the invited email and when it
+// expires, and whether that email has an account.
+type InvitationPreview struct {
+	StoreName   string
+	InviterName string // "" when that account is gone
+	Role        authz.Role
+	Email       string
+	ExpiresAt   time.Time
+	HasAccount  bool
+}
+
+// PreviewInvitation reads an open invitation by its link's token. An
+// unknown, expired, accepted or revoked one is invitation_not_found;
+// lookups are throttled per IP like sign-ins, so tokens cannot be probed.
+func (s *Service) PreviewInvitation(ctx context.Context, token string) (InvitationPreview, error) {
+	if err := s.throttle(ctx, "invite-preview:ip:"+ipKey(ctx), s.limits.LoginPerIP); err != nil {
+		return InvitationPreview{}, err
+	}
+	storeID, hash, ok := parseInviteToken(token)
+	if !ok {
+		return InvitationPreview{}, errInviteNotFound
+	}
+	ctx = tenant.WithStore(ctx, storeID)
+	var inv store.Invitation
+	err := postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) (txErr error) {
+		inv, txErr = store.OpenInvitationByToken(ctx, tx, hash)
+		return txErr
+	})
+	if errors.Is(err, domain.ErrNotFound) {
+		return InvitationPreview{}, errInviteNotFound
+	}
+	if err != nil {
+		return InvitationPreview{}, err
+	}
+	st, err := s.stores.GetStore(ctx)
+	if err != nil {
+		return InvitationPreview{}, err
+	}
+	out := InvitationPreview{StoreName: st.Name, Role: inv.Role, Email: inv.Email, ExpiresAt: inv.ExpiresAt}
+	if inviter, uErr := store.UserByID(ctx, s.db, inv.InvitedBy); uErr == nil {
+		out.InviterName = inviter.Name
+	} else if !errors.Is(uErr, domain.ErrNotFound) {
+		return InvitationPreview{}, uErr
+	}
+	switch _, uErr := store.UserByEmail(ctx, s.db, inv.Email); {
+	case uErr == nil:
+		out.HasAccount = true
+	case !errors.Is(uErr, domain.ErrNotFound):
+		return InvitationPreview{}, uErr
+	}
+	return out, nil
+}

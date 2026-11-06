@@ -163,6 +163,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/invitations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What an invitation link is, before joining
+         * @description For the invitation page (D2): the store, who invited, the role, the
+         *     invited email, when the link expires, and whether that email has an
+         *     account (sign in, then join) or not (create it while joining). The
+         *     token travels in the body: it is the link's fragment and never in
+         *     a URL. An unknown, expired, accepted or revoked link is 404
+         *     invitation_not_found. Rate-limited like the sign-in endpoints.
+         */
+        post: operations["previewInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/invitations/accept": {
         parameters: {
             query?: never;
@@ -5420,6 +5445,18 @@ export interface components {
             password?: string;
             client?: components["schemas"]["ClientKind"];
         };
+        InvitationPreview: {
+            store_name: string;
+            /** @description Who invited; absent when that account is gone. */
+            inviter_name?: string;
+            role: components["schemas"]["Role"];
+            /** @description The invited email; joining is only as it. */
+            email: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description The email has an account */
+            has_account: boolean;
+        };
         AcceptInvitationResponse: {
             store_id: components["schemas"]["ULID"];
             role: components["schemas"]["Role"];
@@ -9051,6 +9088,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MFARequired"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    previewInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The part after `#` in the invitation link. */
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The invitation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -366,6 +366,36 @@ paths:
               schema: { $ref: "#/components/schemas/MFARequired" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/invitations/preview:
+    post:
+      tags: [identity]
+      operationId: previewInvitation
+      summary: What an invitation link is, before joining
+      description: |
+        For the invitation page (D2): the store, who invited, the role, the
+        invited email, when the link expires, and whether that email has an
+        account (sign in, then join) or not (create it while joining). The
+        token travels in the body: it is the link's fragment and never in
+        a URL. An unknown, expired, accepted or revoked link is 404
+        invitation_not_found. Rate-limited like the sign-in endpoints.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, maxLength: 128, description: The part after `#` in the invitation link. }
+      responses:
+        "200":
+          description: The invitation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationPreview" }
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/invitations/accept:
     post:
       tags: [identity]
@@ -6333,6 +6363,16 @@ components:
         name: { type: string, maxLength: 100, description: For a new account. }
         password: { type: string, maxLength: 128, format: password, description: For a new account. }
         client: { $ref: "#/components/schemas/ClientKind" }
+    InvitationPreview:
+      type: object
+      required: [store_name, role, email, expires_at, has_account]
+      properties:
+        store_name: { type: string }
+        inviter_name: { type: string, description: Who invited; absent when that account is gone. }
+        role: { $ref: "#/components/schemas/Role" }
+        email: { type: string, description: The invited email; joining is only as it. }
+        expires_at: { type: string, format: date-time }
+        has_account: { type: boolean, description: The email has an account, so the invitee signs in, then joins. }
     AcceptInvitationResponse:
       type: object
       required: [store_id, role, user]
