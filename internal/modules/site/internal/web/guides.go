@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/site/internal/domain"
+	script "github.com/roshbaikfb/iftahonline/internal/platform/arabic"
 )
 
 // The site's guides (S4c): /guides lists them, /guides/{slug} shows one.
@@ -137,15 +138,12 @@ func (s *Site) guideSitePages(ctx context.Context, l *language) []sitePage {
 	return out
 }
 
-var arMonths = [...]string{"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"} //nolint:gochecknoglobals // constant table
-
 // dateIn is a date as l writes it: "3 نوفمبر 2026", "3 November 2026".
 func dateIn(l *language, t time.Time) string {
 	if l == english {
 		return t.UTC().Format("2 January 2006")
 	}
-	t = t.UTC()
-	return strconv.Itoa(t.Day()) + " " + arMonths[t.Month()-1] + " " + strconv.Itoa(t.Year())
+	return script.Date(t.UTC())
 }
 
 // minutesIn is a reading time as l says it.
