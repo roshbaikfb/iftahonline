@@ -35,6 +35,14 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 	"AdminImpersonateStore":     domain.PermStoresManage,
 	"AdminSetStoreOverride":     domain.PermStoresManage,
 	"AdminClearStoreOverride":   domain.PermStoresManage,
+	// A store's team (C1): contacts need contacts.read too (app).
+	"AdminGetStoreTeam":          domain.PermStoresRead,
+	"AdminGetMemberStores":       domain.PermStoresManage,
+	"AdminRequestMemberMFAReset": domain.PermStoresManage,
+	"AdminDisableMember":         domain.PermStoresManage,
+	"AdminEnableMember":          domain.PermStoresManage,
+	"AdminSignOutMember":         domain.PermStoresManage,
+	"AdminCancelSupportRequest":  domain.PermStoresManage,
 
 	"AdminGetStoreBilling":        domain.PermBillingRead,
 	"AdminGetStoreBalance":        domain.PermBillingRead,

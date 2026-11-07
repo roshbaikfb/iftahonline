@@ -73,3 +73,27 @@ func (h *Handlers) SendEmailVerification(ctx context.Context, _ SendEmailVerific
 	}
 	return SendEmailVerification202Response{}, nil
 }
+
+// CheckSupportLink implements StrictServerInterface: what a support
+// request's cancel link (C1) would cancel.
+func (h *Handlers) CheckSupportLink(ctx context.Context, req CheckSupportLinkRequestObject) (CheckSupportLinkResponseObject, error) {
+	if req.Body == nil {
+		return nil, errs.BadRequest("request body is required", nil)
+	}
+	l, err := h.svc.CheckSupportLink(ctx, req.Body.Token)
+	if err != nil {
+		return nil, err
+	}
+	return CheckSupportLink200JSONResponse{Kind: SupportLinkKind(l.Kind), Email: l.Email, CreatedAt: l.CreatedAt, EffectiveAt: l.EffectiveAt}, nil
+}
+
+// CancelSupportLink implements StrictServerInterface.
+func (h *Handlers) CancelSupportLink(ctx context.Context, req CancelSupportLinkRequestObject) (CancelSupportLinkResponseObject, error) {
+	if req.Body == nil {
+		return nil, errs.BadRequest("request body is required", nil)
+	}
+	if err := h.svc.CancelSupportLink(ctx, req.Body.Token); err != nil {
+		return nil, err
+	}
+	return CancelSupportLink204Response{}, nil
+}

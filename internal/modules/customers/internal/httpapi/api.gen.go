@@ -152,6 +152,9 @@ type ImportID = ULID
 // InvoiceID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type InvoiceID = ULID
 
+// MemberUserID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type MemberUserID = ULID
+
 // OrderID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type OrderID = ULID
 
@@ -169,6 +172,9 @@ type SizeChartID = ULID
 
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
+
+// SupportRequestID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type SupportRequestID = ULID
 
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID

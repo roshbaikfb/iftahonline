@@ -69,6 +69,9 @@ type Deps struct {
 	// Collection is the collection settings (billing.NewCollection); nil
 	// refuses them.
 	Collection billing.CollectionConsole
+	// Support is identity's support on a store's team (C1, adapted in
+	// cmd/platform); nil refuses it.
+	Support StoreSupport
 	// Mailer sends the alerts' emails from the worker (ADR-0080), with
 	// links into ConsoleURL; nil sends none.
 	Mailer     mailer.Mailer
@@ -109,9 +112,15 @@ func New(d Deps) (*Module, error) {
 	}
 	svc := app.NewService(app.Deps{DB: d.AdminPool, Hasher: hasher, Limiter: limiter, Limits: limits, Keyring: d.Secrets.Keyring,
 		IDs: d.IDs, Log: d.Log, Directory: d.Directory, Stores: d.Stores, Impersonate: d.Impersonate, Profile: d.Profile, OwnerStores: d.OwnerStores, DashboardURL: d.DashboardURL,
-		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding, Collection: d.Collection,
+		Plans: d.Plans, Enforced: d.Enforced, Overrides: d.Overrides, Billing: d.Billing, Redis: d.Redis, Agencies: d.Agencies, Ads: d.Ads, Site: d.Site, Founding: d.Founding, Collection: d.Collection, Support: d.Support,
 		Mailer: d.Mailer, ConsoleURL: d.ConsoleURL, Pusher: d.Pusher, PushPublicKey: d.PushPublicKey})
 	return &Module{svc: svc, deps: d}, nil
+}
+
+// NotifyAdmin emails admin id, when active (the worker: identity tells
+// the admin who asked that a merchant cancelled a support request).
+func (m *Module) NotifyAdmin(ctx context.Context, id ulid.ID, subject, text string) error {
+	return m.svc.NotifyAdmin(ctx, id, subject, text)
 }
 
 // NewWebPusher sends Web Push signed with the VAPID keys (ADR-0080).

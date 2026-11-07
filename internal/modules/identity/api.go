@@ -23,6 +23,32 @@ import (
 // ImpersonationGrant is a support session's one-time code (ADR-0055).
 type ImpersonationGrant = app.ImpersonationGrant
 
+// SupportTeam is a store's team for the console (C1): members, pending
+// invitations, and support requests open or closed lately.
+type SupportTeam = app.SupportTeam
+
+// SupportMember is a store member as the console sees them (the phone
+// masked).
+type SupportMember = app.SupportMember
+
+// SupportRequest is a delayed change platform support asked for (C1).
+type SupportRequest = store.SupportRequest
+
+// MemberStore is a store a user works on, with the role.
+type MemberStore = store.MemberStore
+
+// Support request kinds.
+const (
+	SupportMFAReset          = store.KindMFAReset
+	SupportOwnershipTransfer = store.KindOwnershipTransfer
+)
+
+// MemberStores lists the stores (at most 20) user is a member of, on db,
+// the console's pool (C1): IDs and roles only.
+func MemberStores(ctx context.Context, db store.Tx, user ulid.ID) ([]MemberStore, error) {
+	return store.MemberStores(ctx, db, user)
+}
+
 // NewAuditRecorder returns the audit log writer to give other modules.
 // It needs nothing but an ID generator, so it can be built before the
 // module itself.

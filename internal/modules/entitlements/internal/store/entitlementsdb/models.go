@@ -1316,6 +1316,21 @@ type Subscription struct {
 	HeldAt            pgtype.Timestamptz
 }
 
+type SupportRequest struct {
+	ID          ulid.ID
+	StoreID     ulid.ID
+	Kind        string
+	UserID      ulid.ID
+	FromUserID  pgtype.UUID
+	RequestedBy ulid.ID
+	Reason      string
+	CreatedAt   pgtype.Timestamptz
+	EffectiveAt pgtype.Timestamptz
+	CancelledAt pgtype.Timestamptz
+	CancelledBy pgtype.Text
+	DoneAt      pgtype.Timestamptz
+}
+
 type TaxRate struct {
 	Country string
 	RateBps int32
@@ -1379,14 +1394,16 @@ type UserSession struct {
 }
 
 type UserToken struct {
-	ID        ulid.ID
-	UserID    ulid.ID
-	Purpose   string
-	TokenHash []byte
-	Email     string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-	UsedAt    pgtype.Timestamptz
+	ID          ulid.ID
+	UserID      ulid.ID
+	Purpose     string
+	TokenHash   []byte
+	Email       string
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	UsedAt      pgtype.Timestamptz
+	RequestID   pgtype.UUID
+	LinkStoreID pgtype.UUID
 }
 
 type Variant struct {

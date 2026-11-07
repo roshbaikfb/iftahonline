@@ -329,6 +329,61 @@ and confirming an email address.
     is confirmed, with a resend button.
 - Errors: a used, replaced or expired link is 404 `link_not_found`.
 
+## Platform support on a store's team (C1, ADR-0095)
+
+The console acts on a store's members through `admin.StoreSupport`. It is
+adapted from the module's methods in `cmd/platform/storeteam.go`. Each
+action takes the admin's ID and a reason. Each lands in the store's
+activity log with `support_admin` in the metadata, after the console has
+recorded it in its own log.
+
+| Action | Module method | When it happens | Activity |
+|---|---|---|---|
+| The team | `SupportTeam` | — | — |
+| Remove two-step verification | `RequestMFAReset` | 24 hours later (`SupportDelay`) | `support.mfa_reset_requested`, then `_done` or `_cancelled` |
+| Cancel a waiting request | `CancelSupportRequest` | at once | `support.mfa_reset_cancelled` (`by: console`) |
+| Disable / enable an account | `SetMemberDisabled` | at once, in every store | `member.disabled` / `member.enabled` |
+| Sign out everywhere | `SignOutMember` | at once | `member.signed_out` |
+
+- **The team** (`SupportTeam`) lists, in one transaction:
+  - members, from one query (`ListTeam`): two-step state, account status,
+    and last use of the dashboard (support sessions left out). The phone
+    is masked by `MaskPhone`;
+  - pending invitations;
+  - requests open or closed in the last 7 days.
+- **A request** (`support_requests`, RLS) refuses:
+  - a non-member: 404 `member_not_found`. This also covers another
+    store's account;
+  - a member without two-step verification: 409 `mfa_not_enabled`;
+  - a second open request: 409 `request_open`.
+
+  In the same transaction it:
+  - records a cancel link (`user_tokens`, purpose `support_cancel`) for
+    the member, and one for the owner when that is someone else;
+  - enqueues `identity.support.link_email` for each link;
+  - schedules `identity.support.execute` at `effective_at`.
+- **Carrying it out** (`identity.support.execute`, at `effective_at`):
+  - It locks the request; a request cancelled meanwhile is left as it
+    is. Run too early, it fails and River retries it.
+  - It removes the TOTP seed and the recovery codes, signs the member out
+    everywhere, and closes the request and its links.
+  - It enqueues `identity.support.notice`, which emails the member.
+- **The link page:** `/support-request#<secret>` on the dashboard. The
+  secret is in the URL fragment.
+  - `POST /v1/support-requests/check` answers the kind, the masked
+    email, and when the request was made and takes effect.
+  - `POST /v1/support-requests/cancel` cancels the request, closes every
+    link it sent, and enqueues `identity.support.cancelled`. That job
+    emails the admin who asked through `WorkerDeps.NotifyAdmin`, which is
+    the console's mailer.
+  - Neither needs a session. Both are limited per IP. A closed or unknown
+    link is 404 `link_not_found`.
+- **The emails** give times in the store's time zone, for example «الأحد
+  8 نوفمبر 2:30 م بتوقيت مكة» (`platform/arabic.Moment`).
+- **Other stores:** `app.member_stores` (SECURITY DEFINER, `app_admin`
+  only) lists the stores an account works on. The console warns with it
+  before disabling an account.
+
 ## Team: invitations and members
 
 | Operation | Permission |

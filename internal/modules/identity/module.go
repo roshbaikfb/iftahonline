@@ -109,6 +109,34 @@ func (m *Module) Impersonate(ctx context.Context, admin ulid.ID, reason string, 
 	return m.svc.StartImpersonation(ctx, admin, reason, d, write)
 }
 
+// SupportTeam reads the team of the store in ctx for the console (C1):
+// members, pending invitations and support requests.
+func (m *Module) SupportTeam(ctx context.Context) (SupportTeam, error) { return m.svc.SupportTeam(ctx) }
+
+// RequestMFAReset asks for member user's two-step verification to be
+// removed in 24 hours, emailing the member and the owner a cancel link
+// (C1). The console calls it after recording the request in its log.
+func (m *Module) RequestMFAReset(ctx context.Context, admin, user ulid.ID, reason string) (SupportRequest, error) {
+	return m.svc.RequestMFAReset(ctx, admin, user, reason)
+}
+
+// CancelSupportRequest cancels a request of the store in ctx that still
+// waits (C1).
+func (m *Module) CancelSupportRequest(ctx context.Context, admin, id ulid.ID, reason string) error {
+	return m.svc.CancelSupportRequest(ctx, admin, id, reason)
+}
+
+// SetMemberDisabled disables member user's account at once (every
+// session ends) or enables it again (C1).
+func (m *Module) SetMemberDisabled(ctx context.Context, admin, user ulid.ID, disabled bool, reason string) error {
+	return m.svc.SetMemberDisabled(ctx, admin, user, disabled, reason)
+}
+
+// SignOutMember ends every session of member user (C1).
+func (m *Module) SignOutMember(ctx context.Context, admin, user ulid.ID, reason string) error {
+	return m.svc.SignOutMember(ctx, admin, user, reason)
+}
+
 // Mount registers the identity HTTP API.
 func (m *Module) Mount(mux *http.ServeMux, resp *problem.Responder) {
 	httpapi.Mount(mux, m.svc, m.policy, m.scope, resp)
@@ -124,12 +152,22 @@ type WorkerDeps struct {
 	Env     string
 	Tenancy tenancy.Service
 	Log     *slog.Logger
+	// IDs and Jobs carry out support requests (C1); NotifyAdmin tells the
+	// admin who asked when a merchant cancels one from the email link
+	// (nil without a console).
+	IDs         *ulid.Generator
+	Jobs        jobs.Inserter
+	NotifyAdmin AdminNotifier
 }
+
+// AdminNotifier emails a platform admin: the console's, wired in
+// cmd/platform.
+type AdminNotifier = app.AdminNotifier
 
 // RegisterWorkers adds the module's job workers: audit partitions, phone
 // code delivery, invitation email and new-device alerts.
 func RegisterWorkers(w *river.Workers, d WorkerDeps) error {
-	if d.Pool == nil || d.Redis == nil || d.Secrets.Keyring == nil || d.Tenancy == nil || d.Log == nil {
+	if d.Pool == nil || d.Redis == nil || d.Secrets.Keyring == nil || d.Tenancy == nil || d.Log == nil || d.IDs == nil || d.Jobs == nil {
 		return errors.New("identity: missing worker dependency")
 	}
 	mail := mailer.FromConfig(d.Mail, d.Log)
@@ -139,6 +177,6 @@ func RegisterWorkers(w *river.Workers, d WorkerDeps) error {
 	}
 	return app.RegisterWorkers(w, app.WorkerDeps{
 		DB: d.Pool, Redis: d.Redis, Keyring: d.Secrets.Keyring, Mailer: mail, OTP: otp,
-		Stores: d.Tenancy, DashboardURL: d.Mail.DashboardURL, Log: d.Log,
+		Stores: d.Tenancy, DashboardURL: d.Mail.DashboardURL, Log: d.Log, IDs: d.IDs, Jobs: d.Jobs, NotifyAdmin: d.NotifyAdmin,
 	})
 }

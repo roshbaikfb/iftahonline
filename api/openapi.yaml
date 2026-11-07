@@ -385,6 +385,57 @@ paths:
               schema: { $ref: "#/components/schemas/LinkEmail" }
         default:
           $ref: "#/components/responses/Problem"
+  /v1/support-requests/check:
+    post:
+      tags: [identity]
+      operationId: checkSupportLink
+      summary: What a support request's cancel link would cancel
+      description: |
+        C1. No session needed: the emailed link may open anywhere. A link
+        whose request was cancelled, done or is unknown is 404
+        link_not_found.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: The request waits.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportLink" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /v1/support-requests/cancel:
+    post:
+      tags: [identity]
+      operationId: cancelSupportLink
+      summary: Cancel a support request from its emailed link
+      description: |
+        C1. The request is cancelled with every link it sent, the store's
+        activity log records it and the admin who asked is told. 404
+        link_not_found as for the check.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, maxLength: 64 }
+      responses:
+        "204":
+          description: Cancelled.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/auth/email/verify:
     post:
       tags: [identity]
@@ -2709,6 +2760,172 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminStoreProfile" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    get:
+      tags: [admin]
+      operationId: adminGetStoreTeam
+      summary: A store's team, invitations and support requests
+      description: |
+        C1. The store's members (two-step state, account status, last use
+        of the dashboard), its pending invitations, and platform support's
+        requests open or closed in the last 7 days. Email and phone are
+        left out for a role without contacts.read; the phone is masked
+        for everyone.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The team.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminStoreTeam" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/mfa-reset:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    post:
+      tags: [admin]
+      operationId: adminRequestMemberMFAReset
+      summary: "Ask to remove a member's two-step verification in 24 hours"
+      description: |
+        C1. Never at once: the request takes effect 24 hours later, and the
+        member and the store's owner are emailed a link that cancels it.
+        409 mfa_not_enabled when the member has none; 409 request_open
+        when one already waits; 404 member_not_found for an account that
+        is not the store's member. Recorded in the admin log and the
+        store's activity log.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "202":
+          description: Requested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSupportRequest" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/disable:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    post:
+      tags: [admin]
+      operationId: adminDisableMember
+      summary: "Disable a member's account (in every store it works on)"
+      description: |
+        C1. At once: every session ends and the account cannot sign in
+        until it is enabled again; the member is emailed. Recorded in the
+        admin log and the store's activity log.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Done.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/enable:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    post:
+      tags: [admin]
+      operationId: adminEnableMember
+      summary: "Enable a disabled member's account"
+      description: |
+        C1. The member is emailed.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Done.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/sign-out:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    post:
+      tags: [admin]
+      operationId: adminSignOutMember
+      summary: "Sign a member out of every device"
+      description: |
+        C1. Without disabling the account; the member is emailed.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Done.
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/stores:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    get:
+      tags: [admin]
+      operationId: adminGetMemberStores
+      summary: The other stores a member's account works on
+      description: |
+        C1. Before disabling an account: the stores (at most 20) besides
+        this one it is a member of, with the role. 404 member_not_found
+        for an account that is not this store's member.
+      security:
+        - adminSessionCookie: []
+      responses:
+        "200":
+          description: The stores.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminMemberStores" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/support-requests/{request_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/SupportRequestID"
+    post:
+      tags: [admin]
+      operationId: adminCancelSupportRequest
+      summary: "Cancel a support request that still waits"
+      description: |
+        C1. 404 request_not_found when it was cancelled, done, or is not
+        the store's.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "204":
+          description: Done.
         default:
           $ref: "#/components/responses/Problem"
   /admin/v1/stores/{store_id}/invoices/{invoice_id}/settle:
@@ -6279,6 +6496,16 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/ULID" }
+    MemberUserID:
+      name: user_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
+    SupportRequestID:
+      name: request_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ULID" }
     StoreID:
       name: store_id
       in: path
@@ -6544,6 +6771,15 @@ components:
       required: [email]
       properties:
         email: { type: string }
+    SupportLink:
+      type: object
+      description: What a support request's cancel link (C1) would cancel.
+      required: [kind, email, created_at, effective_at]
+      properties:
+        kind: { type: string, enum: [mfa_reset, ownership_transfer] }
+        email: { type: string, description: The account the link was sent to, masked. }
+        created_at: { type: string, format: date-time }
+        effective_at: { type: string, format: date-time }
     InvitationPreview:
       type: object
       required: [store_name, role, email, expires_at, has_account]
@@ -6798,6 +7034,68 @@ components:
         email_verified: { type: boolean }
         phone: { type: string, description: "E.164; absent when the owner gave none." }
         last_seen_at: { type: string, format: date-time, description: The owner's last use of the dashboard; absent for never. }
+    AdminStoreTeam:
+      type: object
+      required: [members, invites, requests]
+      properties:
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/AdminStoreMember" }
+        invites:
+          type: array
+          items: { $ref: "#/components/schemas/AdminStoreInvite" }
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSupportRequest" }
+    AdminStoreMember:
+      type: object
+      required: [user_id, name, role, mfa_enabled, disabled, joined_at]
+      properties:
+        user_id: { $ref: "#/components/schemas/ULID" }
+        name: { type: string }
+        email: { type: string, description: Absent for a role without contacts.read. }
+        phone: { type: string, description: "Masked (+9665••••••412); absent when none or without contacts.read." }
+        role: { type: string, enum: [owner, manager, support, shipping] }
+        mfa_enabled: { type: boolean }
+        disabled: { type: boolean, description: The account is disabled (in every store). }
+        joined_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time, description: Last use of the dashboard; absent for never. }
+    AdminStoreInvite:
+      type: object
+      required: [role, expires_at]
+      properties:
+        email: { type: string, description: Absent for a role without contacts.read. }
+        role: { type: string, enum: [manager, support, shipping] }
+        expires_at: { type: string, format: date-time }
+    AdminSupportRequest:
+      type: object
+      required: [id, kind, user_id, requested_by, requested_by_name, reason, created_at, effective_at, state]
+      properties:
+        id: { $ref: "#/components/schemas/ULID" }
+        kind: { type: string, enum: [mfa_reset, ownership_transfer] }
+        user_id: { $ref: "#/components/schemas/ULID" }
+        requested_by: { $ref: "#/components/schemas/ULID" }
+        requested_by_name: { type: string, description: Empty when the admin is gone. }
+        requested_by_role: { $ref: "#/components/schemas/AdminRole" }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+        effective_at: { type: string, format: date-time }
+        state: { type: string, enum: [open, cancelled, done] }
+        cancelled_by: { type: string, enum: [link, console], description: Who cancelled it. }
+        closed_at: { type: string, format: date-time, description: When it was cancelled or done. }
+    AdminMemberStores:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [store_id, name, role]
+            properties:
+              store_id: { $ref: "#/components/schemas/ULID" }
+              name: { type: string }
+              role: { type: string, enum: [owner, manager, support, shipping] }
     AdminStoreDetail:
       type: object
       required: [store, domains]

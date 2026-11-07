@@ -115,6 +115,7 @@ func newFixture(t *testing.T) fixture {
 				Orders30d: 7, Products: 42}, nil
 		},
 		DashboardURL: "https://app.iftahonline.com",
+		Support:      testSupport{},
 		Plans:        billing.NewCatalog(adminPool, ids), Enforced: entitlements.Enforced, Overrides: ent.Overrides(), Billing: bill.Console(), Agencies: bill.Agencies(), Ads: adv.Console(),
 		Site: siteConsole, Founding: billing.NewFounding(adminPool), Collection: billing.NewCollection(adminPool),
 		// The package's tests all sign in from one address: room for all
