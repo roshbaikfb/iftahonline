@@ -239,6 +239,7 @@ invitations, with platform support's requests. The card reads
 |---|---|
 | `GET …/team` | `stores.read`. Email and phone need `contacts.read` too; the phone is always masked. |
 | `POST …/team/{user}/mfa-reset` | `stores.manage`. Takes effect after 24 hours. Answers 202 with the request. |
+| `POST …/team/{user}/ownership` | `stores.manage`. C2: moves the store to that member after 24 hours, and only the owner gets the cancel link. Answers 202 with the request. |
 | `POST …/team/{user}/disable`, `/enable`, `/sign-out` | `stores.manage`. Take effect at once. |
 | `GET …/team/{user}/stores` | `stores.manage`. Lists the account's other stores, by name. |
 | `POST /admin/v1/stores/{id}/support-requests/{req}/cancel` | `stores.manage` |

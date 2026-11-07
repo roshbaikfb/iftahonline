@@ -268,3 +268,30 @@ func SupportTokenForSend(ctx context.Context, db Tx, id ulid.ID) (SupportTokenTo
 	}
 	return SupportTokenToSend{UserID: r.UserID, Email: r.Email, Name: r.Name, RequestID: r.RequestID}, nil
 }
+
+// TransferOwner moves the current store's ownership from from (who becomes
+// a manager) to to, in tx; false when from is not the owner or to is not
+// a member.
+func TransferOwner(ctx context.Context, tx Tx, from, to ulid.ID) (bool, error) {
+	store, err := current(ctx)
+	if err != nil {
+		return false, err
+	}
+	q := identitydb.New(tx)
+	n, err := q.DemoteOwner(ctx, identitydb.DemoteOwnerParams{StoreID: store, UserID: from})
+	if err != nil || n == 0 {
+		return false, wrapErr("demote owner", err)
+	}
+	n, err = q.PromoteToOwner(ctx, identitydb.PromoteToOwnerParams{StoreID: store, UserID: to})
+	if err != nil || n == 0 {
+		return false, wrapErr("promote owner", err)
+	}
+	return true, nil
+}
+
+func wrapErr(what string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("identity store: %s: %w", what, err)
+}

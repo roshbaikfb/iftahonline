@@ -70,6 +70,20 @@ describe('a support request link (C1)', () => {
     expect(screen.getByText('إن لم يكن كريم سامي من تواصل مع الدعم، فنبّهه ليغيّر كلمة المرور.')).toBeInTheDocument();
   });
 
+  it('shows a transfer to the owner, who did not ask for it', async () => {
+    mockAPI({
+      'POST /v1/support-requests/check': () => ({ status: 200, body: { ...open, kind: 'ownership_transfer', email: 'm•••a@example.com', for_member: false } }),
+      'POST /v1/support-requests/cancel': () => ({ status: 204 }),
+    });
+    renderAt('/support-request#transfer');
+    expect(await screen.findByRole('heading', { name: 'طلب نقل ملكية المتجر' })).toBeInTheDocument();
+    expect(screen.getByText('إلى').nextElementSibling).toHaveTextContent('كريم سامي، عضو في متجرك');
+    expect(screen.queryByText(/وصلك هذا لأنك صاحب المتجر/)).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'ألغِ الطلب، لم أطلبه' }));
+    expect(await screen.findByText('ألغينا الطلب. ملكية المتجر باقية لك كما هي.')).toBeInTheDocument();
+  });
+
   it('says an old link’s request is gone', async () => {
     mockAPI({ 'POST /v1/support-requests/check': gone });
     renderAt('/support-request#old');

@@ -4295,6 +4295,9 @@ type AdminEnableMemberJSONRequestBody = AdminReason
 // AdminRequestMemberMFAResetJSONRequestBody defines body for AdminRequestMemberMFAReset for application/json ContentType.
 type AdminRequestMemberMFAResetJSONRequestBody = AdminReason
 
+// AdminRequestOwnershipTransferJSONRequestBody defines body for AdminRequestOwnershipTransfer for application/json ContentType.
+type AdminRequestOwnershipTransferJSONRequestBody = AdminReason
+
 // AdminSignOutMemberJSONRequestBody defines body for AdminSignOutMember for application/json ContentType.
 type AdminSignOutMemberJSONRequestBody = AdminReason
 
@@ -4597,6 +4600,9 @@ type ServerInterface interface {
 	// AdminRequestMemberMFAReset Ask to remove a member's two-step verification in 24 hours
 	// (POST /admin/v1/stores/{store_id}/team/{user_id}/mfa-reset)
 	AdminRequestMemberMFAReset(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
+	// AdminRequestOwnershipTransfer Ask to move a store's ownership to a member in 24 hours
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/ownership)
+	AdminRequestOwnershipTransfer(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
 	// AdminSignOutMember Sign a member out of every device
 	// (POST /admin/v1/stores/{store_id}/team/{user_id}/sign-out)
 	AdminSignOutMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
@@ -6963,6 +6969,41 @@ func (siw *ServerInterfaceWrapper) AdminRequestMemberMFAReset(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// AdminRequestOwnershipTransfer operation middleware
+func (siw *ServerInterfaceWrapper) AdminRequestOwnershipTransfer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRequestOwnershipTransfer(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminSignOutMember operation middleware
 func (siw *ServerInterfaceWrapper) AdminSignOutMember(w http.ResponseWriter, r *http.Request) {
 
@@ -7370,6 +7411,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/profile", wrapper.AdminGetStoreProfile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team", wrapper.AdminGetStoreTeam)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/mfa-reset", wrapper.AdminRequestMemberMFAReset)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/ownership", wrapper.AdminRequestOwnershipTransfer)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/disable", wrapper.AdminDisableMember)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/enable", wrapper.AdminEnableMember)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/sign-out", wrapper.AdminSignOutMember)
@@ -11000,6 +11042,47 @@ func (response AdminRequestMemberMFAResetdefaultApplicationProblemPlusJSONRespon
 	return err
 }
 
+type AdminRequestOwnershipTransferRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+	Body    *AdminRequestOwnershipTransferJSONRequestBody
+}
+
+type AdminRequestOwnershipTransferResponseObject interface {
+	VisitAdminRequestOwnershipTransferResponse(w http.ResponseWriter) error
+}
+
+type AdminRequestOwnershipTransfer202JSONResponse AdminSupportRequest
+
+func (response AdminRequestOwnershipTransfer202JSONResponse) VisitAdminRequestOwnershipTransferResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRequestOwnershipTransferdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRequestOwnershipTransferdefaultApplicationProblemPlusJSONResponse) VisitAdminRequestOwnershipTransferResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminSignOutMemberRequestObject struct {
 	StoreId StoreID      `json:"store_id"`
 	UserId  MemberUserID `json:"user_id"`
@@ -11646,6 +11729,9 @@ type StrictServerInterface interface {
 	// AdminRequestMemberMFAReset Ask to remove a member's two-step verification in 24 hours
 	// (POST /admin/v1/stores/{store_id}/team/{user_id}/mfa-reset)
 	AdminRequestMemberMFAReset(ctx context.Context, request AdminRequestMemberMFAResetRequestObject) (AdminRequestMemberMFAResetResponseObject, error)
+	// AdminRequestOwnershipTransfer Ask to move a store's ownership to a member in 24 hours
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/ownership)
+	AdminRequestOwnershipTransfer(ctx context.Context, request AdminRequestOwnershipTransferRequestObject) (AdminRequestOwnershipTransferResponseObject, error)
 	// AdminSignOutMember Sign a member out of every device
 	// (POST /admin/v1/stores/{store_id}/team/{user_id}/sign-out)
 	AdminSignOutMember(ctx context.Context, request AdminSignOutMemberRequestObject) (AdminSignOutMemberResponseObject, error)
@@ -14389,6 +14475,40 @@ func (sh *strictHandler) AdminRequestMemberMFAReset(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRequestMemberMFAResetResponseObject); ok {
 		if err := validResponse.VisitAdminRequestMemberMFAResetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRequestOwnershipTransfer operation middleware
+func (sh *strictHandler) AdminRequestOwnershipTransfer(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminRequestOwnershipTransferRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body AdminRequestOwnershipTransferJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRequestOwnershipTransfer(ctx, request.(AdminRequestOwnershipTransferRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRequestOwnershipTransfer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRequestOwnershipTransferResponseObject); ok {
+		if err := validResponse.VisitAdminRequestOwnershipTransferResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

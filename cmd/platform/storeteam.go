@@ -50,6 +50,11 @@ func (s storeSupport) RequestMFAReset(ctx context.Context, by, user ulid.ID, rea
 	return toSupportRequest(r), err
 }
 
+func (s storeSupport) RequestOwnershipTransfer(ctx context.Context, by, user ulid.ID, reason string) (admin.SupportRequest, error) {
+	r, err := s.id.RequestOwnershipTransfer(ctx, by, user, reason)
+	return toSupportRequest(r), err
+}
+
 func (s storeSupport) CancelRequest(ctx context.Context, by, id ulid.ID, reason string) error {
 	return s.id.CancelSupportRequest(ctx, by, id, reason)
 }

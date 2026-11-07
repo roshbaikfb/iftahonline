@@ -50,6 +50,14 @@ func (f *fakeSupport) RequestMFAReset(ctx context.Context, by, user ulid.ID, _ s
 	return app.SupportRequest{ID: ulid.NewGenerator().New(), Kind: "mfa_reset", UserID: user, RequestedBy: by}, nil
 }
 
+func (f *fakeSupport) RequestOwnershipTransfer(ctx context.Context, by, user ulid.ID, _ string) (app.SupportRequest, error) {
+	f.record(ctx, "transfer", by)
+	if user != f.member {
+		return app.SupportRequest{}, errs.NotFound("member_not_found", "not a member")
+	}
+	return app.SupportRequest{ID: ulid.NewGenerator().New(), Kind: "ownership_transfer", UserID: user, RequestedBy: by}, nil
+}
+
 func (f *fakeSupport) CancelRequest(ctx context.Context, by, _ ulid.ID, _ string) error {
 	f.record(ctx, "cancel", by)
 	return nil
@@ -148,13 +156,20 @@ func TestStoreTeamActions(t *testing.T) {
 		func() error { return svc.SetMemberDisabled(ctx, shop, fake.member, true, "stolen account") },
 		func() error { return svc.SetMemberDisabled(ctx, shop, fake.member, false, "cleared") },
 		func() error { return svc.SignOutMember(ctx, shop, fake.member, "suspicious device") },
+		func() error {
+			r, transferErr := svc.RequestOwnershipTransfer(ctx, shop, fake.member, "sale contract")
+			if transferErr == nil && (r.Kind != "ownership_transfer" || r.RequesterName != "Ops") {
+				t.Errorf("transfer = %+v", r)
+			}
+			return transferErr
+		},
 		func() error { return svc.CancelSupportRequest(ctx, shop, req.ID, "wrong member") },
 	} {
 		if err = act(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := []string{"mfa_reset", "mfa_reset", "disable", "enable", "sign_out", "cancel"}
+	want := []string{"mfa_reset", "mfa_reset", "disable", "enable", "sign_out", "transfer", "cancel"}
 	if len(fake.calls) != len(want) {
 		t.Fatalf("calls = %v", fake.calls)
 	}
@@ -172,7 +187,7 @@ func TestStoreTeamActions(t *testing.T) {
 		logged[it.Action] = true
 	}
 	for _, a := range []string{"store.member_mfa_reset_requested", "store.member_disabled", "store.member_enabled", "store.member_signed_out",
-		"store.support_request_cancelled"} {
+		"store.support_request_cancelled", "store.ownership_transfer_requested"} {
 		if !logged[a] {
 			t.Errorf("admin log misses %s", a)
 		}

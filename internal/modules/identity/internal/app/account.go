@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -17,8 +16,6 @@ import (
 // The account page (D4): the signed-in user changes their own name and
 // password. An admin's support session never reaches these (Scope refuses
 // account changes outside the store, ADR-0055).
-
-var errWrongCurrentPassword = errs.Validation(errs.FieldError{Field: "current_password", Code: "wrong", Message: "the current password is not right"})
 
 // UpdateName renames the signed-in user.
 func (s *Service) UpdateName(ctx context.Context, raw string) (domain.User, error) {
@@ -45,32 +42,9 @@ func (s *Service) ChangePassword(ctx context.Context, current, next string) erro
 	if !ok {
 		return errNoSession
 	}
-	failKey := "password:fail:" + id.UserID.String()
-	if err := s.peek(ctx, failKey, s.limits.LoginFailPerUser); err != nil {
-		return err
-	}
-	u, err := store.UserByID(ctx, s.db, id.UserID)
-	if errors.Is(err, domain.ErrNotFound) {
-		return errNoSession
-	}
+	u, err := s.verifyPassword(ctx, id.UserID, current, "current_password")
 	if err != nil {
 		return err
-	}
-	if len(current) > 4*domain.MaxPasswordLen {
-		return errWrongCurrentPassword
-	}
-	match, _, err := s.hasher.Verify(ctx, current, u.PasswordHash)
-	if err != nil {
-		return err
-	}
-	if !match {
-		if _, err = s.limiter.Allow(ctx, failKey, s.limits.LoginFailPerUser); err != nil {
-			return errs.Unavailable(5*time.Second, err)
-		}
-		return errWrongCurrentPassword
-	}
-	if err = s.limiter.Reset(ctx, failKey); err != nil {
-		s.log.WarnContext(ctx, "identity: reset password failures", "err", err)
 	}
 	if fe := domain.ValidatePassword(next, u.Email); fe != nil {
 		return errs.Validation(*fe)

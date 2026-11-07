@@ -139,9 +139,12 @@ func (SupportExecuteArgs) Kind() string { return "identity.support.execute" }
 // SupportNoticeArgs tells a user what support did to their account.
 type SupportNoticeArgs struct {
 	jobs.TenantArgs
-	UserID ulid.ID   `json:"user_id"`
-	Event  string    `json:"event"`
-	At     time.Time `json:"at"`
+	UserID ulid.ID `json:"user_id"`
+	// Other is the other side of an ownership move (C2), named in its
+	// emails; zero for the other notices.
+	Other ulid.ID   `json:"other,omitzero"`
+	Event string    `json:"event"`
+	At    time.Time `json:"at"`
 }
 
 // Kind implements river.JobArgs.
@@ -197,10 +200,54 @@ func member(ctx context.Context, tx pgx.Tx, userID ulid.ID) (domain.User, authz.
 }
 
 // RequestMFAReset asks for member userID's two-step verification to be
-// removed in SupportDelay: the request, its cancel links to the member
-// and the owner, and the job that carries it out are written in one
-// transaction.
+// removed in SupportDelay; the member and the owner get a cancel link.
 func (s *Service) RequestMFAReset(ctx context.Context, admin, userID ulid.ID, reason string) (store.SupportRequest, error) {
+	return s.openRequest(ctx, admin, store.KindMFAReset, userID, reason,
+		func(tx pgx.Tx, u domain.User, _ authz.Role) (*ulid.ID, []recipient, error) {
+			if !u.MFAEnabled() {
+				return nil, nil, errMFAOff
+			}
+			to := []recipient{{user: u}}
+			owner, err := ownerOf(ctx, tx)
+			if err != nil {
+				return nil, nil, err
+			}
+			if owner != nil && owner.ID != u.ID {
+				to = append(to, recipient{user: *owner, owner: true})
+			}
+			return nil, to, nil
+		}, nil)
+}
+
+// recipient is who a request's cancel link goes to: the member it is
+// about, or the store's owner (owner).
+type recipient struct {
+	user  domain.User
+	owner bool
+}
+
+// ownerOf reads the store-in-ctx's owner; nil for a store without one.
+func ownerOf(ctx context.Context, tx pgx.Tx) (*domain.User, error) {
+	id, err := store.Owner(ctx, tx)
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u, err := store.UserByID(ctx, tx, id)
+	return &u, err
+}
+
+// openRequest records a request of kind about member userID that takes
+// effect in SupportDelay, in one transaction: prepare checks the member
+// and picks whom the cancel links go to (and, for a transfer, the owner
+// it moves from); after enqueues what else the kind needs; the job that
+// carries it out is scheduled; the store's log records it.
+func (s *Service) openRequest(ctx context.Context, admin ulid.ID, kind string, userID ulid.ID, reason string,
+	prepare func(tx pgx.Tx, u domain.User, role authz.Role) (*ulid.ID, []recipient, error),
+	after func(tx pgx.Tx, targs jobs.TenantArgs, req store.SupportRequest) error,
+) (store.SupportRequest, error) {
 	if admin.IsZero() || reason == "" {
 		return store.SupportRequest{}, errNoReason
 	}
@@ -210,14 +257,15 @@ func (s *Service) RequestMFAReset(ctx context.Context, admin, userID ulid.ID, re
 	}
 	var req store.SupportRequest
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
-		u, _, txErr := member(ctx, tx, userID)
+		u, role, txErr := member(ctx, tx, userID)
 		if txErr != nil {
 			return txErr
 		}
-		if !u.MFAEnabled() {
-			return errMFAOff
+		from, to, txErr := prepare(tx, u, role)
+		if txErr != nil {
+			return txErr
 		}
-		req, txErr = store.InsertSupportRequest(ctx, tx, store.SupportRequest{ID: s.ids.New(), Kind: store.KindMFAReset, UserID: userID,
+		req, txErr = store.InsertSupportRequest(ctx, tx, store.SupportRequest{ID: s.ids.New(), Kind: kind, UserID: userID, FromUserID: from,
 			RequestedBy: admin, Reason: reason, EffectiveAt: s.now().Add(SupportDelay)})
 		if errors.Is(txErr, store.ErrRequestOpen) {
 			return errRequestOpen
@@ -225,44 +273,32 @@ func (s *Service) RequestMFAReset(ctx context.Context, admin, userID ulid.ID, re
 		if txErr != nil {
 			return txErr
 		}
-		if txErr = s.sendSupportLinksTx(ctx, tx, targs, req, u); txErr != nil {
+		if txErr = s.sendSupportLinksTx(ctx, tx, targs, req, to); txErr != nil {
 			return txErr
+		}
+		if after != nil {
+			if txErr = after(tx, targs, req); txErr != nil {
+				return txErr
+			}
 		}
 		if _, txErr = s.jobs.InsertTx(ctx, tx, SupportExecuteArgs{TenantArgs: targs, RequestID: req.ID},
 			&river.InsertOpts{ScheduledAt: req.EffectiveAt}); txErr != nil {
 			return fmt.Errorf("identity: schedule support request: %w", txErr)
 		}
-		return s.recordSupport(ctx, tx, admin, "support.mfa_reset_requested", userID,
+		return s.recordSupport(ctx, tx, admin, "support."+kind+"_requested", userID,
 			map[string]any{"request_id": req.ID.String(), "reason": reason, "effective_at": req.EffectiveAt.UTC()})
 	})
 	return req, err
 }
 
-// sendSupportLinksTx records a cancel link for the member the request is
-// about and one for the store's owner when that is someone else, and
-// enqueues their emails, in tx.
-func (s *Service) sendSupportLinksTx(ctx context.Context, tx pgx.Tx, targs jobs.TenantArgs, req store.SupportRequest, u domain.User) error {
-	type recipient struct {
-		user  domain.User
-		owner bool
-	}
-	to := []recipient{{user: u}}
-	ownerID, err := store.Owner(ctx, tx)
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
-		return err
-	}
-	if err == nil && ownerID != u.ID {
-		owner, ownerErr := store.UserByID(ctx, tx, ownerID)
-		if ownerErr != nil {
-			return ownerErr
-		}
-		to = append(to, recipient{user: owner, owner: true})
-	}
+// sendSupportLinksTx records a request's cancel link for each recipient
+// and enqueues their emails, in tx.
+func (s *Service) sendSupportLinksTx(ctx context.Context, tx pgx.Tx, targs jobs.TenantArgs, req store.SupportRequest, to []recipient) error {
 	ttl := req.EffectiveAt.Sub(s.now()) + time.Hour
 	for _, r := range to {
-		tok, tokErr := authtoken.New()
-		if tokErr != nil {
-			return tokErr
+		tok, err := authtoken.New()
+		if err != nil {
+			return err
 		}
 		id := s.ids.New()
 		if err = store.InsertSupportToken(ctx, tx, id, r.user.ID, req.ID, r.user.Email, tok.Hash(), req.EffectiveAt); err != nil {
@@ -445,6 +481,26 @@ func (s supportRunner) execute(ctx context.Context, id ulid.ID) error {
 			if _, txErr = s.jobs.InsertTx(ctx, tx, SupportNoticeArgs{TenantArgs: targs, UserID: req.UserID, Event: NoticeMFAReset,
 				At: s.now().UTC()}, nil); txErr != nil {
 				return fmt.Errorf("identity: enqueue support notice: %w", txErr)
+			}
+		case store.KindOwnershipTransfer:
+			if req.FromUserID == nil {
+				return fmt.Errorf("identity: transfer %s has no owner to move from", id)
+			}
+			if txErr = transferTx(ctx, tx, *req.FromUserID, req.UserID); errs.Is(txErr, errs.KindNotFound) || errs.Is(txErr, errs.KindConflict) ||
+				errs.Is(txErr, errs.KindForbidden) || errs.Is(txErr, errs.KindValidation) {
+				// The team changed meanwhile: the owner moved it already,
+				// or the new owner left or was disabled. Nothing to do.
+				if _, txErr = store.CloseSupportRequest(ctx, tx, req.ID, ""); txErr != nil {
+					return txErr
+				}
+				return recordSupport(ctx, tx, s.audit, req.RequestedBy, "support.ownership_transfer_skipped", req.UserID,
+					map[string]any{"request_id": req.ID.String()})
+			}
+			if txErr != nil {
+				return txErr
+			}
+			if txErr = noticeTransferTx(ctx, tx, s.jobs, targs, *req.FromUserID, req.UserID, s.now().UTC()); txErr != nil {
+				return txErr
 			}
 		default:
 			return fmt.Errorf("identity: unknown support request kind %q", req.Kind)

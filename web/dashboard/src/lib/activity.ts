@@ -91,6 +91,10 @@ const plain: Record<string, string> = {
   'member.removed': 'إخراج عضو من فريق العمل',
   'domain.verification_requested': 'طلب التحقق من دومين',
   'impersonation.started': 'بدء جلسة دعم من فريق المنصة',
+  'store.ownership_transferred': 'نقل ملكية المتجر إلى عضو',
+  'support.ownership_transfer_requested': 'طلب نقل ملكية المتجر إلى عضو (يُنفَّذ بعد 24 ساعة)',
+  'support.ownership_transfer_done': 'نقل ملكية المتجر إلى عضو',
+  'support.ownership_transfer_skipped': 'تجاوز طلب نقل الملكية: تغيّر الفريق قبل موعده',
   'support.mfa_reset_requested': 'طلب إلغاء التحقق بخطوتين لعضو (يُنفَّذ بعد 24 ساعة)',
   'support.mfa_reset_done': 'إلغاء التحقق بخطوتين لعضو',
   'member.disabled': 'إيقاف حساب عضو',
@@ -154,6 +158,8 @@ export function describe(e: AuditEntry, storeId: string): Said {
       return { text: m['status'] === 'active' ? 'فتح المتجر للزوار' : 'إغلاق المتجر مؤقتًا' };
     case 'pixel.saved':
       return { text: 'حفظ بكسل إعلانات', ltr: str(m['pixel_id']) };
+    case 'support.ownership_transfer_cancelled':
+      return { text: m['by'] === 'link' ? 'إلغاء طلب الدعم لنقل ملكية المتجر' : 'سحب طلب نقل ملكية المتجر' };
     case 'support.mfa_reset_cancelled':
       return { text: m['by'] === 'link' ? 'إلغاء طلب الدعم لإزالة التحقق بخطوتين' : 'سحب طلب إلغاء التحقق بخطوتين' };
     case 'impersonation.request':

@@ -120,6 +120,12 @@ func (m *Module) RequestMFAReset(ctx context.Context, admin, user ulid.ID, reaso
 	return m.svc.RequestMFAReset(ctx, admin, user, reason)
 }
 
+// RequestOwnershipTransfer asks for the store-in-ctx's ownership to move
+// to member user in 24 hours, emailing the owner a cancel link (C2).
+func (m *Module) RequestOwnershipTransfer(ctx context.Context, admin, user ulid.ID, reason string) (SupportRequest, error) {
+	return m.svc.RequestOwnershipTransfer(ctx, admin, user, reason)
+}
+
 // CancelSupportRequest cancels a request of the store in ctx that still
 // waits (C1).
 func (m *Module) CancelSupportRequest(ctx context.Context, admin, id ulid.ID, reason string) error {

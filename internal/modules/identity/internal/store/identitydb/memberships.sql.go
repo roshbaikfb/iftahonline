@@ -30,6 +30,26 @@ func (q *Queries) DeleteMember(ctx context.Context, arg DeleteMemberParams) (int
 	return result.RowsAffected(), nil
 }
 
+const demoteOwner = `-- name: DemoteOwner :execrows
+UPDATE store_memberships SET role = 'manager', updated_at = now()
+WHERE store_id = $1 AND user_id = $2 AND role = 'owner'
+`
+
+type DemoteOwnerParams struct {
+	StoreID ulid.ID
+	UserID  ulid.ID
+}
+
+// Ownership moves (C2): the owner becomes a manager first, so the one-
+// owner index holds when the new owner is promoted in the same transaction.
+func (q *Queries) DemoteOwner(ctx context.Context, arg DemoteOwnerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, demoteOwner, arg.StoreID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMemberRole = `-- name: GetMemberRole :one
 SELECT role FROM store_memberships WHERE store_id = $1 AND user_id = $2
 `
@@ -231,6 +251,24 @@ func (q *Queries) OwnerStores(ctx context.Context, arg OwnerStoresParams) ([]uli
 		return nil, err
 	}
 	return items, nil
+}
+
+const promoteToOwner = `-- name: PromoteToOwner :execrows
+UPDATE store_memberships SET role = 'owner', updated_at = now()
+WHERE store_id = $1 AND user_id = $2 AND role <> 'owner'
+`
+
+type PromoteToOwnerParams struct {
+	StoreID ulid.ID
+	UserID  ulid.ID
+}
+
+func (q *Queries) PromoteToOwner(ctx context.Context, arg PromoteToOwnerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, promoteToOwner, arg.StoreID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setUserScope = `-- name: SetUserScope :exec

@@ -98,7 +98,20 @@ func (w *SupportLinkEmailWorker) Work(ctx context.Context, job *river.Job[Suppor
 	link := strings.TrimRight(w.D.DashboardURL, "/") + "/support-request#" + d.Text
 	when := storeMoment(st, req.EffectiveAt)
 	var msg mailer.Message
-	if job.Args.Owner {
+	switch {
+	case req.Kind == store.KindOwnershipTransfer:
+		to, toErr := store.UserByID(ctx, w.D.DB, req.UserID)
+		if toErr != nil {
+			return toErr
+		}
+		msg = mailer.Message{To: t.Email, Subject: fmt.Sprintf("طلب نقل ملكية %s إلى %s", st.Name, to.Name),
+			Text: fmt.Sprintf("مرحبًا %s،\n\nطلب فريق دعم المنصة نقل ملكية متجرك \"%s\" إلى %s، بعد أن أخبرنا أحد أنك بعت المتجر أو تركت إدارته. "+
+				"ستبقى في المتجر «مديرًا».\n\nيُنفَّذ الطلب %s.\n\nإن لم تطلب هذا، ألغِه الآن. المتجر يبقى ملكك كما هو:\n%s\n\n"+
+				"الرابط يعمل حتى تنفيذ الطلب.\n\n"+
+				"Platform support asked to move the ownership of your store \"%s\" to %s; it takes effect in 24 hours. "+
+				"If you did not ask for it, cancel it: %s",
+				t.Name, st.Name, to.Name, when, link, st.Name, to.Name, link)}
+	case job.Args.Owner:
 		member, memberErr := store.UserByID(ctx, w.D.DB, req.UserID)
 		if memberErr != nil {
 			return memberErr
@@ -109,7 +122,7 @@ func (w *SupportLinkEmailWorker) Work(ctx context.Context, job *river.Job[Suppor
 				"Platform support asked to remove two-step verification from %s's account in \"%s\". It takes effect in 24 hours. "+
 				"If they did not ask for it, cancel it: %s",
 				t.Name, member.Name, st.Name, when, member.Name, link, member.Name, st.Name, link)}
-	} else {
+	default:
 		msg = mailer.Message{To: t.Email, Subject: "طلب إلغاء التحقق بخطوتين لحسابك",
 			Text: fmt.Sprintf("مرحبًا %s،\n\nطلب فريق دعم المنصة إلغاء التحقق بخطوتين لحسابك، بعد أن أخبرنا أحد أنه فقد موبايله. "+
 				"ستدخل بعدها بكلمة المرور وحدها.\n\nيُنفَّذ الطلب %s.\n\nإن لم تطلب هذا، ألغِه الآن. حسابك يبقى كما هو:\n%s\n\n"+
@@ -172,8 +185,34 @@ func (w *SupportNoticeWorker) Work(ctx context.Context, job *river.Job[SupportNo
 	}
 	base := strings.TrimRight(w.D.DashboardURL, "/")
 	at := storeMoment(st, job.Args.At)
+	other := ""
+	if !job.Args.Other.IsZero() {
+		o, oErr := store.UserByID(ctx, w.D.DB, job.Args.Other)
+		if oErr != nil && !errors.Is(oErr, domain.ErrNotFound) {
+			return oErr
+		}
+		other = o.Name
+	}
 	var subject, text string
 	switch job.Args.Event {
+	case NoticeOwnershipGiven:
+		subject = fmt.Sprintf("انتقلت ملكية %s إلى %s", st.Name, other)
+		text = fmt.Sprintf("مرحبًا %s،\n\nانتقلت ملكية متجر \"%s\" إلى %s (%s). بقيت في المتجر «مديرًا»: الفوترة والفريق وسجل النشاط صارت له.\n\n"+
+			"إن لم تكن تعرف بهذا، تواصل مع الدعم فورًا بالرد على هذه الرسالة.\n\n"+
+			"The ownership of \"%s\" moved to %s; you stay on as a manager. Not expected? Reply to this email.",
+			u.Name, st.Name, other, at, st.Name, other)
+	case NoticeOwnershipReceived:
+		subject = fmt.Sprintf("صرت صاحب %s على iftahonline", st.Name)
+		text = fmt.Sprintf("مرحبًا %s،\n\nصرت صاحب متجر \"%s\" (%s)، وكانت ملكيته لـ%s الذي بقي فيه «مديرًا». "+
+			"صارت لك الفوترة والباقة والفريق وسجل النشاط:\n%s/\n\n"+
+			"You now own \"%s\" on iftahonline; %s stays on as a manager.",
+			u.Name, st.Name, at, other, base, st.Name, other)
+	case NoticeTransferAsked:
+		subject = fmt.Sprintf("طلب نقل ملكية %s إليك", st.Name)
+		text = fmt.Sprintf("مرحبًا %s،\n\nطلب فريق دعم المنصة نقل ملكية متجر \"%s\" إليك من %s. يُنفَّذ الطلب %s إن لم يلغه %s، "+
+			"وسيصلك إيميل عند التنفيذ.\n\n"+
+			"Platform support asked to move the ownership of \"%s\" to you; it takes effect in 24 hours unless %s cancels it.",
+			u.Name, st.Name, other, at, other, st.Name, other)
 	case NoticeMFAReset:
 		subject = "أُلغي التحقق بخطوتين لحسابك على iftahonline"
 		text = fmt.Sprintf("مرحبًا %s،\n\nنفّذنا طلب إلغاء التحقق بخطوتين لحسابك (%s)، وخرجنا من كل أجهزتك. ادخل الآن بكلمة المرور وحدها، "+

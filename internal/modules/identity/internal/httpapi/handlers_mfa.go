@@ -266,3 +266,22 @@ func (h *Handlers) PreviewInvitation(ctx context.Context, req PreviewInvitationR
 	}
 	return out, nil
 }
+
+// TransferOwnership implements StrictServerInterface (C2): the owner
+// moves the store to an active member, at once.
+func (h *Handlers) TransferOwnership(ctx context.Context, req TransferOwnershipRequestObject) (TransferOwnershipResponseObject, error) {
+	if err := h.auth.Authorize(ctx, authz.PermMembersManage); err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errBodyRequired
+	}
+	to, err := pathID(req.Body.UserId, errMemberNotFound)
+	if err != nil {
+		return nil, err
+	}
+	if err = h.svc.TransferOwnership(ctx, to, req.Body.Password, deref(req.Body.Code)); err != nil {
+		return nil, err
+	}
+	return TransferOwnership204Response{}, nil
+}

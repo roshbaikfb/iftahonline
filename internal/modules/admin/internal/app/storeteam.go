@@ -77,6 +77,7 @@ type MemberStore struct {
 type StoreSupport interface {
 	Team(ctx context.Context) (StoreTeam, error)
 	RequestMFAReset(ctx context.Context, admin, user ulid.ID, reason string) (SupportRequest, error)
+	RequestOwnershipTransfer(ctx context.Context, admin, user ulid.ID, reason string) (SupportRequest, error)
 	CancelRequest(ctx context.Context, admin, id ulid.ID, reason string) error
 	SetDisabled(ctx context.Context, admin, user ulid.ID, disabled bool, reason string) error
 	SignOut(ctx context.Context, admin, user ulid.ID, reason string) error
@@ -147,17 +148,34 @@ func (s *Service) StoreTeam(ctx context.Context, id tenant.StoreID) (StoreTeam, 
 // removed in 24 hours (identity emails the member and the owner a link
 // that cancels it).
 func (s *Service) RequestMFAReset(ctx context.Context, id tenant.StoreID, user ulid.ID, rawReason string) (SupportRequest, error) {
+	return s.request(ctx, id, user, rawReason, "store.member_mfa_reset_requested", s.d.Support.RequestMFAReset)
+}
+
+// RequestOwnershipTransfer asks for store id's ownership to move to
+// member user in 24 hours (C2: identity emails the owner a link that
+// cancels it).
+func (s *Service) RequestOwnershipTransfer(ctx context.Context, id tenant.StoreID, user ulid.ID, rawReason string) (SupportRequest, error) {
+	return s.request(ctx, id, user, rawReason, "store.ownership_transfer_requested", s.d.Support.RequestOwnershipTransfer)
+}
+
+// request asks identity for a delayed change and names the admin who
+// asked on the answer.
+func (s *Service) request(ctx context.Context, id tenant.StoreID, user ulid.ID, rawReason, action string,
+	ask func(ctx context.Context, admin, user ulid.ID, reason string) (SupportRequest, error),
+) (SupportRequest, error) {
+	if s.d.Support == nil {
+		return SupportRequest{}, errNoSupport
+	}
 	var req SupportRequest
-	err := s.supportDo(ctx, id, rawReason, "store.member_mfa_reset_requested", "user_id", user,
-		func(sctx context.Context, who Identity, reason string) error {
-			var err error
-			if req, err = s.d.Support.RequestMFAReset(sctx, who.AdminID, user, reason); err != nil {
-				return err
-			}
-			me, err := store.AdminByID(ctx, s.d.DB, who.AdminID)
-			req.RequesterName, req.RequesterRole = me.Name, me.Role
+	err := s.supportDo(ctx, id, rawReason, action, "user_id", user, func(sctx context.Context, who Identity, reason string) error {
+		var err error
+		if req, err = ask(sctx, who.AdminID, user, reason); err != nil {
 			return err
-		})
+		}
+		me, err := store.AdminByID(ctx, s.d.DB, who.AdminID)
+		req.RequesterName, req.RequesterRole = me.Name, me.Role
+		return err
+	})
 	return req, err
 }
 

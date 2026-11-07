@@ -591,6 +591,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stores/{store_id}/ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the store's ownership to an active member, at once
+         * @description C2. The owner only (never a support session), with the password
+         *     and, when two-step verification is on, a code from the app or a
+         *     recovery code. The old owner stays on as a manager; both are
+         *     emailed and the store's activity log records it. 422 with
+         *     `password` wrong or `user_id` already_owner; 401 for a wrong
+         *     code; 404 member_not_found; 409 member_disabled; 403 for anyone
+         *     but the owner.
+         */
+        post: operations["transferOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stores/{store_id}/members": {
         parameters: {
             query?: never;
@@ -2416,6 +2444,33 @@ export interface paths {
          *     store's activity log.
          */
         post: operations["adminRequestMemberMFAReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask to move a store's ownership to a member in 24 hours
+         * @description C2. For an owner who cannot move it (sold the store, left, lost
+         *     the account). The owner now is emailed a link that cancels it and
+         *     the member a heads-up; it takes effect 24 hours later unless
+         *     cancelled (ADR-0095). 422 already_owner; 409 member_disabled,
+         *     request_open or store_has_no_owner; 404 member_not_found.
+         */
+        post: operations["adminRequestOwnershipTransfer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10084,6 +10139,36 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    transferOwnership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    user_id: components["schemas"]["ULID"];
+                    password: string;
+                    /** @description Needed when the owner has two-step verification. */
+                    code?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Moved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listMembers: {
         parameters: {
             query?: never;
@@ -12556,6 +12641,34 @@ export interface operations {
         };
     };
     adminRequestMemberMFAReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Requested. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSupportRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRequestOwnershipTransfer: {
         parameters: {
             query?: never;
             header?: never;
