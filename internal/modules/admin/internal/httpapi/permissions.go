@@ -21,6 +21,14 @@ var permissions = map[string]domain.Permission{ //nolint:gochecknoglobals // a f
 	"AdminLogin":  anyAdmin,
 	"AdminLogout": anyAdmin,
 	"AdminMe":     anyAdmin,
+	// The signed-in admin's own account (C3): every admin.
+	"AdminUpdateMe":              anyAdmin,
+	"AdminChangePassword":        anyAdmin,
+	"AdminStartNewPhone":         anyAdmin,
+	"AdminConfirmNewPhone":       anyAdmin,
+	"AdminListMySessions":        anyAdmin,
+	"AdminRevokeMySession":       anyAdmin,
+	"AdminRevokeMyOtherSessions": anyAdmin,
 	// The home: every admin.
 	"AdminHealth":     anyAdmin,
 	"AdminGetMetrics": anyAdmin,

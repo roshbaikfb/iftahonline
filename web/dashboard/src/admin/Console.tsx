@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 
 import { api } from '../api/client';
 import { AcceptInvite } from './AcceptInvite';
+import { AccountPage } from './AccountPage';
 import { AdsPage } from './AdsPage';
 import { AgenciesPage } from './AgenciesPage';
 import { AgencyPage } from './AgencyPage';
@@ -48,6 +49,7 @@ export function ConsoleRoutes() {
       <Route path="/guides/:id" element={<Need p="content.read"><GuideEditor /></Need>} />
       <Route path="/audit" element={<Need p="audit.read"><AuditPage /></Need>} />
       <Route path="/team" element={<Need p="team.manage"><TeamPage /></Need>} />
+      <Route path="/account" element={<AccountPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

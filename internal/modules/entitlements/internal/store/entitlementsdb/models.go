@@ -176,6 +176,15 @@ type AdminInvite struct {
 	CancelledAt pgtype.Timestamptz
 }
 
+type AdminNotice struct {
+	ID        ulid.ID
+	AdminID   ulid.ID
+	Kind      string
+	IpPrefix  string
+	CreatedAt pgtype.Timestamptz
+	SentAt    pgtype.Timestamptz
+}
+
 type AdminPushSubscription struct {
 	ID         ulid.ID
 	AdminID    ulid.ID

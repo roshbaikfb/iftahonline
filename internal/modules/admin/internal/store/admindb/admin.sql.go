@@ -507,6 +507,27 @@ func (q *Queries) InsertAdminAudit(ctx context.Context, arg InsertAdminAuditPara
 	return err
 }
 
+const insertAdminNotice = `-- name: InsertAdminNotice :exec
+INSERT INTO admin_notices (id, admin_id, kind, ip_prefix) VALUES ($1, $2, $3, $4)
+`
+
+type InsertAdminNoticeParams struct {
+	ID       ulid.ID
+	AdminID  ulid.ID
+	Kind     string
+	IpPrefix string
+}
+
+func (q *Queries) InsertAdminNotice(ctx context.Context, arg InsertAdminNoticeParams) error {
+	_, err := q.db.Exec(ctx, insertAdminNotice,
+		arg.ID,
+		arg.AdminID,
+		arg.Kind,
+		arg.IpPrefix,
+	)
+	return err
+}
+
 const insertAdminSession = `-- name: InsertAdminSession :one
 INSERT INTO admin_sessions (id, admin_id, token_hash, user_agent, ip_prefix, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -703,6 +724,49 @@ func (q *Queries) ListAdminAudit(ctx context.Context, arg ListAdminAuditParams) 
 			&i.IpPrefix,
 			&i.Metadata,
 			&i.AdminName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAdminSessions = `-- name: ListAdminSessions :many
+SELECT id, user_agent, ip_prefix, created_at, last_seen_at, expires_at FROM admin_sessions
+WHERE admin_id = $1 AND revoked_at IS NULL AND expires_at > now()
+ORDER BY last_seen_at DESC, id
+LIMIT 50
+`
+
+type ListAdminSessionsRow struct {
+	ID         ulid.ID
+	UserAgent  string
+	IpPrefix   string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+}
+
+func (q *Queries) ListAdminSessions(ctx context.Context, adminID ulid.ID) ([]ListAdminSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listAdminSessions, adminID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdminSessionsRow{}
+	for rows.Next() {
+		var i ListAdminSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserAgent,
+			&i.IpPrefix,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1017,6 +1081,15 @@ func (q *Queries) LockOwners(ctx context.Context) ([]ulid.ID, error) {
 	return items, nil
 }
 
+const markAdminNoticeSent = `-- name: MarkAdminNoticeSent :exec
+UPDATE admin_notices SET sent_at = now() WHERE id = $1
+`
+
+func (q *Queries) MarkAdminNoticeSent(ctx context.Context, id ulid.ID) error {
+	_, err := q.db.Exec(ctx, markAdminNoticeSent, id)
+	return err
+}
+
 const markPushSent = `-- name: MarkPushSent :exec
 UPDATE admin_push_subscriptions SET last_sent_at = now() WHERE id = $1
 `
@@ -1047,6 +1120,52 @@ func (q *Queries) OpenAlert(ctx context.Context, arg OpenAlertParams) error {
 		arg.At,
 	)
 	return err
+}
+
+const pendingAdminNotices = `-- name: PendingAdminNotices :many
+SELECT n.id, n.kind, n.ip_prefix, n.created_at, a.email, a.name
+FROM admin_notices n JOIN platform_admins a ON a.id = n.admin_id
+WHERE n.sent_at IS NULL
+ORDER BY n.created_at
+LIMIT 50
+FOR UPDATE OF n SKIP LOCKED
+`
+
+type PendingAdminNoticesRow struct {
+	ID        ulid.ID
+	Kind      string
+	IpPrefix  string
+	CreatedAt time.Time
+	Email     string
+	Name      string
+}
+
+// Notices to mail, oldest first, with whom to (locked: one worker sends each).
+func (q *Queries) PendingAdminNotices(ctx context.Context) ([]PendingAdminNoticesRow, error) {
+	rows, err := q.db.Query(ctx, pendingAdminNotices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PendingAdminNoticesRow{}
+	for rows.Next() {
+		var i PendingAdminNoticesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.IpPrefix,
+			&i.CreatedAt,
+			&i.Email,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recordAdminLogin = `-- name: RecordAdminLogin :exec
@@ -1130,6 +1249,40 @@ UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = $1 AND revoked_at 
 // Every live session of an admin, when it is disabled or reset.
 func (q *Queries) RevokeAdminSessions(ctx context.Context, adminID ulid.ID) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeAdminSessions, adminID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeOtherAdminSessions = `-- name: RevokeOtherAdminSessions :execrows
+UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = $1 AND id <> $2 AND revoked_at IS NULL
+`
+
+type RevokeOtherAdminSessionsParams struct {
+	AdminID ulid.ID
+	Keep    ulid.ID
+}
+
+func (q *Queries) RevokeOtherAdminSessions(ctx context.Context, arg RevokeOtherAdminSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOtherAdminSessions, arg.AdminID, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeOwnAdminSession = `-- name: RevokeOwnAdminSession :execrows
+UPDATE admin_sessions SET revoked_at = now() WHERE id = $1 AND admin_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeOwnAdminSessionParams struct {
+	ID      ulid.ID
+	AdminID ulid.ID
+}
+
+func (q *Queries) RevokeOwnAdminSession(ctx context.Context, arg RevokeOwnAdminSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOwnAdminSession, arg.ID, arg.AdminID)
 	if err != nil {
 		return 0, err
 	}
@@ -1232,6 +1385,54 @@ func (q *Queries) SavePushSubscription(ctx context.Context, arg SavePushSubscrip
 	return err
 }
 
+const setAdminName = `-- name: SetAdminName :one
+
+UPDATE platform_admins SET name = $1, updated_at = now() WHERE id = $2 RETURNING id, email, name, password_hash, totp_secret, totp_last_step, status, created_at, updated_at, last_login_at, role, alert_email
+`
+
+type SetAdminNameParams struct {
+	Name string
+	ID   ulid.ID
+}
+
+// An admin's own account (C3).
+func (q *Queries) SetAdminName(ctx context.Context, arg SetAdminNameParams) (PlatformAdmin, error) {
+	row := q.db.QueryRow(ctx, setAdminName, arg.Name, arg.ID)
+	var i PlatformAdmin
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.TotpSecret,
+		&i.TotpLastStep,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastLoginAt,
+		&i.Role,
+		&i.AlertEmail,
+	)
+	return i, err
+}
+
+const setAdminPassword = `-- name: SetAdminPassword :execrows
+UPDATE platform_admins SET password_hash = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAdminPasswordParams struct {
+	PasswordHash string
+	ID           ulid.ID
+}
+
+func (q *Queries) SetAdminPassword(ctx context.Context, arg SetAdminPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAdminPassword, arg.PasswordHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setAdminRole = `-- name: SetAdminRole :execrows
 UPDATE platform_admins SET role = $1, updated_at = now() WHERE id = $2
 `
@@ -1260,6 +1461,25 @@ type SetAdminStatusParams struct {
 
 func (q *Queries) SetAdminStatus(ctx context.Context, arg SetAdminStatusParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setAdminStatus, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setAdminTOTP = `-- name: SetAdminTOTP :execrows
+UPDATE platform_admins SET totp_secret = $1, totp_last_step = $2, updated_at = now() WHERE id = $3
+`
+
+type SetAdminTOTPParams struct {
+	TotpSecret []byte
+	Step       int64
+	ID         ulid.ID
+}
+
+// A new phone: the new seed, its first step claimed.
+func (q *Queries) SetAdminTOTP(ctx context.Context, arg SetAdminTOTPParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAdminTOTP, arg.TotpSecret, arg.Step, arg.ID)
 	if err != nil {
 		return 0, err
 	}

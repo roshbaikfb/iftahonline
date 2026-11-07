@@ -2126,6 +2126,136 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Rename the signed-in admin
+         * @description C3. The role is changed by another owner from the team page.
+         */
+        patch: operations["adminUpdateMe"];
+        trace?: never;
+    };
+    "/admin/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the signed-in admin's password
+         * @description C3. The current password proves it (failures throttled like
+         *     sign-in). Every other device is signed out and an email tells the
+         *     admin. 422 current_password wrong or new_password weak.
+         */
+        post: operations["adminChangePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me/phone/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start moving two-step verification to a new phone
+         * @description C3. A current code from the old phone; answers the new phone's
+         *     enrolment (shown once), which waits 10 minutes for its first code.
+         *     422 code invalid.
+         */
+        post: operations["adminStartNewPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me/phone/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish moving two-step verification to the new phone
+         * @description C3. A code from the new phone: the old phone stops at once and an
+         *     email tells the admin. 422 code invalid; 409 no_new_phone when the
+         *     move was not started or waited too long.
+         */
+        post: operations["adminConfirmNewPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The devices the signed-in admin is on */
+        get: operations["adminListMySessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out of every other device
+         * @description C3. The device making the request stays signed in.
+         */
+        post: operations["adminRevokeMyOtherSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/me/sessions/{session_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One of the signed-in admin's own sessions. */
+                session_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out of another device
+         * @description C3. 422 for this device (sign out instead); 404 session_not_found.
+         */
+        post: operations["adminRevokeMySession"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -6181,6 +6311,25 @@ export interface components {
                 /** @enum {string} */
                 role: "owner" | "manager" | "support" | "shipping";
             }[];
+        };
+        AdminNewPhone: {
+            /** @description The new seed in base32 */
+            secret: string;
+            /** @description The otpauth:// URI. */
+            uri: string;
+            /** @description The URI as an SVG QR code. */
+            qr_svg: string;
+        };
+        AdminOwnSession: {
+            id: components["schemas"]["ULID"];
+            user_agent: string;
+            ip_prefix: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** @description This device. */
+            current: boolean;
         };
         AdminStoreDetail: {
             store: components["schemas"]["Store"];
@@ -12302,6 +12451,175 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminProfile"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Renamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminProfile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminChangePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    current_password: string;
+                    new_password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminStartNewPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The new phone's enrolment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminNewPhone"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminConfirmNewPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminListMySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sessions, the latest used first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminOwnSession"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRevokeMyOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRevokeMySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One of the signed-in admin's own sessions. */
+                session_id: components["schemas"]["ULID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
