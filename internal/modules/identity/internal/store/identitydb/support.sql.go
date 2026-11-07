@@ -331,13 +331,14 @@ func (q *Queries) MemberStores(ctx context.Context, userID ulid.ID) ([]MemberSto
 }
 
 const peekSupportToken = `-- name: PeekSupportToken :one
-SELECT request_id::uuid AS request_id, link_store_id::uuid AS store_id, email::text AS email FROM user_tokens
+SELECT request_id::uuid AS request_id, link_store_id::uuid AS store_id, user_id, email::text AS email FROM user_tokens
 WHERE token_hash = $1 AND purpose = 'support_cancel' AND used_at IS NULL AND expires_at > now()
 `
 
 type PeekSupportTokenRow struct {
 	RequestID ulid.ID
 	StoreID   ulid.ID
+	UserID    ulid.ID
 	Email     string
 }
 
@@ -345,7 +346,12 @@ type PeekSupportTokenRow struct {
 func (q *Queries) PeekSupportToken(ctx context.Context, tokenHash []byte) (PeekSupportTokenRow, error) {
 	row := q.db.QueryRow(ctx, peekSupportToken, tokenHash)
 	var i PeekSupportTokenRow
-	err := row.Scan(&i.RequestID, &i.StoreID, &i.Email)
+	err := row.Scan(
+		&i.RequestID,
+		&i.StoreID,
+		&i.UserID,
+		&i.Email,
+	)
 	return i, err
 }
 

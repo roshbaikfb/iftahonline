@@ -371,7 +371,9 @@ recorded it in its own log.
 - **The link page:** `/support-request#<secret>` on the dashboard. The
   secret is in the URL fragment.
   - `POST /v1/support-requests/check` answers the kind, the masked
-    email, and when the request was made and takes effect.
+    email, and when the request was made and takes effect. It also gives
+    `member_name`, and `for_member`, which is false on the store owner's
+    copy. The page then names the member instead of «your account».
   - `POST /v1/support-requests/cancel` cancels the request, closes every
     link it sent, and enqueues `identity.support.cancelled`. That job
     emails the admin who asked through `WorkerDeps.NotifyAdmin`, which is

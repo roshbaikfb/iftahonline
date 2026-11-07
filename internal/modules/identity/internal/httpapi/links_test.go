@@ -162,7 +162,8 @@ func TestSupportLinkOverHTTP(t *testing.T) {
 	body := fmt.Sprintf(`{"token":%q}`, tok)
 
 	res, m := f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/check", body))
-	if res.StatusCode != http.StatusOK || m["kind"] != "mfa_reset" || m["email"] == acc.email || m["effective_at"] == nil {
+	if res.StatusCode != http.StatusOK || m["kind"] != "mfa_reset" || m["email"] == acc.email || m["effective_at"] == nil || m["for_member"] != true ||
+		m["member_name"] != "Ahmed" {
 		t.Fatalf("check = %d %v", res.StatusCode, m)
 	}
 	if res, m = f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/check", `{"token":"junk"}`)); res.StatusCode != http.StatusNotFound || m["code"] != "link_not_found" {

@@ -9,7 +9,14 @@ import { SupportRequest } from './SupportRequest';
 
 const signedOut = (): Session => ({ state: { kind: 'signed-out' }, reload: vi.fn(() => Promise.resolve()), signOut: vi.fn(() => Promise.resolve()) });
 const gone = () => ({ status: 404, body: { title: 'Not Found', status: 404, code: 'link_not_found' } });
-const open = { kind: 'mfa_reset', email: 'k•••m@example.com', created_at: '2026-11-07T11:30:00Z', effective_at: '2099-11-08T11:30:00Z' };
+const open = {
+  kind: 'mfa_reset',
+  email: 'k•••m@example.com',
+  member_name: 'كريم سامي',
+  for_member: true,
+  created_at: '2026-11-07T11:30:00Z',
+  effective_at: '2099-11-08T11:30:00Z',
+};
 
 function renderAt(entry: string) {
   render(
@@ -46,6 +53,21 @@ describe('a support request link (C1)', () => {
     expect(sent(calls, '/v1/support-requests/cancel')).toEqual([{ token: 'the-link' }]);
     await user.click(screen.getByRole('link', { name: 'ادخل إلى حسابك' }));
     expect(screen.getByText('تسجيل الدخول')).toBeInTheDocument();
+  });
+
+  it('names the member on the store owner’s copy', async () => {
+    mockAPI({
+      'POST /v1/support-requests/check': () => ({ status: 200, body: { ...open, email: 'm•••a@example.com', for_member: false } }),
+      'POST /v1/support-requests/cancel': () => ({ status: 204 }),
+    });
+    renderAt('/support-request#owner-link');
+    expect(await screen.findByText('كريم سامي، عضو في متجرك')).toBeInTheDocument();
+    expect(screen.queryByText('m•••a@example.com')).not.toBeInTheDocument();
+    expect(screen.getByText('وصلك هذا لأنك صاحب المتجر. ألغِه إن لم يطلبه كريم سامي.')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'ألغِ الطلب' }));
+    expect(await screen.findByText('ألغينا الطلب. التحقق بخطوتين باقٍ على حساب كريم سامي كما هو.')).toBeInTheDocument();
+    expect(screen.getByText('إن لم يكن كريم سامي من تواصل مع الدعم، فنبّهه ليغيّر كلمة المرور.')).toBeInTheDocument();
   });
 
   it('says an old link’s request is gone', async () => {

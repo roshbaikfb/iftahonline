@@ -56,7 +56,7 @@ VALUES (@id, @user_id, 'support_cancel', @token_hash, @email, @expires_at, @requ
 
 -- name: PeekSupportToken :one
 -- The request an open cancel link names, without using it.
-SELECT request_id::uuid AS request_id, link_store_id::uuid AS store_id, email::text AS email FROM user_tokens
+SELECT request_id::uuid AS request_id, link_store_id::uuid AS store_id, user_id, email::text AS email FROM user_tokens
 WHERE token_hash = @token_hash AND purpose = 'support_cancel' AND used_at IS NULL AND expires_at > now();
 
 -- name: CloseSupportTokens :exec

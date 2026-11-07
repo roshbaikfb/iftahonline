@@ -5811,6 +5811,10 @@ export interface components {
             kind: "mfa_reset" | "ownership_transfer";
             /** @description The account the link was sent to */
             email: string;
+            /** @description The member the request is about. */
+            member_name: string;
+            /** @description The link was sent to that member; false on the store owner's copy of a request about another member. */
+            for_member: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

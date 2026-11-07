@@ -304,10 +304,14 @@ func (s *Service) CancelSupportRequest(ctx context.Context, admin, id ulid.ID, r
 	})
 }
 
-// SupportLink is what a cancel link's page shows.
+// SupportLink is what a cancel link's page shows: the request, and whom
+// it is about. ForMember is false on the store owner's copy of a link
+// about another member, so the page names that member.
 type SupportLink struct {
 	Kind        string
-	Email       string // masked
+	Email       string // masked: the address the link was sent to
+	MemberName  string
+	ForMember   bool
 	CreatedAt   time.Time
 	EffectiveAt time.Time
 }
@@ -339,10 +343,16 @@ func (s *Service) CheckSupportLink(ctx context.Context, rawToken string) (Suppor
 	if err != nil {
 		return SupportLink{}, err
 	}
-	var req store.SupportRequest
+	var (
+		req    store.SupportRequest
+		member domain.User
+	)
 	err = postgres.InTenantTx(ctx, s.db, func(tx pgx.Tx) error {
 		var txErr error
-		req, txErr = store.GetSupportRequest(ctx, tx, link.RequestID, false)
+		if req, txErr = store.GetSupportRequest(ctx, tx, link.RequestID, false); txErr != nil {
+			return txErr
+		}
+		member, txErr = store.UserByID(ctx, tx, req.UserID)
 		return txErr
 	})
 	if errors.Is(err, domain.ErrNotFound) || err == nil && !req.Open() {
@@ -351,7 +361,8 @@ func (s *Service) CheckSupportLink(ctx context.Context, rawToken string) (Suppor
 	if err != nil {
 		return SupportLink{}, err
 	}
-	return SupportLink{Kind: req.Kind, Email: mailer.MaskEmail(link.Email), CreatedAt: req.CreatedAt, EffectiveAt: req.EffectiveAt}, nil
+	return SupportLink{Kind: req.Kind, Email: mailer.MaskEmail(link.Email), MemberName: member.Name, ForMember: link.UserID == req.UserID,
+		CreatedAt: req.CreatedAt, EffectiveAt: req.EffectiveAt}, nil
 }
 
 // CancelSupportLink cancels the request an open link names: its every

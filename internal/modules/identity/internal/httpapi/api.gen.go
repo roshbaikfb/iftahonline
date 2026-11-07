@@ -613,8 +613,14 @@ type SupportLink struct {
 	EffectiveAt time.Time `json:"effective_at"`
 
 	// Email The account the link was sent to
-	Email string          `json:"email"`
-	Kind  SupportLinkKind `json:"kind"`
+	Email string `json:"email"`
+
+	// ForMember The link was sent to that member; false on the store owner's copy of a request about another member.
+	ForMember bool            `json:"for_member"`
+	Kind      SupportLinkKind `json:"kind"`
+
+	// MemberName The member the request is about.
+	MemberName string `json:"member_name"`
 }
 
 // SupportLinkKind defines model for SupportLink.Kind.

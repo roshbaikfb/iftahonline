@@ -36,6 +36,11 @@ const actions: Record<string, Action> = {
   'store.feature_override_cleared': { label: 'أزال استثناء ميزة لمتجر', family: 'store' },
   'store.agency_joined': { label: 'ضمّ متجرًا لوكالة', family: 'store' },
   'store.agency_left': { label: 'أخرج متجرًا من وكالة', family: 'store' },
+  'store.member_mfa_reset_requested': { label: 'طلب إلغاء التحقق بخطوتين لعضو متجر (بعد 24 ساعة)', family: 'store', danger: true },
+  'store.support_request_cancelled': { label: 'سحب طلب دعم على فريق متجر', family: 'store' },
+  'store.member_disabled': { label: 'أوقف حساب عضو متجر', family: 'store', danger: true },
+  'store.member_enabled': { label: 'أعاد تفعيل حساب عضو متجر', family: 'store' },
+  'store.member_signed_out': { label: 'أخرج عضو متجر من كل أجهزته', family: 'store' },
   'plan.published': { label: 'نشر إصدارًا جديدًا من باقة', family: 'billing' },
   'plan.retired': { label: 'أوقف بيع باقة', family: 'billing', danger: true },
   'feature.saved': { label: 'حفظ ميزة في الكتالوج', family: 'billing' },
@@ -149,6 +154,8 @@ function chips(e: Entry, features: Feature[]): string[] {
       case 'video_id':
       case 'number':
       case 'account':
+      case 'user_id':
+      case 'request_id':
         break; // the reason has its line; the rest names the target or is an ID
       case 'feature':
         if (e.action !== 'store.feature_overridden') out.push(feature?.name_ar ?? str(v));

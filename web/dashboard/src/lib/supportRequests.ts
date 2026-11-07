@@ -8,8 +8,12 @@ type Kind = components['schemas']['SupportLink']['kind'];
 // requestTitle names what a request does.
 export const requestTitle = (k: Kind) => (k === 'mfa_reset' ? 'طلب إلغاء التحقق بخطوتين' : 'طلب نقل ملكية المتجر');
 
-// keptLine says what stays as it was once a request is cancelled.
-export const keptLine = (k: Kind) => (k === 'mfa_reset' ? 'التحقق بخطوتين باقٍ على حسابك كما هو.' : 'ملكية المتجر باقية كما هي.');
+// keptLine says what stays as it was once a request is cancelled: on the
+// member's own account, or (the owner's copy) on the member's.
+export function keptLine(k: Kind, forMember: boolean, member: string): string {
+  if (k !== 'mfa_reset') return 'ملكية المتجر باقية كما هي.';
+  return forMember ? 'التحقق بخطوتين باقٍ على حسابك كما هو.' : `التحقق بخطوتين باقٍ على حساب ${member} كما هو.`;
+}
 
 // hoursUntil words the time until a request takes effect: «بعد 23 ساعة».
 export function hoursUntil(iso: string, now: Date): string {

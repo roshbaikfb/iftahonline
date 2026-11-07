@@ -155,6 +155,7 @@ describe('store team card', () => {
     const dialog = screen.getByRole('dialog', { name: 'إيقاف حساب منى أحمد' });
     expect(await within(dialog).findByText('الحساب عضو في متجر آخر')).toBeInTheDocument();
     expect(dialog).toHaveTextContent('بيت منى (مدير)');
+    expect(dialog).toHaveTextContent('الإيقاف يشمله أيضًا.');
     await user.type(within(dialog).getByLabelText('السبب'), 'حساب مسروق');
     await user.click(within(dialog).getByRole('button', { name: 'أوقف الحساب' }));
     await waitFor(() => {

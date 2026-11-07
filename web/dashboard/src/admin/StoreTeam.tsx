@@ -235,7 +235,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
       {team &&
         cancelledByLink(team).map((r) => (
           <p key={r.id} className="muted small">
-            ألغى صاحب الحساب طلب {kindWords[r.kind]} لـ{nameOf(r.user_id)} من رابط الإيميل{r.closed_at ? ` ${dateTimeAr(r.closed_at)}` : ''}. راجع التذكرة قبل
+            أُلغي طلب {kindWords[r.kind]} لـ{nameOf(r.user_id)} من رابط الإيميل{r.closed_at ? ` ${dateTimeAr(r.closed_at)}` : ''}. راجع التذكرة قبل
             أي طلب آخر.
           </p>
         ))}
@@ -435,7 +435,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
           {others && others.length > 0 && (
             <div className="warn-box">
               <strong>{others.length === 1 ? 'الحساب عضو في متجر آخر' : `الحساب عضو في ${String(others.length)} متاجر أخرى`}</strong>
-              <span>{others.map((o) => `${o.name} (${memberRole(o.role)})`).join(' · ')}. الإيقاف يشملها كلها.</span>
+              <span>{others.map((o) => `${o.name} (${memberRole(o.role)})`).join(' · ')}. {others.length === 1 ? 'الإيقاف يشمله أيضًا.' : 'الإيقاف يشملها كلها.'}</span>
             </div>
           )}
           {reasonField}

@@ -13,7 +13,7 @@ type Load =
   | { kind: 'gone' }
   | { kind: 'failed'; message: string }
   | { kind: 'open'; link: SupportLink }
-  | { kind: 'cancelled'; what: SupportLink['kind'] };
+  | { kind: 'cancelled'; link: SupportLink };
 
 // SupportRequest is where a support request's email link lands (C1, the
 // approved mockup): /support-request#<token>. Without signing in, it shows
@@ -41,12 +41,12 @@ export function SupportRequest() {
     };
   }, [token]);
 
-  async function cancel(what: SupportLink['kind']) {
+  async function cancel(link: SupportLink) {
     setBusy(true);
     setError('');
     const { error: err, response } = await api.POST('/v1/support-requests/cancel', { body: { token } });
     setBusy(false);
-    if (!err) setLoad({ kind: 'cancelled', what });
+    if (!err) setLoad({ kind: 'cancelled', link });
     else if (response.status === 404) setLoad({ kind: 'gone' });
     else setError(accountMessage(err));
   }
@@ -61,10 +61,19 @@ export function SupportRequest() {
           <>
             <h1>{requestTitle(load.link.kind)}</h1>
             <dl className="support-facts">
-              <dt>الحساب</dt>
-              <dd>
-                <bdi dir="ltr">{load.link.email}</bdi>
-              </dd>
+              {load.link.for_member ? (
+                <>
+                  <dt>الحساب</dt>
+                  <dd>
+                    <bdi dir="ltr">{load.link.email}</bdi>
+                  </dd>
+                </>
+              ) : (
+                <>
+                  <dt>حساب</dt>
+                  <dd>{load.link.member_name}، عضو في متجرك</dd>
+                </>
+              )}
               <dt>طُلب</dt>
               <dd>{whenAr(load.link.created_at)}</dd>
               <dt>يُنفَّذ</dt>
@@ -73,18 +82,23 @@ export function SupportRequest() {
               </dd>
             </dl>
             {error && <p role="alert">{error}</p>}
-            <button type="button" className="support-cancel" disabled={busy} onClick={() => void cancel(load.link.kind)}>
-              ألغِ الطلب، لم أطلبه
+            <button type="button" className="support-cancel" disabled={busy} onClick={() => void cancel(load.link)}>
+              {load.link.for_member ? 'ألغِ الطلب، لم أطلبه' : 'ألغِ الطلب'}
             </button>
+            {!load.link.for_member && <p className="muted small">وصلك هذا لأنك صاحب المتجر. ألغِه إن لم يطلبه {load.link.member_name}.</p>}
             <p className="muted small">الإلغاء يبلّغ فريق الدعم أيضًا.</p>
           </>
         )}
         {load.kind === 'cancelled' && (
           <>
             <p role="status" className="support-ok">
-              ألغينا الطلب. {keptLine(load.what)}
+              ألغينا الطلب. {keptLine(load.link.kind, load.link.for_member, load.link.member_name)}
             </p>
-            <p>إن لم تكن أنت من تواصل مع الدعم، فقد يعرف أحدٌ بياناتك: غيّر كلمة المرور من «حسابي».</p>
+            <p>
+              {load.link.for_member
+                ? 'إن لم تكن أنت من تواصل مع الدعم، فقد يعرف أحدٌ بياناتك: غيّر كلمة المرور من «حسابي».'
+                : `إن لم يكن ${load.link.member_name} من تواصل مع الدعم، فنبّهه ليغيّر كلمة المرور.`}
+            </p>
             <Link className="button secondary" to={signedIn ? '/account' : home}>
               {signedIn ? 'إلى حسابي' : 'ادخل إلى حسابك'}
             </Link>

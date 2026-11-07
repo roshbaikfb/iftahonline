@@ -179,8 +179,13 @@ func TestSupportMFAReset(t *testing.T) {
 		t.Fatalf("subjects = %v", subjects)
 	}
 	got, err := f.svc.CheckSupportLink(f.device(t), links[memberEmail])
-	if err != nil || got.Kind != "mfa_reset" || !got.EffectiveAt.Equal(req.EffectiveAt) || got.Email == memberEmail || !strings.Contains(got.Email, "@example.com") {
+	if err != nil || got.Kind != "mfa_reset" || !got.EffectiveAt.Equal(req.EffectiveAt) || got.Email == memberEmail || !strings.Contains(got.Email, "@example.com") ||
+		!got.ForMember || got.MemberName != "Karim" {
 		t.Fatalf("check = %+v, %v", got, err)
+	}
+	// The owner's copy names the member it is about.
+	if got, err = f.svc.CheckSupportLink(f.device(t), links[ownerEmail]); err != nil || got.ForMember || got.MemberName != "Karim" {
+		t.Fatalf("the owner's check = %+v, %v", got, err)
 	}
 
 	// Too early: the job refuses and River retries; nothing changed.
