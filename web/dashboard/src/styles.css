@@ -5815,6 +5815,50 @@ td.plus {
   background: #dcfce7;
   color: #15803d;
 }
+/* Moving the store's ownership (C2, the approved mockup). */
+.ownership-card {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+.ownership-card h2,
+.ownership-card p {
+  margin: 0;
+}
+.transfer-dialog {
+  max-inline-size: 34rem;
+}
+.transfer-dialog label {
+  display: grid;
+  gap: 0.35rem;
+}
+.transfer-dialog select,
+.transfer-dialog input {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.transfer-dialog .code-input {
+  max-inline-size: 12.5rem;
+  letter-spacing: 0.25em;
+  text-align: center;
+}
+.transfer-warn {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+.transfer-dialog button.danger-solid {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.transfer-dialog button.danger-solid:hover:not(:disabled) {
+  background: #991b1b;
+}
 /* A support request's link page (C1, the approved mockup). */
 .support-card {
   justify-items: start;

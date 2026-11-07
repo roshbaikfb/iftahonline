@@ -386,6 +386,34 @@ recorded it in its own log.
   only) lists the stores an account works on. The console warns with it
   before disabling an account.
 
+## Moving a store's ownership (C2, ADR-0095)
+
+The old owner always stays on as a manager. The new owner must already be
+an active member. A store has one owner at a time: `DemoteOwner` runs
+before `PromoteToOwner` in the same transaction.
+
+- **The owner, at once:** `POST /v1/stores/{store_id}/ownership` with
+  `{user_id, password, code?}`.
+  - It needs `members.manage` and the owner's role. A support session is
+    refused.
+  - The password is checked with the same per-user throttle as
+    `ChangePassword` (`verifyPassword`). When the owner has two-step
+    verification on, a TOTP or recovery code is needed too
+    (`checkSecondFactor`).
+  - The activity log records `store.ownership_transferred`.
+  - Both people are emailed (`ownership_given`, `ownership_received`).
+- **Platform support, in 24 hours:** `RequestOwnershipTransfer`, a
+  `support_requests` row of kind `ownership_transfer` (`from_user_id` is
+  the owner at that time).
+  - Only the owner gets a cancel link. The new owner gets a heads-up
+    (`ownership_transfer_asked`).
+  - The link page names the new owner, and the button reads «ألغِ
+    الطلب، لم أطلبه».
+  - When the job runs, it moves the ownership. If the team changed
+    meanwhile (the owner moved it already, or the new owner left or was
+    disabled), it closes the request as
+    `support.ownership_transfer_skipped`.
+
 ## Team: invitations and members
 
 | Operation | Permission |

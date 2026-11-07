@@ -770,6 +770,16 @@ type ListAuditLogParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// TransferOwnershipJSONBody defines parameters for TransferOwnership.
+type TransferOwnershipJSONBody struct {
+	// Code Needed when the owner has two-step verification.
+	Code     *string `json:"code,omitempty"`
+	Password string  `json:"password"`
+
+	// UserId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	UserId ULID `json:"user_id"`
+}
+
 // CancelSupportLinkJSONBody defines parameters for CancelSupportLink.
 type CancelSupportLinkJSONBody struct {
 	Token string `json:"token"`
@@ -839,6 +849,9 @@ type CreateInvitationJSONRequestBody = NewInvitation
 
 // UpdateMemberRoleJSONRequestBody defines body for UpdateMemberRole for application/json ContentType.
 type UpdateMemberRoleJSONRequestBody = MemberRoleUpdate
+
+// TransferOwnershipJSONRequestBody defines body for TransferOwnership for application/json ContentType.
+type TransferOwnershipJSONRequestBody TransferOwnershipJSONBody
 
 // CancelSupportLinkJSONRequestBody defines body for CancelSupportLink for application/json ContentType.
 type CancelSupportLinkJSONRequestBody CancelSupportLinkJSONBody
@@ -944,6 +957,9 @@ type ServerInterface interface {
 	// UpdateMemberRole Change a member's role
 	// (PATCH /v1/stores/{store_id}/members/{user_id})
 	UpdateMemberRole(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID)
+	// TransferOwnership Move the store's ownership to an active member, at once
+	// (POST /v1/stores/{store_id}/ownership)
+	TransferOwnership(w http.ResponseWriter, r *http.Request, storeId StoreID)
 	// CancelSupportLink Cancel a support request from its emailed link
 	// (POST /v1/support-requests/cancel)
 	CancelSupportLink(w http.ResponseWriter, r *http.Request)
@@ -1580,6 +1596,32 @@ func (siw *ServerInterfaceWrapper) UpdateMemberRole(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// TransferOwnership operation middleware
+func (siw *ServerInterfaceWrapper) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TransferOwnership(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CancelSupportLink operation middleware
 func (siw *ServerInterfaceWrapper) CancelSupportLink(w http.ResponseWriter, r *http.Request) {
 
@@ -1755,6 +1797,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/mfa/totp/disable", wrapper.DisableTOTP)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/me/sessions/{session_id}", wrapper.RevokeMySession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/stores/{store_id}/ownership", wrapper.TransferOwnership)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/{store_id}/members", wrapper.ListMembers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/stores/{store_id}/members/{user_id}", wrapper.RemoveMember)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/stores/{store_id}/members/{user_id}", wrapper.UpdateMemberRole)
@@ -3069,6 +3112,40 @@ func (response UpdateMemberRoledefaultApplicationProblemPlusJSONResponse) VisitU
 	return err
 }
 
+type TransferOwnershipRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+	Body    *TransferOwnershipJSONRequestBody
+}
+
+type TransferOwnershipResponseObject interface {
+	VisitTransferOwnershipResponse(w http.ResponseWriter) error
+}
+
+type TransferOwnership204Response struct {
+}
+
+func (response TransferOwnership204Response) VisitTransferOwnershipResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type TransferOwnershipdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response TransferOwnershipdefaultApplicationProblemPlusJSONResponse) VisitTransferOwnershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CancelSupportLinkRequestObject struct {
 	Body *CancelSupportLinkJSONRequestBody
 }
@@ -3239,6 +3316,9 @@ type StrictServerInterface interface {
 	// UpdateMemberRole Change a member's role
 	// (PATCH /v1/stores/{store_id}/members/{user_id})
 	UpdateMemberRole(ctx context.Context, request UpdateMemberRoleRequestObject) (UpdateMemberRoleResponseObject, error)
+	// TransferOwnership Move the store's ownership to an active member, at once
+	// (POST /v1/stores/{store_id}/ownership)
+	TransferOwnership(ctx context.Context, request TransferOwnershipRequestObject) (TransferOwnershipResponseObject, error)
 	// CancelSupportLink Cancel a support request from its emailed link
 	// (POST /v1/support-requests/cancel)
 	CancelSupportLink(ctx context.Context, request CancelSupportLinkRequestObject) (CancelSupportLinkResponseObject, error)
@@ -4209,6 +4289,39 @@ func (sh *strictHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMemberRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateMemberRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TransferOwnership operation middleware
+func (sh *strictHandler) TransferOwnership(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request TransferOwnershipRequestObject
+
+	request.StoreId = storeId
+
+	var body TransferOwnershipJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TransferOwnership(ctx, request.(TransferOwnershipRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TransferOwnership")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TransferOwnershipResponseObject); ok {
+		if err := validResponse.VisitTransferOwnershipResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

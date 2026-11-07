@@ -194,6 +194,39 @@ describe('store team card', () => {
     expect(screen.queryByRole('button', { name: 'ألغِ الطلب' })).not.toBeInTheDocument();
   });
 
+  it('asks to move the ownership to a member after two checks (C2)', async () => {
+    const calls = routes({
+      [`POST ${base}/${karim.user_id}/ownership`]: () => ({ status: 202, body: { ...waitingReq, kind: 'ownership_transfer', user_id: karim.user_id } }),
+    });
+    renderTeam();
+    const user = userEvent.setup();
+    await user.click(within(await rowOf('منى أحمد')).getByRole('button', { name: 'إجراءات على منى أحمد' }));
+    expect(screen.queryByRole('menuitem', { name: 'انقل ملكية المتجر إليه' })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(within(await rowOf('كريم سامي')).getByRole('button', { name: 'إجراءات على كريم سامي' }));
+    await user.click(screen.getByRole('menuitem', { name: 'انقل ملكية المتجر إليه' }));
+    const dialog = screen.getByRole('dialog', { name: 'نقل ملكية المتجر إلى كريم سامي' });
+    expect(dialog).toHaveTextContent('نرسل الآن إيميلًا لـمنى أحمد (صاحب المتجر الحالي)');
+    const send = within(dialog).getByRole('button', { name: 'أرسل طلب النقل' });
+    for (const box of within(dialog).getAllByRole('checkbox')) await user.click(box);
+    await user.type(within(dialog).getByLabelText('السبب'), 'عقد بيع');
+    expect(send).toBeEnabled();
+    await user.click(send);
+    expect(await screen.findByText(/^أُرسل الطلب. تنتقل ملكية المتجر إلى كريم سامي/)).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ reason: 'عقد بيع' });
+  });
+
+  it('shows a waiting transfer and offers no second one', async () => {
+    routes({
+      [`GET ${base}`]: () => ({ status: 200, body: team({ requests: [{ ...waitingReq, kind: 'ownership_transfer', user_id: karim.user_id }] }) }),
+    });
+    renderTeam();
+    expect(await screen.findByText('طلب نقل ملكية المتجر إلى كريم سامي')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(within(await rowOf('كريم سامي')).getByRole('button', { name: 'إجراءات على كريم سامي' }));
+    expect(screen.queryByRole('menuitem', { name: 'انقل ملكية المتجر إليه' })).not.toBeInTheDocument();
+  });
+
   it('closes the menu on Escape', async () => {
     routes();
     renderTeam();

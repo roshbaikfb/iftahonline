@@ -567,6 +567,11 @@ func TestTeamCrossTenant(t *testing.T) {
 		{OperationID: "createInvitation", Request: newReq(t, http.MethodPost, bStore+"/invitations", `{"email":"evil@example.com","role":"manager"}`, bearer(a.token)), Unchanged: teamUnchanged},
 		{OperationID: "revokeInvitation", Request: newReq(t, http.MethodDelete, bStore+"/invitations/"+bInvite, "", bearer(a.token)), Unchanged: teamUnchanged},
 		{OperationID: "revokeInvitation", Request: newReq(t, http.MethodDelete, aStore+"/invitations/"+bInvite, "", bearer(a.token)), Unchanged: teamUnchanged},
+		// C2: A cannot move B's store, nor make B's member the owner of A's.
+		{OperationID: "transferOwnership", Request: newReq(t, http.MethodPost, bStore+"/ownership",
+			fmt.Sprintf(`{"user_id":%q,"password":"correct horse battery"}`, bMember.userID), bearer(a.token)), Unchanged: teamUnchanged},
+		{OperationID: "transferOwnership", Request: newReq(t, http.MethodPost, aStore+"/ownership",
+			fmt.Sprintf(`{"user_id":%q,"password":"correct horse battery"}`, bMember.userID), bearer(a.token)), Unchanged: teamUnchanged},
 	}
 	for _, c := range cases {
 		t.Run(c.OperationID+" "+c.Request.URL.Path, func(t *testing.T) {

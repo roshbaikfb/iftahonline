@@ -11,7 +11,7 @@ export const requestTitle = (k: Kind) => (k === 'mfa_reset' ? 'طلب إلغاء
 // keptLine says what stays as it was once a request is cancelled: on the
 // member's own account, or (the owner's copy) on the member's.
 export function keptLine(k: Kind, forMember: boolean, member: string): string {
-  if (k !== 'mfa_reset') return 'ملكية المتجر باقية كما هي.';
+  if (k !== 'mfa_reset') return 'ملكية المتجر باقية لك كما هي.';
   return forMember ? 'التحقق بخطوتين باقٍ على حسابك كما هو.' : `التحقق بخطوتين باقٍ على حساب ${member} كما هو.`;
 }
 
@@ -27,3 +27,8 @@ export function hoursUntil(iso: string, now: Date): string {
 // whenAr is a moment as the page writes it: «السبت 7 نوفمبر 2:30 م».
 export const whenAr = (iso: string) =>
   new Date(iso).toLocaleString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+
+// aboutYou is a link whose request changes the reader's own things: their
+// account (the member's copy), or the store they own (a transfer, whose
+// link goes to the owner alone).
+export const aboutYou = (l: components['schemas']['SupportLink']) => l.for_member || l.kind === 'ownership_transfer';

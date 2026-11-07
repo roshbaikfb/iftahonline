@@ -823,6 +823,37 @@ paths:
           description: Revoked.
         default:
           $ref: "#/components/responses/Problem"
+  /v1/stores/{store_id}/ownership:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+    post:
+      tags: [identity]
+      operationId: transferOwnership
+      summary: Move the store's ownership to an active member, at once
+      description: |
+        C2. The owner only (never a support session), with the password
+        and, when two-step verification is on, a code from the app or a
+        recovery code. The old owner stays on as a manager; both are
+        emailed and the store's activity log records it. 422 with
+        `password` wrong or `user_id` already_owner; 401 for a wrong
+        code; 404 member_not_found; 409 member_disabled; 403 for anyone
+        but the owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, password]
+              properties:
+                user_id: { $ref: "#/components/schemas/ULID" }
+                password: { type: string, maxLength: 512 }
+                code: { type: string, maxLength: 32, description: Needed when the owner has two-step verification. }
+      responses:
+        "204":
+          description: Moved.
+        default:
+          $ref: "#/components/responses/Problem"
   /v1/stores/{store_id}/members:
     parameters:
       - $ref: "#/components/parameters/StoreID"
@@ -2800,6 +2831,35 @@ paths:
         when one already waits; 404 member_not_found for an account that
         is not the store's member. Recorded in the admin log and the
         store's activity log.
+      security:
+        - adminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminReason" }
+      responses:
+        "202":
+          description: Requested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSupportRequest" }
+        default:
+          $ref: "#/components/responses/Problem"
+  /admin/v1/stores/{store_id}/team/{user_id}/ownership:
+    parameters:
+      - $ref: "#/components/parameters/StoreID"
+      - $ref: "#/components/parameters/MemberUserID"
+    post:
+      tags: [admin]
+      operationId: adminRequestOwnershipTransfer
+      summary: Ask to move a store's ownership to a member in 24 hours
+      description: |
+        C2. For an owner who cannot move it (sold the store, left, lost
+        the account). The owner now is emailed a link that cancels it and
+        the member a heads-up; it takes effect 24 hours later unless
+        cancelled (ADR-0095). 422 already_owner; 409 member_disabled,
+        request_open or store_has_no_owner; 404 member_not_found.
       security:
         - adminSessionCookie: []
       requestBody:

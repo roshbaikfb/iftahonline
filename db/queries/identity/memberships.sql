@@ -66,3 +66,13 @@ LIMIT 1;
 -- The stores whose owner has exactly this email or phone, for the
 -- console's search (ADR-0079), through app.owner_stores: IDs only.
 SELECT store_id::uuid FROM app.owner_stores(@email::text, @phones::text[]);
+
+-- name: DemoteOwner :execrows
+-- Ownership moves (C2): the owner becomes a manager first, so the one-
+-- owner index holds when the new owner is promoted in the same transaction.
+UPDATE store_memberships SET role = 'manager', updated_at = now()
+WHERE store_id = @store_id AND user_id = @user_id AND role = 'owner';
+
+-- name: PromoteToOwner :execrows
+UPDATE store_memberships SET role = 'owner', updated_at = now()
+WHERE store_id = @store_id AND user_id = @user_id AND role <> 'owner';

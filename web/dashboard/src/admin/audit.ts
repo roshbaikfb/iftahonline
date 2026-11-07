@@ -37,6 +37,7 @@ const actions: Record<string, Action> = {
   'store.agency_joined': { label: 'ضمّ متجرًا لوكالة', family: 'store' },
   'store.agency_left': { label: 'أخرج متجرًا من وكالة', family: 'store' },
   'store.member_mfa_reset_requested': { label: 'طلب إلغاء التحقق بخطوتين لعضو متجر (بعد 24 ساعة)', family: 'store', danger: true },
+  'store.ownership_transfer_requested': { label: 'طلب نقل ملكية متجر (بعد 24 ساعة)', family: 'store', danger: true },
   'store.support_request_cancelled': { label: 'سحب طلب دعم على فريق متجر', family: 'store' },
   'store.member_disabled': { label: 'أوقف حساب عضو متجر', family: 'store', danger: true },
   'store.member_enabled': { label: 'أعاد تفعيل حساب عضو متجر', family: 'store' },

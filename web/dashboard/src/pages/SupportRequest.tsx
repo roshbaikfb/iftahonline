@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router';
 
 import { api, type components } from '../api/client';
 import { accountMessage, linkToken } from '../lib/account';
-import { hoursUntil, keptLine, requestTitle, whenAr } from '../lib/supportRequests';
+import { aboutYou, hoursUntil, keptLine, requestTitle, whenAr } from '../lib/supportRequests';
 import { useSession } from '../session';
 
 type SupportLink = components['schemas']['SupportLink'];
@@ -70,7 +70,7 @@ export function SupportRequest() {
                 </>
               ) : (
                 <>
-                  <dt>حساب</dt>
+                  <dt>{load.link.kind === 'ownership_transfer' ? 'إلى' : 'حساب'}</dt>
                   <dd>{load.link.member_name}، عضو في متجرك</dd>
                 </>
               )}
@@ -83,9 +83,9 @@ export function SupportRequest() {
             </dl>
             {error && <p role="alert">{error}</p>}
             <button type="button" className="support-cancel" disabled={busy} onClick={() => void cancel(load.link)}>
-              {load.link.for_member ? 'ألغِ الطلب، لم أطلبه' : 'ألغِ الطلب'}
+              {aboutYou(load.link) ? 'ألغِ الطلب، لم أطلبه' : 'ألغِ الطلب'}
             </button>
-            {!load.link.for_member && <p className="muted small">وصلك هذا لأنك صاحب المتجر. ألغِه إن لم يطلبه {load.link.member_name}.</p>}
+            {!aboutYou(load.link) && <p className="muted small">وصلك هذا لأنك صاحب المتجر. ألغِه إن لم يطلبه {load.link.member_name}.</p>}
             <p className="muted small">الإلغاء يبلّغ فريق الدعم أيضًا.</p>
           </>
         )}
@@ -95,7 +95,7 @@ export function SupportRequest() {
               ألغينا الطلب. {keptLine(load.link.kind, load.link.for_member, load.link.member_name)}
             </p>
             <p>
-              {load.link.for_member
+              {aboutYou(load.link)
                 ? 'إن لم تكن أنت من تواصل مع الدعم، فقد يعرف أحدٌ بياناتك: غيّر كلمة المرور من «حسابي».'
                 : `إن لم يكن ${load.link.member_name} من تواصل مع الدعم، فنبّهه ليغيّر كلمة المرور.`}
             </p>

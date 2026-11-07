@@ -167,6 +167,9 @@ describe('activity sentences (D6)', () => {
     expect(id('support.mfa_reset_cancelled', { metadata: { by: 'console' } }).text).toBe('سحب طلب إلغاء التحقق بخطوتين');
     expect(id('member.disabled').text).toBe('إيقاف حساب عضو');
     expect(id('member.signed_out').text).toBe('إخراج عضو من كل أجهزته');
+    expect(id('store.ownership_transferred').text).toBe('نقل ملكية المتجر إلى عضو');
+    expect(id('support.ownership_transfer_cancelled', { metadata: { by: 'link' } }).text).toBe('إلغاء طلب الدعم لنقل ملكية المتجر');
+    expect(id('support.ownership_transfer_skipped').text).toBe('تجاوز طلب نقل الملكية: تغيّر الفريق قبل موعده');
   });
 
   it('says when, as the mockup does', () => {

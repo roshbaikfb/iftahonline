@@ -98,6 +98,19 @@ func (h *Handlers) AdminRequestMemberMFAReset(ctx context.Context, req AdminRequ
 	return AdminRequestMemberMFAReset202JSONResponse(toSupportRequest(r)), nil
 }
 
+// AdminRequestOwnershipTransfer implements StrictServerInterface (C2).
+func (h *Handlers) AdminRequestOwnershipTransfer(ctx context.Context, req AdminRequestOwnershipTransferRequestObject) (AdminRequestOwnershipTransferResponseObject, error) {
+	id, user, err := memberTarget(req.StoreId, req.UserId, req.Body != nil)
+	if err != nil {
+		return nil, err
+	}
+	r, err := h.svc.RequestOwnershipTransfer(ctx, id, user, req.Body.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return AdminRequestOwnershipTransfer202JSONResponse(toSupportRequest(r)), nil
+}
+
 // AdminDisableMember implements StrictServerInterface.
 func (h *Handlers) AdminDisableMember(ctx context.Context, req AdminDisableMemberRequestObject) (AdminDisableMemberResponseObject, error) {
 	id, user, err := memberTarget(req.StoreId, req.UserId, req.Body != nil)

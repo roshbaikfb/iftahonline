@@ -36,6 +36,12 @@ func (testSupport) RequestMFAReset(_ context.Context, by, user ulid.ID, reason s
 		EffectiveAt: now.Add(24 * time.Hour)}, member(user)
 }
 
+func (testSupport) RequestOwnershipTransfer(_ context.Context, by, user ulid.ID, reason string) (admin.SupportRequest, error) {
+	now := time.Now()
+	return admin.SupportRequest{ID: ulid.NewGenerator().New(), Kind: "ownership_transfer", UserID: user, RequestedBy: by, Reason: reason, CreatedAt: now,
+		EffectiveAt: now.Add(24 * time.Hour)}, member(user)
+}
+
 func (testSupport) CancelRequest(context.Context, ulid.ID, ulid.ID, string) error { return nil }
 
 func (testSupport) SetDisabled(_ context.Context, _, user ulid.ID, _ bool, _ string) error {
@@ -99,6 +105,16 @@ func TestConsoleStoreTeam(t *testing.T) {
 		if r = f.do(t, http.MethodPost, adminHost, path, reason, withCookie(sess), sameOrigin); r.status != http.StatusNotFound {
 			t.Fatalf("%s = %d %v", path, r.status, r.body)
 		}
+	}
+	transfer := base + "/" + teamMember + "/ownership"
+	if r = f.do(t, http.MethodPost, adminHost, transfer, reason, withCookie(viewer), sameOrigin); r.status != http.StatusForbidden {
+		t.Fatalf("viewer transfer = %d", r.status)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, transfer, reason, withCookie(sess), sameOrigin); r.status != http.StatusAccepted || r.body["kind"] != "ownership_transfer" {
+		t.Fatalf("transfer = %d %v", r.status, r.body)
+	}
+	if r = f.do(t, http.MethodPost, adminHost, base+"/"+f.ids.New().String()+"/ownership", reason, withCookie(sess), sameOrigin); r.status != http.StatusNotFound {
+		t.Fatalf("transfer to a non-member = %d", r.status)
 	}
 	for _, action := range []string{"disable", "enable", "sign-out"} {
 		if r = f.do(t, http.MethodPost, adminHost, base+"/"+teamMember+"/"+action, reason, withCookie(sess), sameOrigin); r.status != http.StatusNoContent {

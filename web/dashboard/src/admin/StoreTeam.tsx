@@ -25,9 +25,12 @@ import { dateTimeAr } from './lib';
 type Team = components['schemas']['AdminStoreTeam'];
 type Other = components['schemas']['AdminMemberStores']['items'][number];
 
-type Action = { kind: 'mfa' | 'disable' | 'enable' | 'signout'; member: StoreMember } | { kind: 'cancel'; request: SupportRequest; name: string };
+type Action = { kind: 'mfa' | 'transfer' | 'disable' | 'enable' | 'signout'; member: StoreMember } | { kind: 'cancel'; request: SupportRequest; name: string };
 
 // The three checks support makes before asking (the approved mockup).
+// What support has in hand before moving a store's ownership (C2).
+const transferChecks = ['عندي ما يثبت الطلب: موافقة مكتوبة من صاحب المتجر، أو عقد بيع، أو مستند رسمي.', 'كلّمت صاحب الحساب الجديد على الرقم المسجّل في حسابه.'];
+
 const checks = [
   'تواصلت معه على رقم الموبايل المسجّل في حسابه أو على رقم صاحب المتجر، لا على رقم أعطاه في الطلب.',
   'ذكر معلومة لا يعرفها غيره: آخر طلب في المتجر، أو باقته، أو آخر فاتورة دفعها.',
@@ -131,6 +134,12 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
           if (r.data) done = `أُرسل الطلب. يُلغى التحقق بخطوتين لـ${name} ${dateTimeAr(r.data.effective_at)} إن لم يُلغَ الطلب.`;
           break;
         }
+        case 'transfer': {
+          const r = await api.POST('/admin/v1/stores/{store_id}/team/{user_id}/ownership', params);
+          failed = r.error;
+          if (r.data) done = `أُرسل الطلب. تنتقل ملكية المتجر إلى ${name} ${dateTimeAr(r.data.effective_at)} إن لم يُلغَ الطلب.`;
+          break;
+        }
         case 'disable':
           failed = (await api.POST('/admin/v1/stores/{store_id}/team/{user_id}/disable', params)).error;
           done = `أُوقف حساب ${name} وخرج من كل أجهزته.`;
@@ -158,6 +167,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
 
   const now = new Date();
   const nameOf = (user: string) => team?.members.find((m) => m.user_id === user)?.name ?? 'عضو سابق';
+  const ownerName = team?.members.find((m) => m.role === 'owner')?.name ?? 'صاحب المتجر';
   const reasonField = (
     <label>
       السبب
@@ -215,7 +225,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
             </svg>
             <div className="grow">
               <strong>
-                طلب {kindWords[r.kind]} لـ{nameOf(r.user_id)}
+                {r.kind === 'ownership_transfer' ? `طلب نقل ملكية المتجر إلى ${nameOf(r.user_id)}` : `طلب ${kindWords[r.kind]} لـ${nameOf(r.user_id)}`}
               </strong>
               <div className="small">{requestLine(r, now)}</div>
             </div>
@@ -235,8 +245,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
       {team &&
         cancelledByLink(team).map((r) => (
           <p key={r.id} className="muted small">
-            أُلغي طلب {kindWords[r.kind]} لـ{nameOf(r.user_id)} من رابط الإيميل{r.closed_at ? ` ${dateTimeAr(r.closed_at)}` : ''}. راجع التذكرة قبل
-            أي طلب آخر.
+            أُلغي طلب {kindWords[r.kind]} لـ{nameOf(r.user_id)} من رابط الإيميل{r.closed_at ? ` ${dateTimeAr(r.closed_at)}` : ''}. راجع التذكرة قبل أي طلب آخر.
           </p>
         ))}
       {team && (
@@ -257,6 +266,7 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
             <tbody>
               {team.members.map((m) => {
                 const pending = waiting(team, m.user_id, 'mfa_reset');
+                const transferOpen = team.requests.some((r) => r.state === 'open' && r.kind === 'ownership_transfer');
                 return (
                   <tr key={m.user_id}>
                     <td>
@@ -315,6 +325,17 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
                               >
                                 اخرجه من كل الأجهزة
                               </button>
+                              {m.role !== 'owner' && !m.disabled && !transferOpen && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    open({ kind: 'transfer', member: m });
+                                  }}
+                                >
+                                  انقل ملكية المتجر إليه
+                                </button>
+                              )}
                               <hr />
                               {m.disabled ? (
                                 <button
@@ -424,6 +445,44 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
           {!(checked.every(Boolean) && reason.trim().length >= 3) && <p className="muted small">يتفعّل الزر بعد التأكد من البنود الثلاثة وكتابة السبب.</p>}
         </Dialog>
       )}
+      {action?.kind === 'transfer' && (
+        <Dialog
+          title={`نقل ملكية المتجر إلى ${action.member.name}`}
+          intro="لصاحب متجر لا يستطيع نقلها بنفسه: باع المتجر، أو ترك العمل، أو فقد حسابه."
+          error={dialogError}
+          className="support-dialog"
+          onSubmit={(e) => void submit(e)}
+          onClose={close}
+        >
+          <div className="info-box">
+            <strong>يُنفَّذ بعد 24 ساعة، مثل إلغاء التحقق بخطوتين</strong>
+            <span>
+              نرسل الآن إيميلًا لـ{ownerName} (صاحب المتجر الحالي) فيه رابط «ألغِ الطلب»، وإيميلًا لـ{action.member.name}. بعد التنفيذ يصبح {ownerName}{' '}
+              «مديرًا».
+            </span>
+          </div>
+          <fieldset className="checklist">
+            <legend>تأكدت (كلها مطلوبة)</legend>
+            {transferChecks.map((c, i) => (
+              <label key={c}>
+                <input
+                  type="checkbox"
+                  checked={checked[i] ?? false}
+                  onChange={(e) => {
+                    const next = [...checked];
+                    next[i] = e.target.checked;
+                    setChecked(next);
+                  }}
+                />
+                {c}
+              </label>
+            ))}
+          </fieldset>
+          {reasonField}
+          {buttons('أرسل طلب النقل', false, checked.slice(0, transferChecks.length).every(Boolean) && reason.trim().length >= 3)}
+          <p className="muted small">أثناء الانتظار يظهر في الكارت شريط «طلب نقل ملكية المتجر»، بزر «ألغِ الطلب».</p>
+        </Dialog>
+      )}
       {action?.kind === 'disable' && (
         <Dialog
           title={`إيقاف حساب ${action.member.name}`}
@@ -435,7 +494,9 @@ export function StoreTeam({ storeId, seatLimit, onChanged }: { storeId: string; 
           {others && others.length > 0 && (
             <div className="warn-box">
               <strong>{others.length === 1 ? 'الحساب عضو في متجر آخر' : `الحساب عضو في ${String(others.length)} متاجر أخرى`}</strong>
-              <span>{others.map((o) => `${o.name} (${memberRole(o.role)})`).join(' · ')}. {others.length === 1 ? 'الإيقاف يشمله أيضًا.' : 'الإيقاف يشملها كلها.'}</span>
+              <span>
+                {others.map((o) => `${o.name} (${memberRole(o.role)})`).join(' · ')}. {others.length === 1 ? 'الإيقاف يشمله أيضًا.' : 'الإيقاف يشملها كلها.'}
+              </span>
             </div>
           )}
           {reasonField}

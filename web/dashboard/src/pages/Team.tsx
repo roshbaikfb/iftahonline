@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { api, type components } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PlanLock } from '../components/PlanLock';
+import { TransferDialog } from '../components/TransferDialog';
 import { dateTime } from '../lib/orders';
 import { lockedFor, usePlanFeatures } from '../lib/plan';
 import { problemMessage } from '../lib/problem';
@@ -23,8 +24,10 @@ export function Team() {
   const { storeId = '' } = useParams();
   const locked = lockedFor(usePlanFeatures(storeId), 'staff');
   const role = useRole(storeId);
-  const { state } = useSession();
+  const { state, reload } = useSession();
   const me = state.kind === 'signed-in' ? state.me.user.id : '';
+  const myMFA = state.kind === 'signed-in' && state.me.user.mfa_enabled;
+  const [transferring, setTransferring] = useState(false);
   const manage = role === 'owner';
   const [members, setMembers] = useState<Member[] | null>(null);
   const [invites, setInvites] = useState<Invitation[]>([]);
@@ -155,6 +158,29 @@ export function Team() {
           {!manage && <p className="muted small">المالك وحده يدعو الأعضاء ويغيّر أدوارهم.</p>}
         </section>
 
+        {manage && members && (
+          <section className="card ownership-card" aria-labelledby="h-ownership">
+            <h2 id="h-ownership">ملكية المتجر</h2>
+            <p className="muted">
+              أنت صاحب المتجر. إن بعت المتجر أو سلّمت إدارته لشريك، انقل الملكية لعضو نشط في الفريق. ادعُه أولًا إن لم يكن عضوًا.
+            </p>
+            <div>
+              <button
+                type="button"
+                className="danger"
+                disabled={!members.some((m) => m.role !== 'owner')}
+                onClick={() => {
+                  setNotice('');
+                  setTransferring(true);
+                }}
+              >
+                انقل الملكية
+              </button>
+            </div>
+            {!members.some((m) => m.role !== 'owner') && <p className="muted small">لا أعضاء غيرك بعد: ادعُ من ستنقل إليه الملكية أولًا.</p>}
+          </section>
+        )}
+
         {manage && (
           <section className="card editor-card" aria-labelledby="h-invite">
             <h2 id="h-invite">ادعُ عضوًا</h2>
@@ -221,6 +247,22 @@ export function Team() {
           </section>
         )}
       </div>
+      {transferring && members && (
+        <TransferDialog
+          storeId={storeId}
+          members={members.filter((m) => m.role !== 'owner')}
+          needCode={myMFA}
+          onClose={() => {
+            setTransferring(false);
+          }}
+          onDone={(to) => {
+            setTransferring(false);
+            setMembers((cur) => cur?.map((x) => (x.user_id === to.user_id ? { ...x, role: 'owner' } : x.user_id === me ? { ...x, role: 'manager' } : x)) ?? null);
+            setNotice(`صار ${to.name || to.email} صاحب المتجر، وصرت أنت «مديرًا».`);
+            void reload();
+          }}
+        />
+      )}
     </Layout>
   );
 }
