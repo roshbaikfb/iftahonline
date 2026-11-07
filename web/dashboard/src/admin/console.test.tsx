@@ -83,6 +83,8 @@ function consoleRoutes(over: Record<string, (c: Call) => { status: number; body?
       },
     }),
     'GET /admin/v1/founding': () => ({ status: 200, body: { program: { enabled: true, seats: 100, discount_bps: 2000 }, members: [] } }),
+    // The store's team card (C1).
+    [`GET /admin/v1/stores/${store}/team`]: () => ({ status: 200, body: { members: [], invites: [], requests: [] } }),
     [`GET /admin/v1/stores/${store}/profile`]: () => ({
       status: 200,
       body: {

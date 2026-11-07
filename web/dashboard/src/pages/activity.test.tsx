@@ -153,6 +153,20 @@ describe('activity sentences (D6)', () => {
     delete automatic.actor_user_id;
     expect(who(automatic, names)).toBe('المتجر تلقائيًا');
     expect(who(entry('store.updated', { metadata: { impersonated_by: 'admin' } }), names)).toBe('فريق دعم المنصة');
+    // Platform support's actions on the team (C1), and a link's cancel.
+    expect(who(entry('member.disabled', { metadata: { support_admin: 'admin', reason: 'x' } }), names)).toBe('فريق دعم المنصة');
+    const byLink = entry('support.mfa_reset_cancelled', { metadata: { by: 'link' } });
+    delete byLink.actor_user_id;
+    expect(who(byLink, names)).toBe('من رابط الإيميل');
+  });
+
+  it('says support’s actions on the team (C1)', () => {
+    expect(id('support.mfa_reset_requested').text).toBe('طلب إلغاء التحقق بخطوتين لعضو (يُنفَّذ بعد 24 ساعة)');
+    expect(id('support.mfa_reset_done').text).toBe('إلغاء التحقق بخطوتين لعضو');
+    expect(id('support.mfa_reset_cancelled', { metadata: { by: 'link' } }).text).toBe('إلغاء طلب الدعم لإزالة التحقق بخطوتين');
+    expect(id('support.mfa_reset_cancelled', { metadata: { by: 'console' } }).text).toBe('سحب طلب إلغاء التحقق بخطوتين');
+    expect(id('member.disabled').text).toBe('إيقاف حساب عضو');
+    expect(id('member.signed_out').text).toBe('إخراج عضو من كل أجهزته');
   });
 
   it('says when, as the mockup does', () => {
