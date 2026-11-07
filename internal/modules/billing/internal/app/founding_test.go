@@ -228,3 +228,13 @@ func TestFoundingMerchants(t *testing.T) {
 		t.Fatal("the sweep's job")
 	}
 }
+
+// TestFoundingSweepIsGlobal: the daily sweep's args name their scope, as
+// every job's must (jobs.Middleware refuses the insert otherwise, and a
+// periodic job refused at start-up held back every other periodic job).
+func TestFoundingSweepIsGlobal(t *testing.T) {
+	t.Parallel()
+	if _, ok := any(app.FoundingSweepArgs{}).(interface{ JobGlobal() }); !ok {
+		t.Fatal("FoundingSweepArgs does not embed jobs.GlobalArgs")
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/domain"
 	"github.com/roshbaikfb/iftahonline/internal/modules/billing/internal/store"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 )
 
@@ -89,8 +90,11 @@ func foundingRenewal(ctx context.Context, tx pgx.Tx, currency string, m *member,
 	return lines, nil
 }
 
-// FoundingSweepArgs ends the memberships of stores that left (daily).
-type FoundingSweepArgs struct{}
+// FoundingSweepArgs ends the memberships of stores that left (daily). It
+// is about no one store.
+type FoundingSweepArgs struct {
+	jobs.GlobalArgs
+}
 
 // Kind implements river.JobArgs.
 func (FoundingSweepArgs) Kind() string { return "billing.founding_sweep" }
