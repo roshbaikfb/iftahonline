@@ -252,3 +252,42 @@ WHERE m.month >= @since::date
   AND m.taken_on < m.month + @grace_days::int
   AND n.taken_on < n.month + @grace_days::int
 ORDER BY m.month;
+
+-- An admin's own account (C3).
+
+-- name: SetAdminName :one
+UPDATE platform_admins SET name = @name, updated_at = now() WHERE id = @id RETURNING *;
+
+-- name: SetAdminPassword :execrows
+UPDATE platform_admins SET password_hash = @password_hash, updated_at = now() WHERE id = @id;
+
+-- name: SetAdminTOTP :execrows
+-- A new phone: the new seed, its first step claimed.
+UPDATE platform_admins SET totp_secret = @totp_secret, totp_last_step = @step, updated_at = now() WHERE id = @id;
+
+-- name: ListAdminSessions :many
+SELECT id, user_agent, ip_prefix, created_at, last_seen_at, expires_at FROM admin_sessions
+WHERE admin_id = @admin_id AND revoked_at IS NULL AND expires_at > now()
+ORDER BY last_seen_at DESC, id
+LIMIT 50;
+
+-- name: RevokeOwnAdminSession :execrows
+UPDATE admin_sessions SET revoked_at = now() WHERE id = @id AND admin_id = @admin_id AND revoked_at IS NULL;
+
+-- name: RevokeOtherAdminSessions :execrows
+UPDATE admin_sessions SET revoked_at = now() WHERE admin_id = @admin_id AND id <> @keep AND revoked_at IS NULL;
+
+-- name: InsertAdminNotice :exec
+INSERT INTO admin_notices (id, admin_id, kind, ip_prefix) VALUES (@id, @admin_id, @kind, @ip_prefix);
+
+-- name: PendingAdminNotices :many
+-- Notices to mail, oldest first, with whom to (locked: one worker sends each).
+SELECT n.id, n.kind, n.ip_prefix, n.created_at, a.email, a.name
+FROM admin_notices n JOIN platform_admins a ON a.id = n.admin_id
+WHERE n.sent_at IS NULL
+ORDER BY n.created_at
+LIMIT 50
+FOR UPDATE OF n SKIP LOCKED;
+
+-- name: MarkAdminNoticeSent :exec
+UPDATE admin_notices SET sent_at = now() WHERE id = @id;

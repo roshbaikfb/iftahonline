@@ -33,7 +33,9 @@ func TestEveryOperationHasAPermission(t *testing.T) {
 	// Only the session's own routes and the home are open to every admin;
 	// anything that writes needs a manage permission.
 	for op, p := range permissions {
-		open := []string{"AdminLogin", "AdminLogout", "AdminMe", "AdminHealth", "AdminGetMetrics", "AdminLookupInvite", "AdminAcceptInvite", "AdminSearch", "AdminListAlerts", "AdminSetAlertEmail", "AdminPushStatus", "AdminSubscribePush", "AdminUnsubscribePush"}
+		open := []string{"AdminLogin", "AdminLogout", "AdminMe", "AdminHealth", "AdminGetMetrics", "AdminLookupInvite", "AdminAcceptInvite", "AdminSearch", "AdminListAlerts", "AdminSetAlertEmail", "AdminPushStatus", "AdminSubscribePush", "AdminUnsubscribePush",
+			// The admin's own account (C3): their name, password, phone and devices.
+			"AdminUpdateMe", "AdminChangePassword", "AdminStartNewPhone", "AdminConfirmNewPhone", "AdminListMySessions", "AdminRevokeMySession", "AdminRevokeMyOtherSessions"}
 		if p == anyAdmin && !slices.Contains(open, op) {
 			t.Errorf("%s is open to every admin", op)
 		}

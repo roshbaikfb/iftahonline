@@ -187,6 +187,9 @@ export function ConsoleLayout({ children }: { children: ReactNode }) {
           <div className="console-who">
             <span>{admin.name}</span>
             <small dir="ltr">{admin.email}</small>
+            <NavLink to="/account" className="console-account-link" onClick={close}>
+              حسابي
+            </NavLink>
             <button type="button" className="link-button" onClick={() => void signOut()}>
               تسجيل الخروج
             </button>

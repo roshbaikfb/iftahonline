@@ -134,13 +134,16 @@ func (m *Module) RegisterWorkers(w *river.Workers) error {
 	if err := river.AddWorkerSafely(w, &app.AlertsCheckWorker{Svc: m.svc}); err != nil {
 		return err
 	}
+	if err := river.AddWorkerSafely(w, &app.NoticesWorker{Svc: m.svc}); err != nil {
+		return err
+	}
 	return river.AddWorkerSafely(w, &app.GrowthSnapshotWorker{Svc: m.svc})
 }
 
 // PeriodicJobs are the module's schedule: the alerts' check every five
 // minutes, and the growth page's reading every hour.
 func (*Module) PeriodicJobs() []*river.PeriodicJob {
-	return []*river.PeriodicJob{app.AlertsPeriodic(), app.GrowthPeriodic()}
+	return []*river.PeriodicJob{app.AlertsPeriodic(), app.GrowthPeriodic(), app.NoticesPeriodic()}
 }
 
 // CreateAdmin adds a platform admin in role (owner, operations, finance,

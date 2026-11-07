@@ -2830,6 +2830,18 @@ type AdminMonthStores struct {
 	Month     openapi_types.Date `json:"month"`
 }
 
+// AdminNewPhone defines model for AdminNewPhone.
+type AdminNewPhone struct {
+	// QrSvg The URI as an SVG QR code.
+	QrSvg string `json:"qr_svg"`
+
+	// Secret The new seed in base32
+	Secret string `json:"secret"`
+
+	// Uri The otpauth:// URI.
+	Uri string `json:"uri"`
+}
+
 // AdminNewStores defines model for AdminNewStores.
 type AdminNewStores struct {
 	// Daily The last 30 Cairo days, oldest first, today last.
@@ -2863,6 +2875,20 @@ type AdminOverrideInput struct {
 
 	// Value Ignored when unlimited. A flag is 0 or 1.
 	Value *int64 `json:"value,omitempty"`
+}
+
+// AdminOwnSession defines model for AdminOwnSession.
+type AdminOwnSession struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// Current This device.
+	Current bool `json:"current"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id         ULID      `json:"id"`
+	IpPrefix   string    `json:"ip_prefix"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	UserAgent  string    `json:"user_agent"`
 }
 
 // AdminPayment defines model for AdminPayment.
@@ -4075,6 +4101,27 @@ type AdminExportInvoicesParamsStatus string
 // AdminExportInvoicesParamsCurrency defines parameters for AdminExportInvoices.
 type AdminExportInvoicesParamsCurrency string
 
+// AdminUpdateMeJSONBody defines parameters for AdminUpdateMe.
+type AdminUpdateMeJSONBody struct {
+	Name string `json:"name"`
+}
+
+// AdminChangePasswordJSONBody defines parameters for AdminChangePassword.
+type AdminChangePasswordJSONBody struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// AdminConfirmNewPhoneJSONBody defines parameters for AdminConfirmNewPhone.
+type AdminConfirmNewPhoneJSONBody struct {
+	Code string `json:"code"`
+}
+
+// AdminStartNewPhoneJSONBody defines parameters for AdminStartNewPhone.
+type AdminStartNewPhoneJSONBody struct {
+	Code string `json:"code"`
+}
+
 // AdminListPaymentsParams defines parameters for AdminListPayments.
 type AdminListPaymentsParams struct {
 	Outcome *AdminPaymentOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
@@ -4207,6 +4254,18 @@ type AdminLookupInviteJSONRequestBody = AdminInviteToken
 
 // AdminSettleAccountInvoiceJSONRequestBody defines body for AdminSettleAccountInvoice for application/json ContentType.
 type AdminSettleAccountInvoiceJSONRequestBody = AdminSettleInput
+
+// AdminUpdateMeJSONRequestBody defines body for AdminUpdateMe for application/json ContentType.
+type AdminUpdateMeJSONRequestBody AdminUpdateMeJSONBody
+
+// AdminChangePasswordJSONRequestBody defines body for AdminChangePassword for application/json ContentType.
+type AdminChangePasswordJSONRequestBody AdminChangePasswordJSONBody
+
+// AdminConfirmNewPhoneJSONRequestBody defines body for AdminConfirmNewPhone for application/json ContentType.
+type AdminConfirmNewPhoneJSONRequestBody AdminConfirmNewPhoneJSONBody
+
+// AdminStartNewPhoneJSONRequestBody defines body for AdminStartNewPhone for application/json ContentType.
+type AdminStartNewPhoneJSONRequestBody AdminStartNewPhoneJSONBody
 
 // AdminPublishPlanJSONRequestBody defines body for AdminPublishPlan for application/json ContentType.
 type AdminPublishPlanJSONRequestBody = AdminPlanInput
@@ -4453,6 +4512,27 @@ type ServerInterface interface {
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(w http.ResponseWriter, r *http.Request)
+	// AdminUpdateMe Rename the signed-in admin
+	// (PATCH /admin/v1/me)
+	AdminUpdateMe(w http.ResponseWriter, r *http.Request)
+	// AdminChangePassword Change the signed-in admin's password
+	// (POST /admin/v1/me/password)
+	AdminChangePassword(w http.ResponseWriter, r *http.Request)
+	// AdminConfirmNewPhone Finish moving two-step verification to the new phone
+	// (POST /admin/v1/me/phone/confirm)
+	AdminConfirmNewPhone(w http.ResponseWriter, r *http.Request)
+	// AdminStartNewPhone Start moving two-step verification to a new phone
+	// (POST /admin/v1/me/phone/start)
+	AdminStartNewPhone(w http.ResponseWriter, r *http.Request)
+	// AdminListMySessions The devices the signed-in admin is on
+	// (GET /admin/v1/me/sessions)
+	AdminListMySessions(w http.ResponseWriter, r *http.Request)
+	// AdminRevokeMyOtherSessions Sign out of every other device
+	// (POST /admin/v1/me/sessions/revoke-others)
+	AdminRevokeMyOtherSessions(w http.ResponseWriter, r *http.Request)
+	// AdminRevokeMySession Sign out of another device
+	// (POST /admin/v1/me/sessions/{session_id}/revoke)
+	AdminRevokeMySession(w http.ResponseWriter, r *http.Request, sessionId ULID)
 	// AdminGetMetrics Revenue and growth for the console's home
 	// (GET /admin/v1/metrics)
 	AdminGetMetrics(w http.ResponseWriter, r *http.Request)
@@ -5636,6 +5716,116 @@ func (siw *ServerInterfaceWrapper) AdminMe(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminUpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminChangePassword operation middleware
+func (siw *ServerInterfaceWrapper) AdminChangePassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminChangePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminConfirmNewPhone operation middleware
+func (siw *ServerInterfaceWrapper) AdminConfirmNewPhone(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminConfirmNewPhone(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminStartNewPhone operation middleware
+func (siw *ServerInterfaceWrapper) AdminStartNewPhone(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminStartNewPhone(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListMySessions operation middleware
+func (siw *ServerInterfaceWrapper) AdminListMySessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListMySessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRevokeMyOtherSessions operation middleware
+func (siw *ServerInterfaceWrapper) AdminRevokeMyOtherSessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRevokeMyOtherSessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRevokeMySession operation middleware
+func (siw *ServerInterfaceWrapper) AdminRevokeMySession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "session_id" -------------
+	var sessionId ULID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "session_id", r.PathValue("session_id"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "session_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRevokeMySession(w, r, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7397,6 +7587,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/push/subscriptions", wrapper.AdminSubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/push/subscriptions/remove", wrapper.AdminUnsubscribePush)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminMe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/admin/v1/me", wrapper.AdminUpdateMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/me/password", wrapper.AdminChangePassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/me/phone/start", wrapper.AdminStartNewPhone)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/me/phone/confirm", wrapper.AdminConfirmNewPhone)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/me/sessions", wrapper.AdminListMySessions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/me/sessions/revoke-others", wrapper.AdminRevokeMyOtherSessions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/me/sessions/{session_id}/revoke", wrapper.AdminRevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores", wrapper.AdminListStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}", wrapper.AdminGetStore)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/suspend", wrapper.AdminSuspendStore)
@@ -9157,6 +9354,255 @@ type AdminMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminMedefaultApplicationProblemPlusJSONResponse) VisitAdminMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateMeRequestObject struct {
+	Body *AdminUpdateMeJSONRequestBody
+}
+
+type AdminUpdateMeResponseObject interface {
+	VisitAdminUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateMe200JSONResponse AdminProfile
+
+func (response AdminUpdateMe200JSONResponse) VisitAdminUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminUpdateMedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminUpdateMedefaultApplicationProblemPlusJSONResponse) VisitAdminUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminChangePasswordRequestObject struct {
+	Body *AdminChangePasswordJSONRequestBody
+}
+
+type AdminChangePasswordResponseObject interface {
+	VisitAdminChangePasswordResponse(w http.ResponseWriter) error
+}
+
+type AdminChangePassword204Response struct {
+}
+
+func (response AdminChangePassword204Response) VisitAdminChangePasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminChangePassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminChangePassworddefaultApplicationProblemPlusJSONResponse) VisitAdminChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminConfirmNewPhoneRequestObject struct {
+	Body *AdminConfirmNewPhoneJSONRequestBody
+}
+
+type AdminConfirmNewPhoneResponseObject interface {
+	VisitAdminConfirmNewPhoneResponse(w http.ResponseWriter) error
+}
+
+type AdminConfirmNewPhone204Response struct {
+}
+
+func (response AdminConfirmNewPhone204Response) VisitAdminConfirmNewPhoneResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminConfirmNewPhonedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminConfirmNewPhonedefaultApplicationProblemPlusJSONResponse) VisitAdminConfirmNewPhoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminStartNewPhoneRequestObject struct {
+	Body *AdminStartNewPhoneJSONRequestBody
+}
+
+type AdminStartNewPhoneResponseObject interface {
+	VisitAdminStartNewPhoneResponse(w http.ResponseWriter) error
+}
+
+type AdminStartNewPhone200JSONResponse AdminNewPhone
+
+func (response AdminStartNewPhone200JSONResponse) VisitAdminStartNewPhoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminStartNewPhonedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminStartNewPhonedefaultApplicationProblemPlusJSONResponse) VisitAdminStartNewPhoneResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListMySessionsRequestObject struct {
+}
+
+type AdminListMySessionsResponseObject interface {
+	VisitAdminListMySessionsResponse(w http.ResponseWriter) error
+}
+
+type AdminListMySessions200JSONResponse struct {
+	Items []AdminOwnSession `json:"items"`
+}
+
+func (response AdminListMySessions200JSONResponse) VisitAdminListMySessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminListMySessionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminListMySessionsdefaultApplicationProblemPlusJSONResponse) VisitAdminListMySessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRevokeMyOtherSessionsRequestObject struct {
+}
+
+type AdminRevokeMyOtherSessionsResponseObject interface {
+	VisitAdminRevokeMyOtherSessionsResponse(w http.ResponseWriter) error
+}
+
+type AdminRevokeMyOtherSessions204Response struct {
+}
+
+func (response AdminRevokeMyOtherSessions204Response) VisitAdminRevokeMyOtherSessionsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRevokeMyOtherSessionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRevokeMyOtherSessionsdefaultApplicationProblemPlusJSONResponse) VisitAdminRevokeMyOtherSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRevokeMySessionRequestObject struct {
+	SessionId ULID `json:"session_id"`
+}
+
+type AdminRevokeMySessionResponseObject interface {
+	VisitAdminRevokeMySessionResponse(w http.ResponseWriter) error
+}
+
+type AdminRevokeMySession204Response struct {
+}
+
+func (response AdminRevokeMySession204Response) VisitAdminRevokeMySessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminRevokeMySessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRevokeMySessiondefaultApplicationProblemPlusJSONResponse) VisitAdminRevokeMySessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11582,6 +12028,27 @@ type StrictServerInterface interface {
 	// AdminMe The signed-in admin
 	// (GET /admin/v1/me)
 	AdminMe(ctx context.Context, request AdminMeRequestObject) (AdminMeResponseObject, error)
+	// AdminUpdateMe Rename the signed-in admin
+	// (PATCH /admin/v1/me)
+	AdminUpdateMe(ctx context.Context, request AdminUpdateMeRequestObject) (AdminUpdateMeResponseObject, error)
+	// AdminChangePassword Change the signed-in admin's password
+	// (POST /admin/v1/me/password)
+	AdminChangePassword(ctx context.Context, request AdminChangePasswordRequestObject) (AdminChangePasswordResponseObject, error)
+	// AdminConfirmNewPhone Finish moving two-step verification to the new phone
+	// (POST /admin/v1/me/phone/confirm)
+	AdminConfirmNewPhone(ctx context.Context, request AdminConfirmNewPhoneRequestObject) (AdminConfirmNewPhoneResponseObject, error)
+	// AdminStartNewPhone Start moving two-step verification to a new phone
+	// (POST /admin/v1/me/phone/start)
+	AdminStartNewPhone(ctx context.Context, request AdminStartNewPhoneRequestObject) (AdminStartNewPhoneResponseObject, error)
+	// AdminListMySessions The devices the signed-in admin is on
+	// (GET /admin/v1/me/sessions)
+	AdminListMySessions(ctx context.Context, request AdminListMySessionsRequestObject) (AdminListMySessionsResponseObject, error)
+	// AdminRevokeMyOtherSessions Sign out of every other device
+	// (POST /admin/v1/me/sessions/revoke-others)
+	AdminRevokeMyOtherSessions(ctx context.Context, request AdminRevokeMyOtherSessionsRequestObject) (AdminRevokeMyOtherSessionsResponseObject, error)
+	// AdminRevokeMySession Sign out of another device
+	// (POST /admin/v1/me/sessions/{session_id}/revoke)
+	AdminRevokeMySession(ctx context.Context, request AdminRevokeMySessionRequestObject) (AdminRevokeMySessionResponseObject, error)
 	// AdminGetMetrics Revenue and growth for the console's home
 	// (GET /admin/v1/metrics)
 	AdminGetMetrics(ctx context.Context, request AdminGetMetricsRequestObject) (AdminGetMetricsResponseObject, error)
@@ -13018,6 +13485,204 @@ func (sh *strictHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminMeResponseObject); ok {
 		if err := validResponse.VisitAdminMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateMe operation middleware
+func (sh *strictHandler) AdminUpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request AdminUpdateMeRequestObject
+
+	var body AdminUpdateMeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateMe(ctx, request.(AdminUpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateMeResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminChangePassword operation middleware
+func (sh *strictHandler) AdminChangePassword(w http.ResponseWriter, r *http.Request) {
+	var request AdminChangePasswordRequestObject
+
+	var body AdminChangePasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminChangePassword(ctx, request.(AdminChangePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminChangePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminChangePasswordResponseObject); ok {
+		if err := validResponse.VisitAdminChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminConfirmNewPhone operation middleware
+func (sh *strictHandler) AdminConfirmNewPhone(w http.ResponseWriter, r *http.Request) {
+	var request AdminConfirmNewPhoneRequestObject
+
+	var body AdminConfirmNewPhoneJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminConfirmNewPhone(ctx, request.(AdminConfirmNewPhoneRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminConfirmNewPhone")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminConfirmNewPhoneResponseObject); ok {
+		if err := validResponse.VisitAdminConfirmNewPhoneResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminStartNewPhone operation middleware
+func (sh *strictHandler) AdminStartNewPhone(w http.ResponseWriter, r *http.Request) {
+	var request AdminStartNewPhoneRequestObject
+
+	var body AdminStartNewPhoneJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminStartNewPhone(ctx, request.(AdminStartNewPhoneRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminStartNewPhone")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminStartNewPhoneResponseObject); ok {
+		if err := validResponse.VisitAdminStartNewPhoneResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListMySessions operation middleware
+func (sh *strictHandler) AdminListMySessions(w http.ResponseWriter, r *http.Request) {
+	var request AdminListMySessionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListMySessions(ctx, request.(AdminListMySessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListMySessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListMySessionsResponseObject); ok {
+		if err := validResponse.VisitAdminListMySessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRevokeMyOtherSessions operation middleware
+func (sh *strictHandler) AdminRevokeMyOtherSessions(w http.ResponseWriter, r *http.Request) {
+	var request AdminRevokeMyOtherSessionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRevokeMyOtherSessions(ctx, request.(AdminRevokeMyOtherSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRevokeMyOtherSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRevokeMyOtherSessionsResponseObject); ok {
+		if err := validResponse.VisitAdminRevokeMyOtherSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRevokeMySession operation middleware
+func (sh *strictHandler) AdminRevokeMySession(w http.ResponseWriter, r *http.Request, sessionId ULID) {
+	var request AdminRevokeMySessionRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRevokeMySession(ctx, request.(AdminRevokeMySessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRevokeMySession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRevokeMySessionResponseObject); ok {
+		if err := validResponse.VisitAdminRevokeMySessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -252,6 +252,29 @@ invitations, with platform support's requests. The card reads
 - When a merchant cancels from the emailed link, the worker emails that
   admin through `Module.NotifyAdmin`, with the console's link.
 
+## The admin's own account (C3)
+
+The page is `/console/account`, linked as «حسابي» under the admin's name in
+the menu. Every admin may use these routes, which are the session's own:
+`PATCH /admin/v1/me` (the name), `POST /admin/v1/me/password`,
+`POST /admin/v1/me/phone/start` and `/confirm`, `GET /admin/v1/me/sessions`,
+`POST /admin/v1/me/sessions/{id}/revoke` and `/revoke-others`.
+
+- **Password:** the current password proves the change. Failures are
+  throttled like sign-in failures, under their own key. A new password
+  needs 14 characters or more. Every other session is signed out.
+- **A new phone:** start with a current code from the old phone (the
+  replay guard applies). The new seed waits, sealed, in Redis for 10
+  minutes under the session. Confirm with a code from the new phone: the
+  old phone stops at once. A lost phone is still another owner's reset
+  from the team page.
+- **Email notices:** a password change and a phone move each email the
+  admin. The console's role cannot insert River jobs, so each change
+  writes an `admin_notices` row in its own transaction (migration 00110).
+  The worker's `admin.notices` job mails them every minute.
+- **Admin log:** `admin.name_changed`, `admin.password_changed`,
+  `admin.totp_changed`, `admin.session_revoked`, `admin.sessions_revoked`.
+
 ## Operations
 
 ### Creating an admin
