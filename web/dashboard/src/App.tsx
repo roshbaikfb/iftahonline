@@ -23,6 +23,7 @@ import { Impersonate } from './pages/Impersonate';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { Invite } from './pages/Invite';
 import { ResetPassword } from './pages/ResetPassword';
+import { SupportRequest } from './pages/SupportRequest';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Imports } from './pages/Imports';
 import { Inventory } from './pages/Inventory';
@@ -104,6 +105,7 @@ function Gate() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/support-request" element={<SupportRequest />} />
           <Route path="*" element={<Login />} />
         </Routes>
       );
@@ -116,6 +118,7 @@ function Gate() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/support-request" element={<SupportRequest />} />
           <Route path="/stores/:storeId/setup" element={<Setup />} />
           <Route path="/stores/:storeId/home" element={<Overview />} />
           <Route path="/stores/:storeId/orders" element={<Orders />} />

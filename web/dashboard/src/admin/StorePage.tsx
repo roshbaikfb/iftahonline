@@ -14,6 +14,7 @@ import { ConsoleLayout } from './ConsoleLayout';
 import { countryName, storeCountries } from './countries';
 import { BalanceCard } from './BalanceCard';
 import { Dialog } from './Dialog';
+import { StoreTeam } from './StoreTeam';
 import { dateTimeAr, initial, storeStatusLabel } from './lib';
 import { currencyName } from './plans';
 import { useAdmin, useCan } from './session';
@@ -187,6 +188,9 @@ export function StorePage() {
   const store = detail?.store;
   const host = detail?.domains.find((d) => d.is_primary)?.host ?? detail?.domains[0]?.host ?? '';
   const enforced = features.filter((f) => f.enforced);
+  // The team card counts seats against the plan's (members and invitations).
+  const staff = grants?.effective.find((g) => g.feature === 'staff');
+  const seatLimit = !staff || staff.unlimited ? null : (staff.value ?? null);
   const suspended = store?.status === 'suspended';
   const openInvoices = billing?.open_invoices.length ?? 0;
 
@@ -300,6 +304,8 @@ export function StorePage() {
           )}
         </section>
       </div>
+
+      <StoreTeam storeId={storeId} seatLimit={seatLimit} onChanged={() => void load()} />
 
       <div className="store-grid">
         {billing && (

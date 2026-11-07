@@ -5815,6 +5815,44 @@ td.plus {
   background: #dcfce7;
   color: #15803d;
 }
+/* A support request's link page (C1, the approved mockup). */
+.support-card {
+  justify-items: start;
+  text-align: start;
+  max-inline-size: 30rem;
+}
+.support-card .brand-word {
+  color: var(--navy);
+  font-size: 1.1rem;
+}
+.support-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+.support-facts dt {
+  color: var(--muted);
+}
+.support-facts dd {
+  margin: 0;
+}
+button.support-cancel {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+button.support-cancel:hover:not(:disabled) {
+  background: #991b1b;
+}
+.support-ok {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+}
 .email-banner {
   display: flex;
   flex-wrap: wrap;

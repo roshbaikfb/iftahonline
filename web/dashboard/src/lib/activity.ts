@@ -91,6 +91,11 @@ const plain: Record<string, string> = {
   'member.removed': 'إخراج عضو من فريق العمل',
   'domain.verification_requested': 'طلب التحقق من دومين',
   'impersonation.started': 'بدء جلسة دعم من فريق المنصة',
+  'support.mfa_reset_requested': 'طلب إلغاء التحقق بخطوتين لعضو (يُنفَّذ بعد 24 ساعة)',
+  'support.mfa_reset_done': 'إلغاء التحقق بخطوتين لعضو',
+  'member.disabled': 'إيقاف حساب عضو',
+  'member.enabled': 'إعادة تفعيل حساب عضو',
+  'member.signed_out': 'إخراج عضو من كل أجهزته',
 };
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -149,6 +154,8 @@ export function describe(e: AuditEntry, storeId: string): Said {
       return { text: m['status'] === 'active' ? 'فتح المتجر للزوار' : 'إغلاق المتجر مؤقتًا' };
     case 'pixel.saved':
       return { text: 'حفظ بكسل إعلانات', ltr: str(m['pixel_id']) };
+    case 'support.mfa_reset_cancelled':
+      return { text: m['by'] === 'link' ? 'إلغاء طلب الدعم لإزالة التحقق بخطوتين' : 'سحب طلب إلغاء التحقق بخطوتين' };
     case 'impersonation.request':
       return { text: m['refused'] === true ? 'طلب مرفوض من جلسة الدعم' : 'تغيير من جلسة الدعم' };
   }
@@ -163,7 +170,8 @@ const gatewayName = (g: string) => gateways[g] ?? g;
 // former member, the platform's support team, or the store itself (an
 // automatic step, such as an unanswered confirmation).
 export function who(e: AuditEntry, names: ReadonlyMap<string, string>): string {
-  if (e.metadata['impersonated_by'] !== undefined || e.action.startsWith('impersonation.')) return 'فريق دعم المنصة';
+  if (e.metadata['impersonated_by'] !== undefined || e.metadata['support_admin'] !== undefined || e.action.startsWith('impersonation.')) return 'فريق دعم المنصة';
+  if (e.metadata['by'] === 'link') return 'من رابط الإيميل';
   if (!e.actor_user_id) return 'المتجر تلقائيًا';
   return names.get(e.actor_user_id) ?? 'عضو سابق';
 }

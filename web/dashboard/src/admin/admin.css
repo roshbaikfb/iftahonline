@@ -2734,3 +2734,121 @@ fieldset.read-only {
   cursor: pointer;
   font-weight: 600;
 }
+
+/* A store's team on its page (C1, the approved mockup): support's
+   waiting requests, the members' table, each member's menu, and the
+   two-step dialog's checklist. */
+.store-team {
+  gap: 0.85rem;
+}
+.store-team > div > p {
+  margin: 0.15rem 0 0;
+}
+.support-wait {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius);
+  background: #fffbeb;
+  color: #78350f;
+}
+.support-wait .grow {
+  flex: 1 1 22rem;
+}
+.store-team-table {
+  inline-size: 100%;
+  min-inline-size: 46rem;
+}
+.store-team-table td {
+  vertical-align: middle;
+}
+.warn-text {
+  color: #92400e;
+}
+.row-menu {
+  position: relative;
+  display: inline-block;
+}
+.icon-only {
+  min-inline-size: 2.5rem;
+  min-block-size: 2.5rem;
+  padding: 0;
+}
+.row-menu-list {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 0.35rem);
+  z-index: 5;
+  display: grid;
+  inline-size: 15.5rem;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(17 24 39 / 14%);
+}
+.row-menu-list button {
+  min-block-size: 2.5rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+}
+.row-menu-list button:hover,
+.row-menu-list button:focus-visible {
+  background: #f1f5f9;
+}
+.row-menu-list button.danger {
+  color: var(--red);
+  font-weight: 700;
+}
+.row-menu-list hr {
+  margin: 0.25rem 0;
+  border: 0;
+  border-block-start: 1px solid var(--line);
+}
+.support-dialog {
+  max-inline-size: 37.5rem;
+}
+.info-box,
+.warn-box {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+}
+.info-box {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+.warn-box {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #78350f;
+}
+.console-dialog fieldset.checklist {
+  gap: 0.6rem;
+}
+.checklist legend {
+  margin-block-end: 0.4rem;
+  font-weight: 700;
+}
+.console-dialog .checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 400;
+}
+.console-dialog .checklist input {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin: 0.15rem 0 0;
+}
