@@ -19,6 +19,8 @@ group('describe', () => {
   it.each<[string, Partial<Entry>, { label: string; family: string; danger?: boolean; target?: { text: string; to?: string }; chips?: string[] }]>([
     ['store.suspended', { metadata: { reason: 'بلاغ', slug: 'mona' } }, { label: 'أوقف متجرًا', family: 'store', danger: true, target: { text: 'mona', to: `/stores/${store}` } }],
     ['store.impersonated', { metadata: { minutes: 30, write: false } }, { label: 'فتح جلسة دعم في متجر', family: 'store', target: { text: 'صفحة المتجر', to: `/stores/${store}` }, chips: ['30 دقيقة', 'للقراءة فقط'] }],
+    ['store.member_disabled', { metadata: { reason: 'حساب مسروق', user_id: '01M5USER0000000000000000AA' } }, { label: 'أوقف حساب عضو متجر', family: 'store', danger: true, target: { text: 'صفحة المتجر', to: `/stores/${store}` }, chips: [] }],
+    ['store.member_mfa_reset_requested', { metadata: { user_id: '01M5USER0000000000000000AA' } }, { label: 'طلب إلغاء التحقق بخطوتين لعضو متجر (بعد 24 ساعة)', family: 'store', danger: true, target: { text: 'صفحة المتجر', to: `/stores/${store}` }, chips: [] }],
     [
       'store.feature_overridden',
       { metadata: { feature: 'ad_free', value: 0, unlimited: false } },

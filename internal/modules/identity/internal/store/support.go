@@ -230,6 +230,7 @@ func InsertSupportToken(ctx context.Context, tx Tx, id, userID, requestID ulid.I
 type SupportLink struct {
 	RequestID ulid.ID
 	StoreID   ulid.ID
+	UserID    ulid.ID // whom the link was sent to: the member, or the owner
 	Email     string
 }
 
@@ -244,7 +245,7 @@ func PeekSupportToken(ctx context.Context, db Tx, hash []byte) (SupportLink, err
 	if err != nil {
 		return SupportLink{}, fmt.Errorf("identity store: check request link: %w", err)
 	}
-	return SupportLink{RequestID: r.RequestID, StoreID: r.StoreID, Email: r.Email}, nil
+	return SupportLink{RequestID: r.RequestID, StoreID: r.StoreID, UserID: r.UserID, Email: r.Email}, nil
 }
 
 // SupportTokenToSend is an open cancel link its email job sends.

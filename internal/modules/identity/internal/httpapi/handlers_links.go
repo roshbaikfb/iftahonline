@@ -84,7 +84,8 @@ func (h *Handlers) CheckSupportLink(ctx context.Context, req CheckSupportLinkReq
 	if err != nil {
 		return nil, err
 	}
-	return CheckSupportLink200JSONResponse{Kind: SupportLinkKind(l.Kind), Email: l.Email, CreatedAt: l.CreatedAt, EffectiveAt: l.EffectiveAt}, nil
+	return CheckSupportLink200JSONResponse{Kind: SupportLinkKind(l.Kind), Email: l.Email, MemberName: l.MemberName, ForMember: l.ForMember,
+		CreatedAt: l.CreatedAt, EffectiveAt: l.EffectiveAt}, nil
 }
 
 // CancelSupportLink implements StrictServerInterface.

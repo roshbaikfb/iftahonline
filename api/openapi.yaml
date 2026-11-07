@@ -6774,10 +6774,14 @@ components:
     SupportLink:
       type: object
       description: What a support request's cancel link (C1) would cancel.
-      required: [kind, email, created_at, effective_at]
+      required: [kind, email, member_name, for_member, created_at, effective_at]
       properties:
         kind: { type: string, enum: [mfa_reset, ownership_transfer] }
         email: { type: string, description: The account the link was sent to, masked. }
+        member_name: { type: string, description: The member the request is about. }
+        for_member:
+          type: boolean
+          description: The link was sent to that member; false on the store owner's copy of a request about another member.
         created_at: { type: string, format: date-time }
         effective_at: { type: string, format: date-time }
     InvitationPreview:
