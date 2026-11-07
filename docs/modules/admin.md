@@ -228,6 +228,29 @@ Every change asks for a reason.
   new admin.
 - **Email:** none yet. The console shows the link once to copy.
 
+## A store's team (C1, ADR-0095)
+
+The store page has a card listing the store's members and pending
+invitations, with platform support's requests. The card reads
+`GET /admin/v1/stores/{id}/team`. Identity answers through
+`Deps.Support` (`StoreSupport`, adapted in `cmd/platform`).
+
+| Operation | Permission |
+|---|---|
+| `GET …/team` | `stores.read`. Email and phone need `contacts.read` too; the phone is always masked. |
+| `POST …/team/{user}/mfa-reset` | `stores.manage`. Takes effect after 24 hours. Answers 202 with the request. |
+| `POST …/team/{user}/disable`, `/enable`, `/sign-out` | `stores.manage`. Take effect at once. |
+| `GET …/team/{user}/stores` | `stores.manage`. Lists the account's other stores, by name. |
+| `POST /admin/v1/stores/{id}/support-requests/{req}/cancel` | `stores.manage` |
+
+- Every action needs a reason. The reason is recorded in the admin log
+  before identity is called: `store.member_mfa_reset_requested`,
+  `store.member_disabled`, `store.member_enabled`,
+  `store.member_signed_out`, `store.support_request_cancelled`.
+- Each request names the admin who asked, with their role.
+- When a merchant cancels from the emailed link, the worker emails that
+  admin through `Module.NotifyAdmin`, with the console's link.
+
 ## Operations
 
 ### Creating an admin

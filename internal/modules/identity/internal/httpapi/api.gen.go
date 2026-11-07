@@ -227,6 +227,24 @@ func (e SlugAvailabilityReason) Valid() bool {
 	}
 }
 
+// Defines values for SupportLinkKind.
+const (
+	MfaReset          SupportLinkKind = "mfa_reset"
+	OwnershipTransfer SupportLinkKind = "ownership_transfer"
+)
+
+// Valid indicates whether the value is a known member of the SupportLinkKind enum.
+func (e SupportLinkKind) Valid() bool {
+	switch e {
+	case MfaReset:
+		return true
+	case OwnershipTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicySlug.
 const (
 	PolicySlugPrivacy  PolicySlug = "privacy"
@@ -589,6 +607,19 @@ type SlugAvailability struct {
 // SlugAvailabilityReason Why it is not available.
 type SlugAvailabilityReason string
 
+// SupportLink What a support request's cancel link (C1) would cancel.
+type SupportLink struct {
+	CreatedAt   time.Time `json:"created_at"`
+	EffectiveAt time.Time `json:"effective_at"`
+
+	// Email The account the link was sent to
+	Email string          `json:"email"`
+	Kind  SupportLinkKind `json:"kind"`
+}
+
+// SupportLinkKind defines model for SupportLink.Kind.
+type SupportLinkKind string
+
 // TOTPCode defines model for TOTPCode.
 type TOTPCode struct {
 	Code string `json:"code"`
@@ -655,6 +686,9 @@ type ImportID = ULID
 // InvoiceID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type InvoiceID = ULID
 
+// MemberUserID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type MemberUserID = ULID
+
 // OrderID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type OrderID = ULID
 
@@ -672,6 +706,9 @@ type SizeChartID = ULID
 
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
+
+// SupportRequestID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type SupportRequestID = ULID
 
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
@@ -725,6 +762,16 @@ type ChangePasswordJSONBody struct {
 type ListAuditLogParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CancelSupportLinkJSONBody defines parameters for CancelSupportLink.
+type CancelSupportLinkJSONBody struct {
+	Token string `json:"token"`
+}
+
+// CheckSupportLinkJSONBody defines parameters for CheckSupportLink.
+type CheckSupportLinkJSONBody struct {
+	Token string `json:"token"`
 }
 
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
@@ -786,6 +833,12 @@ type CreateInvitationJSONRequestBody = NewInvitation
 
 // UpdateMemberRoleJSONRequestBody defines body for UpdateMemberRole for application/json ContentType.
 type UpdateMemberRoleJSONRequestBody = MemberRoleUpdate
+
+// CancelSupportLinkJSONRequestBody defines body for CancelSupportLink for application/json ContentType.
+type CancelSupportLinkJSONRequestBody CancelSupportLinkJSONBody
+
+// CheckSupportLinkJSONRequestBody defines body for CheckSupportLink for application/json ContentType.
+type CheckSupportLinkJSONRequestBody CheckSupportLinkJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -885,6 +938,12 @@ type ServerInterface interface {
 	// UpdateMemberRole Change a member's role
 	// (PATCH /v1/stores/{store_id}/members/{user_id})
 	UpdateMemberRole(w http.ResponseWriter, r *http.Request, storeId StoreID, userId ULID)
+	// CancelSupportLink Cancel a support request from its emailed link
+	// (POST /v1/support-requests/cancel)
+	CancelSupportLink(w http.ResponseWriter, r *http.Request)
+	// CheckSupportLink What a support request's cancel link would cancel
+	// (POST /v1/support-requests/check)
+	CheckSupportLink(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1515,6 +1574,34 @@ func (siw *ServerInterfaceWrapper) UpdateMemberRole(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// CancelSupportLink operation middleware
+func (siw *ServerInterfaceWrapper) CancelSupportLink(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelSupportLink(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckSupportLink operation middleware
+func (siw *ServerInterfaceWrapper) CheckSupportLink(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckSupportLink(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1640,6 +1727,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/forgot", wrapper.ForgotPassword)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/reset", wrapper.ResetPassword)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/password/reset/check", wrapper.CheckResetLink)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/support-requests/check", wrapper.CheckSupportLink)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/support-requests/cancel", wrapper.CancelSupportLink)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/email/verify", wrapper.VerifyEmail)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/mfa", wrapper.VerifyMFA)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auth/otp/start", wrapper.StartOTPLogin)
@@ -2974,6 +3063,78 @@ func (response UpdateMemberRoledefaultApplicationProblemPlusJSONResponse) VisitU
 	return err
 }
 
+type CancelSupportLinkRequestObject struct {
+	Body *CancelSupportLinkJSONRequestBody
+}
+
+type CancelSupportLinkResponseObject interface {
+	VisitCancelSupportLinkResponse(w http.ResponseWriter) error
+}
+
+type CancelSupportLink204Response struct {
+}
+
+func (response CancelSupportLink204Response) VisitCancelSupportLinkResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type CancelSupportLinkdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelSupportLinkdefaultApplicationProblemPlusJSONResponse) VisitCancelSupportLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckSupportLinkRequestObject struct {
+	Body *CheckSupportLinkJSONRequestBody
+}
+
+type CheckSupportLinkResponseObject interface {
+	VisitCheckSupportLinkResponse(w http.ResponseWriter) error
+}
+
+type CheckSupportLink200JSONResponse SupportLink
+
+func (response CheckSupportLink200JSONResponse) VisitCheckSupportLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckSupportLinkdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CheckSupportLinkdefaultApplicationProblemPlusJSONResponse) VisitCheckSupportLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// VerifyEmail Confirm an email from the emailed link
@@ -3072,6 +3233,12 @@ type StrictServerInterface interface {
 	// UpdateMemberRole Change a member's role
 	// (PATCH /v1/stores/{store_id}/members/{user_id})
 	UpdateMemberRole(ctx context.Context, request UpdateMemberRoleRequestObject) (UpdateMemberRoleResponseObject, error)
+	// CancelSupportLink Cancel a support request from its emailed link
+	// (POST /v1/support-requests/cancel)
+	CancelSupportLink(ctx context.Context, request CancelSupportLinkRequestObject) (CancelSupportLinkResponseObject, error)
+	// CheckSupportLink What a support request's cancel link would cancel
+	// (POST /v1/support-requests/check)
+	CheckSupportLink(ctx context.Context, request CheckSupportLinkRequestObject) (CheckSupportLinkResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -4036,6 +4203,68 @@ func (sh *strictHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMemberRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateMemberRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelSupportLink operation middleware
+func (sh *strictHandler) CancelSupportLink(w http.ResponseWriter, r *http.Request) {
+	var request CancelSupportLinkRequestObject
+
+	var body CancelSupportLinkJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelSupportLink(ctx, request.(CancelSupportLinkRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelSupportLink")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelSupportLinkResponseObject); ok {
+		if err := validResponse.VisitCancelSupportLinkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckSupportLink operation middleware
+func (sh *strictHandler) CheckSupportLink(w http.ResponseWriter, r *http.Request) {
+	var request CheckSupportLinkRequestObject
+
+	var body CheckSupportLinkJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckSupportLink(ctx, request.(CheckSupportLinkRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckSupportLink")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckSupportLinkResponseObject); ok {
+		if err := validResponse.VisitCheckSupportLinkResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

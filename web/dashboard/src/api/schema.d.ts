@@ -175,6 +175,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/support-requests/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a support request's cancel link would cancel
+         * @description C1. No session needed: the emailed link may open anywhere. A link
+         *     whose request was cancelled, done or is unknown is 404
+         *     link_not_found.
+         */
+        post: operations["checkSupportLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support-requests/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a support request from its emailed link
+         * @description C1. The request is cancelled with every link it sent, the store's
+         *     activity log records it and the admin who asked is told. 404
+         *     link_not_found as for the check.
+         */
+        post: operations["cancelSupportLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/email/verify": {
         parameters: {
             query?: never;
@@ -2318,6 +2362,180 @@ export interface paths {
         get: operations["adminGetStoreProfile"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A store's team, invitations and support requests
+         * @description C1. The store's members (two-step state, account status, last use
+         *     of the dashboard), its pending invitations, and platform support's
+         *     requests open or closed in the last 7 days. Email and phone are
+         *     left out for a role without contacts.read; the phone is masked
+         *     for everyone.
+         */
+        get: operations["adminGetStoreTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/mfa-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask to remove a member's two-step verification in 24 hours
+         * @description C1. Never at once: the request takes effect 24 hours later, and the
+         *     member and the store's owner are emailed a link that cancels it.
+         *     409 mfa_not_enabled when the member has none; 409 request_open
+         *     when one already waits; 404 member_not_found for an account that
+         *     is not the store's member. Recorded in the admin log and the
+         *     store's activity log.
+         */
+        post: operations["adminRequestMemberMFAReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a member's account (in every store it works on)
+         * @description C1. At once: every session ends and the account cannot sign in
+         *     until it is enabled again; the member is emailed. Recorded in the
+         *     admin log and the store's activity log.
+         */
+        post: operations["adminDisableMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable a disabled member's account
+         * @description C1. The member is emailed.
+         */
+        post: operations["adminEnableMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/sign-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign a member out of every device
+         * @description C1. Without disabling the account; the member is emailed.
+         */
+        post: operations["adminSignOutMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/team/{user_id}/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The other stores a member's account works on
+         * @description C1. Before disabling an account: the stores (at most 20) besides
+         *     this one it is a member of, with the role. 404 member_not_found
+         *     for an account that is not this store's member.
+         */
+        get: operations["adminGetMemberStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/stores/{store_id}/support-requests/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                request_id: components["parameters"]["SupportRequestID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a support request that still waits
+         * @description C1. 404 request_not_found when it was cancelled, done, or is not
+         *     the store's.
+         */
+        post: operations["adminCancelSupportRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5587,6 +5805,17 @@ export interface components {
         LinkEmail: {
             email: string;
         };
+        /** @description What a support request's cancel link (C1) would cancel. */
+        SupportLink: {
+            /** @enum {string} */
+            kind: "mfa_reset" | "ownership_transfer";
+            /** @description The account the link was sent to */
+            email: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            effective_at: string;
+        };
         InvitationPreview: {
             store_name: string;
             /** @description Who invited; absent when that account is gone. */
@@ -5825,6 +6054,74 @@ export interface components {
              * @description The owner's last use of the dashboard; absent for never.
              */
             last_seen_at?: string;
+        };
+        AdminStoreTeam: {
+            members: components["schemas"]["AdminStoreMember"][];
+            invites: components["schemas"]["AdminStoreInvite"][];
+            requests: components["schemas"]["AdminSupportRequest"][];
+        };
+        AdminStoreMember: {
+            user_id: components["schemas"]["ULID"];
+            name: string;
+            /** @description Absent for a role without contacts.read. */
+            email?: string;
+            /** @description Masked (+9665••••••412); absent when none or without contacts.read. */
+            phone?: string;
+            /** @enum {string} */
+            role: "owner" | "manager" | "support" | "shipping";
+            mfa_enabled: boolean;
+            /** @description The account is disabled (in every store). */
+            disabled: boolean;
+            /** Format: date-time */
+            joined_at: string;
+            /**
+             * Format: date-time
+             * @description Last use of the dashboard; absent for never.
+             */
+            last_seen_at?: string;
+        };
+        AdminStoreInvite: {
+            /** @description Absent for a role without contacts.read. */
+            email?: string;
+            /** @enum {string} */
+            role: "manager" | "support" | "shipping";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        AdminSupportRequest: {
+            id: components["schemas"]["ULID"];
+            /** @enum {string} */
+            kind: "mfa_reset" | "ownership_transfer";
+            user_id: components["schemas"]["ULID"];
+            requested_by: components["schemas"]["ULID"];
+            /** @description Empty when the admin is gone. */
+            requested_by_name: string;
+            requested_by_role?: components["schemas"]["AdminRole"];
+            reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            effective_at: string;
+            /** @enum {string} */
+            state: "open" | "cancelled" | "done";
+            /**
+             * @description Who cancelled it.
+             * @enum {string}
+             */
+            cancelled_by?: "link" | "console";
+            /**
+             * Format: date-time
+             * @description When it was cancelled or done.
+             */
+            closed_at?: string;
+        };
+        AdminMemberStores: {
+            items: {
+                store_id: components["schemas"]["ULID"];
+                name: string;
+                /** @enum {string} */
+                role: "owner" | "manager" | "support" | "shipping";
+            }[];
         };
         AdminStoreDetail: {
             store: components["schemas"]["Store"];
@@ -8990,6 +9287,8 @@ export interface components {
         /** @description An invoice number's start, or a part of the store's or agency's name. */
         InvoiceSearch: string;
         InvoiceID: components["schemas"]["ULID"];
+        MemberUserID: components["schemas"]["ULID"];
+        SupportRequestID: components["schemas"]["ULID"];
         StoreID: components["schemas"]["ULID"];
         DomainID: components["schemas"]["ULID"];
         ProductID: components["schemas"]["ULID"];
@@ -9237,6 +9536,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LinkEmail"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    checkSupportLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request waits. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportLink"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    cancelSupportLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
@@ -12173,6 +12524,185 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminStoreProfile"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetStoreTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStoreTeam"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminRequestMemberMFAReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Requested. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSupportRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminDisableMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminEnableMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminSignOutMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminGetMemberStores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                user_id: components["parameters"]["MemberUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stores. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMemberStores"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    adminCancelSupportRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: components["parameters"]["StoreID"];
+                request_id: components["parameters"]["SupportRequestID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReason"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

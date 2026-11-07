@@ -117,3 +117,66 @@ func TestLinkValidation(t *testing.T) {
 		})
 	}
 }
+
+// putSupportRequest records an open MFA-reset request on acc in its
+// store, with a cancel link for acc, straight in the database (its email
+// goes through a job these tests do not run), and returns the link.
+func (f fixture) putSupportRequest(t *testing.T, acc account) string {
+	t.Helper()
+	tok, err := authtoken.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	tx, err := f.owner.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	store, user, req := mustULID(t, acc.storeID), mustULID(t, acc.userID), f.ids.New()
+	if _, err = tx.Exec(ctx, `SELECT set_config('app.store_id', ($1::uuid)::text, true)`, store); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO support_requests (id, store_id, kind, user_id, requested_by, reason, effective_at)
+		VALUES ($1, $2, 'mfa_reset', $3, $4, 'ticket', $5)`, req, store, user, f.ids.New(), time.Now().Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO user_tokens (id, user_id, purpose, token_hash, email, expires_at, request_id, link_store_id)
+		VALUES ($1, $2, 'support_cancel', $3, $4, $5, $6, $7)`, f.ids.New(), user, tok.Hash(), acc.email, time.Now().Add(24*time.Hour), req, store); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return string(tok)
+}
+
+// TestSupportLinkOverHTTP (C1): a support request's emailed link is
+// checked and cancelled without a session; once cancelled it is gone; a
+// malformed body is refused.
+func TestSupportLinkOverHTTP(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	acc := f.signup(t, "web")
+	tok := f.putSupportRequest(t, acc)
+	body := fmt.Sprintf(`{"token":%q}`, tok)
+
+	res, m := f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/check", body))
+	if res.StatusCode != http.StatusOK || m["kind"] != "mfa_reset" || m["email"] == acc.email || m["effective_at"] == nil {
+		t.Fatalf("check = %d %v", res.StatusCode, m)
+	}
+	if res, m = f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/check", `{"token":"junk"}`)); res.StatusCode != http.StatusNotFound || m["code"] != "link_not_found" {
+		t.Fatalf("check junk = %d %v", res.StatusCode, m)
+	}
+	if res, _ = f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/cancel", `{"token":`)); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("malformed = %d", res.StatusCode)
+	}
+	if res, m = f.do(t, newReq(t, http.MethodPost, "/v1/support-requests/cancel", body)); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("cancel = %d %v", res.StatusCode, m)
+	}
+	for _, path := range []string{"/v1/support-requests/cancel", "/v1/support-requests/check"} {
+		if res, m = f.do(t, newReq(t, http.MethodPost, path, body)); res.StatusCode != http.StatusNotFound || m["code"] != "link_not_found" {
+			t.Fatalf("%s after cancel = %d %v", path, res.StatusCode, m)
+		}
+	}
+}

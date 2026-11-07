@@ -688,6 +688,30 @@ func (e AdminInvoiceLineKind) Valid() bool {
 	}
 }
 
+// Defines values for AdminMemberStoresItemsRole.
+const (
+	AdminMemberStoresItemsRoleManager  AdminMemberStoresItemsRole = "manager"
+	AdminMemberStoresItemsRoleOwner    AdminMemberStoresItemsRole = "owner"
+	AdminMemberStoresItemsRoleShipping AdminMemberStoresItemsRole = "shipping"
+	AdminMemberStoresItemsRoleSupport  AdminMemberStoresItemsRole = "support"
+)
+
+// Valid indicates whether the value is a known member of the AdminMemberStoresItemsRole enum.
+func (e AdminMemberStoresItemsRole) Valid() bool {
+	switch e {
+	case AdminMemberStoresItemsRoleManager:
+		return true
+	case AdminMemberStoresItemsRoleOwner:
+		return true
+	case AdminMemberStoresItemsRoleShipping:
+		return true
+	case AdminMemberStoresItemsRoleSupport:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminMetricsErrors.
 const (
 	NewStores AdminMetricsErrors = "new_stores"
@@ -1261,6 +1285,108 @@ func (e AdminStoreBalanceLevel) Valid() bool {
 	}
 }
 
+// Defines values for AdminStoreInviteRole.
+const (
+	AdminStoreInviteRoleManager  AdminStoreInviteRole = "manager"
+	AdminStoreInviteRoleShipping AdminStoreInviteRole = "shipping"
+	AdminStoreInviteRoleSupport  AdminStoreInviteRole = "support"
+)
+
+// Valid indicates whether the value is a known member of the AdminStoreInviteRole enum.
+func (e AdminStoreInviteRole) Valid() bool {
+	switch e {
+	case AdminStoreInviteRoleManager:
+		return true
+	case AdminStoreInviteRoleShipping:
+		return true
+	case AdminStoreInviteRoleSupport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminStoreMemberRole.
+const (
+	AdminStoreMemberRoleManager  AdminStoreMemberRole = "manager"
+	AdminStoreMemberRoleOwner    AdminStoreMemberRole = "owner"
+	AdminStoreMemberRoleShipping AdminStoreMemberRole = "shipping"
+	AdminStoreMemberRoleSupport  AdminStoreMemberRole = "support"
+)
+
+// Valid indicates whether the value is a known member of the AdminStoreMemberRole enum.
+func (e AdminStoreMemberRole) Valid() bool {
+	switch e {
+	case AdminStoreMemberRoleManager:
+		return true
+	case AdminStoreMemberRoleOwner:
+		return true
+	case AdminStoreMemberRoleShipping:
+		return true
+	case AdminStoreMemberRoleSupport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSupportRequestCancelledBy.
+const (
+	Console AdminSupportRequestCancelledBy = "console"
+	Link    AdminSupportRequestCancelledBy = "link"
+)
+
+// Valid indicates whether the value is a known member of the AdminSupportRequestCancelledBy enum.
+func (e AdminSupportRequestCancelledBy) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Link:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSupportRequestKind.
+const (
+	MfaReset          AdminSupportRequestKind = "mfa_reset"
+	OwnershipTransfer AdminSupportRequestKind = "ownership_transfer"
+)
+
+// Valid indicates whether the value is a known member of the AdminSupportRequestKind enum.
+func (e AdminSupportRequestKind) Valid() bool {
+	switch e {
+	case MfaReset:
+		return true
+	case OwnershipTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminSupportRequestState.
+const (
+	AdminSupportRequestStateCancelled AdminSupportRequestState = "cancelled"
+	AdminSupportRequestStateDone      AdminSupportRequestState = "done"
+	AdminSupportRequestStateOpen      AdminSupportRequestState = "open"
+)
+
+// Valid indicates whether the value is a known member of the AdminSupportRequestState enum.
+func (e AdminSupportRequestState) Valid() bool {
+	switch e {
+	case AdminSupportRequestStateCancelled:
+		return true
+	case AdminSupportRequestStateDone:
+		return true
+	case AdminSupportRequestStateOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BillingBillingGateway.
 const (
 	BillingBillingGatewayPaymob BillingBillingGateway = "paymob"
@@ -1677,22 +1803,22 @@ func (e InvoiceStatusFilter) Valid() bool {
 
 // Defines values for PolicySlug.
 const (
-	Privacy  PolicySlug = "privacy"
-	Refund   PolicySlug = "refund"
-	Shipping PolicySlug = "shipping"
-	Terms    PolicySlug = "terms"
+	PolicySlugPrivacy  PolicySlug = "privacy"
+	PolicySlugRefund   PolicySlug = "refund"
+	PolicySlugShipping PolicySlug = "shipping"
+	PolicySlugTerms    PolicySlug = "terms"
 )
 
 // Valid indicates whether the value is a known member of the PolicySlug enum.
 func (e PolicySlug) Valid() bool {
 	switch e {
-	case Privacy:
+	case PolicySlugPrivacy:
 		return true
-	case Refund:
+	case PolicySlugRefund:
 		return true
-	case Shipping:
+	case PolicySlugShipping:
 		return true
-	case Terms:
+	case PolicySlugTerms:
 		return true
 	default:
 		return false
@@ -2645,6 +2771,20 @@ type AdminLoginRequest struct {
 	Password string `json:"password"`
 }
 
+// AdminMemberStores defines model for AdminMemberStores.
+type AdminMemberStores struct {
+	Items []struct {
+		Name string                     `json:"name"`
+		Role AdminMemberStoresItemsRole `json:"role"`
+
+		// StoreId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+		StoreId ULID `json:"store_id"`
+	} `json:"items"`
+}
+
+// AdminMemberStoresItemsRole defines model for AdminMemberStores.Items.Role.
+type AdminMemberStoresItemsRole string
+
 // AdminMetrics defines model for AdminMetrics.
 type AdminMetrics struct {
 	ComputedAt time.Time            `json:"computed_at"`
@@ -3369,6 +3509,42 @@ type AdminStoreEntitlements struct {
 	Plan      []AdminPlanGrant `json:"plan"`
 }
 
+// AdminStoreInvite defines model for AdminStoreInvite.
+type AdminStoreInvite struct {
+	// Email Absent for a role without contacts.read.
+	Email     *string              `json:"email,omitempty"`
+	ExpiresAt time.Time            `json:"expires_at"`
+	Role      AdminStoreInviteRole `json:"role"`
+}
+
+// AdminStoreInviteRole defines model for AdminStoreInvite.Role.
+type AdminStoreInviteRole string
+
+// AdminStoreMember defines model for AdminStoreMember.
+type AdminStoreMember struct {
+	// Disabled The account is disabled (in every store).
+	Disabled bool `json:"disabled"`
+
+	// Email Absent for a role without contacts.read.
+	Email    *string   `json:"email,omitempty"`
+	JoinedAt time.Time `json:"joined_at"`
+
+	// LastSeenAt Last use of the dashboard; absent for never.
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+	MfaEnabled bool       `json:"mfa_enabled"`
+	Name       string     `json:"name"`
+
+	// Phone Masked (+9665••••••412); absent when none or without contacts.read.
+	Phone *string              `json:"phone,omitempty"`
+	Role  AdminStoreMemberRole `json:"role"`
+
+	// UserId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	UserId ULID `json:"user_id"`
+}
+
+// AdminStoreMemberRole defines model for AdminStoreMember.Role.
+type AdminStoreMemberRole string
+
 // AdminStoreOwner defines model for AdminStoreOwner.
 type AdminStoreOwner struct {
 	Email         string `json:"email"`
@@ -3406,6 +3582,51 @@ type AdminStoreSummary struct {
 	PrimaryHost string `json:"primary_host"`
 	Store       Store  `json:"store"`
 }
+
+// AdminStoreTeam defines model for AdminStoreTeam.
+type AdminStoreTeam struct {
+	Invites  []AdminStoreInvite    `json:"invites"`
+	Members  []AdminStoreMember    `json:"members"`
+	Requests []AdminSupportRequest `json:"requests"`
+}
+
+// AdminSupportRequest defines model for AdminSupportRequest.
+type AdminSupportRequest struct {
+	// CancelledBy Who cancelled it.
+	CancelledBy *AdminSupportRequestCancelledBy `json:"cancelled_by,omitempty"`
+
+	// ClosedAt When it was cancelled or done.
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	EffectiveAt time.Time  `json:"effective_at"`
+
+	// Id Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	Id     ULID                    `json:"id"`
+	Kind   AdminSupportRequestKind `json:"kind"`
+	Reason string                  `json:"reason"`
+
+	// RequestedBy Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	RequestedBy ULID `json:"requested_by"`
+
+	// RequestedByName Empty when the admin is gone.
+	RequestedByName string `json:"requested_by_name"`
+
+	// RequestedByRole owner: everything and the team; operations: stores; finance: billing and the catalog; content: the site, guides and ads; viewer: read only.
+	RequestedByRole *AdminRole               `json:"requested_by_role,omitempty"`
+	State           AdminSupportRequestState `json:"state"`
+
+	// UserId Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+	UserId ULID `json:"user_id"`
+}
+
+// AdminSupportRequestCancelledBy Who cancelled it.
+type AdminSupportRequestCancelledBy string
+
+// AdminSupportRequestKind defines model for AdminSupportRequest.Kind.
+type AdminSupportRequestKind string
+
+// AdminSupportRequestState defines model for AdminSupportRequest.State.
+type AdminSupportRequestState string
 
 // AdminTax defines model for AdminTax.
 type AdminTax struct {
@@ -3772,6 +3993,9 @@ type InvoiceSearch = string
 // InvoiceStatusFilter defines model for InvoiceStatusFilter.
 type InvoiceStatusFilter string
 
+// MemberUserID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type MemberUserID = ULID
+
 // OrderID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type OrderID = ULID
 
@@ -3789,6 +4013,9 @@ type SizeChartID = ULID
 
 // StoreID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type StoreID = ULID
+
+// SupportRequestID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
+type SupportRequestID = ULID
 
 // VariantID Example: 01J9ZQ3W5Y8V4K2N6M7P0R1S2T
 type VariantID = ULID
@@ -4053,8 +4280,23 @@ type AdminSettleInvoiceJSONRequestBody = AdminSettleInput
 // AdminReactivateStoreJSONRequestBody defines body for AdminReactivateStore for application/json ContentType.
 type AdminReactivateStoreJSONRequestBody = AdminReason
 
+// AdminCancelSupportRequestJSONRequestBody defines body for AdminCancelSupportRequest for application/json ContentType.
+type AdminCancelSupportRequestJSONRequestBody = AdminReason
+
 // AdminSuspendStoreJSONRequestBody defines body for AdminSuspendStore for application/json ContentType.
 type AdminSuspendStoreJSONRequestBody = AdminReason
+
+// AdminDisableMemberJSONRequestBody defines body for AdminDisableMember for application/json ContentType.
+type AdminDisableMemberJSONRequestBody = AdminReason
+
+// AdminEnableMemberJSONRequestBody defines body for AdminEnableMember for application/json ContentType.
+type AdminEnableMemberJSONRequestBody = AdminReason
+
+// AdminRequestMemberMFAResetJSONRequestBody defines body for AdminRequestMemberMFAReset for application/json ContentType.
+type AdminRequestMemberMFAResetJSONRequestBody = AdminReason
+
+// AdminSignOutMemberJSONRequestBody defines body for AdminSignOutMember for application/json ContentType.
+type AdminSignOutMemberJSONRequestBody = AdminReason
 
 // AdminDisableAdminJSONRequestBody defines body for AdminDisableAdmin for application/json ContentType.
 type AdminDisableAdminJSONRequestBody = AdminReason
@@ -4337,9 +4579,30 @@ type ServerInterface interface {
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminCancelSupportRequest Cancel a support request that still waits
+	// (POST /admin/v1/stores/{store_id}/support-requests/{request_id}/cancel)
+	AdminCancelSupportRequest(w http.ResponseWriter, r *http.Request, storeId StoreID, requestId SupportRequestID)
 	// AdminSuspendStore Suspend an active store (storefront answers 503)
 	// (POST /admin/v1/stores/{store_id}/suspend)
 	AdminSuspendStore(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminGetStoreTeam A store's team, invitations and support requests
+	// (GET /admin/v1/stores/{store_id}/team)
+	AdminGetStoreTeam(w http.ResponseWriter, r *http.Request, storeId StoreID)
+	// AdminDisableMember Disable a member's account (in every store it works on)
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/disable)
+	AdminDisableMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
+	// AdminEnableMember Enable a disabled member's account
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/enable)
+	AdminEnableMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
+	// AdminRequestMemberMFAReset Ask to remove a member's two-step verification in 24 hours
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/mfa-reset)
+	AdminRequestMemberMFAReset(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
+	// AdminSignOutMember Sign a member out of every device
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/sign-out)
+	AdminSignOutMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
+	// AdminGetMemberStores The other stores a member's account works on
+	// (GET /admin/v1/stores/{store_id}/team/{user_id}/stores)
+	AdminGetMemberStores(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID)
 	// AdminGetTeam The console's admins and open invites
 	// (GET /admin/v1/team)
 	AdminGetTeam(w http.ResponseWriter, r *http.Request)
@@ -6508,6 +6771,41 @@ func (siw *ServerInterfaceWrapper) AdminReactivateStore(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// AdminCancelSupportRequest operation middleware
+func (siw *ServerInterfaceWrapper) AdminCancelSupportRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "request_id" -------------
+	var requestId SupportRequestID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "request_id", r.PathValue("request_id"), &requestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCancelSupportRequest(w, r, storeId, requestId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AdminSuspendStore operation middleware
 func (siw *ServerInterfaceWrapper) AdminSuspendStore(w http.ResponseWriter, r *http.Request) {
 
@@ -6525,6 +6823,207 @@ func (siw *ServerInterfaceWrapper) AdminSuspendStore(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSuspendStore(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetStoreTeam operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetStoreTeam(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetStoreTeam(w, r, storeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminDisableMember operation middleware
+func (siw *ServerInterfaceWrapper) AdminDisableMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDisableMember(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminEnableMember operation middleware
+func (siw *ServerInterfaceWrapper) AdminEnableMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminEnableMember(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminRequestMemberMFAReset operation middleware
+func (siw *ServerInterfaceWrapper) AdminRequestMemberMFAReset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRequestMemberMFAReset(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSignOutMember operation middleware
+func (siw *ServerInterfaceWrapper) AdminSignOutMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSignOutMember(w, r, storeId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetMemberStores operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetMemberStores(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "store_id" -------------
+	var storeId StoreID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "store_id", r.PathValue("store_id"), &storeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "store_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId MemberUserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", r.PathValue("user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetMemberStores(w, r, storeId, userId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6869,6 +7368,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/balance", wrapper.AdminGetStoreBalance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/balance/credits", wrapper.AdminCreditStoreBalance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/profile", wrapper.AdminGetStoreProfile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team", wrapper.AdminGetStoreTeam)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/mfa-reset", wrapper.AdminRequestMemberMFAReset)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/disable", wrapper.AdminDisableMember)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/enable", wrapper.AdminEnableMember)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/sign-out", wrapper.AdminSignOutMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/stores/{store_id}/team/{user_id}/stores", wrapper.AdminGetMemberStores)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/support-requests/{request_id}/cancel", wrapper.AdminCancelSupportRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/invoices/{invoice_id}/settle", wrapper.AdminSettleInvoice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/admin/v1/stores/{store_id}/reactivate", wrapper.AdminReactivateStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/admin/v1/health", wrapper.AdminHealth)
@@ -10269,6 +10775,41 @@ func (response AdminReactivateStoredefaultApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type AdminCancelSupportRequestRequestObject struct {
+	StoreId   StoreID          `json:"store_id"`
+	RequestId SupportRequestID `json:"request_id"`
+	Body      *AdminCancelSupportRequestJSONRequestBody
+}
+
+type AdminCancelSupportRequestResponseObject interface {
+	VisitAdminCancelSupportRequestResponse(w http.ResponseWriter) error
+}
+
+type AdminCancelSupportRequest204Response struct {
+}
+
+func (response AdminCancelSupportRequest204Response) VisitAdminCancelSupportRequestResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminCancelSupportRequestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminCancelSupportRequestdefaultApplicationProblemPlusJSONResponse) VisitAdminCancelSupportRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AdminSuspendStoreRequestObject struct {
 	StoreId StoreID `json:"store_id"`
 	Body    *AdminSuspendStoreJSONRequestBody
@@ -10298,6 +10839,231 @@ type AdminSuspendStoredefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AdminSuspendStoredefaultApplicationProblemPlusJSONResponse) VisitAdminSuspendStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreTeamRequestObject struct {
+	StoreId StoreID `json:"store_id"`
+}
+
+type AdminGetStoreTeamResponseObject interface {
+	VisitAdminGetStoreTeamResponse(w http.ResponseWriter) error
+}
+
+type AdminGetStoreTeam200JSONResponse AdminStoreTeam
+
+func (response AdminGetStoreTeam200JSONResponse) VisitAdminGetStoreTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetStoreTeamdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetStoreTeamdefaultApplicationProblemPlusJSONResponse) VisitAdminGetStoreTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminDisableMemberRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+	Body    *AdminDisableMemberJSONRequestBody
+}
+
+type AdminDisableMemberResponseObject interface {
+	VisitAdminDisableMemberResponse(w http.ResponseWriter) error
+}
+
+type AdminDisableMember204Response struct {
+}
+
+func (response AdminDisableMember204Response) VisitAdminDisableMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDisableMemberdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminDisableMemberdefaultApplicationProblemPlusJSONResponse) VisitAdminDisableMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminEnableMemberRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+	Body    *AdminEnableMemberJSONRequestBody
+}
+
+type AdminEnableMemberResponseObject interface {
+	VisitAdminEnableMemberResponse(w http.ResponseWriter) error
+}
+
+type AdminEnableMember204Response struct {
+}
+
+func (response AdminEnableMember204Response) VisitAdminEnableMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminEnableMemberdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminEnableMemberdefaultApplicationProblemPlusJSONResponse) VisitAdminEnableMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRequestMemberMFAResetRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+	Body    *AdminRequestMemberMFAResetJSONRequestBody
+}
+
+type AdminRequestMemberMFAResetResponseObject interface {
+	VisitAdminRequestMemberMFAResetResponse(w http.ResponseWriter) error
+}
+
+type AdminRequestMemberMFAReset202JSONResponse AdminSupportRequest
+
+func (response AdminRequestMemberMFAReset202JSONResponse) VisitAdminRequestMemberMFAResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminRequestMemberMFAResetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminRequestMemberMFAResetdefaultApplicationProblemPlusJSONResponse) VisitAdminRequestMemberMFAResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminSignOutMemberRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+	Body    *AdminSignOutMemberJSONRequestBody
+}
+
+type AdminSignOutMemberResponseObject interface {
+	VisitAdminSignOutMemberResponse(w http.ResponseWriter) error
+}
+
+type AdminSignOutMember204Response struct {
+}
+
+func (response AdminSignOutMember204Response) VisitAdminSignOutMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminSignOutMemberdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminSignOutMemberdefaultApplicationProblemPlusJSONResponse) VisitAdminSignOutMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetMemberStoresRequestObject struct {
+	StoreId StoreID      `json:"store_id"`
+	UserId  MemberUserID `json:"user_id"`
+}
+
+type AdminGetMemberStoresResponseObject interface {
+	VisitAdminGetMemberStoresResponse(w http.ResponseWriter) error
+}
+
+type AdminGetMemberStores200JSONResponse AdminMemberStores
+
+func (response AdminGetMemberStores200JSONResponse) VisitAdminGetMemberStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdminGetMemberStoresdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdminGetMemberStoresdefaultApplicationProblemPlusJSONResponse) VisitAdminGetMemberStoresResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10862,9 +11628,30 @@ type StrictServerInterface interface {
 	// AdminReactivateStore Reactivate a suspended store
 	// (POST /admin/v1/stores/{store_id}/reactivate)
 	AdminReactivateStore(ctx context.Context, request AdminReactivateStoreRequestObject) (AdminReactivateStoreResponseObject, error)
+	// AdminCancelSupportRequest Cancel a support request that still waits
+	// (POST /admin/v1/stores/{store_id}/support-requests/{request_id}/cancel)
+	AdminCancelSupportRequest(ctx context.Context, request AdminCancelSupportRequestRequestObject) (AdminCancelSupportRequestResponseObject, error)
 	// AdminSuspendStore Suspend an active store (storefront answers 503)
 	// (POST /admin/v1/stores/{store_id}/suspend)
 	AdminSuspendStore(ctx context.Context, request AdminSuspendStoreRequestObject) (AdminSuspendStoreResponseObject, error)
+	// AdminGetStoreTeam A store's team, invitations and support requests
+	// (GET /admin/v1/stores/{store_id}/team)
+	AdminGetStoreTeam(ctx context.Context, request AdminGetStoreTeamRequestObject) (AdminGetStoreTeamResponseObject, error)
+	// AdminDisableMember Disable a member's account (in every store it works on)
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/disable)
+	AdminDisableMember(ctx context.Context, request AdminDisableMemberRequestObject) (AdminDisableMemberResponseObject, error)
+	// AdminEnableMember Enable a disabled member's account
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/enable)
+	AdminEnableMember(ctx context.Context, request AdminEnableMemberRequestObject) (AdminEnableMemberResponseObject, error)
+	// AdminRequestMemberMFAReset Ask to remove a member's two-step verification in 24 hours
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/mfa-reset)
+	AdminRequestMemberMFAReset(ctx context.Context, request AdminRequestMemberMFAResetRequestObject) (AdminRequestMemberMFAResetResponseObject, error)
+	// AdminSignOutMember Sign a member out of every device
+	// (POST /admin/v1/stores/{store_id}/team/{user_id}/sign-out)
+	AdminSignOutMember(ctx context.Context, request AdminSignOutMemberRequestObject) (AdminSignOutMemberResponseObject, error)
+	// AdminGetMemberStores The other stores a member's account works on
+	// (GET /admin/v1/stores/{store_id}/team/{user_id}/stores)
+	AdminGetMemberStores(ctx context.Context, request AdminGetMemberStoresRequestObject) (AdminGetMemberStoresResponseObject, error)
 	// AdminGetTeam The console's admins and open invites
 	// (GET /admin/v1/team)
 	AdminGetTeam(ctx context.Context, request AdminGetTeamRequestObject) (AdminGetTeamResponseObject, error)
@@ -13414,6 +14201,40 @@ func (sh *strictHandler) AdminReactivateStore(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// AdminCancelSupportRequest operation middleware
+func (sh *strictHandler) AdminCancelSupportRequest(w http.ResponseWriter, r *http.Request, storeId StoreID, requestId SupportRequestID) {
+	var request AdminCancelSupportRequestRequestObject
+
+	request.StoreId = storeId
+	request.RequestId = requestId
+
+	var body AdminCancelSupportRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCancelSupportRequest(ctx, request.(AdminCancelSupportRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCancelSupportRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCancelSupportRequestResponseObject); ok {
+		if err := validResponse.VisitAdminCancelSupportRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // AdminSuspendStore operation middleware
 func (sh *strictHandler) AdminSuspendStore(w http.ResponseWriter, r *http.Request, storeId StoreID) {
 	var request AdminSuspendStoreRequestObject
@@ -13440,6 +14261,195 @@ func (sh *strictHandler) AdminSuspendStore(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSuspendStoreResponseObject); ok {
 		if err := validResponse.VisitAdminSuspendStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetStoreTeam operation middleware
+func (sh *strictHandler) AdminGetStoreTeam(w http.ResponseWriter, r *http.Request, storeId StoreID) {
+	var request AdminGetStoreTeamRequestObject
+
+	request.StoreId = storeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetStoreTeam(ctx, request.(AdminGetStoreTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetStoreTeam")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetStoreTeamResponseObject); ok {
+		if err := validResponse.VisitAdminGetStoreTeamResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDisableMember operation middleware
+func (sh *strictHandler) AdminDisableMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminDisableMemberRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body AdminDisableMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDisableMember(ctx, request.(AdminDisableMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDisableMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDisableMemberResponseObject); ok {
+		if err := validResponse.VisitAdminDisableMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminEnableMember operation middleware
+func (sh *strictHandler) AdminEnableMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminEnableMemberRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body AdminEnableMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminEnableMember(ctx, request.(AdminEnableMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminEnableMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminEnableMemberResponseObject); ok {
+		if err := validResponse.VisitAdminEnableMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRequestMemberMFAReset operation middleware
+func (sh *strictHandler) AdminRequestMemberMFAReset(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminRequestMemberMFAResetRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body AdminRequestMemberMFAResetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRequestMemberMFAReset(ctx, request.(AdminRequestMemberMFAResetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRequestMemberMFAReset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRequestMemberMFAResetResponseObject); ok {
+		if err := validResponse.VisitAdminRequestMemberMFAResetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSignOutMember operation middleware
+func (sh *strictHandler) AdminSignOutMember(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminSignOutMemberRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	var body AdminSignOutMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSignOutMember(ctx, request.(AdminSignOutMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSignOutMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSignOutMemberResponseObject); ok {
+		if err := validResponse.VisitAdminSignOutMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetMemberStores operation middleware
+func (sh *strictHandler) AdminGetMemberStores(w http.ResponseWriter, r *http.Request, storeId StoreID, userId MemberUserID) {
+	var request AdminGetMemberStoresRequestObject
+
+	request.StoreId = storeId
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetMemberStores(ctx, request.(AdminGetMemberStoresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetMemberStores")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetMemberStoresResponseObject); ok {
+		if err := validResponse.VisitAdminGetMemberStoresResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

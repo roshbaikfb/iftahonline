@@ -746,6 +746,7 @@ func mountAPI(ctx context.Context, c clients) (func(server.Routes), error) {
 			Plans: billing.NewCatalog(c.adminPool, c.ids), Enforced: entitlements.Enforced, Overrides: c.entitlements.Overrides(),
 			Billing: bill.Console(), Agencies: bill.Agencies(),
 			Site: siteConsole, Founding: billing.NewFounding(c.adminPool), Collection: billing.NewCollection(c.adminPool),
+			Support: storeSupport{id: id, adminPool: c.adminPool},
 		}); err != nil {
 			return nil, err
 		}
@@ -1145,12 +1146,10 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 		return err
 	}
 	c.learnAnalytics.Set(anl.LearnHandler())
-	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
-		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
-	}); err != nil {
-		return err
-	}
 	periodic := slices.Concat(cat.PeriodicJobs(), bill.PeriodicJobs(), rsk.PeriodicJobs(), anl.PeriodicJobs())
+	// The console's mailer tells an admin when a merchant cancels their
+	// support request (C1); without a console nobody is told.
+	var notifyAdmin identity.AdminNotifier
 	if c.adminPool != nil {
 		console, consoleErr := admin.New(admin.Deps{AdminPool: c.adminPool, Redis: rdb, Directory: ten.Directory(), IDs: c.ids, Log: log,
 			Secrets: cfg.Secrets, Hashing: cfg.Identity, Billing: bill.Console(), Mailer: mailer.FromConfig(cfg.Mail, log),
@@ -1162,6 +1161,17 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger, build s
 			return err
 		}
 		periodic = append(periodic, console.PeriodicJobs()...)
+		notifyAdmin = console.NotifyAdmin
+	}
+	idJobs, err := server.NewRiverInserter(pool, log)
+	if err != nil {
+		return err
+	}
+	if err = identity.RegisterWorkers(workers, identity.WorkerDeps{
+		Pool: pool, Redis: rdb, Secrets: cfg.Secrets, Mail: cfg.Mail, Env: cfg.Env, Tenancy: ten.Service(), Log: log,
+		IDs: c.ids, Jobs: idJobs, NotifyAdmin: notifyAdmin,
+	}); err != nil {
+		return err
 	}
 	client, err := server.NewRiverClient(pool, cfg.Worker, log, workers, cat.Queues(), periodic...)
 	if err != nil {

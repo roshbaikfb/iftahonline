@@ -107,6 +107,9 @@ type Deps struct {
 	Founding billing.Founding
 	// Collection is the collection settings; nil for the CLI.
 	Collection billing.CollectionConsole
+	// Support is identity's support on a store's team (C1); nil for the
+	// CLI.
+	Support StoreSupport
 }
 
 // Service implements the console.

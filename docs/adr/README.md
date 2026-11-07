@@ -100,3 +100,4 @@ supersedes it.
 | [0092](0092-stripe-for-storefronts.md) | Stripe for merchants' storefronts | Accepted |
 | [0093](0093-storefront-gateways-by-country.md) | A store's gateways follow its country | Accepted |
 | [0094](0094-stripe-webhook-endpoint-by-the-platform.md) | The platform creates a merchant's Stripe webhook endpoint | Accepted |
+| [0095](0095-delayed-support-requests.md) | Support's risky changes to a merchant account wait 24 hours | Accepted |

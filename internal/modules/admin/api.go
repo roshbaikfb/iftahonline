@@ -33,3 +33,22 @@ type Impersonator = app.Impersonator
 
 // Created is a new admin with the TOTP enrolment to show once.
 type Created = app.Created
+
+// StoreSupport is identity's support operations on the store in ctx (C1):
+// cmd/platform adapts the identity module to it.
+type StoreSupport = app.StoreSupport
+
+// StoreTeam is a store's team for the console.
+type StoreTeam = app.StoreTeam
+
+// StoreMember is a member of a store's team.
+type StoreMember = app.StoreMember
+
+// StoreInvite is a pending invitation to a store.
+type StoreInvite = app.StoreInvite
+
+// SupportRequest is a delayed change support asked for in a store.
+type SupportRequest = app.SupportRequest
+
+// MemberStore is a store a member's account works on.
+type MemberStore = app.MemberStore

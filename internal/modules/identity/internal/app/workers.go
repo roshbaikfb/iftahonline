@@ -18,10 +18,12 @@ import (
 	"github.com/roshbaikfb/iftahonline/internal/modules/identity/internal/store"
 	"github.com/roshbaikfb/iftahonline/internal/modules/tenancy"
 	"github.com/roshbaikfb/iftahonline/internal/platform/authz"
+	"github.com/roshbaikfb/iftahonline/internal/platform/jobs"
 	"github.com/roshbaikfb/iftahonline/internal/platform/mailer"
 	"github.com/roshbaikfb/iftahonline/internal/platform/phone"
 	"github.com/roshbaikfb/iftahonline/internal/platform/postgres"
 	"github.com/roshbaikfb/iftahonline/internal/platform/secretbox"
+	"github.com/roshbaikfb/iftahonline/internal/platform/ulid"
 )
 
 // WorkerDeps are what the identity job workers need.
@@ -34,6 +36,13 @@ type WorkerDeps struct {
 	Stores       tenancy.Service
 	DashboardURL string
 	Log          *slog.Logger
+	// IDs and Jobs let support requests be carried out (C1); NotifyAdmin
+	// tells the admin who asked when a merchant cancels one (nil: no
+	// console here, nobody to tell); Now is the clock (tests).
+	IDs         *ulid.Generator
+	Jobs        jobs.Inserter
+	NotifyAdmin AdminNotifier
+	Now         func() time.Time
 }
 
 // readDelivery opens a sealed delivery; found is false when it expired
@@ -262,6 +271,10 @@ func RegisterWorkers(workers *river.Workers, d WorkerDeps) error {
 		func() error { return river.AddWorkerSafely(workers, &DeviceAlertWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &LinkEmailWorker{D: d}) },
 		func() error { return river.AddWorkerSafely(workers, &PasswordChangedWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &SupportLinkEmailWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &SupportExecuteWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &SupportNoticeWorker{D: d}) },
+		func() error { return river.AddWorkerSafely(workers, &SupportCancelledWorker{D: d}) },
 	} {
 		if err := add(); err != nil {
 			return fmt.Errorf("identity: %w", err)
